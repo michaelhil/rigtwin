@@ -1,0 +1,728 @@
+# Rig B: declarative structure. Tree, mount frames, joints, datums, expected motion.
+#
+# Frame: metres, radians, right-handed, Z up, X forward (operator -> main display), Y to the operator's left.
+# Origin: centre of the platform deck's top surface.
+#
+# [nodes.<id>]   parent, group, label, pos, rpy, joints, assembly, tags
+#   pos / rpy    pose of the node in its parent (or in its last joint frame). Each entry is an
+#                expression over parameter keys (see generator/expr.ts). rpy = roll X, pitch Y, yaw Z.
+#   joints       joint frames inserted between the parent and this node, outermost first
+#   assembly     true = the node carries no mesh of its own
+# [joints.<id>]  type (revolute | prismatic | ball), axis (in the joint frame), lower, upper, neutral,
+#                kind (adjustment | control), evidence (seen | inferred | assumed), locked, signal, pos, rpy
+#   node transform = pose(pos, rpy) · motion(value);  the GLB stores it at value = neutral.
+# [motion]       for every joint: the C_/D_/S_ nodes that must move when it moves (* = wildcard).
+#                Everything else must stay still. `bun run check` poses each joint and compares.
+
+asset = "rig-b"
+title = "Rig B"
+groups = ["platform", "seat", "pods", "stand", "pedals"]
+
+# ------------------------------------------------------------------------------------------------ root
+[nodes.C_rig]
+label = "Rig B"
+assembly = true
+
+[nodes.D_origin]
+parent = "C_rig"
+label = "Origin: centre of the deck top"
+
+[nodes.D_floor]
+parent = "C_rig"
+label = "Floor under the deck centre"
+pos = ["0", "0", "-platform.deck_height"]
+
+# ------------------------------------------------------------------------------------------------ platform
+[nodes.C_platform]
+parent = "C_rig"
+group = "platform"
+label = "Platform (deck, rim, plinth)"
+tags = ["structure", "floor"]
+
+[nodes.C_platform_fitting_1]
+parent = "C_platform"
+group = "platform"
+label = "Deck pull handle 1"
+pos = ["platform.fitting_xy[0][0]", "platform.fitting_xy[0][1]", "0"]
+
+[nodes.C_platform_fitting_2]
+parent = "C_platform"
+group = "platform"
+label = "Deck pull handle 2"
+pos = ["platform.fitting_xy[1][0]", "platform.fitting_xy[1][1]", "0"]
+
+[nodes.C_platform_fitting_3]
+parent = "C_platform"
+group = "platform"
+label = "Deck pull handle 3"
+pos = ["platform.fitting_xy[2][0]", "platform.fitting_xy[2][1]", "0"]
+
+[nodes.C_platform_fitting_4]
+parent = "C_platform"
+group = "platform"
+label = "Deck pull handle 4"
+pos = ["platform.fitting_xy[3][0]", "platform.fitting_xy[3][1]", "0"]
+
+# ------------------------------------------------------------------------------------------------ seat
+[nodes.C_seat]
+parent = "C_rig"
+group = "seat"
+label = "Seat assembly"
+assembly = true
+pos = ["seat.pos_x", "0", "0"]
+
+[nodes.C_seat_pedestal]
+parent = "C_seat"
+group = "seat"
+label = "Seat pedestal"
+tags = ["structure"]
+
+[nodes.D_seat_ref_fixed]
+parent = "C_seat_pedestal"
+label = "Seat reference, fixed (top of pedestal on the swivel axis; estimated, not a standardised seat index point)"
+pos = ["0", "0", "seat.pedestal_height"]
+
+[nodes.C_seat_carrier]
+parent = "C_seat"
+group = "seat"
+label = "Seat carrier (swivel and height mechanism)"
+joints = ["J_seat_swivel", "J_seat_height"]
+tags = ["structure", "adjustable"]
+
+[nodes.C_seat_base]
+parent = "C_seat_carrier"
+group = "seat"
+label = "Seat base (slide and tilt frame)"
+joints = ["J_seat_slide", "J_seat_tilt"]
+tags = ["structure", "adjustable"]
+
+[nodes.D_seat_ref_live]
+parent = "C_seat_base"
+label = "Seat reference, live (centre line, where the modelled cushion top meets the modelled backrest surface; estimated, not a standardised seat index point)"
+pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height"]
+
+[nodes.D_eye_provisional]
+parent = "C_seat_base"
+label = "Eye point, median adult (alias of D_eye_median, kept for older references)"
+pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x - seat.eye_height_median * sin(seat.recline_neutral) + seat.eye_forward * cos(seat.recline_neutral)", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height - seat.eye_cushion_compression + seat.eye_height_median * cos(seat.recline_neutral) + seat.eye_forward * sin(seat.recline_neutral)"]
+
+[nodes.D_eye_small]
+parent = "C_seat_base"
+label = "Eye point, small woman (5th percentile female sitting eye height, from the live seat reference)"
+pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x - seat.eye_height_small * sin(seat.recline_neutral) + seat.eye_forward * cos(seat.recline_neutral)", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height - seat.eye_cushion_compression + seat.eye_height_small * cos(seat.recline_neutral) + seat.eye_forward * sin(seat.recline_neutral)"]
+
+[nodes.D_eye_median]
+parent = "C_seat_base"
+label = "Eye point, median adult (from the live seat reference along the torso line)"
+pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x - seat.eye_height_median * sin(seat.recline_neutral) + seat.eye_forward * cos(seat.recline_neutral)", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height - seat.eye_cushion_compression + seat.eye_height_median * cos(seat.recline_neutral) + seat.eye_forward * sin(seat.recline_neutral)"]
+
+[nodes.D_eye_large]
+parent = "C_seat_base"
+label = "Eye point, tall man (95th percentile male sitting eye height, from the live seat reference)"
+pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x - seat.eye_height_large * sin(seat.recline_neutral) + seat.eye_forward * cos(seat.recline_neutral)", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height - seat.eye_cushion_compression + seat.eye_height_large * cos(seat.recline_neutral) + seat.eye_forward * sin(seat.recline_neutral)"]
+
+[nodes.C_seat_pan]
+parent = "C_seat_base"
+group = "seat"
+label = "Seat pan (cushion in white lower shell)"
+tags = ["body_contact"]
+
+[nodes.C_seat_hub_L]
+parent = "C_seat_base"
+group = "seat"
+label = "Recline hub cover, left"
+pos = ["seat.hub_centre_xz[0] - seat.pos_x", "seat.hub_half_spacing", "seat.hub_centre_xz[1] - seat.pedestal_height - seat.carrier_height"]
+
+[nodes.C_seat_hub_R]
+parent = "C_seat_base"
+group = "seat"
+label = "Recline hub cover, right"
+pos = ["seat.hub_centre_xz[0] - seat.pos_x", "-seat.hub_half_spacing", "seat.hub_centre_xz[1] - seat.pedestal_height - seat.carrier_height"]
+
+[nodes.C_seat_back]
+parent = "C_seat_base"
+group = "seat"
+label = "Seat back assembly"
+assembly = true
+joints = ["J_seat_recline"]
+tags = ["adjustable"]
+
+[nodes.C_seat_back_shell]
+parent = "C_seat_back"
+group = "seat"
+label = "Seat back shell (white, with dark rear panel)"
+
+[nodes.C_seat_back_cushion]
+parent = "C_seat_back"
+group = "seat"
+label = "Seat back cushion"
+tags = ["body_contact"]
+
+[nodes.C_seat_headrest]
+parent = "C_seat_back"
+group = "seat"
+label = "Headrest"
+tags = ["body_contact"]
+
+# ------------------------------------------------------------------------------------------------ pods
+# Pod frame: origin on the top surface of the black control plate at the joystick axis, pitched by the
+# plate tilt: X runs forward along the plate (front low), Z is the plate normal. The mount is written
+# from rig coordinates (joy_x, plate_front_z are measured in the rig frame), so it does not move when
+# the seat's own layout parameters change.
+[nodes.C_pod_L]
+parent = "C_seat_base"
+group = "pods"
+label = "Left armrest pod"
+assembly = true
+pos = ["pods.joy_x - seat.pos_x", "pods.joy_y", "pods.plate_front_z + tan(pods.plate_tilt) * (pods.plate_front_ref_x - pods.joy_x) - seat.pedestal_height - seat.carrier_height"]
+rpy = ["0", "pods.plate_tilt", "0"]
+
+[nodes.C_pod_shell_L]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod shell (blade, leg, tray)"
+
+[nodes.C_pod_plate_L]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod top plate"
+
+[nodes.C_pod_armrest_L]
+parent = "C_pod_L"
+group = "pods"
+label = "Left armrest pad"
+joints = ["J_pod_armrest_L"]
+tags = ["body_contact", "adjustable"]
+
+[nodes.C_joy_base_L]
+parent = "C_pod_L"
+group = "pods"
+label = "Left joystick base (plinth and bellows)"
+tags = ["control"]
+
+[nodes.C_joy_lever_L]
+parent = "C_joy_base_L"
+group = "pods"
+label = "Left joystick lever and grip"
+joints = ["J_joy_L_roll", "J_joy_L_pitch"]
+tags = ["control", "hand"]
+
+[nodes.D_grip_L]
+parent = "C_joy_lever_L"
+label = "Left grip reference point (palm centre, on the grip surface)"
+pos = ["pods.grip_palm[0]", "pods.grip_palm[1]", "pods.grip_palm[2] - pods.joy_pivot_height"]
+
+[nodes.C_pod_keyswitch_L]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod key switch"
+pos = ["pods.keyswitch_xy_L[0]", "pods.keyswitch_xy_L[1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_L_1]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod button 1"
+pos = ["pods.button_xy_L[0][0]", "pods.button_xy_L[0][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_L_2]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod button 2"
+pos = ["pods.button_xy_L[1][0]", "pods.button_xy_L[1][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_L_3]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod button 3"
+pos = ["pods.button_xy_L[2][0]", "pods.button_xy_L[2][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_L_4]
+parent = "C_pod_L"
+group = "pods"
+label = "Left pod button 4"
+pos = ["pods.button_xy_L[3][0]", "pods.button_xy_L[3][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_R]
+parent = "C_seat_base"
+group = "pods"
+label = "Right armrest pod"
+assembly = true
+pos = ["pods.joy_x - seat.pos_x", "-pods.joy_y", "pods.plate_front_z + tan(pods.plate_tilt) * (pods.plate_front_ref_x - pods.joy_x) - seat.pedestal_height - seat.carrier_height"]
+rpy = ["0", "pods.plate_tilt", "0"]
+
+[nodes.C_pod_shell_R]
+parent = "C_pod_R"
+group = "pods"
+label = "Right pod shell (blade, leg, tray)"
+
+[nodes.C_pod_plate_R]
+parent = "C_pod_R"
+group = "pods"
+label = "Right pod top plate"
+
+[nodes.C_pod_armrest_R]
+parent = "C_pod_R"
+group = "pods"
+label = "Right armrest pad"
+joints = ["J_pod_armrest_R"]
+tags = ["body_contact", "adjustable"]
+
+[nodes.C_joy_base_R]
+parent = "C_pod_R"
+group = "pods"
+label = "Right joystick base (plinth and bellows)"
+tags = ["control"]
+
+[nodes.C_joy_lever_R]
+parent = "C_joy_base_R"
+group = "pods"
+label = "Right joystick lever and grip"
+joints = ["J_joy_R_roll", "J_joy_R_pitch"]
+tags = ["control", "hand"]
+
+[nodes.D_grip_R]
+parent = "C_joy_lever_R"
+label = "Right grip reference point (palm centre, on the grip surface)"
+pos = ["pods.grip_palm[0]", "-pods.grip_palm[1]", "pods.grip_palm[2] - pods.joy_pivot_height"]
+
+[nodes.C_pod_estop_R]
+parent = "C_pod_R"
+group = "pods"
+label = "Emergency stop"
+pos = ["pods.estop_xy[0]", "pods.estop_xy[1]", "0"]
+tags = ["control", "safety"]
+
+[nodes.D_estop]
+parent = "C_pod_estop_R"
+label = "Emergency stop head centre"
+pos = ["0", "0", "pods.estop_height"]
+
+[nodes.C_pod_button_R_1]
+parent = "C_pod_R"
+group = "pods"
+label = "Right pod button 1"
+pos = ["pods.button_xy_R[0][0]", "pods.button_xy_R[0][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_R_2]
+parent = "C_pod_R"
+group = "pods"
+label = "Right pod button 2"
+pos = ["pods.button_xy_R[1][0]", "pods.button_xy_R[1][1]", "0"]
+tags = ["control"]
+
+[nodes.C_pod_button_R_3]
+parent = "C_pod_R"
+group = "pods"
+label = "Right pod button 3"
+pos = ["pods.button_xy_R[2][0]", "pods.button_xy_R[2][1]", "0"]
+tags = ["control"]
+
+# Arm frame: origin at the lower ball, +Z along the arm. Screen frame: origin at the upper ball,
+# screen face toward -X, width along Y, height along Z.
+[nodes.C_ts_arm]
+parent = "C_pod_R"
+group = "pods"
+label = "Touchscreen arm (double socket)"
+joints = ["J_ts_arm"]
+tags = ["adjustable"]
+
+[nodes.C_ts_screen]
+parent = "C_ts_arm"
+group = "pods"
+label = "Touchscreen"
+joints = ["J_ts_screen"]
+tags = ["display", "control", "adjustable"]
+
+[nodes.S_ts_screen]
+parent = "C_ts_screen"
+group = "pods"
+label = "Touchscreen active area"
+pos = ["-touchscreen.depth - pods.ts_ball_standoff", "0", "pods.ts_mount_drop"]
+
+# ------------------------------------------------------------------------------------------------ stand
+# Stand frame: on the deck, centred between the column feet.
+[nodes.C_stand]
+parent = "C_rig"
+group = "stand"
+label = "Monitor stand assembly"
+assembly = true
+pos = ["(stand.column_rear_nose_x + stand.column_depth_foot / 2)", "stand.centre_y", "0"]
+
+[nodes.C_stand_column_L]
+parent = "C_stand"
+group = "stand"
+label = "Stand column, left"
+pos = ["0", "stand.column_inner_gap / 2 + stand.column_width / 2", "0"]
+tags = ["structure"]
+
+[nodes.C_stand_column_R]
+parent = "C_stand"
+group = "stand"
+label = "Stand column, right"
+pos = ["0", "-stand.column_inner_gap / 2 - stand.column_width / 2", "0"]
+tags = ["structure"]
+
+[nodes.C_stand_shelf]
+parent = "C_stand"
+group = "stand"
+label = "Stand shelf"
+pos = ["(stand.shelf_near_edge_x + stand.shelf_far_edge_x) / 2 - (stand.column_rear_nose_x + stand.column_depth_foot / 2)", "0", "stand.shelf_top_z_near_edge - (stand.shelf_far_edge_x - stand.shelf_near_edge_x) / 2 * tan(stand.shelf_tilt)"]
+rpy = ["0", "stand.shelf_tilt", "0"]
+tags = ["structure"]
+
+[nodes.C_stand_soundbar]
+parent = "C_stand"
+group = "stand"
+label = "Soundbar"
+pos = ["soundbar.front_x - (stand.column_rear_nose_x + stand.column_depth_foot / 2)", "soundbar.centre_y - stand.centre_y", "stand.shelf_top_z_near_edge - (soundbar.front_x - stand.shelf_near_edge_x) * tan(stand.shelf_tilt)"]
+rpy = ["0", "stand.shelf_tilt", "0"]
+
+# Arm frame: on the shelf top at the arm post axis.
+[nodes.C_stand_monarm]
+parent = "C_stand"
+group = "stand"
+label = "Monitor arm base (edge clamp and post)"
+pos = ["stand.arm_post_xy[0] - (stand.column_rear_nose_x + stand.column_depth_foot / 2)", "stand.arm_post_xy[1] - stand.centre_y", "(stand.shelf_top_z_near_edge - (stand.arm_post_xy[0] - stand.shelf_near_edge_x) * tan(stand.shelf_tilt))"]
+tags = ["adjustable"]
+
+# Links frame: on the post axis at the sliding collar, axes parallel to the rig's. The collar, both links
+# and the head ride the height joint along the post, so the head stays on the monitor's mount.
+[nodes.C_stand_monarm_links]
+parent = "C_stand_monarm"
+group = "stand"
+label = "Monitor arm links and head (slide on the post)"
+joints = ["J_mon_height"]
+rpy = ["0", "-stand.shelf_tilt", "0"]
+tags = ["adjustable"]
+
+# Monitor frame: origin at the arm head pivot behind the panel; screen toward -X.
+[nodes.C_stand_monitor]
+parent = "C_stand_monarm_links"
+group = "stand"
+label = "Main monitor (curved ultrawide)"
+joints = ["J_mon_tilt", "J_mon_pan"]
+tags = ["display", "adjustable"]
+
+[nodes.S_mon_screen]
+parent = "C_stand_monitor"
+group = "stand"
+label = "Main monitor active area"
+pos = ["-monitor.depth_centre", "0", "monitor.active_offset_z"]
+
+# ------------------------------------------------------------------------------------------------ pedals
+# Pedal frame: on the deck at the operator-side lip of the heel plate, centred.
+[nodes.C_pedals]
+parent = "C_rig"
+group = "pedals"
+label = "Pedal set assembly"
+assembly = true
+joints = ["J_pedal_tray"]
+
+[nodes.C_pedal_base]
+parent = "C_pedals"
+group = "pedals"
+label = "Pedal base (heel plate and frame)"
+
+[nodes.C_pedal_arm_1]
+parent = "C_pedals"
+group = "pedals"
+label = "Pedal 1 (left)"
+joints = ["J_pedal_1"]
+tags = ["control", "foot"]
+
+[nodes.D_pedal_face_1]
+parent = "C_pedal_arm_1"
+label = "Pedal 1 face centre"
+pos = ["-pedals.pad_face_offset", "0", "pedals.arm_reach - pedals.pad_size[1] / 2"]
+
+[nodes.C_pedal_arm_2]
+parent = "C_pedals"
+group = "pedals"
+label = "Pedal 2 (centre)"
+joints = ["J_pedal_2"]
+tags = ["control", "foot"]
+
+[nodes.D_pedal_face_2]
+parent = "C_pedal_arm_2"
+label = "Pedal 2 face centre"
+pos = ["-pedals.pad_face_offset", "0", "pedals.arm_reach - pedals.pad_size[1] / 2"]
+
+[nodes.C_pedal_arm_3]
+parent = "C_pedals"
+group = "pedals"
+label = "Pedal 3 (right)"
+joints = ["J_pedal_3"]
+tags = ["control", "foot"]
+
+[nodes.D_pedal_face_3]
+parent = "C_pedal_arm_3"
+label = "Pedal 3 face centre"
+pos = ["-pedals.pad_face_offset", "0", "pedals.arm_reach - pedals.pad_size[1] / 2"]
+
+# ================================================================================================ joints
+[joints.J_seat_swivel]
+type = "revolute"
+axis = [0, 0, 1]
+pos = ["0", "0", "seat.pedestal_height"]
+lower = "-seat.swivel_range"
+upper = "seat.swivel_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+[joints.J_seat_height]
+type = "prismatic"
+axis = [0, 0, 1]
+lower = "-seat.height_range"
+upper = "seat.height_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+[joints.J_seat_slide]
+type = "prismatic"
+axis = [1, 0, 0]
+pos = ["0", "0", "seat.carrier_height"]
+lower = "-seat.slide_range"
+upper = "seat.slide_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+[joints.J_seat_tilt]
+type = "revolute"
+axis = [0, 1, 0]
+lower = "-seat.tilt_range"
+upper = "seat.tilt_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+# Positive = leaning back. The back is modelled upright in its own frame; the joint leans it.
+[joints.J_seat_recline]
+type = "revolute"
+axis = [0, -1, 0]
+pos = ["seat.hub_centre_xz[0] - seat.pos_x", "0", "seat.hub_centre_xz[1] - seat.pedestal_height - seat.carrier_height"]
+lower = "seat.recline_min"
+upper = "seat.recline_max"
+neutral = "seat.recline_neutral"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+[joints.J_pod_armrest_L]
+type = "prismatic"
+axis = [1, 0, 0]
+pos = ["pods.pad_x", "pods.pad_y", "pods.pad_top"]
+lower = "-pods.pad_travel"
+upper = "pods.pad_travel"
+neutral = "0"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_pod_armrest_R]
+type = "prismatic"
+axis = [1, 0, 0]
+pos = ["pods.pad_x", "-pods.pad_y", "pods.pad_top"]
+lower = "-pods.pad_travel"
+upper = "pods.pad_travel"
+neutral = "0"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_joy_L_roll]
+type = "revolute"
+axis = [1, 0, 0]
+pos = ["0", "0", "pods.joy_pivot_height"]
+lower = "-joystick.travel"
+upper = "joystick.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "joy_L.x"
+
+[joints.J_joy_L_pitch]
+type = "revolute"
+axis = [0, 1, 0]
+lower = "-joystick.travel"
+upper = "joystick.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "joy_L.y"
+
+[joints.J_joy_R_roll]
+type = "revolute"
+axis = [1, 0, 0]
+pos = ["0", "0", "pods.joy_pivot_height"]
+lower = "-joystick.travel"
+upper = "joystick.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "joy_R.x"
+
+[joints.J_joy_R_pitch]
+type = "revolute"
+axis = [0, 1, 0]
+lower = "-joystick.travel"
+upper = "joystick.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "joy_R.y"
+
+# Ball joints: neutral is a roll/pitch/yaw triple; lower/upper bound each of the three offsets.
+[joints.J_ts_arm]
+type = "ball"
+pos = ["pods.ts_base_xy[0]", "pods.ts_base_xy[1]", "pods.ts_base_height"]
+lower = "-pods.ts_ball_range"
+upper = "pods.ts_ball_range"
+neutral = ["pods.ts_arm_rpy[0]", "pods.ts_arm_rpy[1]", "pods.ts_arm_rpy[2]"]
+kind = "adjustment"
+evidence = "seen"
+locked = false
+
+[joints.J_ts_screen]
+type = "ball"
+pos = ["0", "0", "pods.ts_arm_length"]
+lower = "-pods.ts_ball_range"
+upper = "pods.ts_ball_range"
+neutral = ["pods.ts_screen_rpy[0]", "pods.ts_screen_rpy[1]", "pods.ts_screen_rpy[2]"]
+kind = "adjustment"
+evidence = "seen"
+locked = false
+
+# Height: the arm's collar slides along the post, which stands square on the tilted shelf (joint Z = post axis).
+# The gas-spring link's own lift is not a joint: the links are posed by parameters and move as one piece.
+[joints.J_mon_height]
+type = "prismatic"
+axis = [0, 0, 1]
+pos = ["stand.arm_collar_height * sin(stand.shelf_tilt)", "0", "stand.arm_collar_height * cos(stand.shelf_tilt)"]
+rpy = ["0", "stand.shelf_tilt", "0"]
+lower = "stand.arm_slide_limits[0] - stand.arm_collar_height"
+upper = "stand.arm_slide_limits[1] - stand.arm_collar_height"
+neutral = "0"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+# Positive = top of the screen tips away from the operator.
+[joints.J_mon_tilt]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["stand.monitor_centre[0] + monitor.depth_centre - stand.arm_post_xy[0] - stand.arm_collar_height * sin(stand.shelf_tilt)", "stand.monitor_centre[1] - stand.arm_post_xy[1]", "stand.monitor_centre[2] - (stand.shelf_top_z_near_edge - (stand.arm_post_xy[0] - stand.shelf_near_edge_x) * tan(stand.shelf_tilt)) - stand.arm_collar_height * cos(stand.shelf_tilt)"]
+lower = "-stand.monitor_tilt_range"
+upper = "stand.monitor_tilt_range"
+neutral = "stand.monitor_tilt"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_mon_pan]
+type = "revolute"
+axis = [0, 0, 1]
+lower = "-stand.monitor_pan_range"
+upper = "stand.monitor_pan_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_pedal_tray]
+type = "prismatic"
+axis = [1, 0, 0]
+pos = ["pedals.heel_lip_x", "pedals.centre_y", "0"]
+lower = "-pedals.tray_range"
+upper = "pedals.tray_range"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+# Pedal frame: origin on the hinge axis, +Z along the arm toward the pad. Positive = pressed (pad moves forward and down).
+[joints.J_pedal_1]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["pedals.pad_top_edge[0] - pedals.heel_lip_x - pedals.arm_reach * sin(pedals.arm_angle) + pedals.pad_face_offset * cos(pedals.arm_angle)", "pedalset.pitch", "pedals.pad_top_edge[1] - pedals.arm_reach * cos(pedals.arm_angle) - pedals.pad_face_offset * sin(pedals.arm_angle)"]
+rpy = ["0", "pedals.arm_angle", "0"]
+lower = "0"
+upper = "pedals.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "pedal_1"
+
+[joints.J_pedal_2]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["pedals.pad_top_edge[0] - pedals.heel_lip_x - pedals.arm_reach * sin(pedals.arm_angle) + pedals.pad_face_offset * cos(pedals.arm_angle)", "0", "pedals.pad_top_edge[1] - pedals.arm_reach * cos(pedals.arm_angle) - pedals.pad_face_offset * sin(pedals.arm_angle)"]
+rpy = ["0", "pedals.arm_angle", "0"]
+lower = "0"
+upper = "pedals.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "pedal_2"
+
+[joints.J_pedal_3]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["pedals.pad_top_edge[0] - pedals.heel_lip_x - pedals.arm_reach * sin(pedals.arm_angle) + pedals.pad_face_offset * cos(pedals.arm_angle)", "-pedalset.pitch", "pedals.pad_top_edge[1] - pedals.arm_reach * cos(pedals.arm_angle) - pedals.pad_face_offset * sin(pedals.arm_angle)"]
+rpy = ["0", "pedals.arm_angle", "0"]
+lower = "0"
+upper = "pedals.travel"
+neutral = "0"
+kind = "control"
+evidence = "seen"
+locked = false
+signal = "pedal_3"
+
+# ================================================================================================ expected motion
+[motion]
+J_seat_swivel   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
+J_seat_height   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
+J_seat_slide    = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
+J_seat_tilt     = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
+J_seat_recline  = ["C_seat_back", "C_seat_back_shell", "C_seat_back_cushion", "C_seat_headrest"]
+J_pod_armrest_L = ["C_pod_armrest_L"]
+J_pod_armrest_R = ["C_pod_armrest_R"]
+J_joy_L_roll    = ["C_joy_lever_L", "D_grip_L"]
+J_joy_L_pitch   = ["C_joy_lever_L", "D_grip_L"]
+J_joy_R_roll    = ["C_joy_lever_R", "D_grip_R"]
+J_joy_R_pitch   = ["C_joy_lever_R", "D_grip_R"]
+J_ts_arm        = ["C_ts_arm", "C_ts_screen", "S_ts_screen"]
+J_ts_screen     = ["C_ts_screen", "S_ts_screen"]
+J_mon_height    = ["C_stand_monarm_links", "C_stand_monitor", "S_mon_screen"]
+J_mon_tilt      = ["C_stand_monitor", "S_mon_screen"]
+J_mon_pan       = ["C_stand_monitor", "S_mon_screen"]
+J_pedal_tray    = ["C_pedals", "C_pedal_base", "C_pedal_arm_*", "D_pedal_face_*"]
+J_pedal_1       = ["C_pedal_arm_1", "D_pedal_face_1"]
+J_pedal_2       = ["C_pedal_arm_2", "D_pedal_face_2"]
+J_pedal_3       = ["C_pedal_arm_3", "D_pedal_face_3"]
+
+# ================================================================================================ left / right
+# Every id with a side marker must have its counterpart, at the mirrored position, unless listed here.
+[symmetry]
+# exist on one side only
+single = ["C_pod_estop_R", "C_pod_button_L_4", "C_pod_keyswitch_L"]
+# pairs whose positions are deliberately not mirror images (listed by the left id)
+free = ["C_pod_button_L_1", "C_pod_button_L_2", "C_pod_button_L_3", "C_stand_column_L"]

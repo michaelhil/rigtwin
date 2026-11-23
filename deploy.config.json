@@ -1,0 +1,7 @@
+{
+  "_about": "Read by `bun run deploy` (tools/deploy.ts). host: SSH alias from ~/.ssh/config; remoteRoot: folder on the server holding releases/ and the symlink current; publicUrl: where the web server serves remoteRoot/current (with the trailing slash); keepReleases: release folders kept on the server. See wiki/50-implementation/deployment.md.",
+  "host": "samsinn",
+  "remoteRoot": "/srv/rigtwin",
+  "publicUrl": "https://mightwork.ai/rigtwin/",
+  "keepReleases": 5
+}

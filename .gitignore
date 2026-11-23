@@ -1,0 +1,7 @@
+node_modules/
+private/
+work/
+tools/.venv/
+dist/
+assets/*/build/
+.DS_Store

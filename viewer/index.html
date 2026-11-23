@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rig viewer</title>
+<link rel="stylesheet" href="./viewer.css">
+</head>
+<body>
+<div id="stage">
+  <div id="frame">
+    <img id="photo" alt="" hidden>
+    <canvas id="gl" tabindex="0" aria-label="3D view of the rig"></canvas>
+    <canvas id="overlay" hidden></canvas>
+    <svg id="hud" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="legend" hidden></div>
+    <div id="caption" hidden></div>
+  </div>
+  <div id="tip" hidden></div>
+  <div id="status">Loading…</div>
+
+  <!-- everything below is the page's own interface; hidden with ui=0 -->
+  <div id="notices" class="ui" aria-live="polite"></div>
+  <div id="empty" class="ui" hidden>Everything is hidden. <button id="empty-show">Show all</button></div>
+  <div id="key" class="ui" hidden></div>
+  <div id="hint" class="ui"></div>
+  <div id="toolbar" class="ui">
+    <button id="open-parts" aria-expanded="false">Parts</button>
+    <button id="reset" title="Put the view and all parts back to the start">Reset all</button>
+    <button id="copy-link" title="Copy a link that opens exactly this view"><span class="long">Copy link</span><span class="short">Link</span></button>
+    <button id="save-picture" title="Save the 3D view as a picture"><span class="long">Save picture</span><span class="short">Picture</span></button>
+    <button id="more-btn" aria-expanded="false" aria-controls="more" title="Views, colours, help">More</button>
+  </div>
+  <div id="more" class="ui pop" hidden></div>
+  <aside id="card" class="ui" hidden aria-label="Selected part"></aside>
+  <div id="toast" class="ui" hidden role="status"></div>
+</div>
+
+<aside id="parts" class="ui" aria-label="Parts">
+  <header><h1 id="title">Rig</h1><p id="subtitle">Teleoperation station</p></header>
+  <div id="tree"></div>
+</aside>
+<div id="scrim" class="ui" hidden></div>
+
+<script type="module" src="./viewer.js"></script>
+</body>
+</html>

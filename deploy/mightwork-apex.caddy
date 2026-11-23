@@ -1,0 +1,38 @@
+# Caddy site for the bare domain mightwork.ai, serving rigtwin's static release.
+# Installed on the production host as /etc/caddy/managed-sites/mightwork-apex.caddy
+# (the main Caddyfile imports /etc/caddy/managed-sites/*.caddy).
+#
+#   /rigtwin    -> redirect to /rigtwin/
+#   /rigtwin/*  -> files from /srv/rigtwin/current (a symlink switched by `bun run deploy`)
+#                  the viewer is at /rigtwin/, the wiki at /rigtwin/wiki/
+#   anything else on mightwork.ai -> 404 (nothing else is served from the bare domain yet)
+#
+# Other sites on the host (subdomains of mightwork.ai and other domains) have their own files
+# and are not affected by this one.
+
+mightwork.ai {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	redir /rigtwin /rigtwin/ 308
+
+	handle_path /rigtwin/* {
+		root * /srv/rigtwin/current
+		@html path *.html */
+		header @html Cache-Control "no-cache"
+		@data path *.glb *.json
+		header @data Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sheet</title>
+<style>
+  body { margin: 0; background: #fff; font: 14px/1.35 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1b1e23; }
+  #sheet { display: inline-block; padding: 14px; }
+  h1 { font-size: 20px; margin: 0 0 2px; } .sub { color: #5a616b; margin-bottom: 10px; font-size: 13px; }
+  #grid { display: grid; gap: 8px; }
+  figure { margin: 0; position: relative; background: #e9ebee; }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { position: absolute; left: 8px; top: 6px; background: rgba(255,255,255,.82); padding: 1px 8px; border-radius: 4px; font-weight: 600; font-size: 14px; }
+  #foot { margin-top: 10px; font-size: 12.5px; color: #333; max-width: 100%; }
+  #foot div { margin-top: 2px; } #foot b { color: #a23; }
+</style>
+<div id="sheet"><h1 id="title"></h1><div class="sub" id="sub"></div><div id="grid"></div><div id="foot"></div></div>
+<script>
+  // Spec in the URL fragment: { title, sub, cols, tileWidth, tiles: [{ src, label }], footer: [text] }
+  const spec = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+  document.getElementById('title').textContent = spec.title ?? '';
+  document.getElementById('sub').textContent = spec.sub ?? '';
+  // a sheet without a title is a plain row of labelled panels (used for the documentation's comparison images)
+  if (!spec.title && !spec.sub) { document.getElementById('title').hidden = true; document.getElementById('sub').hidden = true; document.getElementById('sheet').style.padding = (spec.pad ?? 8) + 'px'; }
+  const grid = document.getElementById('grid');
+  grid.style.gridTemplateColumns = `repeat(${spec.cols}, ${spec.tileWidth}px)`;
+  const waits = [];
+  for (const t of spec.tiles) {
+    const f = document.createElement('figure'), img = new Image(), c = document.createElement('figcaption');
+    img.src = t.src; c.textContent = t.label; f.append(img, c); grid.append(f);
+    waits.push(img.decode().catch(() => { c.textContent += ' (image missing)'; }));
+  }
+  for (const line of spec.footer ?? []) { const d = document.createElement('div'); if (line.startsWith('!')) { const b = document.createElement('b'); b.textContent = line.slice(1); d.append(b); } else d.textContent = line; document.getElementById('foot').append(d); }
+  Promise.all(waits).then(() => { const r = document.getElementById('sheet').getBoundingClientRect(); window.sheetSize = [Math.ceil(r.width), Math.ceil(r.height)]; window.sheetReady = true; });
+</script>

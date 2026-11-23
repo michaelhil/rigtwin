@@ -1,0 +1,60 @@
+# Purchased devices: vendor dimensions (class "vendor"). Sources: build brief section 7 and
+# private/planning/research/01-photo-evidence.md section 4. One record per independent number.
+
+[monitor]
+outer_width   = { value = 1.195, unit = "m", range = 0.005, class = "vendor", tier = "critical", evidence = "Vendor data, 49 in 32:9 curved monitor: overall width about 1.195 m, taken as the chord (the straight width vendors list); along the 1800R arc that is 1.218, which leaves 10 mm of bezel beside the 1.197 active arc. Photo fit of the chord: 1.19-1.20 (IMG_2530)." }
+outer_height  = { value = 0.365, unit = "m", range = 0.005, class = "vendor", tier = "critical", evidence = "Vendor data: panel housing height about 0.365 m (without stand)." }
+active_arc    = { value = 1.197, unit = "m", range = 0.003, class = "vendor", tier = "critical", evidence = "Vendor data: active area 1.197 m along the arc." }
+active_height = { value = 0.339, unit = "m", range = 0.003, class = "vendor", tier = "critical", evidence = "Vendor data: active area height 0.339 m." }
+radius        = { value = 1.8, unit = "m", range = 0.1, class = "vendor", tier = "layout", evidence = "Vendor data: 1800R curvature class." }
+depth_edge    = { value = 0.016, unit = "m", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Housing thickness at the rim all round, by eye from IMG_2530 and the same class of monitor on Rig C1 (IMG_2517)." }
+depth_shell   = { value = 0.075, unit = "m", class = "assumed", basis = "cross_instance", tier = "cosmetic", evidence = "Greatest thickness of the rear shell at the middle of the panel, by eye from Rig C1 (IMG_2517); no vendor depth without stand found." }
+shell_bulge   = { value = [0.22, 0.82, 0.3, 0.74], unit = "ratio", class = "assumed", basis = "cross_instance", tier = "cosmetic", evidence = "Shape of the rear bulge as fractions of the half width and half height: full depth inside the first, back to the rim thickness at the second (along the arc); flat crown up to the third, back toward the rim thickness at the fourth (vertical). By eye from Rig C1 (IMG_2517)." }
+rim           = { value = [0.0015, 0.002], unit = "m", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Width of the light housing edge seen around the dark front glass, and how far the glass stands proud of it; by eye from IMG_2530." }
+active_offset_z = { value = 0.004, unit = "m", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Active area sits slightly above the middle of the housing (lower bezel a little wider), by eye from IMG_2511." }
+boss          = { value = [0.06, 0.115, 0.004], unit = "m", class = "assumed", basis = "cross_instance", tier = "cosmetic", evidence = "Round boss on the rear shell (radius) and the mounting plate on it (side, thickness), by eye from Rig C1 (IMG_2517)." }
+depth_centre  = { value = 0.105, unit = "m", class = "assumed", basis = "by_eye", tier = "layout", evidence = "Screen face to arm head pivot at the centre, by eye; no vendor depth without stand found." }
+vesa          = { value = 0.10, unit = "m", class = "vendor", tier = "cosmetic", evidence = "Vendor data: VESA 100 mount." }
+bevel         = { value = 0.003, unit = "m", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Soft edge of the panel housing, by eye." }
+surface_lift  = { value = 0.0005, unit = "m", class = "invented", tier = "cosmetic", evidence = "Gap between housing and the active-area sheet so the two never coincide; modelling device." }
+
+[touchscreen]
+outer_width   = { value = 0.387, unit = "m", range = 0.002, class = "vendor", tier = "layout", evidence = "Vendor data, 15.6 in touch monitor: 0.387 m wide." }
+outer_height  = { value = 0.2444, unit = "m", range = 0.002, class = "vendor", tier = "layout", evidence = "Vendor data: 0.2444 m high." }
+depth         = { value = 0.0329, unit = "m", range = 0.002, class = "vendor", tier = "cosmetic", evidence = "Vendor data: 0.0329 m deep." }
+active_width  = { value = 0.3452, unit = "m", range = 0.001, class = "vendor", tier = "layout", evidence = "Vendor data: active area 0.3452 m wide." }
+surface_lift  = { value = 0.0005, unit = "m", class = "invented", tier = "cosmetic", evidence = "Gap between housing and the active-area sheet so the two never coincide; modelling device." }
+active_height = { value = 0.1946, unit = "m", range = 0.001, class = "vendor", tier = "layout", evidence = "Vendor data: active area 0.1946 m high." }
+
+[pedalset]
+width  = { value = 0.388, unit = "m", range = 0.005, class = "vendor", tier = "layout", evidence = "Vendor data, three-pedal set: 0.388 m wide." }
+depth  = { value = 0.368, unit = "m", range = 0.005, class = "vendor", tier = "layout", evidence = "Vendor data: 0.368 m deep." }
+height = { value = 0.225, unit = "m", range = 0.005, class = "vendor", tier = "layout", evidence = "Vendor data: 0.225 m high." }
+pitch  = { value = 0.14, unit = "m", range = 0.01, class = "vendor", tier = "layout", evidence = "Vendor data: pedal pitch about 0.14 m." }
+
+[joystick]
+grip_top_height  = { value = 0.2399, unit = "m", range = 0.003, class = "vendor", tier = "layout", evidence = "Vendor drawing, industrial joystick with multi-button grip: grip top 239.9 mm above the mounting plane." }
+grip_ref_height  = { value = 0.127, unit = "m", range = 0.003, class = "vendor", tier = "critical", evidence = "Vendor drawing: grip reference point 127 mm above the mounting plane." }
+bellows_diameter = { value = 0.064, unit = "m", range = 0.003, class = "vendor", tier = "cosmetic", evidence = "Vendor drawing: bellows diameter 64 mm." }
+flange_size      = { value = 0.1067, unit = "m", range = 0.002, class = "vendor", tier = "layout", evidence = "Vendor drawing: mounting flange 106.7 mm square." }
+travel           = { value = 20, unit = "deg", class = "vendor", tier = "critical", evidence = "Vendor data: lever travel plus/minus 20 degrees on both axes." }
+
+[soundbar]
+length = { value = 0.41, unit = "m", range = 0.006, class = "vendor", tier = "layout", evidence = "Vendor data: 0.41 m long. Photo: 0.411 between the triangulated front-bottom corners (IMG_2530 + IMG_2532), ratio 1.003." }
+height = { value = 0.075, unit = "m", range = 0.008, class = "photo", tier = "cosmetic", evidence = "Two views. Front face at the left end, two triangulated corners. Vendor 0.063 to 0.075 depending on the listing." }
+front_x = { value = 0.4925, unit = "m", range = 0.008, class = "photo", tier = "layout", evidence = "Two views. Front-bottom edge in the rig frame: corners triangulated at x 0.494 (left) and 0.491 (right); parallel to Y within 0.5 deg." }
+centre_y = { value = 0.008, unit = "m", range = 0.008, class = "photo", tier = "layout", evidence = "Two views. Middle of the two triangulated front-bottom corners (y +0.213 and -0.198), rig frame." }
+foot_gap = { value = 0.004, unit = "m", range = 0.004, class = "photo", tier = "cosmetic", evidence = "Two views. The front-bottom corners sit 4-5 mm above the shelf plane (feet)." }
+section = { value = [[0.14, 0.0], [1.0, 0.0], [1.0, 0.86], [0.9, 1.0], [0.34, 1.0], [0.17, 0.93], [0.06, 0.76], [0.0, 0.5], [0.02, 0.24], [0.07, 0.07]], unit = "ratio", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Cross-section as fractions of depth (0 = front) and height: slightly rounded front grille, rounded upper front edge, flat back; by eye from the IMG_2532 and IMG_2530 shelf crops." }
+end_cap = { value = [0.012, 0.88], unit = "m", class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Length of the tapered end caps (m) and the scale of the end face relative to the section (ratio), by eye from the IMG_2530 shelf crop." }
+depth  = { value = 0.095, unit = "m", range = 0.013, class = "vendor", tier = "cosmetic", evidence = "Vendor data: 0.082 to 0.108 m deep depending on the listing." }
+
+[monarm]
+lift            = { value = 0.292, unit = "m", class = "vendor", tier = "layout", evidence = "Vendor data, white desk monitor arm: lift 0.292 m." }
+reach           = { value = 0.594, unit = "m", class = "vendor", tier = "layout", evidence = "Vendor data: reach 0.594 m." }
+vesa_height_min = { value = 0.16, unit = "m", class = "vendor", tier = "layout", evidence = "Vendor data: VESA centre 0.16 m above the arm base at the lowest setting." }
+vesa_height_max = { value = 0.452, unit = "m", class = "vendor", tier = "layout", evidence = "Vendor data: VESA centre 0.452 m above the arm base at the highest setting." }
+post_diameter   = { value = 0.05, unit = "m", range = 0.012, class = "photo", tier = "cosmetic", evidence = "Single view. White post of the arm on the shelf: 0.042 (IMG_2532), 0.063 (IMG_2530)." }
+
+[estop]
+head_diameter = { value = 0.03, unit = "m", range = 0.005, class = "vendor", tier = "cosmetic", evidence = "Typical catalogue size for this style of emergency stop head: about 30 mm." }
