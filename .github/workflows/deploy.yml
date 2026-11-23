@@ -1,0 +1,76 @@
+# Every push to main: run every check, build the model, the viewer and the wiki, and deploy to
+# https://mightwork.ai/rigtwin/ with the same script as a manual deploy (`bun run deploy`), which
+# switches releases only after the upload, checks the live site and switches back if a check fails.
+#
+# Credentials: the repository secret DEPLOY_SSH_KEY is the private half of a key that the server
+# accepts only for the unprivileged account `rigtwin-deploy`, and only for the exact commands of
+# the deploy script inside /srv/rigtwin (deploy/rigtwin-deploy-gate.sh; no shell, no forwarding).
+# The server's host key is pinned in deploy/known_hosts.
+#
+# Images that need the private photo cameras are not regenerated here (--no-images); they are
+# committed. See wiki/50-implementation/deployment.md.
+
+name: Check and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RIGTWIN_AGENT: github-actions
+      RIGTWIN_CHROME: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure the deploy account
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "the repository secret DEPLOY_SSH_KEY is not set"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/rigtwin_deploy
+          chmod 600 ~/.ssh/rigtwin_deploy
+          cat > ~/.ssh/config <<EOF
+          Host rigtwin-deploy
+            HostName mightwork.ai
+            User rigtwin-deploy
+            IdentityFile ~/.ssh/rigtwin_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $GITHUB_WORKSPACE/deploy/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Check, build and deploy
+        run: bun run deploy --no-images
+
+      - name: Keep the deploy receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-receipt
+          path: dist/deploy-receipt.json
+          if-no-files-found: ignore
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/rigtwin_deploy

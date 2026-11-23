@@ -35,7 +35,8 @@ function findChrome(): string {
   for (const d of dirs.filter((x) => x.startsWith("chromium-"))) {
     for (const sub of readdirSync(join(cache, d))) { const p = join(cache, d, sub, "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"); if (existsSync(p)) return p; }
   }
-  throw new Error("no cached Chromium found under ~/Library/Caches/ms-playwright; set RIGTWIN_CHROME to a Chromium binary");
+  for (const p of ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser"]) if (existsSync(p)) return p;   // Linux, e.g. the CI runner
+  throw new Error("no Chromium found (Playwright cache under ~/Library/Caches/ms-playwright, or /usr/bin/google-chrome); set RIGTWIN_CHROME to a Chromium binary");
 }
 
 export class Page {
@@ -106,7 +107,11 @@ export class Browser {
   private constructor(private child: any, private profile: string, public port: number) {}
   static async launch(): Promise<Browser> {
     const profile = mkdtempSync(join(tmpdir(), "rigtwin-render-"));
-    const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", "--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "about:blank"], { stdio: "ignore" });
+    // Graphics: Metal on macOS (the development machine); on Linux (the CI runner, no GPU) WebGL runs on
+    // SwiftShader, which Chrome only allows with --enable-unsafe-swiftshader. Extra flags: RIGTWIN_CHROME_FLAGS.
+    const gfx = process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"];
+    const extra = (process.env.RIGTWIN_CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
+    const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", ...gfx, "--disable-background-timer-throttling", "--disable-renderer-backgrounding", ...extra, "about:blank"], { stdio: "ignore" });
     let port = 0;
     for (let i = 0; i < 200 && !port; i++) { try { port = Number(readFileSync(join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]); } catch { await sleep(25); } }
     if (!port) { child.kill(); throw new Error("Chromium did not open a debugging port"); }

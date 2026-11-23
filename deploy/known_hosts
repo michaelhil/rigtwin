@@ -1,0 +1,3 @@
+# Pinned host key of the production host for mightwork.ai (ed25519), checked on 2026-11-23 against the
+# key already trusted for the host's IP address: SHA256:8OFUvgiFwCK1YumKbLzjRcm8yecsnUPDz1TWoRZuw1Q
+mightwork.ai ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAi7eS0nfwfHlHolFnIVr1Gnbae7AyH49dbptF2jqYMt
