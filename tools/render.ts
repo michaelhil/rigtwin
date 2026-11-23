@@ -109,12 +109,14 @@ export class Browser {
     const profile = mkdtempSync(join(tmpdir(), "rigtwin-render-"));
     // Graphics: Metal on macOS (the development machine); on Linux (the CI runner, no GPU) WebGL runs on
     // SwiftShader, which Chrome only allows with --enable-unsafe-swiftshader. Extra flags: RIGTWIN_CHROME_FLAGS.
-    const gfx = process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"];
+    const gfx = process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-dev-shm-usage"];
     const extra = (process.env.RIGTWIN_CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
     const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", ...gfx, "--disable-background-timer-throttling", "--disable-renderer-backgrounding", ...extra, "about:blank"], { stdio: "ignore" });
     let port = 0;
-    for (let i = 0; i < 200 && !port; i++) { try { port = Number(readFileSync(join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]); } catch { await sleep(25); } }
-    if (!port) { child.kill(); throw new Error("Chromium did not open a debugging port"); }
+    // A warm start takes well under a second; a cold start on a fresh CI runner can take several (a 5 s
+    // limit failed there once), so wait up to 30 s.
+    for (let i = 0; i < 1200 && !port; i++) { try { port = Number(readFileSync(join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]); } catch { await sleep(25); } }
+    if (!port) { child.kill(); throw new Error("Chromium did not open a debugging port within 30 s"); }
     return new Browser(child, profile, port);
   }
   async page(url: string): Promise<Page> {

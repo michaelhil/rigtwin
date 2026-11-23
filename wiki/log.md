@@ -178,3 +178,6 @@ account worked (release `ac78fc6`). [D-37](20-decisions/decision-log.md#d-37),
 **About 23:31** — The first automatic run refused to deploy: the check failed on the runner (favicon 404
 in full Chrome; a two-minute software-rendered benchmark). Fixed and pushed.
 [F-32](60-lessons/failures-and-fixes.md#f-32).
+
+**About 23:35** — The second automatic run was refused too: Chrome did not start within 5 s on a cold
+runner. Start-up limit raised to 30 s; pushed again. [F-32](60-lessons/failures-and-fixes.md#f-32).
