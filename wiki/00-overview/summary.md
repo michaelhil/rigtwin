@@ -113,5 +113,5 @@ As of 2026-11-23, about 22:00 local time:
 | Skill | version 0.1.0; not yet tested on a second object |
 | Tape measurements, seat make and model, which adjustments exist | requested, not received |
 | GitHub repository (private) | <https://github.com/michaelhil/rigtwin> |
-| Live viewer | <https://mightwork.ai/rigtwin/> |
+| Live viewer | <https://mightwork.ai/rigtwin/>; every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
 | Live wiki | <https://mightwork.ai/rigtwin/wiki/> |

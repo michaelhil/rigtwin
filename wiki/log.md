@@ -181,3 +181,8 @@ in full Chrome; a two-minute software-rendered benchmark). Fixed and pushed.
 
 **About 23:35** — The second automatic run was refused too: Chrome did not start within 5 s on a cold
 runner. Start-up limit raised to 30 s; pushed again. [F-32](60-lessons/failures-and-fixes.md#f-32).
+
+**23:35** — The third automatic run deployed: every check passed on the runner, release
+`20261123T223434Z-66c7bbd` went live in 70.1 s, all nine live checks passed, and the server's gate
+allowed each of its commands. From now on every push to `main` deploys.
+[Deployment](50-implementation/deployment.md#continuous-deployment-from-github).

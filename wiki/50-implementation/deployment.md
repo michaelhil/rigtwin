@@ -234,9 +234,12 @@ The model file built on the runner is not byte-identical to one built on macOS (
 differ slightly between platforms; each platform is deterministic on its own), so the live model's
 SHA-256 is the runner's. The live check compares against the file that was uploaded.
 
-**First runs.** The first run (commit `ac78fc6`) refused to deploy because a check failed on the runner
-([F-32](../60-lessons/failures-and-fixes.md#f-32)); nothing was uploaded. The fix followed in the next
-commit.
+**First runs.** The first two runs (commits `ac78fc6` and `d21bd59`) refused to deploy because a check
+failed on the runner ([F-32](../60-lessons/failures-and-fixes.md#f-32)); nothing was uploaded. The third
+(commit `66c7bbd`, 2026-11-23 22:34 UTC) passed every check on the runner and deployed release
+`20261123T223434Z-66c7bbd` in 70.1 s: check 22 s (it is slower in software rendering), distribution
+with its browser verification 28.6 s, upload and switch about 10 s, nine live checks passed. The gate's
+log shows every server command of that run allowed, including GNU rsync's upload form.
 
 ## Production state
 
@@ -251,7 +254,7 @@ Verified by the coordinator on 2026-11-23 after the first deployment.
 | First deployment | 2026-11-23 21:21 UTC, release `20261123T212137Z-5d673d1`, version line `2026-11-23 21:21 UTC · 5d673d1 · model 0b6d8248` |
 | HTTPS checks | all nine passed: viewer page, `version.json` identical to the build, model file size and SHA-256, wiki start page and two wiki pages, `/rigtwin` and `/rigtwin/wiki` redirects, `X-Robots-Tag` |
 | Not served (checked) | `private/…`, `work/`, parameter sources, `.git/config`, Markdown sources: all 404. The release folder contains only `index.html`, `viewer.js`, `viewer.css`, `version.json`, `asset/` and `wiki/` (21 MB) |
-| Time of a full deployment | 24.8 s including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
+| Time of a full deployment | 70 s from GitHub Actions (runner, software rendering); 15–25 s from the development machine, including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
 | Release history | see `ssh <host> 'ls -1 /srv/rigtwin/releases'`; the deploy keeps the newest 5 |
 | Coordinator's browser check of the live site | viewer loads the model with no console errors (narrow layout in a small window); wiki index and gallery render; navigation and viewer link work |
 
