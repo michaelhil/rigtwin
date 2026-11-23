@@ -1,6 +1,6 @@
 ---
 title: Failures and fixes
-tldr: Every failure of the project as a numbered incident (F-01 to F-31), each with what happened, who found it, the cause, the fix, the guard that now prevents it and its status. Starts with the missing left joystick.
+tldr: Every failure of the project as a numbered incident (F-01 to F-32), each with what happened, who found it, the cause, the fix, the guard that now prevents it and its status. Starts with the missing left joystick.
 status: living
 updated: 2026-11-23
 tags: [lessons, failures, checks, review, planning, viewer]
@@ -10,8 +10,8 @@ tags: [lessons, failures, checks, review, planning, viewer]
 
 ## TL;DR
 
-- 31 entries: 12 from planning (two of them from the trial builds), 5 from measuring and building, 6 from the model reviews, 3 from the viewer, 4 from project hygiene and record keeping, and 1 from running many agents at once (the usage-limit interruption).
-- The owner found 4 of them by looking (F-01, F-23, F-24, F-25). Fresh reviewing agents found 14. Scripted checks found 4. The builders, the coordinator and the documentation writers found the rest.
+- 32 entries: 12 from planning (two of them from the trial builds), 5 from measuring and building, 6 from the model reviews, 3 from the viewer, 4 from project hygiene and record keeping, 1 from running many agents at once (the usage-limit interruption), and 1 from the first automatic deployment.
+- The owner found 4 of them by looking (F-01, F-23, F-24, F-25). Fresh reviewing agents found 14. Scripted checks found 5. The builders, the coordinator and the documentation writers found the rest.
 - Almost every failure has the same shape: **something was left unstated or unchecked, and the result still looked finished.** A model without its left side, a "verified" accuracy figure, a slider that did nothing.
 - Every fix is paired with a guard: a check that runs on every build, a rule in the briefs, or a reviewer step. Guards that were planned and **not** exercised in this run are named as open (F-09).
 - For the short version of what to do differently, read [lessons-learned.md](lessons-learned.md). Reusable procedures are in [patterns.md](patterns.md).
@@ -61,6 +61,7 @@ IDs are stable. Check names refer to the list printed by `bun run check` (see [.
 | F-29 | Round-2 review: three small defects left | reviewer | review | fixed in round 3 |
 | F-30 | Seven agents stopped by a usage limit | harness | process | recovered |
 | F-31 | Banned-word check false positive on images | check | hygiene | fixed |
+| F-32 | First automatic deploy refused: favicon 404 and a two-minute benchmark on the runner | check | deployment | fixed |
 
 ---
 
@@ -405,3 +406,13 @@ IDs are stable. Check names refer to the list printed by `bun run check` (see [.
 - **Fix.** Binary files (images, the model, fonts) are scanned only for the never-allowed names (rig maker, customer); text files get the full scan.
 - **Guard.** The comment in `tools/check.ts` explains why. Lesson: a text check run on binary data needs a reason.
 - **Status.** Fixed.
+
+<a id="f-32"></a>
+### F-32 — The first automatic deploy was refused on the GitHub runner
+
+- **What happened.** The first GitHub Actions run (2026-11-23, commit `ac78fc6`) stopped before uploading anything: `bun run check` failed on the runner although it passed on the development machine. Production was not touched.
+- **Found by.** The check, run by the deploy script on the runner, which refuses to deploy after any failure (the safeguard working as designed).
+- **Cause.** Two differences between the runner and the development machine. (1) The runner uses full Google Chrome, which asks every page for `/favicon.ico`; the local headless shell does not. The 404 appeared in the viewer's console and the console check counts it as an error. Visitors with ordinary browsers got the same harmless 404 on the live site. (2) WebGL runs in software on the runner (no GPU): the 90-frame frame-rate benchmark took two minutes at 1 frame per second.
+- **Fix.** The viewer and every wiki page declare an empty icon, so no browser asks for `favicon.ico`. On a CI runner (`CI` set) the check counts draw calls from one frame and does not measure the frame rate, which says nothing about real viewing there.
+- **Guard.** The deploy refuses on any failed check, wherever it runs. Lesson [L-55](lessons-learned.md#l-55).
+- **Status.** Fixed in the next commit.

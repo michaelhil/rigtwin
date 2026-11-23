@@ -31,7 +31,7 @@ tags: [lessons, ideas, backlog]
 | I-09 | The assessment layer: sized manikins, reach and vision analysis | XL | plan |
 | I-10 | Viewing-distance envelope from the monitor arm's range | M | planned, not run |
 | I-11 | Simulator binding: real joysticks and pedals, live pictures on the screens, first-person view | L | plan |
-| I-12 | Deployment from GitHub on every push | S | coordinator |
+| I-12 | Deployment from GitHub on every push (done, D-37) | S | coordinator |
 | I-13 | Look up the makers' sheets still missing | S | measurement, review |
 | I-14 | Look up the anthropometric source for the eye points | S | round 2 |
 | I-15 | Frame rate and exposure on a weak laptop and a phone | S | UX review |
@@ -177,8 +177,8 @@ tags: [lessons, ideas, backlog]
 <a id="i-12"></a>
 ### I-12 — Deployment from GitHub on every push
 
-- **Why.** Deployment is one command run from the owner's machine. Running it from the repository on every push needs a deploy key on the server, which is a credential and therefore the owner's decision.
-- **Size.** S once decided.
+- **Status.** **Done** on 2026-11-23 ([D-37](../20-decisions/decision-log.md#d-37)): every push to `main` deploys through a restricted account and a forced-command gate.
+- **Why it was an idea first.** Running deployment from the repository needs a deploy key on the server, which is a credential and therefore the owner's decision.
 
 <a id="i-15"></a>
 ### I-15 — Frame rate and exposure on other devices

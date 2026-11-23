@@ -1,6 +1,6 @@
 ---
 title: Lessons learned
-tldr: Fifty-four numbered lessons (L-01 to L-54) from building a 3D asset from photos with a team of AI agents, each one sentence with its evidence and how it is now applied, grouped by topic, with a top ten and a map to the failures and patterns behind them.
+tldr: Fifty-five numbered lessons (L-01 to L-55) from building a 3D asset from photos with a team of AI agents, each one sentence with its evidence and how it is now applied, grouped by topic, with a top ten and a map to the failures and patterns behind them.
 status: living
 updated: 2026-11-23
 tags: [lessons, measurement, modelling, review, agents, viewer, planning]
@@ -62,6 +62,7 @@ tags: [lessons, measurement, modelling, review, agents, viewer, planning]
 | [L-25](#l-25) | F-01, F-11, F-12 | P-13 | | [L-50](#l-50) | F-27 | — |
 | [L-51](#l-51) | F-30 | P-20 | | [L-53](#l-53) | F-30 | — |
 | [L-52](#l-52) | F-30, F-31 | — | | [L-54](#l-54) | F-29 | — |
+| [L-55](#l-55) | F-32 | — | | | | |
 
 ---
 
@@ -406,3 +407,10 @@ tags: [lessons, measurement, modelling, review, agents, viewer, planning]
 
 - The round-2 reviewer accepted the model subject to three small fixes and said a spot check of those places sufficed. The coordinator inspected before/after renders of each place and the operator's-eye view and recorded the result, instead of a third full review.
 - Now: the modelling-rounds page states the spot check and its scope; a larger change would need a fresh reviewer.
+
+<a id="l-55"></a>
+**L-55. A new machine finds what the development machine hides; let the pipeline refuse rather than trust the first run.**
+
+- The first automatic deploy failed its checks on the GitHub runner (F-32): full Chrome asks for a favicon that the local headless browser never requests, and software rendering made a benchmark take two minutes. Nothing was uploaded, because the deploy refuses on any failed check.
+- The model file's bytes also differ between the macOS and Linux builds (SHA-256 `0b6d8248…` locally, `7e71301a…` on the runner): floating-point functions differ slightly between platforms. Each platform is deterministic on its own (two builds, same hash), so the determinism check holds per platform and the live check compares against the build that was uploaded.
+- Now: the CI-specific behaviour is explicit in the check (`CI` set: no frame-rate measurement); the deployed model's hash is the runner's.

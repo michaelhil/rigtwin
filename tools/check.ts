@@ -260,8 +260,12 @@ if (!fast) {
     report(st.pass, "projection self-test", `${st.checked} known points over ${st.cameras.length} camera(s): worst ${Number(st.worst_px).toFixed(3)} px (tolerance ${st.tolerance_px} px)`, st.pass ? [] : st.results.filter((r: any) => r.error || r.error_px > 1).map((r: any) => JSON.stringify(r)));
     await v.page.viewport(1600, 1000);
     await v.page.evaluate("viewer.apply({ ui: '0', view: 'three_quarter' })");
-    const b = await v.page.evaluate("viewer.benchmark(90)");
-    report(b.fps >= BUDGET.fps ? true : "warn", "frame rate", `${b.fps.toFixed(0)} fps at 1600 × 1000 in headless Chromium (${b.triangles} triangles, ${b.calls} draw calls in the default view)`);
+    // On a CI runner WebGL runs in software (no GPU): 90 frames took two minutes at 1 fps and say nothing
+    // about real viewing performance, so only the draw calls are counted there (one frame).
+    const ci = Boolean(process.env.CI);
+    const b = await v.page.evaluate(`viewer.benchmark(${ci ? 1 : 90})`);
+    if (ci) report(true, "frame rate", `not measured on the CI runner (software rendering, no GPU); ${b.triangles} triangles, ${b.calls} draw calls in the default view`);
+    else report(b.fps >= BUDGET.fps ? true : "warn", "frame rate", `${b.fps.toFixed(0)} fps at 1600 × 1000 in headless Chromium (${b.triangles} triangles, ${b.calls} draw calls in the default view)`);
     if (b.calls > BUDGET.primitives + 2) report(false, "draw calls", `${b.calls} draw calls in the default view > ${BUDGET.primitives}`);
     const errs = [...new Set(v.page.errors)];
     if (errs.length) report(false, "viewer console", `${errs.length} error(s) or warning(s)`, errs);

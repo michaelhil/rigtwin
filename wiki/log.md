@@ -167,3 +167,14 @@ Viewer at <https://mightwork.ai/rigtwin/>, wiki at <https://mightwork.ai/rigtwin
 
 **About 22:30** — Wiki updated with the production state, committed, pushed and redeployed through the
 same pipeline (second release; the script switched releases and re-checked the live site).
+
+**About 23:10** — The owner chose automatic deployment. Set up: an unprivileged server account
+`rigtwin-deploy` behind a forced-command gate that allows only the deploy script's commands inside
+`/srv/rigtwin`; a new key stored as a GitHub secret; the server's host key pinned; a GitHub Actions
+workflow running `bun run deploy --no-images` on every push to `main`. A manual deploy through the new
+account worked (release `ac78fc6`). [D-37](20-decisions/decision-log.md#d-37),
+[deployment](50-implementation/deployment.md#continuous-deployment-from-github).
+
+**About 23:31** — The first automatic run refused to deploy: the check failed on the runner (favicon 404
+in full Chrome; a two-minute software-rendered benchmark). Fixed and pushed.
+[F-32](60-lessons/failures-and-fixes.md#f-32).

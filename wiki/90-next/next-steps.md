@@ -14,7 +14,7 @@ tags: [next-steps, planning, open-questions]
 - **Second, test the reviewer** with planted errors of known size (agents, a few hours). Until then its "accepted" has no stated power.
 - **Third, build a second, different object** with only the Skill, against tape values the owner keeps sealed (owner and agents). That is what turns Skill 0.1.0 into 1.0.
 - Then: small fixes and hardening, other rig configurations as overlays, and the two later phases, **assessment** (a digital human layer has to be built; standards to buy) and **simulator** (real joysticks and pedals through the browser, live pictures on the screens, a first-person view).
-- Continuous deployment from GitHub waits for **the owner's decision** on a deploy credential. Routine changes follow the maintenance steps at the end.
+- Continuous deployment from GitHub is **done** (2026-11-23): every push to `main` deploys. Routine changes follow the maintenance steps at the end.
 
 ## Who does what
 
@@ -39,7 +39,7 @@ one run.
 | 5 | Other rig configurations as overlays | agents; owner chooses which | M each | the same seat and pods appear in a van and a control room | [I-08](../60-lessons/ideas.md#i-08) |
 | 6 | Assessment phase | owner (questions, standards); agents (build) | XL | the owner's purpose; needs steps 1 and 2 first | [I-09](../60-lessons/ideas.md#i-09), [I-10](../60-lessons/ideas.md#i-10), [I-19](../60-lessons/ideas.md#i-19), [I-21](../60-lessons/ideas.md#i-21) |
 | 7 | Simulator phase | agents; owner or client provides hardware | L | the training use; the asset is already prepared for it | [I-11](../60-lessons/ideas.md#i-11) |
-| 8 | Continuous deployment from GitHub | owner decides; agents set up | S once decided | convenience; needs a server credential | [I-12](../60-lessons/ideas.md#i-12) |
+| 8 | Continuous deployment from GitHub | done 2026-11-23 | — | every push to `main` deploys through a restricted account | [D-37](../20-decisions/decision-log.md#d-37) |
 | 9 | Maintenance | agents, on request | per change | keeps model, wiki and production in step | — |
 
 Steps 2 and 3 do not depend on step 1 and can run in parallel with it.
@@ -172,12 +172,11 @@ ISO 15536-1 and -2 (requirements and verification for computer manikins, for the
 
 ## 8. Continuous deployment from GitHub
 
-**The owner decides; agents set it up, size S** ([I-12](../60-lessons/ideas.md#i-12),
-[D-32](../20-decisions/decision-log.md#d-32)). Today a person runs `bun run deploy` from a working copy.
-Publishing on every push needs a new SSH key used only for deployment, stored as an encrypted secret of
-the repository, a restricted user on the server, and a workflow that runs the same checks. It means
-storing a key to the production server in GitHub, so no credential is created unasked. Details:
-[deployment](../50-implementation/deployment.md#continuous-deployment-from-github-not-set-up).
+**Done on 2026-11-23** at the owner's request ([D-37](../20-decisions/decision-log.md#d-37)). Every
+push to `main` runs every check and deploys; the key GitHub holds can only run the deploy script's own
+commands inside `/srv/rigtwin` through the unprivileged account `rigtwin-deploy`. After a model change,
+regenerate the wiki's images locally (`bun run render --set wiki`) and commit them: the runner has no
+private photo cameras. Details: [deployment](../50-implementation/deployment.md#continuous-deployment-from-github).
 
 ## 9. Maintenance: how to change the model and redeploy
 
@@ -196,7 +195,8 @@ storing a key to the production server in GitHub, so no credential is created un
 5. **Update the wiki:** the model card, the gallery if pictures changed (`bun run render --set wiki`),
    a dated line in the [log](../log.md); then `bun run wiki index` and `bun run wiki lint` until no
    error.
-6. **Commit and deploy:** commit, `bun run deploy --dry-run`, read what it prints, then
-   `bun run deploy`. The deploy refuses to publish a working tree with failing checks, lint errors or
+6. **Commit and push:** a push to `main` deploys automatically (GitHub Actions); watch the run in the
+   repository's Actions tab. To deploy by hand instead: `bun run deploy --dry-run`, read what it prints,
+   then `bun run deploy`. Either way the deploy refuses to publish failing checks, lint errors or
    uncommitted changes, and switches back if the live check fails
    ([deployment](../50-implementation/deployment.md#updating-production-after-a-change)).

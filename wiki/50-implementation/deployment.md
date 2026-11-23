@@ -1,6 +1,6 @@
 ---
 title: Deployment
-tldr: One command, bun run deploy, checks the project, builds the viewer, the model and the wiki into one static folder, copies it to the production server as a new dated release, switches the live site to it in one atomic step, checks the live pages over HTTPS and switches back if they fail. Nothing runs on the server but a static file server.
+tldr: Every push to main deploys automatically through GitHub Actions; the same script, bun run deploy, can be run by hand. It checks the project, builds the viewer, the model and the wiki into one static folder, uploads it as a new dated release through a restricted server account, switches the live site in one atomic step, checks the live pages over HTTPS and switches back if they fail.
 status: living
 updated: 2026-11-23
 tags: [deployment, implementation, wiki, viewer]
@@ -14,7 +14,7 @@ tags: [deployment, implementation, wiki, viewer]
 - It refuses to publish when `bun run check` fails, when `bun run wiki lint` finds an error, or when the git working tree has uncommitted changes. What goes live is therefore always a commit that passed every check.
 - Each deployment is a **complete new folder** on the server; the live site is a symbolic link switched in one step. A failed check after the switch puts the link back automatically; **`bun run deploy --rollback`** goes back one release by hand.
 - The distribution is about **17 MB in 129 files** (*measured* on 2026-11-23 with 29 wiki pages): viewer 0.74 MB, model 0.94 MB with its description, wiki 15.5 MB, almost all of it images. No file under `private/` or `work/` is ever copied, and every photograph in it is a masked copy.
-- Continuous deployment from GitHub is **not set up**: it would mean storing a server credential in GitHub, which is the owner's decision.
+- **Every push to `main` deploys automatically** (GitHub Actions, [workflow](#continuous-deployment-from-github)). The key GitHub holds can log in only as the unprivileged account `rigtwin-deploy` and run only the deploy script's own commands inside `/srv/rigtwin`; the owner approved this on 2026-11-23.
 
 The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the viewer itself works is on the
 [viewer page](viewer.md), the checks it runs are on the [checks page](../40-method/checks.md).
@@ -69,7 +69,7 @@ Settings, in `deploy.config.json` (committed):
 
 ```json
 {
-  "host": "samsinn",
+  "host": "rigtwin-deploy",
   "remoteRoot": "/srv/rigtwin",
   "publicUrl": "https://mightwork.ai/rigtwin/",
   "keepReleases": 5
@@ -100,16 +100,16 @@ stored in the repository.
    `20261123T204500Z-3f2c1ab`:
 
    ```sh
-   ssh samsinn 'mkdir -p /srv/rigtwin/releases'
-   rsync -az --delete dist/ samsinn:/srv/rigtwin/releases/20261123T204500Z-3f2c1ab/
-   ssh samsinn 'chmod -R u+rwX,go+rX,go-w /srv/rigtwin/releases/20261123T204500Z-3f2c1ab'
+   ssh rigtwin-deploy 'mkdir -p /srv/rigtwin/releases'
+   rsync -az --delete dist/ rigtwin-deploy:/srv/rigtwin/releases/20261123T204500Z-3f2c1ab/
+   ssh rigtwin-deploy 'chmod -R u+rwX,go+rX,go-w /srv/rigtwin/releases/20261123T204500Z-3f2c1ab'
    ```
 
    A release folder that already exists is never overwritten.
 4. **Switch** the live link in one step (the web server sees either the old or the new release, never a mix):
 
    ```sh
-   ssh samsinn 'ln -sfn /srv/rigtwin/releases/20261123T204500Z-3f2c1ab /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
+   ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/20261123T204500Z-3f2c1ab /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
    ```
 
 5. **Check the live site over HTTPS**: the viewer page answers 200 with HTML; `version.json` is exactly
@@ -141,45 +141,52 @@ bun run deploy --rollback             # live link to the release before the curr
 
 It does not build anything and does not delete anything. If the older release fails its checks, the link
 returns to where it was. By hand, the same is one command (list the releases with
-`ssh samsinn 'ls -1 /srv/rigtwin/releases'`):
+`ssh rigtwin-deploy 'ls -1 /srv/rigtwin/releases'`):
 
 ```sh
-ssh samsinn 'ln -sfn /srv/rigtwin/releases/<release> /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
+ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/<release> /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
 ```
 
 ## What the server must provide
 
 The deploy script never reads or changes the web server's configuration. It expects:
 
-- an SSH login under the alias `samsinn` that works without a password prompt and may write in
-  `/srv/rigtwin`; `rsync` and the GNU core utilities (for `mv -T`) on the server;
+- an SSH alias `rigtwin-deploy` (the `host` in `deploy.config.json`) that logs in as the unprivileged
+  account `rigtwin-deploy`, which owns `/srv/rigtwin`; `rsync` and the GNU core utilities (for
+  `mv -T`) on the server. Locally the alias is in `~/.ssh/config`; in GitHub Actions the workflow
+  writes it;
+- on the server, the gate `/usr/local/bin/rigtwin-deploy-gate` (source: `deploy/rigtwin-deploy-gate.sh`)
+  as the forced command of every key of that account (next section);
 - a static file server that serves the folder `/srv/rigtwin/current` (following the link, looked up on
   every request) at the address path `/rigtwin/`, serves `index.html` for a folder, redirects a folder
   asked for without its trailing slash, and redirects `/rigtwin` to `/rigtwin/`;
 - preferably the header `X-Robots-Tag: noindex` (every page also carries the same instruction as a meta tag).
 
-The site block the coordinator installs on the production server (Caddy), inside the existing
-`mightwork.ai` block:
-
-```caddyfile
-mightwork.ai {
-	# … the site's existing routes stay as they are …
-
-	redir /rigtwin /rigtwin/ 308
-
-	handle_path /rigtwin/* {
-		root * /srv/rigtwin/current
-		header X-Robots-Tag "noindex, nofollow"
-		file_server
-	}
-}
-```
+The site block installed on the production server is `deploy/mightwork-apex.caddy` in this repository
+(Caddy; one file per site under `/etc/caddy/managed-sites/`). It serves only the bare domain
+`mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` comes from `/srv/rigtwin/current`
+with `X-Robots-Tag: noindex` and `Cache-Control: no-cache` on pages and data, and every other address
+returns 404.
 
 `handle_path` removes `/rigtwin` from the address before looking for the file, so
-`/rigtwin/wiki/index.html` is read from `/srv/rigtwin/current/wiki/index.html`. Optional, and *not
-verified* on the server: `header Cache-Control "no-cache"` inside the same block makes browsers ask
-for a fresh copy after every deployment (they still get a quick "not modified" answer when nothing
-changed), so a returning visitor can never combine a new page with an old script.
+`/rigtwin/wiki/index.html` is read from `/srv/rigtwin/current/wiki/index.html`.
+
+### The restricted deploy account
+
+Set up on 2026-11-23 after the owner chose automatic deployment.
+
+| Part | What it is |
+|---|---|
+| Account | `rigtwin-deploy`, a system user with no password and no sudo; owns `/srv/rigtwin` and nothing else |
+| Keys | `/var/lib/rigtwin-deploy/.ssh/authorized_keys`, owned by root so the account cannot add keys; two keys, the GitHub Actions key and the owner's own key for manual deploys, both with `restrict,command="/usr/local/bin/rigtwin-deploy-gate"`: no shell, no terminal, no port or agent forwarding |
+| Gate | `deploy/rigtwin-deploy-gate.sh`, installed as `/usr/local/bin/rigtwin-deploy-gate`. It compares the requested command with nine anchored patterns, one per command the deploy script sends (make the release folder, read the live link, list releases, test for a release, upload with rsync, set permissions and confirm two files, switch the link, read a release's `version.json`, delete old releases), all confined to `/srv/rigtwin`. Anything else is refused with exit code 126 |
+| No links | after every upload the gate deletes symbolic links in that release, and it refuses to switch to a release that contains one, because the web server would follow a link to any readable file on the host |
+| Log | every allowed and refused command goes to the system log with the tag `rigtwin-deploy-gate` (`journalctl -t rigtwin-deploy-gate`) |
+| Host key | the server's host key is pinned in `deploy/known_hosts` (checked against the key already trusted for the server's address); the workflow refuses any other |
+| Tested | allowed: every deploy command, both the GNU rsync form (GitHub runner) and the macOS openrsync form; refused: `id`, `cat /etc/passwd`, an interactive login, port forwarding, and in a local pattern test 12 injection and escape attempts (extra commands after `;` or `&&`, `$(…)`, paths outside `/srv/rigtwin`, `..`, links to `/etc`) |
+
+To revoke GitHub's access: delete the first line of the server's `authorized_keys` (or the repository
+secret `DEPLOY_SSH_KEY`). To change what the deploy may do, change `tools/deploy.ts` and the gate together.
 
 ## Updating production after a change
 
@@ -188,30 +195,48 @@ After changing the model or the wiki:
 1. Model: `bun run build` and `bun run check`; then `bun run render --set wiki` so the wiki's images
    show the new model (images that did not change are left as they were).
 2. Wiki: `bun run wiki index` and `bun run wiki lint` until it reports no error.
-3. Commit everything.
-4. `bun run deploy --dry-run`, read what it prints, then `bun run deploy`.
+3. Commit everything and push to `main`: GitHub Actions deploys it.
+4. Or by hand: `bun run deploy --dry-run`, read what it prints, then `bun run deploy`.
 
 Doing 1 to 3 before deploying means the deploy's own rebuild changes nothing and it does not stop to ask
 for a commit. To publish a wiki fix without regenerating the images, add `--no-images`.
 
-## Continuous deployment from GitHub (not set up)
+## Continuous deployment from GitHub
 
-Publishing automatically on every push to GitHub would need:
+Set up on 2026-11-23 at the owner's request; workflow `.github/workflows/deploy.yml`.
 
-- **A server credential for GitHub**: a new SSH key used only for deployment, stored as an encrypted
-  secret of the repository, and on the server a separate user (not `root`) that may write only in
-  `/srv/rigtwin/releases` and replace the link `/srv/rigtwin/current`; ideally the key is limited further
-  on the server (a forced command or rsync's restricted mode, and the runners' addresses).
-- **A GitHub Actions workflow** that, on a push to the main branch, installs Bun and the pinned
-  dependencies (`bun install --frozen-lockfile`), installs the headless Chromium the checks need, and
-  runs the same `bun run deploy`. The checks and the refusal rules stay exactly as they are locally.
-- **The photo cameras**: the projection self-test in `bun run check` and the photo comparisons need
-  files under `private/`, which never enter the repository. A workflow would either skip those two
-  (deploying with `--no-images` and committed images) or receive the cameras as another secret.
+1. **Trigger**: every push to `main`, or by hand from the repository's Actions tab. Runs never overlap
+   (one deploy at a time) and a run that is already deploying is never cancelled.
+2. **Runner**: GitHub's Ubuntu 24.04 machine; Bun 1.4.0; `bun install --frozen-lockfile`; Google Chrome
+   from the runner image for the headless checks, with WebGL in software (SwiftShader).
+3. **Key**: the repository secret `DEPLOY_SSH_KEY` is written to a file for the run and deleted at the
+   end; the SSH settings pin the server's host key from `deploy/known_hosts`.
+4. **Deploy**: `bun run deploy --no-images`, the same script and the same refusal rules as a manual
+   deploy: every check, wiki lint, clean commit, build, wiki site, distribution with its own browser
+   check, upload, switch, nine live checks, automatic switch-back on failure.
+5. **Receipt**: `dist/deploy-receipt.json` is kept as a run artifact.
 
-It was left as **the owner's decision** ([D-32](../20-decisions/decision-log.md#d-32)), because it means
-storing a key to the production server in GitHub; no credential is created unasked. Until then a person
-runs `bun run deploy` from a working copy.
+What the runner cannot do, and how it is handled:
+
+- **No private files.** The photo cameras and the photographs never enter the repository. The
+  projection self-test then uses its two synthetic cameras only, and the photo-comparison images are
+  not regenerated (`--no-images`): the committed images are published. After changing the model,
+  regenerate the images locally (`bun run render --set wiki`) and commit them, or they will show the
+  old model.
+- **No GPU.** The frame-rate check runs in software rendering and reports a warning, not a failure,
+  below 55 frames per second; the real figure is the one measured on a development machine.
+
+A manual deploy from a working copy (`bun run deploy`) still works and goes through the same restricted
+account and gate (*tested* on 2026-11-23: release `20261123T222830Z-ac78fc6`, 14.8 s, every server
+command allowed by the gate, including the macOS rsync form).
+
+The model file built on the runner is not byte-identical to one built on macOS (floating-point functions
+differ slightly between platforms; each platform is deterministic on its own), so the live model's
+SHA-256 is the runner's. The live check compares against the file that was uploaded.
+
+**First runs.** The first run (commit `ac78fc6`) refused to deploy because a check failed on the runner
+([F-32](../60-lessons/failures-and-fixes.md#f-32)); nothing was uploaded. The fix followed in the next
+commit.
 
 ## Production state
 
@@ -220,7 +245,7 @@ Verified by the coordinator on 2026-11-23 after the first deployment.
 | Item | Value |
 |---|---|
 | Addresses | viewer <https://mightwork.ai/rigtwin/>, wiki <https://mightwork.ai/rigtwin/wiki/> |
-| Server | the production host behind the SSH alias in `deploy.config.json`; Caddy 2.11.4 serving ports 80 and 443 for several sites |
+| Server | the production host, reached through the restricted alias `rigtwin-deploy` (see above); Caddy 2.11.4 serving ports 80 and 443 for several sites |
 | Site block as installed | `deploy/mightwork-apex.caddy` in this repository, copied to `/etc/caddy/managed-sites/mightwork-apex.caddy` (the main Caddyfile imports that folder). It serves only the bare domain `mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` is served from `/srv/rigtwin/current`, anything else returns 404; `X-Robots-Tag: noindex`. The full configuration was validated with `caddy validate` before `systemctl reload caddy`; a Let's Encrypt certificate for `mightwork.ai` was obtained automatically within seconds |
 | Other sites on the host | checked before and after the change: every one answered with the same status as before (303, 303, 200, 302, 200) |
 | First deployment | 2026-11-23 21:21 UTC, release `20261123T212137Z-5d673d1`, version line `2026-11-23 21:21 UTC · 5d673d1 · model 0b6d8248` |

@@ -11,7 +11,7 @@ tags: [decisions, log]
 ## TL;DR
 
 - The plan's core decisions (D-01 to D-20) held through the build: parametric code as the route, text parameters as the source, TypeScript with three.js, a GLB plus a description file, no Blender, no live monitoring agent.
-- The owner took seven decisions after approval: internal test and no confidentiality concern (D-21), a full autonomous run (D-22), the name (D-23), usable assumed adjustments (D-31), the public addresses (D-32), a private repository (D-33) and the ban on the rig maker's name (D-35).
+- The owner took eight decisions after approval (the eighth, automatic deployment, is D-37): internal test and no confidentiality concern (D-21), a full autonomous run (D-22), the name (D-23), usable assumed adjustments (D-31), the public addresses (D-32), a private repository (D-33) and the ban on the rig maker's name (D-35).
 - The most consequential later ruling is D-24: where the photographs disagree with the owner's three scale figures, the photo value is modelled and the owner's figure is recorded as conflicting evidence. A tape measure must settle it.
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
@@ -254,7 +254,7 @@ tags: [decisions, log]
 
 - **Decided by / status:** owner (addresses), coordinator (pipeline); in force.
 - **What:** viewer at `mightwork.ai/rigtwin`, wiki at `mightwork.ai/rigtwin/wiki`. One deploy command builds, checks, packages, copies a dated release to the server, switches a link and verifies the live pages.
-- **Alternatives:** deployment from GitHub's automation; offered as a follow-up, because it needs a new access key on the server and no credentials are created unasked.
+- **Alternatives:** deployment from GitHub's automation; offered as a follow-up, because it needs a new access key on the server and no credentials are created unasked. The owner chose it afterwards: [D-37](#d-37).
 
 ### D-33 — The repository is private, and version control starts only at the end
 
@@ -275,3 +275,12 @@ tags: [decisions, log]
 
 - **Decided by / status:** coordinator; in force.
 - **What:** people and names blurred, metadata removed. Unmasked photographs never enter the repository.
+
+<a id="d-37"></a>
+### D-37 — Every push to main deploys automatically, through a restricted account
+
+- **Decided by / status:** owner (automatic deployment, 2026-11-23, answering "Should a push to GitHub deploy to mightwork.ai automatically?" with "Yes, set it up"); coordinator (how); in force.
+- **What:** a GitHub Actions workflow runs `bun run deploy --no-images` on every push to `main`. GitHub holds a new SSH key that the server accepts only for the unprivileged account `rigtwin-deploy`, and only for the exact commands of the deploy script inside `/srv/rigtwin` (a forced-command gate); the server's host key is pinned in the repository. Manual deploys use the same account and gate.
+- **Alternatives:** the existing root login as the deploy key (rejected: a leaked secret would give full control of a server that hosts other sites); a deploy user with an ordinary shell (rejected: a leaked secret would allow any command as that user); building on the server from a pull (rejected: the server would need Bun, Chrome and the repository credentials).
+- **Reason:** the owner asked for "a pipeline so that future updates will be pushed to prod"; least privilege keeps a leaked GitHub secret from reaching anything but the `/rigtwin/` release folders.
+- **Consequences:** images that need the private photo cameras are not regenerated on the runner; after a model change they are regenerated locally and committed. Details: [deployment](../50-implementation/deployment.md#continuous-deployment-from-github).

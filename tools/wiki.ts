@@ -521,6 +521,7 @@ ${html}</div>`, p, ctx);
 <meta name="robots" content="noindex, nofollow">
 <title>${esc(p.title)} · rigtwin wiki</title>
 <meta name="description" content="${esc(p.tldr)}">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="${root}assets/wiki.css">
 </head>
 <body data-root="${root}">
