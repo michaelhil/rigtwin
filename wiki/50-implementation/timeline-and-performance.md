@@ -59,7 +59,7 @@ tools run without `RIGTWIN_AGENT` carry the name `unnamed` (14 lines).
 | 13 | Interruption by the usage limit, and recovery | 20:03–20:35 | about 32 min | — | — | — |
 | 14 | Round 3: the three final fixes and a limit bug (fresh agent on Opus 5.5) | 20:34–20:51 | 17 min | 1 | 17.3 min | 339,041 |
 | 15 | Documentation, second pass (two wiki writers) and publishing tools finished (fresh agents on Opus 5.5); coordinator's final wiki pass | 20:34–21:30 | about 56 min | 3 | 79.1 min | 1,331,395 |
-| 16 | Deployment | dry run 20:52 | <!-- PENDING: final --> | | | |
+| 16 | GitHub (private repository, first commit) and deployment: web-server site installed, first release live, second release through the pipeline | 21:18–21:30 | about 12 min | — (coordinator) | — | — |
 
 **Planning** is described in [How the plan was made](../30-plan/approved-plan.md#9-how-the-plan-was-made);
 its reports are summarised in [Research sources](../80-reference/sources.md). **Implementation** is
@@ -170,7 +170,7 @@ measured by the tool itself. The [tool reference](../80-reference/tools.md) expl
 | `wiki index` | | 6 | 0.010 s | 0.004–0.013 s | |
 | `wiki lint` | | 5 | 0.017 s | 0.009–0.022 s | all five failed: pages still being written |
 | `wiki build` | static site | 3 passed, 8 failed | 0.13 s | 0.07–0.25 s | |
-| `deploy --dry-run` | check, build, documentation images, wiki, dist, no upload | 1 | 16.6 s | — | of two earlier attempts one refused after the check and one stopped at `dist` (broken wiki links); nothing was uploaded; later runs went to a local test server <!-- PENDING: final --> |
+| `deploy --dry-run` | check, build, documentation images, wiki, dist, no upload | 1 | 16.6 s | — | of two earlier attempts one refused after the check and one stopped at `dist` (broken wiki links); nothing was uploaded; later runs went to a local test server; the first real deployment took 24.8 s and a dry run 17.2 s |
 
 Other measured speeds (*measured*, same machine): viewer ready 0.1–0.2 s after navigation on the local
 server; 60–61 fps in headless Chromium at 1440 × 900 and 1600 × 1000 (capped by the display rate);

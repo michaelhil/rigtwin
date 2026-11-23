@@ -276,11 +276,10 @@ of the reviewer, and a second object built from the Skill against sealed tape va
 
 ## Pending items
 
-To be completed by the coordinator; until then the rows R-38, R-51, R-62, R-64 and R-65 stand as
-written above.
+Completed by the coordinator on 2026-11-23. With these three items done, the rows R-38, R-51, R-62, R-64 and R-65 above are met as far as they concern verification, publication and deployment.
 
-**Final browser verification** (coordinator, 2026-11-23, about 22:50 local time, the in-app Chromium browser at 1440 × 900, local server, build `0b6d8248b63f`): the model loads with no errors; rotate and zoom work; hiding the *Monitor stand* group hides its 7 parts and shows "7 parts hidden · Show all"; clicking the right joystick opens its card with one two-axis "Push the stick" pad; dragging the pad deflects the stick (14.6° forward, 9.7° sideways) and the address updates so the view can be shared. Earlier in the same session on the redesigned viewer: the monitor card (height slider and one turn-and-tilt pad) and sliding the seat 8.8 cm back with the "assumed range" notice. The deployed copy is checked again after deployment (below). Result: passed.
+**Final browser verification** (coordinator, 2026-11-23, about 21:55 local time, the in-app Chromium browser at 1440 × 900, local server, build `0b6d8248b63f`): the model loads with no errors; rotate and zoom work; hiding the *Monitor stand* group hides its 7 parts and shows "7 parts hidden · Show all"; clicking the right joystick opens its card with one two-axis "Push the stick" pad; dragging the pad deflects the stick (14.6° forward, 9.7° sideways) and the address updates so the view can be shared. Earlier in the same session on the redesigned viewer: the monitor card (height slider and one turn-and-tilt pad) and sliding the seat 8.8 cm back with the "assumed range" notice. The deployed copy is checked again after deployment (below). Result: passed.
 
-<!-- PENDING: coordinator --> GitHub push: private repository address, commit, date.
+**GitHub push**: private repository <https://github.com/michaelhil/rigtwin>, first commit `5d673d1` on `main`, 2026-11-23 about 22:20 local time; checked before pushing: nothing from `private/`, `work/` or `dist/`, no unmasked photograph, no personal path or address, banned-word check clean.
 
-<!-- PENDING: coordinator --> Production deployment: viewer address, wiki address, release name, result of the live check.
+**Production deployment**: viewer <https://mightwork.ai/rigtwin/>, wiki <https://mightwork.ai/rigtwin/wiki/>, first release `20261123T212137Z-5d673d1`; all nine live checks passed (model size and SHA-256 included); private paths return 404; the coordinator loaded the live viewer and wiki in a browser with no errors. Details in [deployment](../50-implementation/deployment.md#production-state).

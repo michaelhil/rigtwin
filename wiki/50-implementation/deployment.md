@@ -215,14 +215,24 @@ runs `bun run deploy` from a working copy.
 
 ## Production state
 
-> **Placeholder, to be filled in by the coordinator after the first deployment.** Until then nothing in
-> this section has been verified.
+Verified by the coordinator on 2026-11-23 after the first deployment.
 
 | Item | Value |
 |---|---|
-| First deployment (date, release folder) | *to be filled in* |
-| Live release and version line | *to be filled in* |
-| Web server and the site block as installed | *to be filled in* |
-| Result of the HTTPS checks (from `dist/deploy-receipt.json`) | *to be filled in* |
-| Warnings (redirects, `X-Robots-Tag`) | *to be filled in* |
-| Time of a full deployment, measured | *to be filled in* |
+| Addresses | viewer <https://mightwork.ai/rigtwin/>, wiki <https://mightwork.ai/rigtwin/wiki/> |
+| Server | the production host behind the SSH alias in `deploy.config.json`; Caddy 2.11.4 serving ports 80 and 443 for several sites |
+| Site block as installed | `deploy/mightwork-apex.caddy` in this repository, copied to `/etc/caddy/managed-sites/mightwork-apex.caddy` (the main Caddyfile imports that folder). It serves only the bare domain `mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` is served from `/srv/rigtwin/current`, anything else returns 404; `X-Robots-Tag: noindex`. The full configuration was validated with `caddy validate` before `systemctl reload caddy`; a Let's Encrypt certificate for `mightwork.ai` was obtained automatically within seconds |
+| Other sites on the host | checked before and after the change: every one answered with the same status as before (303, 303, 200, 302, 200) |
+| First deployment | 2026-11-23 21:21 UTC, release `20261123T212137Z-5d673d1`, version line `2026-11-23 21:21 UTC · 5d673d1 · model 0b6d8248` |
+| HTTPS checks | all nine passed: viewer page, `version.json` identical to the build, model file size and SHA-256, wiki start page and two wiki pages, `/rigtwin` and `/rigtwin/wiki` redirects, `X-Robots-Tag` |
+| Not served (checked) | `private/…`, `work/`, parameter sources, `.git/config`, Markdown sources: all 404. The release folder contains only `index.html`, `viewer.js`, `viewer.css`, `version.json`, `asset/` and `wiki/` (21 MB) |
+| Time of a full deployment | 24.8 s including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
+| Release history | see `ssh <host> 'ls -1 /srv/rigtwin/releases'`; the deploy keeps the newest 5 |
+| Coordinator's browser check of the live site | viewer loads the model with no console errors (narrow layout in a small window); wiki index and gallery render; navigation and viewer link work |
+
+### Updating production
+
+After a change to the model, the viewer or the wiki: commit, push, then `bun run deploy`. The script
+refuses to deploy an uncommitted or failing tree, builds everything from the commit, uploads a new
+release folder, switches `current` only after the upload, checks the live site and switches back
+automatically if a check fails. `bun run deploy --rollback` returns to the previous release.

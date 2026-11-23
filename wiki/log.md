@@ -148,4 +148,22 @@ The web-server site file was validated on the production server and not yet inst
 pages for tools and for the Skill and agents were written from the run's records.
 [Summary](00-overview/summary.md).
 
-<!-- PENDING: coordinator appends final entries -->
+**About 22:20** — Results pages written (model card, gallery, critique, goal assessment,
+next steps); the coordinator's final wiki pass filled every open marker, added failures F-29 to F-31 and
+lessons L-51 to L-54; wiki lint clean (37 pages, 104 images, 0 errors). [Goal assessment](70-results/goal-assessment.md).
+
+**About 21:55** — Final browser verification of the round-3 model by the coordinator (show/hide, the
+selected-part card, the joystick pad, the address carrying the state). [Goal assessment](70-results/goal-assessment.md#pending-items).
+
+**22:18** — Private GitHub repository created and the first commit (`5d673d1`) pushed, after checking
+that nothing private, unmasked or personal was staged.
+
+**22:20** — Web-server site for `mightwork.ai` installed on the production host, full configuration
+validated, server reloaded; every other site on the host answered as before; certificate obtained.
+
+**22:21** — First release deployed with `bun run deploy` in 24.8 s; all nine live checks passed.
+Viewer at <https://mightwork.ai/rigtwin/>, wiki at <https://mightwork.ai/rigtwin/wiki/>.
+[Deployment](50-implementation/deployment.md#production-state).
+
+**About 22:30** — Wiki updated with the production state, committed, pushed and redeployed through the
+same pipeline (second release; the script switched releases and re-checked the live site).
