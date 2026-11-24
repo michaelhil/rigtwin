@@ -1,9 +1,9 @@
 ---
 title: Deployment
-tldr: Every push to main deploys automatically through GitHub Actions; the same script, bun run deploy, can be run by hand. It checks the project, builds the viewer, the model and the wiki into one static folder, uploads it as a new dated release through a restricted server account, switches the live site in one atomic step, checks the live pages over HTTPS and switches back if they fail.
+tldr: Every push to main deploys automatically; bun run deploy does the same by hand. It checks everything, builds the viewer, model, wiki and (since platform step 1) the server into one release, uploads it through a restricted account, switches the site atomically, checks it over HTTPS and switches back on failure. The server's host setup is scripted; on 2026-11-24 only its read-only check and load test H14 have run.
 status: living
-updated: 2026-11-23
-tags: [deployment, implementation, wiki, viewer]
+updated: 2026-11-24
+tags: [deployment, implementation, wiki, viewer, server]
 ---
 
 # Deployment
@@ -13,8 +13,11 @@ tags: [deployment, implementation, wiki, viewer]
 - **`bun run deploy`** publishes the viewer at `mightwork.ai/rigtwin/` and this wiki at `mightwork.ai/rigtwin/wiki/` ([R-64](../10-request/requirements.md#r-64), [R-65](../10-request/requirements.md#r-65), [SF-25](../10-request/requirements.md#sf-25), decision [D-32](../20-decisions/decision-log.md#d-32)). Always run **`bun run deploy --dry-run`** first: it does every local step and prints the exact server commands without running them.
 - It refuses to publish when `bun run check` fails, when `bun run wiki lint` finds an error, or when the git working tree has uncommitted changes. What goes live is therefore always a commit that passed every check.
 - Each deployment is a **complete new folder** on the server; the live site is a symbolic link switched in one step. A failed check after the switch puts the link back automatically; **`bun run deploy --rollback`** goes back one release by hand.
-- The distribution is about **17 MB in 129 files** (*measured* on 2026-11-23 with 29 wiki pages): viewer 0.74 MB, model 0.94 MB with its description, wiki 15.5 MB, almost all of it images. No file under `private/` or `work/` is ever copied, and every photograph in it is a masked copy.
-- **Every push to `main` deploys automatically** (GitHub Actions, [workflow](#continuous-deployment-from-github)). The key GitHub holds can log in only as the unprivileged account `rigtwin-deploy` and run only the deploy script's own commands inside `/srv/rigtwin`; the owner approved this on 2026-11-23.
+- The distribution is about **21.3 MB in 151 files** (*measured* on 2026-11-24 with 37 wiki pages; 17 MB in 129 files on 2026-11-23): viewer 0.75 MB, server 65 kB, model 0.94 MB with its description, wiki 19.6 MB, almost all of it images. No file under `private/` or `work/` is ever copied, and every photograph in it is a masked copy.
+- **Every push to `main` deploys automatically** (GitHub Actions, [workflow](#continuous-deployment-from-github)). The key GitHub holds can log in only as the unprivileged account `rigtwin-deploy` and run only the deploy script's own commands inside `/srv/rigtwin`; the owner approved this on 2026-11-23. Since step 1 the workflow first runs every local step without the key, and the key is written only for the upload ([details](#continuous-deployment-from-github)).
+- **Platform step 1 (2026-11-24)** adds a small server to the release: `server/server.js`, the live channel and the commands behind `mightwork.ai/rigtwin/api/` ([the platform plan](../30-plan/platform-plan.md)). On the host it is one service, `rigtwin-server`, on `127.0.0.1:4190`, reached through one new Caddy route; its own code is never served ([the server on the host](#the-rigtwin-server-on-the-host)). The release keeps today's layout: no split into a served and an unserved folder ([D-42](../20-decisions/decision-log.md#d-42)).
+- **Order of the first rollout:** the host's setup (`deploy/setup-server.sh --apply`, with the owner's yes) must run **before** the first release with `server/` reaches `main`; the deploy refuses otherwise ([order](#order-of-the-first-rollout)). Status on 2026-11-24: the read-only `--check` and the load test H14 have run on the host (H14 passed on its second run, after a fix); `--apply` and the merge wait.
+- **The public site gets the platform without the person.** The manikin appears on mightwork.ai only after the owner approves the new manikin ([D-44](../20-decisions/decision-log.md#d-44)).
 
 The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the viewer itself works is on the
 [viewer page](viewer.md), the checks it runs are on the [checks page](../40-method/checks.md).
@@ -24,14 +27,25 @@ The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the view
 `bun run dist` assembles one self-contained folder, `dist/`. All addresses inside it are relative, so it
 works from any sub-path; it is tested from `/rigtwin/` on every build.
 
-| Path in `dist/` | What | Size (*measured*, 2026-11-23) |
+| Path in `dist/` | What | Size (*measured*, 2026-11-24) |
 |---|---|---|
-| `index.html`, `viewer.css`, `viewer.js` | the viewer, bundled with three.js; no other file is loaded from anywhere | 2 kB, 16 kB, 726 kB |
+| `index.html`, `viewer.css`, `viewer.js` | the viewer, bundled with three.js; no other file is loaded from anywhere. Since step 1 it includes the live client (about 6 kB), which talks to the server when there is one | 2.7 kB, 16 kB, 732,720 bytes (726 kB on 2026-11-23) |
 | `asset/rig-b.glb` | the model | 720 kB |
 | `asset/rig-b.manifest.json` | the model's description: parts, joints, where every number comes from | 220 kB |
-| `version.json` | build time, source revision, model hash and triangle count; shown in the viewer's More menu and the wiki's footer | under 1 kB |
-| `wiki/` | this wiki as a static site: one HTML page per Markdown page, one stylesheet, one small search script, the images | 15.5 MB in 123 files, 29 pages |
-| `deploy-receipt.json` | written after a deployment (or dry run): what was published, where, and the result of every check | — |
+| `server/server.js` | **new in step 1:** the rigtwin server bundled into one file for Bun (`bun build --target bun` of `server/server.ts`). `bun run dist` refuses a bundle that takes code from anywhere but `server/` and `shared/` (no viewer code, no npm package) or imports anything Bun does not provide itself. Never served: Caddy answers 404 for `/rigtwin/server/*` | 65,471 bytes |
+| `version.json` | build time, source revision, model hash and triangle count; shown in the viewer's More menu and the wiki's footer. With the server it also says `server: {format: "rigtwin-scene/1"}`, the scene format the server stores; the viewer looks for a server only when this entry is there | under 1 kB |
+| `wiki/` | this wiki as a static site: one HTML page per Markdown page, one stylesheet, one small search script, the images | 19.6 MB in 144 files, 37 pages (15.5 MB, 29 pages on 2026-11-23) |
+| `deploy-receipt.json` | written after a deployment (or dry run): what was published, where, the result of every check, and the server's state (`server`, and `rollbackServer` after a switch back) | — |
+
+**The verify step of `bun run dist`** now also starts the built `server/server.js` (local mode, a free
+port, an empty temporary data folder, the release's own `asset/`) behind the throwaway static server,
+which forwards `/rigtwin/api/*` to it the way Caddy does and refuses `/rigtwin/server/*`. It requires:
+`api/health` answers with the scene format, mode and the revision of `version.json`; `api/live` is an
+event stream that delivers a snapshot within 5 s; `server/server.js`, `server/` and `server` answer 404;
+the server is still running at the end. The viewer's own health request and live channel are therefore
+part of the headless-Chromium check, which fails on any failed request or console error. *Measured*
+2026-11-24: "server … answered health and streamed session, snapshot through /rigtwin/api/; /rigtwin/server/
+refused; 155 requests answered, 0 failed".
 
 The wiki site has navigation by section, a table of contents per page, the TL;DR highlighted, a status
 badge and the date of the last update, previous and next links, a search over titles and summaries,
@@ -96,7 +110,14 @@ stored in the repository.
 
    If these steps changed a committed file (a regenerated image, the index), the site would not match
    the commit, and the deployment stops with the list of files: commit them and run it again.
-3. **Upload** a new release folder named after the build time and the revision, for example
+3. **Ask the server's route first** (new in step 1; only for a release whose `version.json` has a
+   `server` entry): with the old release still live, `GET https://mightwork.ai/rigtwin/api/health`. A 404
+   means the web server has no route for the API, hence no 404 rule for `server/` either, and the new
+   release would make `server/server.js` public; no answer means the rule cannot be confirmed. Either
+   way the deploy stops here, before anything is uploaded, and prints the [order of the first
+   rollout](#order-of-the-first-rollout). A 200 (an older server) or 502/503 (the route without a running
+   service, as before the first server release) lets it go on.
+4. **Upload** a new release folder named after the build time and the revision, for example
    `20261123T204500Z-3f2c1ab`:
 
    ```sh
@@ -106,26 +127,32 @@ stored in the repository.
    ```
 
    A release folder that already exists is never overwritten.
-4. **Switch** the live link in one step (the web server sees either the old or the new release, never a mix):
+5. **Switch** the live link in one step (the web server sees either the old or the new release, never a mix):
 
    ```sh
    ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/20261123T204500Z-3f2c1ab /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
    ```
 
-5. **Check the live site over HTTPS**: the viewer page answers 200 with HTML; `version.json` is exactly
+6. **Check the live site over HTTPS**: the viewer page answers 200 with HTML; `version.json` is exactly
    the one just built; the model file has the same size and SHA-256 as the local one; the wiki's start page
-   and two wiki pages answer 200. Each check is tried three times a second apart. If one fails, the link
-   goes back to the previous release, that release is checked, and the command ends with an error; the
-   failed release stays on the server to be looked at. Three more things are reported as warnings
-   only: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/wiki` redirects to `/rigtwin/wiki/`, and the
-   `X-Robots-Tag: noindex` header is sent.
-6. **Tidy up** (only after the checks passed): release folders beyond the five newest are deleted, never
+   and two wiki pages answer 200. New in step 1, for every release: `server/server.js` must **not** answer
+   200 (the server's code is in the release folder but never served). For a release with a server:
+   `api/health` must report the deployed revision within 20 s, asked every second (a 404, or a 502 or
+   another revision after 20 s, is a failure). Each check is tried three times a second apart. If one
+   fails, the link goes back to the previous release, that release is checked, and the command ends with
+   an error; the failed release stays on the server to be looked at. Three more things are reported as
+   warnings only: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/wiki` redirects to `/rigtwin/wiki/`, and
+   the `X-Robots-Tag: noindex` header is sent.
+7. **Tidy up** (only after the checks passed): release folders beyond the five newest are deleted, never
    the live one or the one before it.
-7. **Report**: a summary on the screen and `dist/deploy-receipt.json` with the release, the previous
-   release, the version, every remote command and every check.
+8. **Report**: a summary on the screen and `dist/deploy-receipt.json` with the release, the previous
+   release, the version, every remote command, every check and the server's state.
 
-`bun run deploy --dry-run` runs steps 1 and 2 for real and prints the commands of steps 3 to 6 without
-running them. Measured on 2026-11-23 on the build machine (one Apple M2): a dry run takes about 17 s, of
+`bun run deploy --dry-run` runs steps 1 and 2 for real and prints the probe of step 3 and the commands
+and checks of steps 4 to 7 without running them. **`bun run deploy --prepared`** (new in step 1) runs
+only steps 3 to 8, and refuses unless the working tree is clean and `dist/version.json` says it was built
+from that same commit without uncommitted changes (what a dry run of the clean commit leaves behind);
+GitHub Actions uses the pair so that the deploy key is on disk only for the network part. Measured on 2026-11-23 on the build machine (one Apple M2): a dry run takes about 17 s, of
 which the documentation images take 10 s, `check` 4.5 s and `dist` with its browser test 1.5 s. The same
 pipeline was run end to end against a stand-in server on the build machine (a local folder reached
 through a substitute for `ssh`, and a local web server): three deployments, pruning to the newest
@@ -147,6 +174,20 @@ returns to where it was. By hand, the same is one command (list the releases wit
 ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/<release> /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
 ```
 
+**Rollback rules since step 1.**
+
+- `--rollback` reads the live release's and the target's `version.json` (with the gate's existing `cat`
+  pattern) and **refuses** when the live one has a `server` entry and the target has none: once the host
+  runs the server, the site does not go back to a release without it (the service would have no
+  `server/server.js` to start and would fail every 2 s). The gate on the server did not change for this.
+- The automatic switch-back after a failed deploy is not subject to that rule: it always returns to the
+  release that was live just before, so it cannot cross it, and it must work when the very first release
+  with a server fails its checks.
+- After any switch the service exits by itself (it watches where `current` points, every 2 s) and
+  systemd starts it again from the release now live.
+- A rollback by hand with the `ln`/`mv` line above bypasses the refusal; use it only to go to a release
+  that has a server, once the service exists.
+
 ## What the server must provide
 
 The deploy script never reads or changes the web server's configuration. It expects:
@@ -166,10 +207,133 @@ The site block installed on the production server is `deploy/mightwork-apex.cadd
 (Caddy; one file per site under `/etc/caddy/managed-sites/`). It serves only the bare domain
 `mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` comes from `/srv/rigtwin/current`
 with `X-Robots-Tag: noindex` and `Cache-Control: no-cache` on pages and data, and every other address
-returns 404.
+returns 404. The version in the repository since step 1 adds the server's route
+([below](#the-caddy-route)); it goes live only through the setup script, never through a deploy.
 
 `handle_path` removes `/rigtwin` from the address before looking for the file, so
 `/rigtwin/wiki/index.html` is read from `/srv/rigtwin/current/wiki/index.html`.
+
+## The rigtwin server on the host
+
+New in platform step 1 ([the platform plan](../30-plan/platform-plan.md)). The server holds the shared
+scene of the public sandbox (the "Playground": the rig's pose and its last 200 changes) and answers the
+commands and the live channel the viewer and `bun run rig` use. The same code runs on the laptop
+(`bun run serve`); how the viewer uses it is on the [viewer page](viewer.md). The commands go over plain
+HTTP POST and the changes come back as server-sent events, not a WebSocket ([D-39](../20-decisions/decision-log.md#d-39)).
+
+### The service
+
+`deploy/rigtwin-server.service`, installed as `/etc/systemd/system/rigtwin-server.service`:
+
+| Setting | Value |
+|---|---|
+| Program | `/opt/rigtwin/runtime/bun /srv/rigtwin/current/server/server.js --mode deployed --port 4190 --host 127.0.0.1 --data /var/lib/rigtwin`: the bundled server of the live release, run by Bun 1.4.0 |
+| Address | **127.0.0.1:4190**, loopback only. The design said 4180; the setup's read-only check on the host found 4180 already used by another service, so it moved to 4190 ([D-45](../20-decisions/decision-log.md#d-45)) |
+| User and data | system user `rigtwin` (no login, no home); data in `/var/lib/rigtwin` (mode 0700): `playground/doc.json` (written atomically, at most four times a second) and `secret` (the key for the author ids) |
+| Restarts | `Restart=always`, every 2 s, no start limit: until the first release with `server/` is live each start fails and is tried again, so that release starts it within seconds. The server exits by itself when `current` points at another release, and systemd starts it from the new one |
+| Files | the whole file system read-only (`ProtectSystem=strict`), writes only to `/var/lib/rigtwin`; `/srv` replaced by an empty folder holding only `/srv/rigtwin`; **new after host check H10:** `/opt` replaced by an empty folder holding only `/opt/rigtwin`, and the other applications' settings and data folders under `/etc`, `/var/lib` and `/srv` made inaccessible; also `/etc/caddy`, `/var/www`, `/var/backups`, `/var/lib/caddy`; home folders hidden; private `/tmp` and devices |
+| Privileges | no new privileges, no capabilities, system calls limited to `@system-service` (a blocked call fails instead of killing the process), kernel settings, modules, logs, clock and control groups protected |
+| Network | none but loopback (`IPAddressDeny=any`, `IPAddressAllow=localhost`): Caddy connects to it, it connects to nothing |
+| Resources | one CPU core (`CPUQuota=100%`), 512 MB of memory, 128 tasks, 4,096 open files, a low disk share; journal lines limited to 200 per 30 s |
+
+*Not verified locally* (macOS has no systemd): the setup script runs `systemd-analyze verify` before it
+installs the unit, and `--probe` runs Bun once under every setting of the unit (host check H7).
+
+### The Caddy route
+
+`deploy/mightwork-apex.caddy`, in this order (Caddy tries the block with the longest path first; each
+block's matcher is one inline path on purpose, since a named matcher would be sorted after `/rigtwin/*`):
+
+| Address | Answer |
+|---|---|
+| `/rigtwin/server/*` | 404: the server's code is in the release folder but never served |
+| `/rigtwin/api/*` | passed to `127.0.0.1:4190` with `/rigtwin` removed (the server sees `/api/…`); request bodies at most 64 KiB, as the server's own limit. No `flush_interval -1`: Caddy passes event streams on at once anyway, and with that setting it would keep the request to the server open after the visitor has gone |
+| `/rigtwin/*` | the static release as before; compression (`encode`) only here, so it cannot hold back live events; `file_server { hide /srv/rigtwin/current/server }` as a second guard (it also covers `/rigtwin/server` without the slash) |
+| anything else on `mightwork.ai` | 404 |
+
+Caddy passes the visitor's address in `X-Forwarded-For`; the server believes that header only from
+loopback. *Not validated locally* (no Caddy on the laptop): the setup script validates the file on its own
+and then the whole configuration on the host before it reloads Caddy.
+
+### The setup script and the host checks
+
+`deploy/setup-server.sh` is run once, as root on the production host, only with the owner's yes, inside
+`tmux` (or `systemd-run --scope`) so that a dropped connection cannot stop it half-way:
+
+| Mode | What it does |
+|---|---|
+| `--check` | changes nothing: prints the status of every Caddy site and service, the host checks, and what `--apply` would do |
+| `--apply` | in this order: the system user and `/var/lib/rigtwin`; Bun 1.4.0 into `/opt/rigtwin/runtime/` from the official release zip for the host's architecture, checked against a pinned SHA-256 before anything is installed; the Caddy site file under the host's Caddy lock (validated on its own, a timestamped backup, installed, the whole configuration validated, `systemctl reload caddy`, then `/rigtwin/` must answer 200, `/rigtwin/server/server.js` 404, `/rigtwin/api/health` must reach the new route, and every other site must answer as before); then the unit (checked, installed, enabled, started). On any failure, a hang-up, Ctrl-C or a closed output, the backup is put back and Caddy reloaded. A second run changes nothing |
+| `--probe` | after `--apply`: runs Bun once under the unit's settings (host check H7) |
+| `--undo [--purge-data]` | removes the service, the route and the runtime and restores the site file from before the setup; refused as a whole while the live release contains `server/` (removing the 404 rule would then publish `server.js`) |
+
+Every run appends to `/var/log/rigtwin-setup.log` and the system log (`journalctl -t rigtwin-setup`).
+Every Caddy reload closes the streaming connections of every site on the host for a moment; the sites
+themselves stay up. The script is tested locally against a stand-in host (72 cases, in `bun run check`).
+
+`deploy/HOST-CHECKS.md` lists the fourteen checks on the host (H1 to H14), each with when to run it and
+what to expect: Caddy's reload path and lock, the live site file's hash, the host reaching its own sites,
+no proxy in front, systemd and kernel versions, Bun under the unit's hardening (H7), exposure and limits
+after the first server release (H8), journal room, other applications' files (H10, which added the `/opt`
+and inaccessible-path lines above), disk and access logs, nothing of `server/` served (H12), the tools the
+script needs, and many slow live streams (H14).
+
+### Host check H14: live streams that do not read
+
+`tools/deploy-tests/stream-load.ts` runs the built server in deployed mode on a throwaway port, asks for
+300 live streams that never read (6 per visitor, one visitor per network block) and sends 50 full-pose
+edits a second for 60 s. It prints the server's memory, CPU and health time every 5 s and, on Linux, the
+kernel's TCP memory against its pressure threshold; at the end it reads every stream out.
+
+| Run (2026-11-24, on the host) | Result |
+|---|---|
+| First: the bundle with 300 streams and no byte budget | **failed.** The server stayed healthy (peak 77 MB, health in 0–1 ms, about 10 % CPU), but the kernel's TCP memory reached 59,172 pages against a pressure threshold of 58,837: Linux took about 770 kB per non-reading stream into socket buffers, so the server's own 1 MB queue limit never triggered ("0 of 300 slow streams closed") |
+| Fix | a byte budget per stream: a stream that has been given 512 kB in all, read or not, is ended after its last event; the browser reconnects with the last version it saw and gets only the changes it missed. The ended stream's place in the limits stays taken until its connection is gone (at most 45 s), so reconnecting cannot multiply the buffers. And 150 streams in all (was 300), 12 per network block (was 30). Worst case about 150 × 0.5 MB = 75 MB of socket memory ([D-46](../20-decisions/decision-log.md#d-46)) |
+| Second: the bundle with the fix (SHA-256 `270ec3ab…`) | **passed.** 150 of 150 taken streams ended by the server, largest 527,904 bytes, server peak 66 MB, health 0–1 ms throughout, TCP memory peak 28,698 pages (49 % of the pressure threshold), the host's other sites unaffected |
+
+On the laptop the fixed server also passes a 30 s run (150 of 300 taken, all ended, largest 528,124
+bytes); before the fix, macOS's own network memory ran out with 300 stalled loopback connections.
+
+### Guards on the open server
+
+Built in deployed mode only; a local server has none. The numbers are in `server/limits.ts`
+(the plan's D1 table, with the changes from the security review and H14):
+
+| Guard | Number |
+|---|---|
+| Request body | 64 KiB (Caddy and the server); it must arrive within 10 s |
+| Live streams | 6 per visitor, 12 per network block (IPv6 /48, IPv4 /24), 150 in all; a heartbeat every 15 s; a stream is closed when 1 MB is queued for it, and ended after 512 kB in all |
+| Edits | 60 a minute per visitor, 10 a second per network block, 50 a second in all (view commands count as edits) |
+| Queries | 600 a minute per visitor (every other request under `api/`) |
+| Session codes | eight characters; after five unknown codes a minute a visitor's view commands are refused |
+| Disk | writes refused when the data disk has less than 5 % or 200 MB free |
+| Visitor | the address from `X-Forwarded-For`, believed only from loopback (IPv6 by its /64 block) |
+| Errors | `development: false`: no error page with code (a check in `bun run check` keeps it so) |
+| What is stored | the Playground's pose and its last 200 changes, each with a random author id made by the server; the only text written by a client is a request's group name ([D-41](../20-decisions/decision-log.md#d-41)). The page says so under More → "About this sandbox" |
+
+### Order of the first rollout
+
+The deploy's checks need the host's route before the first release that contains `server/`; otherwise
+every automatic deploy would stop at the route probe. So:
+
+1. `setup-server.sh --check` on the host; read every line (H1–H6, H9–H11, H13); the owner says yes.
+2. `setup-server.sh --apply` inside tmux: the Caddy route and its 404 rule, then the service, which
+   retries every 2 s until a release with `server/` is live.
+3. `setup-server.sh --probe` (H7) and the load test H14.
+4. Only then: merge the platform branch (`platform-step1-main`) to `main` and push. The automatic deploy
+   asks `api/health` first (a 404 stops it before the upload), switches the release, the service starts
+   from it, and `api/health` must report the new revision within 20 s.
+5. `setup-server.sh --check` again (H8, H12); on the laptop `bun tools/live-idle-test.ts --url
+   https://mightwork.ai/rigtwin` (ten minutes idle through Caddy, then one change and its undo in the
+   public Playground); then the two-browser test on the live site.
+
+**Status on 2026-11-24:** steps 1 (the read-only check, which moved the port to 4190 and added the H10
+lines to the unit) and the H14 part of step 3 have run on the host. `--apply`, `--probe`, the merge and
+step 5 have not run yet.
+
+The release that goes out is the platform **without the manikin**: no person in the viewer, no Person
+button, no `manikin.json` in the release. The person appears on mightwork.ai only after the owner approves
+the new manikin ([D-44](../20-decisions/decision-log.md#d-44)).
 
 ### The restricted deploy account
 
@@ -209,12 +373,28 @@ Set up on 2026-11-23 at the owner's request; workflow `.github/workflows/deploy.
    (one deploy at a time) and a run that is already deploying is never cancelled.
 2. **Runner**: GitHub's Ubuntu 24.04 machine; Bun 1.4.0; `bun install --frozen-lockfile`; Google Chrome
    from the runner image for the headless checks, with WebGL in software (SwiftShader).
-3. **Key**: the repository secret `DEPLOY_SSH_KEY` is written to a file for the run and deleted at the
-   end; the SSH settings pin the server's host key from `deploy/known_hosts`.
-4. **Deploy**: `bun run deploy --no-images`, the same script and the same refusal rules as a manual
-   deploy: every check, wiki lint, clean commit, build, wiki site, distribution with its own browser
-   check, upload, switch, nine live checks, automatic switch-back on failure.
-5. **Receipt**: `dist/deploy-receipt.json` is kept as a run artifact.
+3. **Check and build, without the key** (since step 1): `bun run deploy --dry-run --no-images`, the same
+   refusal rules as a manual deploy: every check, wiki lint, clean commit, build, wiki site, distribution
+   with its own browser check (and the built server behind it).
+4. **Key**: only then is `DEPLOY_SSH_KEY` written to a file; the SSH settings pin the server's host key from
+   `deploy/known_hosts`.
+5. **Upload, switch and check**: `bun run deploy --prepared` (the route probe, upload, switch, the live
+   checks including the server's health, automatic switch-back on failure); the key is removed in the next
+   step, which runs whatever happened.
+6. **Receipt**: `dist/deploy-receipt.json` is kept as a run artifact.
+
+**Hardening added in step 1** (security review of step 1, S9):
+
+- Each action (`actions/checkout`, `oven-sh/setup-bun`, `actions/upload-artifact`) is pinned to the
+  commit its tag pointed to on 2026-11-24, the tag kept as a comment, so a moved tag cannot change what
+  runs next to the deploy key. The workflow file says how to update them.
+- The job runs only for `refs/heads/main`, also when started by hand, in the GitHub environment
+  `production`; the checkout keeps no credentials (`persist-credentials: false`).
+- `setup-bun` downloads Bun without a pinned checksum, and this Bun builds the `server.js` that runs on
+  the host, so the job stops unless `bun --revision` is `1.4.0+34cbb9a40` (the official 1.4.0 build; a
+  weak check, not a checksum).
+- **For the owner** (settings only the owner can change): move `DEPLOY_SSH_KEY` from the repository's
+  secrets into the environment `production`, limited to the branch `main`, and protect `main`.
 
 What the runner cannot do, and how it is handled:
 
@@ -257,6 +437,7 @@ Verified by the coordinator on 2026-11-23 after the first deployment.
 | Time of a full deployment | 70 s from GitHub Actions (runner, software rendering); 15–25 s from the development machine, including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
 | Release history | see `ssh <host> 'ls -1 /srv/rigtwin/releases'`; the deploy keeps the newest 5 |
 | Coordinator's browser check of the live site | viewer loads the model with no console errors (narrow layout in a small window); wiki index and gallery render; navigation and viewer link work |
+| The rigtwin server (2026-11-24) | not live yet. On the host: the setup's read-only `--check` (port 4180 found taken, so 4190; host check H10 added the `/opt` and inaccessible-path lines to the unit) and the load test H14 (passed on its second run). Waiting: the owner's yes for `--apply`, then `--probe`, then the merge of `platform-step1-main` ([order](#order-of-the-first-rollout)) |
 
 ### Updating production
 

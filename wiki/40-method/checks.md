@@ -1,8 +1,8 @@
 ---
 title: Checks
-tldr: Every automatic check of the asset (bun run check, 20 checks), of the distribution build (1) and of the viewer page (53), with what each verifies, the real failure it exists to catch, and its current result; plus what is not checked and how to add a check.
+tldr: Every automatic check of the asset and the platform (bun run check, 28 checks, 8 of them added by platform step 1 for the commands, the server, the live page and the deploy), of the distribution build (2) and of the viewer page (53), with what each verifies, the real failure it exists to catch, and its current result; plus the host's load test, what is not checked and how to add a check.
 status: living
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [checks, quality, method, viewer]
 ---
 
@@ -10,17 +10,20 @@ tags: [checks, quality, method, viewer]
 
 ## TL;DR
 
-- `bun run check` runs 20 checks in about 4 s and exits non-zero if one fails. As of round 2 all pass, with one standing warning (11 parameters read by nothing).
+- `bun run check` runs 28 checks and exits non-zero if one fails: the 20 checks of the asset (about 4 s) and 8 added by [platform step 1](../30-plan/platform-plan.md) for the command layer, the server, the live page and the deploy (C-75 to C-82). The full run now takes about 105 s, most of it the deploy tests. On 2026-11-24 all pass, with one standing warning (11 parameters read by nothing).
 - The checks read the built GLB through an **independent reader** written in Python that shares no code with the generator. A writer checked only by its own reader hides its own mistakes.
 - Each check exists because of a real failure or a named risk. The coverage check exists because an early trial silently lacked the whole left armrest pod and joystick.
-- `bun tools/ui-accept.ts` drives the viewer page like a person (real pointer, wheel and key events) through 53 checks in about 2 min. All pass.
+- `bun tools/ui-accept.ts` drives the viewer page like a person (real pointer, wheel and key events) through 53 checks in about 2 min. All pass. Since step 1 the load check (T10) counts every script of the default page against 800 kB in all ([D-43](../20-decisions/decision-log.md#d-43)).
+- `bun tools/live-accept.ts` drives the shared scene in two real browsers and the command line (14 steps, about 12 s; also part of the full check as C-82). The host's load test `tools/deploy-tests/stream-load.ts` is run by hand on the production host (host check H14).
 - **Not checked by any script:** parts cutting into each other, parts that tear when moved, agreement with the photos, and whether sizes are true. An independent reviewer and a tape cover those.
 
 Ids `C-01 …` are stable; refer to them from other pages. Commands and options are in the
 [tool reference](../80-reference/tools.md). Terms are in the [glossary](../00-overview/glossary.md).
 
 <!-- UPDATE after the final modelling round: the "Result" columns and the counts quoted in them -->
-Results below are **as of round 2** (build `c32727406a5c…`, run on 2026-11-23 on one Apple M2 machine).
+Results of C-01 to C-74 below are **as of round 2** (build `c32727406a5c…`, run on 2026-11-23 on one Apple M2
+machine), except T10 (C-31), which is as of 2026-11-24. The platform's checks (C-75 to C-83) and the totals are
+**as of 2026-11-24**, on the branch `platform-step1-main` (build `0b6d8248…`, same machine).
 
 ## How a check run behaves
 
@@ -30,7 +33,9 @@ Results below are **as of round 2** (build `c32727406a5c…`, run on 2026-11-23 
   parameters or building stops the run, because nothing after it would mean anything.
 - `ok`, `warn` and `FAIL` lines; only `FAIL` changes the exit code. When everything passes, 18
   lines are printed: C-19 and C-20 print only when they fail.
-- `--fast` skips the four checks that need the headless browser (C-17 to C-20): 1.8 s instead of 4.2 s.
+- `--fast` skips the checks that need the headless browser or a built `dist/`: C-17 to C-20 and C-80 to C-82.
+  The fast set still runs the setup script's harness (C-79, about 9 s).
+- The deploy tests (C-80, C-81) need `dist/`; without it the run prints a warning "skipped: no dist/" instead.
 - The last line is appended to the timeline file with the duration.
 
 ## Checks of the asset (`bun run check`)
@@ -58,18 +63,43 @@ Results below are **as of round 2** (build `c32727406a5c…`, run on 2026-11-23 
 | C-19 | draw calls | Fails if a still default view needs more than 82 draw calls. Printed only on failure | A viewer that redraws shadows every frame doubles its draw calls; the shadow map is now redrawn only when something moves | passes silently: 68 calls for 67 primitives plus the ground |
 | C-20 | viewer console | Any error or warning in the page console during C-17 to C-19 fails the run. Printed only on failure | A page that renders but logs errors | passes silently |
 
+### Checks added by platform step 1
+
+Step 1 ([platform plan](../30-plan/platform-plan.md)) added the command layer, the server, the viewer as a
+live client and the deployed service. Their checks run in the same `bun run check`; results of 2026-11-24.
+
+| Id | Name as printed | Verifies, and how | The failure it exists to catch | Result |
+|---|---|---|---|---|
+| C-75 | commands | `bun test shared/commands`: argument checking and the shape of errors; `pose.set` units for all 20 joints; limits, including a three-angle mount; assumed adjustments refused unless asked for; the stale check per joint; undo by version and by request ([D-40](../20-decisions/decision-log.md#d-40)); the history cap of 200; a rebuilt asset; `scene.find` ranking; `measure.distance` against an independent 4 × 4 matrix computation from the model file | A command that moves the wrong joint, takes degrees for metres, or lets an old edit overwrite a newer one | ok, 26 pass |
+| C-76 | server | `bun test server`: two live clients over real HTTP (a change on one appears on the other; stale refusal with the reason; undo by request; resume after a dropped stream; a server process killed and restarted with both clients catching up); view commands only to the addressed browser; the deployed guards (body size, streams per visitor, per network block and in all, edit rate, nearly full disk) and none locally; author ids made by the server ([D-41](../20-decisions/decision-log.md#d-41)); the Host check; the release watch; and since the host's load test, the byte budget of a live stream: a stream ends after its budget, the page comes back with `since=` and gets only what it missed, and the ended stream's place still counts until its connection is gone ([D-46](../20-decisions/decision-log.md#d-46)) | Two browsers that disagree; a server restart that loses changes; one visitor filling the server; a stranger's stalled streams filling the host's network memory | ok, 19 pass |
+| C-77 | live client | `bun test viewer/src`: the page's reconnect rules with a stand-in EventSource and clock, after Leitbild's reconnect cases: backoff 1, 2, 4 … 30 s; one resync after a reconnect; a visible page or the network coming back tries at once; nothing reconnects after `disconnect()` | The part of a live system that takes longest to get right (Leitbild's reconnect took eight months) | ok, 5 pass |
+| C-78 | server options | `server/server.ts` passes `development: false` to `Bun.serve` | Error pages that show the server's code to visitors | ok |
+| C-79 | setup script | `bash tools/deploy-tests/setup-server.test.sh`: the real `deploy/setup-server.sh` against a stand-in host folder (check, apply, a second apply that changes nothing, undo, probe; failed validation, failed reload, another site answering differently, a checksum mismatch, three machine types; a hang-up, a closed output and a broken pipe right after the Caddy reload each put the old site file back) | A setup that breaks the host's other sites or leaves Caddy half-changed. The harness itself had a bug found on 2026-11-24: it took the site file "live before the setup" from the last commit (`git show HEAD:…`), so after any commit containing the new Caddy file 22 of its cases failed, which would have stopped the first automatic deploy. It now reads the fixture `tools/deploy-tests/fixtures/mightwork-apex.before-setup.caddy` (the file live today, SHA-256 `60efbcdb…`) | ok, 72 passed, 0 failed |
+| C-80 | deploy checks | `bun tools/deploy-tests/deploy-checks.ts`: the live-site checks of `tools/deploy.ts` against local stand-ins of the site built from `dist/`: a release without a server; the route probe before the switch; an old revision, then the new one; a 502 for 20 s; a wrong revision; `server/server.js` served | A deploy that switches to a release whose server never comes up, or that publishes the server's code | ok, 16 passed, 0 failed |
+| C-81 | deploy rollback | `bash tools/deploy-tests/rollback.test.sh`: `bun run deploy --rollback` with a stand-in `ssh` on a local folder: refused to go back to a release without a server once the live one has one; the server checks after a rollback; the dry run | A rollback that silently drops the server or exposes its code | ok, 17 passed, 0 failed |
+| C-82 | live viewer | `bun tools/live-accept.ts`: two headless browsers and the real command line on one local server with an empty temporary scene (steps listed in the [tool reference](../80-reference/tools.md#the-shared-scene-commands-and-tests)) | Everything above working in a real page: a slider move, a command, Undo on the activity line, a stale refusal, a link preview, view routing, a forged author id, a server restart, the network coming back, and the page without a server | ok, 14 of 14 steps |
+
+Two older checks changed with step 1: `bun run render` and `ui-accept` start the server with an **empty
+temporary scene**, so no pose of the shared Playground can reach a published picture, and `ui-accept` empties it
+again before every page.
+
 ## Check of the distribution build (`bun run dist`)
 
 | Id | Verifies, and how | The failure it exists to catch | Result |
 |---|---|---|---|
-| C-21 | Refuses a partial build or one with missing components. Then serves `dist/` under the sub-path `/rigtwin/` and loads it once in headless Chromium: no request outside the sub-path, no request mentioning `private` or `work/`, no console error, more than zero triangles drawn | The viewer is deployed under a sub-path, so one absolute URL breaks it. The local server also serves private photo cameras; a deployed copy must never ask for them | ok: 5 files, 1.68 MB; 5 requests; 28,106 triangles drawn (the model's 28,042 plus the 64 of the ground disc) |
+| C-21 | Refuses a partial build or one with missing components. Then serves `dist/` under the sub-path `/rigtwin/` and loads it once in headless Chromium: no request outside the sub-path, no request mentioning `private` or `work/`, no console error, more than zero triangles drawn | The viewer is deployed under a sub-path, so one absolute URL breaks it. The local server also serves private photo cameras; a deployed copy must never ask for them | ok: 5 files, 1.68 MB; 5 requests; 28,106 triangles drawn (the model's 28,042 plus the 64 of the ground disc) (round 2) |
+| C-83 | Since step 1: bundles `server/server.ts` into `dist/server/server.js` and refuses a bundle that takes code from anywhere but `server/` and `shared/` or imports anything Bun does not provide itself. The verify step then starts the built server (local mode, free port, empty temporary data folder) and answers `/rigtwin/api/*` from it as Caddy does: `api/health` must report the release's revision and scene format, `api/live` must deliver a `snapshot` within 5 s, and `server/server.js`, `server/` and `server` must answer 404 | The viewer asks `api/health` on a release with a server, so a verify without one would fail on its own request; viewer code or an npm package slipping into the server; the server's code being served | ok (2026-11-24): server bundle 65,471 bytes from 10 modules; health and live channel answered through `/rigtwin/api/`; `server/` refused; 155 requests answered, 0 failed |
 
 ## Checks of the viewer page (`bun tools/ui-accept.ts`)
 
 The script opens a fresh page per test at 1440 × 900 (some also at 1024 × 768 and 390 × 800) and
 acts through the browser's own input events. It reads joint limits from the manifest, so it does
 not break when the model is rebuilt. Each check came from one of the two interface reviews; "before"
-is what the reviews measured on the first viewer. All 53 pass (113.9 s).
+is what the reviews measured on the first viewer. All 53 pass (113.9 s in round 2; 115.6 s on 2026-11-24 with the
+live client, which the page loads but which stays quiet until something changes).
+
+Moving the platform onto `main` without the manikin changed **no** check of this script: the manikin's commit
+never touched `tools/ui-accept.ts`, and only the comment explaining T10's budget was reworded.
 
 | Id | Script id | Verifies | Before the redesign | Result |
 |---|---|---|---|---|
@@ -82,7 +112,7 @@ is what the reviews measured on the first viewer. All 53 pass (113.9 s).
 | C-28 | T07 | A hint line names rotate and zoom, disappears after the first drag, and is absent with `ui=0` | none | pass |
 | C-29 | T08 | No pointer target smaller than 24 × 24 px | 65 | 0 |
 | C-30 | T09 | The cursor over the 3D view is not the default arrow | — | grab |
-| C-31 | T10 | Page ready ≤ 1 s; script ≤ 760 kB | 687 kB script | 190 ms; 1.68 MB in 6 requests; script 726 kB |
+| C-31 | T10 | Page ready ≤ 1 s; every script the default page loads ≤ 800 kB in all (was `viewer.js` ≤ 760 kB until step 1; [D-43](../20-decisions/decision-log.md#d-43)) | 687 kB script | 2026-11-24: 210 ms; 1.70 MB in 9 requests; 1 script, 733 kB |
 | C-32 | T11 | No row label is cut off | — | 0 |
 | C-33 | T12 | Hide the monitor: click it, "Hide" (≤ 2 actions), and bring it back (≤ 3); no monitor pixel left | 4 actions with a trap | 2 and 3 |
 | C-34 | T12b | Hide the touchscreen the same way | — | 2 actions |
@@ -131,6 +161,25 @@ The script's own ids (T01 …) have gaps because some review items were merged o
 implementer reported C-71 as passing against the previous viewer when it was last run with a
 baseline (*not re-run for this page*).
 
+## The host's load test (host check H14)
+
+`tools/deploy-tests/stream-load.ts` is not part of `bun run check` (it takes a minute); it is run by hand before a
+release that changes the server, on the production host against a throwaway server from the release's bundle
+(`deploy/HOST-CHECKS.md`). It runs the built server in deployed mode, asks for 300 live streams that never read (6 per
+visitor, one visitor per network block) and sends 50 full-pose edits a second from 50 other visitors. Every 5 s it
+prints the server's memory and CPU, how fast `api/health` answers, and on Linux the kernel's TCP memory against its
+pressure threshold. At the end it reads every stream out.
+
+It **passes** when the server's resident memory stays at or below 150 MB, `api/health` answers 200 within a second
+every time, every stream the server took was ended by the server (by its byte budget or as too slow), no stream got
+more than the budget (512 kB) plus one event, and the TCP memory stays below the pressure threshold.
+
+On 2026-11-24 the first run on the host failed: TCP memory reached 59,172 pages against a threshold of 58,837,
+because Linux absorbed about 770 kB per stalled stream and the server's 1 MB queue limit never triggered. With the
+byte budget and the lower stream limits ([D-46](../20-decisions/decision-log.md#d-46)) the second run passed: 150 of
+150 streams ended by the server, largest 527,904 bytes, server peak 66 MB, health 0–1 ms, TCP memory peak 28,698 pages
+(49 % of the threshold). Detail: [deployment](../50-implementation/deployment.md).
+
 ## Not checked by any script
 
 Knowing the holes matters as much as knowing the checks.
@@ -163,7 +212,7 @@ To `bun run check` (`tools/check.ts`):
    `--fast` skips.
 5. **Prove it can fail.** Break the model on purpose once and see the check go red with a useful
    message (the infrastructure agent did this with a zero-height cylinder and a misspelt key).
-6. Add a row here with the next free id (`C-75`), and say what it exists to catch.
+6. Add a row here with the next free id (`C-84`), and say what it exists to catch.
 
 To the viewer acceptance script (`tools/ui-accept.ts`): add
 `await test("T54", "name", async () => { const s = await open(1440, 900); … record("T54", "name", pass, value, limit); await close(s); })`.

@@ -1,8 +1,8 @@
 ---
 title: Tool reference
-tldr: Every command of the project (bun run build, check, render, serve, dist, wiki, deploy, test, typecheck; the viewer acceptance script; the independent model reader; the Skill's vocabulary check) with its options, inputs, outputs and typical run time, plus the viewer's URL interface for agents, the workspaces and environment variables, and where every output goes.
+tldr: Every command of the project (build, check, render, serve, rig, dist, wiki, deploy; the acceptance, live and deploy tests; the setup script; the independent model reader) with its options, outputs and typical run time, plus the shared scene's commands, the viewer's URL and script interface, the workspaces and where every output goes.
 status: living
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [reference, tools, commands, viewer, agents]
 ---
 
@@ -15,6 +15,7 @@ tags: [reference, tools, commands, viewer, agents]
 - Agents drive the viewer by **URL parameters** (`view`, `only`, `hide`, `fit`, `pose`, `mode`, `cam`, …) or by `window.viewer.apply({...})` with the same keys.
 - Parallel agents set `RIGTWIN_WORKSPACE` (own build and render folders) and `RIGTWIN_AGENT` (their name in the timeline). `RIGTWIN_VIEWER_DIR` points the tools at a copy of the viewer.
 - `bun run deploy` checks, builds, packages and publishes, and switches back if the live pages fail; see [deployment](../50-implementation/deployment.md).
+- Since [platform step 1](../30-plan/platform-plan.md), **`bun run rig <command> '<json>'`** changes, shows, measures and undoes things in the shared scene that every open viewer follows live, on the laptop (`bun run serve`) or on the public sandbox (`--server https://mightwork.ai/rigtwin`). Its commands are listed [below](#the-shared-scene-commands-and-tests).
 
 Every tool appends one line per run to the timeline file (`work/timeline.jsonl`, not committed):
 `{"ts", "agent", "event", "seconds", "note"}`. The "Typical time" column below is the median and range
@@ -38,15 +39,24 @@ fit together is in [the pipeline](../40-method/pipeline.md).
 | `bun run build` | parameters + spec + component code → model file and description file | `--only <group>[,<group>]` builds only those groups' meshes (the frame tree stays complete); `--workspace <name>`; `--asset <id>` (default `rig-b`); `--out <dir>`; `--quiet`; `--no-timeline` | `assets/rig-b/params/*.toml`, `spec/rig.toml`, `src/*.ts` → `assets/rig-b/build/rig-b.glb` and `rig-b.manifest.json` | full 0.19 s (0.12–0.32 and one of 0.79; 42 runs); `--only` 0.12 s (0.09–0.38, 62 runs); a failing build stops in 0.03–0.21 s naming the component and the reason |
 | `bun run check` | full build, then every check; exit code 1 if one fails | `--fast` skips the checks that need the browser; `--workspace <name>` | build → printed `ok` / `warn` / `FAIL` lines | 4.2 s (3.8–4.8, 24 runs); `--fast` 2.1 s (1.8–2.7, 4 runs) |
 | `bun run render` | drives the viewer page headless and writes images | `--set <set>[,<set>]` (below; default `sheet`); `--only <group or id>[,…]`; `--fit <group or id>[,…]`; `--cam <photo>[,…]`; `--pose J_x:val,…`; `--mode ids\|class`; `--out <dir>`; `--workspace <name>`; `--viewer <dir>`; `--photos <dir>` (use masked photos) | current build → PNG or JPEG files (see "Where outputs go") | per set, below; browser start 0.38 s (0.26–2.47, 144 runs) |
-| `bun run serve` | local web server laid out like the deployed folder | `--port <n>` (default 4173); `--workspace <name>`; `--viewer <dir>` | → `http://127.0.0.1:4173/`: `/` viewer (bundled in memory, rebuilt when a file changes), `/asset/` build, `/wiki/` built wiki, `/version.json`; local only: `/private/`, `/work/` | starts at once; bundling about 0.1 s |
+| `bun run serve` | local web server laid out like the deployed folder, with the rigtwin server (local mode) on the same port under `/api/` | `--port <n>` (default 4173); `--workspace <name>`; `--viewer <dir>`; `--data <dir>` (where the shared scene is kept; default `../rigtwin-projects/` next to the repository, the scene in `playground/doc.json`); `--no-api` (static files only, as before step 1) | → `http://127.0.0.1:4173/`: `/` viewer (bundled in memory, rebuilt when a file changes), `/asset/` build, `/wiki/` built wiki, `/version.json` (with a `server` entry when the API is on), `/api/` the server; local only: `/private/`, `/work/`. Every path answers only to the Host names 127.0.0.1, localhost, [::1] or *.localhost (403 otherwise), so a web page elsewhere cannot reach the local files by DNS rebinding | starts at once; bundling about 0.1 s |
+| `bun run rig` | runs one command on a rigtwin server and prints one JSON reply that names the server it came from | `list` (the server's own catalogue, with arguments and examples); `--server <url>` (default `$RIG_URL` or `http://127.0.0.1:4173`); `--viewer <code>` (the browser a view command is for: its code is in the viewer's More menu); `--group <id>` (names the request a change belongs to, so `history.undo {"group": …}` undoes it whole); `--expected-version <n>` (the scene version the change is based on: refused as stale if a joint it names changed after it) | `bun run rig pose.set '{"joints": {"J_mon_height": -0.03}}' --group lower-monitor` → `{"server": "http://127.0.0.1:4173 (local, revision …)", "ok": true, "version": 1, "you": {…}, "recorded": 1, "result": {"changes": [{"joint", "label", "before", "after", "unit", "said"}]}}`; a refusal carries `error: {code, message, hint, schema?}`. Exit code 0 ran, 1 refused, 2 not sent | well under a second |
 | `bun run dist` | assembles the self-contained deployable folder and verifies it | `--out <dir>` (default `dist`); `--no-verify` | → `dist/index.html`, `viewer.css`, `viewer.js`, `asset/rig-b.glb`, `asset/rig-b.manifest.json`, `wiki/`, `version.json`; then served from the sub-path `/rigtwin/` and loaded in headless Chromium: every request must succeed, no console error | 0.5 s (0.03–0.80, 6 runs, before the wiki was included); 1.3 s with the wiki (1 successful run: 124 files, 17.0 MB) |
 | `bun run wiki index` | regenerates `wiki/index.md` from the pages' front matter | — | `wiki/**/*.md` → `wiki/index.md` | 0.004–0.013 s |
 | `bun run wiki lint` | front matter, links, anchors, images and captions, stable IDs, page length, index freshness | — | `wiki/` → findings; exit code 1 on errors | 0.01–0.02 s |
 | `bun run wiki build` | renders the wiki as a static site (relative links, search, generated index) | `--out <dir>` (default `dist/wiki`) | `wiki/` → HTML site | 0.12–0.15 s (3 successful runs; 0.07–0.25 s including runs that stopped on broken links) |
-| `bun run deploy` | refuses unless the check and the wiki lint pass and the working tree is committed; then build, documentation images, wiki index and site, dist; copies the folder to the production server as a new release, switches the live link in one step, checks the live pages over HTTPS and switches back if they fail | `--dry-run` (every local step; prints the server commands without running them); `--rollback` (back one release); `--allow-lint`, `--allow-dirty`, `--no-images`, `--config <file>` | settings in `deploy.config.json` → the production server; `dist/deploy-receipt.json` | one dry run 16.6 s (check 4.6, documentation images 10.1, dist 1.3); see [deployment](../50-implementation/deployment.md) |
+| `bun run deploy` | refuses unless the check and the wiki lint pass and the working tree is committed; then build, documentation images, wiki index and site, dist; copies the folder to the production server as a new release, switches the live link in one step, checks the live pages over HTTPS and switches back if they fail. A release with a server is first checked against the live route (`api/health` must not answer 404) and, after the switch, must report its own revision on `api/health` within 20 s; `server/server.js` must never answer 200 | `--dry-run` (every local step; prints the server commands without running them); `--prepared` (upload, switch and check a `dist/` that a dry run of the same clean commit has just built; the GitHub workflow runs the two as separate steps so the deploy key is on disk only for the network part); `--rollback` (back one release; refused to a release without a server once the live one has one); `--allow-lint`, `--allow-dirty`, `--no-images`, `--config <file>` | settings in `deploy.config.json` → the production server; `dist/deploy-receipt.json` | one dry run 16.6 s before step 1 (check 4.6, documentation images 10.1, dist 1.3); the full check now takes about 105 s of it; see [deployment](../50-implementation/deployment.md) |
 | `bun run test` | `bun test generator`: known-answer tests of the geometry kit (5 tests); also part of `check` | — | — | part of the check time |
 | `bun run typecheck` | `tsc --noEmit` over generator, shared code, viewer, tools and asset sources; also part of `check` | — | — | part of the check time |
 | `bun tools/ui-accept.ts` | the viewer's 53 acceptance checks, driven like a person (real pointer, wheel and key events, a fresh page per check, three window sizes) | `--viewer <dir>`; `--origin <url>` (test a running server); `--baseline <url>` (a second server with the previous viewer, for check T49); `--shots <dir>` (default `work/renders/ui-accept`); `--json <file>`; `--only T12,T31` | viewer source → screenshots and `ui-accept.json`; exit code 1 if a check fails | full run 115 s (111–125, 9 runs); a few checks with `--only` 3–46 s |
+| `bun tools/live-accept.ts` | the shared scene in real browsers: two (and a third) headless pages and the real command line on one local server with an empty temporary scene, driven with real pointer input; steps [below](#the-shared-scene-commands-and-tests); also part of the full `check` | — | → `ok` / `FAIL` lines; exit code 1 if a step fails | about 12 s (11.6 s on 2026-11-24) |
+| `bun tools/live-idle-test.ts` | does the live channel survive a long quiet spell on a real route (the laptop, or `https://mightwork.ai/rigtwin` through Caddy)? Keeps `api/live` open, counts the heartbeats (one every 15 s), then makes one small change in its own group (1° or 5 mm) and undoes it; both must arrive on the same open stream. If the undo is refused it prints the command to undo by hand | `--url <base>` (required); `--minutes <n>` (default 10); `--joint <id>` (default `J_mon_tilt`; refuses assumed and three-angle joints) | → progress lines; exit 0 when all holds, 1 with the reason, 2 for bad options | the minutes given |
+| `bash deploy/setup-server.sh` | one-time setup of the rigtwin server on the production host, as root and only with the owner's yes: system user and data folder, Bun 1.4.0 from the official zip checked against a pinned SHA-256, the Caddy site file (validated, backed up, reloaded, every other site checked before and after, the backup put back on any failure), the service unit | `--check` (changes nothing; prints the state and the host checks of `deploy/HOST-CHECKS.md`); `--apply` (idempotent); `--probe` (after `--apply`: runs Bun once under the unit's hardening, host check H7); `--undo [--purge-data]` | the three files `deploy/setup-server.sh`, `deploy/mightwork-apex.caddy`, `deploy/rigtwin-server.service`, copied to the host → the host's configuration; log in `/var/log/rigtwin-setup.log` and `journalctl -t rigtwin-setup` | see [deployment](../50-implementation/deployment.md) |
+| `bash tools/deploy-tests/setup-server.test.sh` | the setup script against a stand-in host folder (72 cases); part of `check` | `[path/to/setup-server.sh]` (test another copy) | → `setup-server.sh test: N passed, M failed` | about 9 s |
+| `bun tools/deploy-tests/deploy-checks.ts` | the deploy's live-site checks against local stand-ins of the site (16 cases); needs `dist/`; part of the full `check` | — | → `deploy checks test: …` | part of about 90 s for both deploy tests |
+| `bash tools/deploy-tests/rollback.test.sh` | `bun run deploy --rollback` with a stand-in `ssh` on a local folder (17 cases); needs `dist/`; part of the full `check` | — | → `rollback test: …` | as above |
+| `bun tools/deploy-tests/idle-local.ts` | `live-idle-test.ts` against the built server directly and behind the dist verify's Caddy-like proxy | `--minutes <n>` (default 0.5, longer than Bun's default 10 s idle timeout) | → ok or the reason | twice the minutes |
+| `bun tools/deploy-tests/stream-load.ts` | the host's load test (host check H14): 300 attempts at a live stream that never reads and 50 full-pose edits a second against a throwaway server in deployed mode; pass criteria on the [checks](../40-method/checks.md#the-hosts-load-test-host-check-h14) page; not part of `check` | `--seconds <n>` (60); `--streams <n>` (300); `--edits <n>` (50 a second); `--limit-mb <n>` (150); `--budget-kb <n>` (512); `--bundle <server.js> --asset <dir>` (a release's bundle, as on the host) | → memory, CPU, health time and (Linux) TCP memory every 5 s; `stream load: passed` or `FAILED` | the seconds given plus the read-out |
 | `python3 -I tools/glb_inspect.py <file.glb>` | independent reader of the model file (standard library only; shares no code with the generator) | `--poses <poses.json>` adds posed matrices; `--tree` | GLB → one JSON document: nodes, meshes, statistics, joint motion sets | used inside `check` |
 | `bash .claude/skills/modeling-3d-assets-from-references/scripts/check-vocabulary.sh` | keeps the Skill free of asset-type words and banned names | `--banned-b64 <base64>[,…]` | Skill files and agent definitions → hits by position; exit 0 clean, 1 hits, 2 no banned list | under a second |
 
@@ -121,8 +131,50 @@ selection, assumed joints in use), `setView`, `setPhotoCamera`, `setOverlay`, `s
 `worldPosition(id)`, `cameras()`, `cameraInfo(name)`, `manifest()`, `benchmark(n)`, `rows()`,
 `shareUrl()`, `picture()`, `frame()`.
 
+`viewer.live()` (since step 1) gives the state of the shared scene on this page, or `null` when the page has
+no server: `code` (the session code view commands name), `version` (the scene version the page holds), `preview`
+(a link's pose shown with Apply), `unsaved` (joints changed here and not saved yet), `activity` (the text of the
+activity line, or `null`), `resyncs`, and the connection's `connected`, `attempt`, `waiting` and `stopped`.
+
 **Keys for people:** Esc clears the selection (or closes a menu), A shows all, F zooms to the selection,
 H hides it, I shows only it.
+
+## The shared scene: commands and tests
+
+The rigtwin server (`server/server.ts`, the same code on the laptop and on the host) keeps one shared scene, the
+Playground: the pose of the rig and its last 200 changes. Every viewer that shows it follows changes live over
+server-sent events and sends its own changes as commands ([D-39](../20-decisions/decision-log.md#d-39)). The commands
+of step 1, from `shared/commands/core.ts` (`bun run rig list` shows each with its arguments and examples):
+
+| Command | Kind | What it does |
+|---|---|---|
+| `scene.summary` | query | what is open: the asset, the scene version, every moved joint with its value and unit, and the recent changes (version, who, group, what changed) |
+| `scene.find` | query | ids by plain words, ranked: parts (`C_`, `S_`), joints (`J_`, with unit, neutral value, travel and evidence) and datums (`D_`, reference points such as eye points and grips) |
+| `pose.set` | edit | set one or more joints: degrees for turning joints and for each angle of a three-angle mount (`[roll, pitch, yaw]`, absolute), metres for sliding joints; values outside the travel are refused; assumed adjustments only with `allowAssumed`; recorded as one change |
+| `history.undo` | edit | undo one change (`{"version": n}`) or every change of a request (`{"group": id}`) as a new change; refused as stale if a joint it would put back was changed again since ([D-40](../20-decisions/decision-log.md#d-40)) |
+| `measure.distance` | query | distance in metres between two frames (parts, datums, surfaces, joint frames) at the current pose: a point estimate from the photo-estimated sizes, no range yet |
+| `view.set` | view | show a named view in one browser (`--viewer <code>`): `operator` (the operator's eye), `three_quarter`, `front`, `rear`, `left`, `right`, `top`, `front_quarter` |
+| `view.show` | view | choose what one browser shows: `only`, `hide`, or `all` again |
+| `view.select` | view | select a part or group in one browser, as a click would (its card opens) |
+
+The request-level values `group`, `expectedVersion` and `session` (the browser's code) travel with the request,
+never inside the arguments. Authors are labels the server makes from a keyed hash of the caller's id ("Person ·
+3f2a", "Claude Code · 3f2a"; [D-41](../20-decisions/decision-log.md#d-41)). Scripts can `import { call, catalogue }
+from "./tools/rig.ts"`: `call(id, args, {server, viewer, group, expectedVersion, client})` returns the same reply
+object (callers default to the label "Script"). On a remote server, a group name in a reply that is not this run's own
+`--group` comes back as `untrusted_group`, and `--group` itself is refused if it contains a banned name.
+
+The steps of `bun tools/live-accept.ts`:
+
+1. a slider move in browser A appears in B, with B's activity line naming A (A shows none for its own change);
+2. `bun run rig pose.set` appears in both, with the activity line;
+3. Undo on B's activity line undoes it in both;
+4. a stale edit (A holds a slider while Claude Code moves the same joint) is refused, the reason is shown and A shows the shared value again;
+5. a link with `pose=` shows Apply and saves nothing by itself; Dismiss returns to the shared pose, Apply saves it;
+6. a view command reaches only the browser whose code it names;
+7. a stranger who copies B's author id from the live channel cannot make B ignore the change;
+8. after a server restart both pages reconnect by themselves with backoff, catch up and resync exactly once; the browser coming back online reconnects at once;
+9. without a server the page works as before: no request under `api/`, nothing logged.
 
 ## Workspaces and environment variables
 
@@ -146,7 +198,8 @@ one agent's file can still stop another agent's build (it happened; see
 | Anything containing photo pixels (matched outlines, blends, side-by-sides from the originals) | `private/renders/matched/` | never |
 | Masked photo comparisons and model images for the wiki | `wiki/img/matched/`, `wiki/img/model/` | yes |
 | Viewer acceptance screenshots and results | `work/renders/ui-accept/` | no |
-| Deployable folder | `dist/` | no |
+| Deployable folder (with `server/server.js`, the server bundled into one file, never served) | `dist/` | no |
+| The shared scene of `bun run serve` | `../rigtwin-projects/playground/doc.json` (outside the repository; `--data <dir>` elsewhere) | no |
 | Timeline of tool runs | `work/timeline.jsonl` | no |
 | Wiki site | `dist/wiki/` | no |
 

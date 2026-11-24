@@ -1,9 +1,9 @@
 ---
 title: Decision log
-tldr: 36 decisions, D-01 to D-36, in the order they were taken on 2026-11-23, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan; D-21 to D-36 were taken after approval, by the owner or by the coordinator during the build.
+tldr: 46 decisions, D-01 to D-46, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan of 2026-11-23, D-21 to D-37 were taken during the first build, and D-38 to D-46 belong to platform step 1 (2026-11-24), among them a live channel without WebSocket, undo by entry or request, no release split and no manikin on the public site until the owner approves it.
 status: living
-updated: 2026-11-23
-tags: [decisions, log]
+updated: 2026-11-24
+tags: [decisions, log, platform]
 ---
 
 # Decision log
@@ -14,13 +14,14 @@ tags: [decisions, log]
 - The owner took eight decisions after approval (the eighth, automatic deployment, is D-37): internal test and no confidentiality concern (D-21), a full autonomous run (D-22), the name (D-23), usable assumed adjustments (D-31), the public addresses (D-32), a private repository (D-33) and the ban on the rig maker's name (D-35).
 - The most consequential later ruling is D-24: where the photographs disagree with the owner's three scale figures, the photo value is modelled and the owner's figure is recorded as conflicting evidence. A tape measure must settle it.
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
+- Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
 
 - **Decided by** is one of: *owner*; *coordinator* (the AI agent that ran the project and wrote the plan); *plan* (coordinator's decision inside the plan, approved by the owner with the words "Plan approved"); *review finding* (forced by one of the reviews summarised in [../80-reference/sources.md](../80-reference/sources.md)).
 - The plan itself lists seven decisions as D1 to D7. They map to this log as: D1 → D-01, D2 → D-03, D3 → D-04, D4 → D-14, D5 → D-15, D6 → D-10, D7 → D-16.
-- All dates are 2026-11-23. "Before approval" and "after approval" give the order.
+- D-01 to D-37 are dated 2026-11-23 ("before approval" and "after approval" give the order); D-38 to D-46 are dated 2026-11-24.
 - Breadth behind each decision: [options-considered.md](options-considered.md). Changes from the plan: [../30-plan/deviations.md](../30-plan/deviations.md).
 
 ## Decisions from the approved plan
@@ -284,3 +285,82 @@ tags: [decisions, log]
 - **Alternatives:** the existing root login as the deploy key (rejected: a leaked secret would give full control of a server that hosts other sites); a deploy user with an ordinary shell (rejected: a leaked secret would allow any command as that user); building on the server from a pull (rejected: the server would need Bun, Chrome and the repository credentials).
 - **Reason:** the owner asked for "a pipeline so that future updates will be pushed to prod"; least privilege keeps a leaked GitHub secret from reaching anything but the `/rigtwin/` release folders.
 - **Consequences:** images that need the private photo cameras are not regenerated on the runner; after a model change they are regenerated locally and committed. Details: [deployment](../50-implementation/deployment.md#continuous-deployment-from-github).
+
+## Decisions of platform step 1 (2026-11-24)
+
+These were taken on 2026-11-24, for the platform plan ([plan v7](../30-plan/platform-plan.md)) and its
+first step, agent control. "Simplicity monitor" is the independent reviewer that asks of every part of
+the design whether it could be simpler; its objections and the coordinator's answers are kept in the
+project's working files.
+
+<a id="d-38"></a>
+### D-38 — The platform plan (version 7) is approved, starting with step 1
+
+- **Decided by / status:** owner (2026-11-24, "approved to proceed", with an independent simplicity monitor); in force.
+- **What:** rigtwin becomes a working platform in five steps that can each be stopped after: agent control, honest numbers, assessment, an agent in the app, the control room. Step 1 is started; steps 2 to 5 are decided after the owner has tried it.
+- **Consequences:** every change to the scene becomes a command that buttons, Claude Code and later an agent in the app all use. Details: [the platform plan](../30-plan/platform-plan.md).
+
+<a id="d-39"></a>
+### D-39 — The live channel is server-sent events plus plain POST commands, not WebSocket
+
+- **Decided by / status:** plan (the multi-user expert's report and the step-1 design); in force.
+- **What:** browsers receive changes on one `GET api/live` event stream (a heartbeat every 15 s, resume with `Last-Event-ID` or `?since=`); every change is sent as `POST api/command`. This copies the core of Leitbild (the owner's other project: one server-side truth, numbered changes, a stale check, a snapshot on joining) but not its WebSocket transport.
+- **Alternatives:** WebSocket as in Leitbild (rejected: Leitbild needed eight months to get reconnecting right by hand); polling (rejected: changes would arrive late and every open page would load the server).
+- **Reason:** an event stream resumes from the last event it saw and passes through Caddy without special settings; commands are ordinary requests that a command line or a script can send.
+- **Consequences:** the page reconnects by itself with Leitbild's rules (backoff 1 to 30 s, at once when the page becomes visible or the network returns, one resync), tested with Leitbild's cases. A browser over the laptop's HTTP/1.1 can hold six streams per host, so a seventh viewer tab on the laptop waits; the public site uses HTTP/2.
+
+<a id="d-40"></a>
+### D-40 — Undo reverts a named change or a named request, not "my last change"
+
+- **Decided by / status:** simplicity monitor (blocking objection 1), accepted by the coordinator; in force.
+- **What:** `history.undo {version}` reverts one entry and `history.undo {group}` reverts every entry of one request, each as a new entry, refused as stale when a joint it touches has changed since.
+- **Alternatives:** "undo own last change" (rejected: the owner's Undo in the browser must undo Claude Code's change, and on an open server "own" cannot be established).
+- **Consequences:** the activity line's Undo names the entry it undoes; Claude Code tags each request with a group (`--group lower-monitor`) and undoes it in one step.
+
+<a id="d-41"></a>
+### D-41 — Author ids are made by the server; no text written by a client is stored except a request's group name
+
+- **Decided by / status:** simplicity monitor and security review (M3), accepted by the coordinator; in force.
+- **What:** the server labels each author from the declared kind ("Person", "Claude Code", "Script") and a keyed hash of a random client id ("Person · 3f2a"), with a secret made on the host at the first start. The client's own id is never stored or shown, so copying an id read on the live channel does not make a stranger look like someone else.
+- **Alternatives:** names typed by visitors (rejected for step 1: they would need the text limits and the banned-names rule); the client id as the author (rejected: anybody can read it off the stream).
+- **Consequences:** the page knows its own changes by the versions its requests recorded, never by author id. On a remote server `bun run rig` prints other requests' group names as `untrusted_group`, because they are claims.
+
+<a id="d-42"></a>
+### D-42 — No release split: the server travels in today's release folder, never served
+
+- **Decided by / status:** simplicity monitor (blocking objection 3), accepted by the coordinator; supersedes the plan's release split; in force.
+- **What:** `server/server.js` is part of each release next to the viewer. Caddy answers 404 for `/rigtwin/server/*` (installed by the setup script before any release with a server), the deploy checks that 404, and a rollback refuses a release without a server once the host runs one. The deploy account's gate is unchanged.
+- **Alternatives:** separate `site/` and `server/` folders per release (rejected: two new gate patterns, a reinstall of the gate as root, a rollback floor for the whole site, and most of the security review's release risks).
+- **Consequences:** the order of the first rollout matters: the Caddy rule must be on the host before a release with `server/` reaches `main` ([deployment](../50-implementation/deployment.md)).
+
+<a id="d-43"></a>
+### D-43 — The viewer's download budget counts every script of the default page: at most 800 kB, ready within 1 s
+
+- **Decided by / status:** simplicity monitor (step 1 checkpoint review), accepted by the coordinator; in force.
+- **What:** acceptance check T10 adds up every script the default page loads and allows 800 kB in all (before: 760 kB for `viewer.js` alone). "Ready in at most 1 s" stays.
+- **Alternatives:** splitting default features into a second script (rejected: the visitor loads the same bytes, only the measured file shrinks); raising the old limit without a rule (rejected).
+- **Reason:** the live client is a default feature the owner asked for; three.js is most of the script and its prebuilt modules cannot be trimmed by the bundler.
+- **Consequences:** only modules that are off by default are split, each with its own budget. On the platform branch without the manikin the page loads one script of 733 kB and is ready in about 210 ms (*measured* 2026-11-24).
+
+<a id="d-44"></a>
+### D-44 — The public site gets the platform without the person in the seat, until the owner approves the new manikin
+
+- **Decided by / status:** owner (2026-11-24: "No manikin yet: deploy the platform without the person: it appears on mightwork.ai only after you approve the new manikin"); in force.
+- **What:** platform step 1 was moved onto `main` on its own branch (`platform-step1-main`) without any part of the manikin work, which stays on its own branch until the owner approves it.
+- **Consequences:** the engine keeps only the two extension points the live client uses (before and after a reset of the page); the reference-frame reader `shared/kinematics.ts` stays because `measure.distance` uses it. The manikin is documented by its own pass when it is approved.
+
+<a id="d-45"></a>
+### D-45 — The rigtwin server listens on 127.0.0.1:4190
+
+- **Decided by / status:** coordinator (2026-11-24); in force.
+- **What:** the plan's port 4180 is already used by another service on the production host (found by the setup script's read-only check); the unit, the Caddy route, the setup script and its test use 4190.
+- **Consequences:** the setup script still refuses to install when its port is taken by another program.
+
+<a id="d-46"></a>
+### D-46 — A live stream ends after 512 kB; at most 150 streams, 12 per network block
+
+- **Decided by / status:** coordinator, on host check H14 (2026-11-24); in force.
+- **What:** the server ends a live stream once it has been given 512 kB in all, read or not (the browser reconnects with `since=` and receives only what it missed); the ended stream's place still counts in the limits until its connection is gone (at most 45 s). The plan's 300 streams in all and the security review's 30 per network block become 150 and 12.
+- **Alternatives:** relying on the 1 MB queue limit alone (rejected: on the host's Linux kernel each non-reading stream held about 770 kB in socket buffers before that limit could act).
+- **Reason:** *measured* on the host: without the budget, 300 non-reading streams took the kernel's TCP memory past its pressure threshold (59,172 against 58,837 pages); with it, 150 of 150 were ended by the server and TCP memory peaked at 49 % of the threshold.
+- **Consequences:** at worst about 150 × 0.5 MB = 75 MB of socket memory. A stream that gets only heartbeats and occasional changes lasts for hours. Details: [deployment](../50-implementation/deployment.md).

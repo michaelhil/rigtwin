@@ -1,9 +1,9 @@
 ---
 title: Tech stack as built
-tldr: The project runs on Bun and TypeScript with three.js as the only library that reaches the browser; Python (standard library) reads the model file independently; a cached headless Chromium makes every render. Six pinned npm packages (fifteen installed), all MIT or Apache-2.0. Blender, photogrammetry and segmentation models were deliberately not used.
+tldr: Bun and TypeScript, with three.js the only library that reaches the browser; Python reads the model file independently; headless Chromium makes every render. Since platform step 1 a small Bun server with no added package holds the shared scene (commands over HTTP, changes as server-sent events). Six pinned npm packages, all MIT or Apache-2.0; no Blender or photogrammetry.
 status: living
-updated: 2026-11-23
-tags: [stack, implementation, dependencies, repository]
+updated: 2026-11-24
+tags: [stack, implementation, dependencies, repository, server]
 ---
 
 # Tech stack as built
@@ -11,12 +11,14 @@ tags: [stack, implementation, dependencies, repository]
 ## TL;DR
 
 - **Bun** runs everything written in TypeScript (generator, tools, tests) and bundles the viewer. **three.js** is the one library in the browser and also the generator's math and file writer. **Python 3** reads the model file independently, with its standard library only.
-- **Six direct npm packages**, versions pinned exactly; fifteen installed in all (66 MB). Licences: MIT and Apache-2.0. Only three.js ships to the browser (viewer script 726 kB).
+- **Six direct npm packages**, versions pinned exactly; fifteen installed in all (66 MB). Licences: MIT and Apache-2.0. Only three.js ships to the browser (viewer script 732,720 bytes on 2026-11-24, with the live client; 726 kB before).
+- **The server (platform step 1, 2026-11-24)** is `server/server.ts` on `Bun.serve`, with the command layer in `shared/commands/` (its own small schema validator) and no new package: commands come in as JSON over HTTP POST, changes go out as server-sent events ([D-39](../20-decisions/decision-log.md#d-39)). `bun run dist` bundles it into one file for Bun; on the host it runs on Bun 1.4.0 installed from the official zip with a pinned SHA-256 ([deployment](deployment.md#the-rigtwin-server-on-the-host)).
 - Renders and page tests use a **headless Chromium** already in the machine's Playwright cache (build 1248), driven directly over the DevTools protocol; no Playwright package.
 - The **measurement** used numpy, Pillow, OpenCV, SciPy and pycolmap in a throwaway Python environment outside the repository. The values it produced live in the parameter files; the scripts do not.
 - **Not used, on purpose:** Blender, automatic photogrammetry, segmentation models, a CAD kernel, a UI framework. Reasons and the tests behind them are in [Options considered](../20-decisions/options-considered.md).
 
-Versions are those on the build machine (one Apple M2, macOS) on 2026-11-23. Decisions:
+Versions are those on the build machine (one Apple M2, macOS) on 2026-11-23; the server's parts were
+added on 2026-11-24 ([platform plan](../30-plan/platform-plan.md)). Decisions:
 [D-01](../20-decisions/decision-log.md#d-01) to [D-05](../20-decisions/decision-log.md#d-05),
 [D-13](../20-decisions/decision-log.md#d-13), [D-29](../20-decisions/decision-log.md#d-29).
 Commands are in the [tool reference](../80-reference/tools.md).
@@ -25,7 +27,7 @@ Commands are in the [tool reference](../80-reference/tools.md).
 
 | Component | Version | Used for | Where it comes from |
 |---|---|---|---|
-| Bun | 1.4.0 | runs TypeScript directly; package manager; bundler for the viewer; test runner | installed on the machine; the only runtime the project asks for |
+| Bun | 1.4.0 | runs TypeScript directly; package manager; bundler for the viewer and (`bun build --target bun`) for the server; test runner; since step 1 also the server's HTTP server (`Bun.serve`), locally and on the host | installed on the machine; the only runtime the project asks for. On the production host: `/opt/rigtwin/runtime/bun`, from the official 1.4.0 release zip, checked against a pinned SHA-256 by `deploy/setup-server.sh`; GitHub Actions checks `bun --revision` is `1.4.0+34cbb9a40` |
 | TypeScript | 5.9.3 | type checking only (`tsc --noEmit`, part of `bun run check`); Bun runs the sources without a compile step | npm, pinned |
 | three.js | 0.187.0 | generator: vectors, matrices and the GLB writer path; viewer: rendering, controls, loading | npm, pinned |
 | Khronos glTF validator | 2.0.0-dev.3.10 | the file-format check on every `bun run check` | npm, pinned |
@@ -60,9 +62,27 @@ re-run.
 Fifteen packages are installed in all; `node_modules` is 66 MB. The nine pulled-in packages come only
 from the two type-definition packages; none of them reaches the browser or the model file.
 
-**What reaches the browser:** one bundled script (`viewer.js`, 726 kB: three.js plus the project's own
-viewer and shared code), one stylesheet (15.7 kB), one HTML page, the model file (0.72 MB) and its
-description file (0.22 MB). No CDN, no web font, no analytics, no server-side code.
+**What reaches the browser:** one bundled script (`viewer.js`, 732,720 bytes on 2026-11-24: three.js,
+about 660 kB of it, plus the project's own viewer and shared code, including the live client), one
+stylesheet (16 kB), one HTML page, the model file (0.72 MB) and its description file (0.22 MB). No CDN, no
+web font, no analytics. The viewer acceptance check T10 counts every script the default page loads
+against 800 kB in all and requires the page to be ready within 1 s ([D-43](../20-decisions/decision-log.md#d-43)).
+The live client does not import the command layer, to keep the script small; it speaks the wire format
+directly.
+
+## The server side (platform step 1)
+
+| Part | What | Where |
+|---|---|---|
+| HTTP server | `Bun.serve`: `GET api/health`, `GET api/commands`, `POST api/command` (JSON, header `X-Rigtwin: 1`), `GET api/live` (server-sent events: session, snapshot or the missed changes, heartbeat every 15 s); the guards of the open server in deployed mode only | `server/server.ts`, `server/limits.ts` |
+| Command layer | a registry of commands (`scene.summary`, `scene.find`, `pose.set`, `history.undo`, `measure.distance`, and the view commands `view.set`, `view.show`, `view.select`); the scene document (pose, last 200 changes, per-joint stale check, undo by entry or group); a validator of about 80 lines for the part of JSON Schema it needs, written for it instead of a package | `shared/commands/` |
+| Words | the plain-language names of parts and adjustments, moved from `viewer/src/words.ts` to `shared/words.ts` so the viewer, the commands and the command line say the same thing | `shared/words.ts` |
+| Kinematics | reads the GLB's node tree and poses it; used by `measure.distance` on the server | `shared/kinematics.ts` |
+| Live client | the viewer's side of the live channel and its reconnect rules | `viewer/src/live.ts`, `viewer/src/live-connection.ts` |
+| Command line | `bun run rig <command> '<json>'`, `bun run rig list`, `--server`, `--viewer`, `--group` | `tools/rig.ts` |
+| Bundle | `bun run dist` writes `dist/server/server.js` (65,471 bytes on 2026-11-24) and refuses code from outside `server/` and `shared/` or any import Bun does not provide | `tools/dist.ts` |
+
+Nothing here added an npm package: `package.json` gained only the `rig` script.
 
 ## Repository layout
 
@@ -73,12 +93,15 @@ description file (0.22 MB). No CDN, no web font, no analytics, no server-side co
 | `assets/rig-b/src/` | one module per group (`platform.ts`, `seat.ts`, `pods.ts`, `stand.ts`, `pedals.ts`) and group helpers in `lib/` | yes |
 | `assets/rig-b/build/` | the built model file and description file | no (rebuilt in 0.2 s) |
 | `generator/` | parameter loader, expression evaluator, geometry kit and faceted cage, assembler, GLB writer, materials, generated screen images, build command, kit tests, developer note | yes |
-| `shared/` | code used by both generator and viewer: the pose function, the description-file types, math | yes |
-| `viewer/` | the viewer page: `index.html`, `viewer.css`, `src/*.ts` | yes |
-| `tools/` | check, render driver, server, bundler, distribution, deploy, wiki, timeline, version, viewer acceptance script, the Python model reader, the contact-sheet page | yes (`tools/.venv/` excluded) |
+| `shared/` | code used by the generator, the viewer and the server: the pose function, the description-file types, math, the plain-language words (`words.ts`, moved from the viewer in step 1), the node-tree kinematics (`kinematics.ts`) | yes |
+| `shared/commands/` | the command layer (step 1): schema validator, registry, scene document, the commands, their unit tests | yes |
+| `server/` | the rigtwin server (step 1): `server.ts`, `limits.ts`, the integration test `server.test.ts` | yes |
+| `viewer/` | the viewer page: `index.html`, `viewer.css`, `src/*.ts` (since step 1 also `live.ts` and `live-connection.ts` with its test) | yes |
+| `tools/` | check, render driver, local static server (with the server mounted under `/api/` since step 1), bundler, distribution, deploy, wiki, timeline, version, viewer acceptance script, the Python model reader, the contact-sheet page; new in step 1: `rig.ts` (the command line), `live-accept.ts` (two browsers and the command line on one server), `live-idle-test.ts` (the live channel idle through Caddy), `banned.ts` (the banned names, shared by the check and `rig`), `claude-sandbox-settings.json` (a prepared Claude Code setting for work against the public sandbox, not active) | yes (`tools/.venv/` excluded) |
+| `tools/deploy-tests/` | tests of the deploy and the host setup against local stand-ins: the setup script's harness (with the fixture of the site file live before the setup), the deploy's live checks, rollback, idle test, stream load (host check H14) | yes |
 | `wiki/` | this wiki, with its images under `wiki/img/` (masked photos and renders only) | yes |
-| `.claude/skills/`, `.claude/agents/` | the Agent Skill and the three agent definitions ([Skills and agents](../80-reference/skills-and-agents.md)) | yes |
-| `deploy/` | the web-server site file for the production server | yes (being prepared at the time of writing) |
+| `.claude/skills/`, `.claude/agents/` | the Agent Skills (modelling, and since step 1 `operating-rigtwin`) and the three agent definitions ([Skills and agents](../80-reference/skills-and-agents.md)) | yes |
+| `deploy/` | the production server's files: the Caddy site file, the deploy gate and pinned host key, and since step 1 the server's unit `rigtwin-server.service`, the one-time `setup-server.sh` and the host checklist `HOST-CHECKS.md` ([deployment](deployment.md)) | yes |
 | `CLAUDE.md` | entry instructions for AI agents: read the wiki first; commands; rules that are easy to break | yes |
 | `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig.json`, `deploy.config.json`, `LICENSE` (MIT), `.gitignore` | project files | yes |
 | `private/` | original photos, solved cameras, measurement evidence, renders containing photo pixels, the planning records (which name the client) | **never** |
@@ -101,7 +124,8 @@ The owner asked for open source only and "as few dependencies or external softwa
 | To build and check the asset | Bun; three.js; the glTF validator; Python 3 standard library; a Chromium binary for the browser checks | 1 runtime, 2 npm packages, 1 system Python, 1 browser binary |
 | To develop | TypeScript, two type-definition packages, marked | 4 npm packages (13 more installed with them) |
 | To measure from photos (once per asset, outside the repository) | numpy, Pillow, OpenCV, SciPy, pycolmap | 5 PyPI packages in a throwaway environment |
-| Not needed at all | Node.js, Playwright, Blender, Docker, a database, a CDN, any server-side code, any paid or closed tool | 0 |
+| To run the server (step 1) | Bun only; Node's built-in modules as Bun provides them | 0 packages |
+| Not needed at all | Node.js, Playwright, Blender, Docker, a database, a CDN, a web framework, a WebSocket library, any paid or closed tool | 0 |
 
 Everything listed is open source (*checked* against the package metadata; Chromium's own licence
 file is in its cache folder). *Judgment:* this meets the request; the one heavy item is Chromium,
@@ -117,7 +141,8 @@ which the project uses but does not install.
 | A CAD kernel (OpenCascade through build123d or CadQuery) | 573 MB and 58 packages; a fillet failed at the radii the shell needs; exactness the evidence does not support. The project has its own small geometry kit with tests |
 | A UI framework (React, Svelte) or a 3D viewer component | a framework and a bundler for a page of a few hundred lines; existing viewer components have no joints or reference frames |
 | Playwright as a library | the tools speak the DevTools protocol to the cached browser directly |
-| Code from the owner's Leitbild project | its ideas were reused, not its code ([D-20](../20-decisions/decision-log.md#d-20)) |
+| Code from the owner's Leitbild project | its ideas were reused, not its code ([D-20](../20-decisions/decision-log.md#d-20)); step 1 takes its command-and-revision core and its reconnect cases, but not its WebSocket ([D-39](../20-decisions/decision-log.md#d-39)) |
+| A database, a web framework, a WebSocket library (step 1) | the scene is one small JSON file written atomically; `Bun.serve` and server-sent events cover the routes and the live channel |
 
 ## Known weaknesses
 
@@ -131,3 +156,5 @@ which the project uses but does not install.
 | Frame rate and exposure measured only in headless Chromium on one Apple M2 | no data for weaker laptops or phones | [I-15](../60-lessons/ideas.md#i-15) |
 | Two Python versions (3.11 and 3.13) were used by two agents | harmless for the throwaway environments; the committed reader needs only the standard library | accepted |
 | Transitive type-definition packages (nine) | install size only; nothing ships | accepted |
+| The Caddy file and the server's systemd unit cannot be tried on the laptop (no Caddy, no systemd on macOS) | they are validated only on the host, by the setup script (`caddy validate`, `systemd-analyze verify`, `--probe`) | accepted; [deployment](deployment.md#the-setup-script-and-the-host-checks) |
+| On the laptop the local server speaks HTTP/1.1, where a browser allows six streams per host | a seventh viewer tab on the same local server waits; the deployed site uses HTTP/2 through Caddy | accepted |

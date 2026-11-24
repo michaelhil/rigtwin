@@ -1,8 +1,8 @@
 ---
 title: The viewer
-tldr: The browser viewer shows the rig, lets a person turn, zoom, hide and adjust its parts, and is the same page the agents render with. The first version had 103 controls and gave the model 58 % of the window; after two independent interface reviews a separate implementer rebuilt it with 16 controls, 83 % for the model, a card per selected part, and assumed adjustments usable with a notice. 53 acceptance checks pass.
+tldr: The browser viewer shows the rig, lets a person turn, zoom, hide and adjust its parts, and makes every render. Rebuilt after two interface reviews from 103 controls to 16, with 83 % of the window for the model and 53 acceptance checks passing. Since platform step 1 it is a live client of the shared scene: changes are saved for everyone, others' appear with who did what and an Undo.
 status: living
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [viewer, ux, implementation, typescript]
 ---
 
@@ -15,6 +15,7 @@ tags: [viewer, ux, implementation, typescript]
 - A **separate implementer**, working in a copy so the agents' renders were not disturbed, rebuilt the page: **16 controls, model 82.8 % of the window, 53 of 53 acceptance checks passed** (*tested*; one of the 53 was skipped, see below).
 - Assumed adjustments (the seat) are **usable**, tagged "assumed range", with an amber notice on the picture while one is in use; the description file still records them as assumed. Lit whites came down from 244–249 to 221–231 of 255.
 - The viewer is **TypeScript**, bundled by Bun, and shares one pose function with the generator. Agents drive it by URL parameters; that interface did not change in the redesign.
+- **Platform step 1** ([below](#the-shared-scene-platform-step-1)): when the page's server has the rigtwin server, the page joins one shared scene. Every pose change (slider, pad, drag, keys, Reset all) is saved as one command; changes by others, including Claude Code, appear at once with an **activity line** and its **Undo**; More shows the page's **session code** and a statement about the sandbox. Without a server nothing changes and no request is made. The page loads one script of 733 kB and is ready in about 210 ms (*measured* 2026-11-24).
 
 Commands and every URL parameter are in the [tool reference](../80-reference/tools.md#the-viewers-url-interface).
 Decisions: [D-13](../20-decisions/decision-log.md#d-13), [D-29](../20-decisions/decision-log.md#d-29),
@@ -38,8 +39,9 @@ Requirements: [R-36](../10-request/requirements.md), [R-51](../10-request/requir
 | Narrow windows | at phone width the parts list becomes a drawer and the card a bottom sheet | T52 |
 | Agents | the same page, driven headless, makes every render the agents and reviewers judge ([P-11](../60-lessons/patterns.md#p-11), [L-30](../60-lessons/lessons-learned.md#l-30)) | all render sets |
 
-Size and speed (*measured* by the acceptance script on the local server, one Apple M2):
-ready 198 ms after navigation; 1.69 MB in 7 requests, of which the viewer script is 726 kB;
+Size and speed (*measured* by the acceptance script on the local server, one Apple M2; round 2):
+ready 198 ms after navigation; 1.69 MB in 7 requests, of which the viewer script is 726 kB
+(2026-11-24, with the live client: ready 210 ms; 1.70 MB in 9 requests; one script of 733 kB);
 61 fps while something changes every frame at 1440 × 900; an idle page draws no frames.
 
 ![The redesigned viewer: six group rows on the left, the model filling the window, four buttons at the top right](../img/viewer/viewer-after-default.jpg)
@@ -202,6 +204,54 @@ run ([D-29](../20-decisions/decision-log.md#d-29)):
   ([C-01](../40-method/checks.md#c-01)) and compares the shared pose function with the independent
   Python reader on 96 poses ([C-13](../40-method/checks.md#c-13)): largest difference 2.4e-8.
 
+## The shared scene (platform step 1)
+
+Added on 2026-11-24 by platform step 1 ([the platform plan](../30-plan/platform-plan.md)). The code is
+`viewer/src/live.ts` and `viewer/src/live-connection.ts`; it does not load the command layer, so the page
+stays small.
+
+**When it is on.** The page reads `version.json`; only if that names a server does it ask `api/health`,
+and only if that answers with the scene format does it connect. Otherwise it stays a page on its own:
+no request under `api/`, nothing in the console, everything as before. `bun run serve` and the
+deployed site (once the server is set up) have a server; `bun run dist`'s folder opened on its own does not.
+
+**One rule for every pose change.** Sliders, ↺, double-click, the pads, the arrow keys, "As
+photographed", the notices, Reset all and dragging in the 3D view all end in the engine's own joint
+setters. The page treats any difference between what it shows and the shared pose as a local preview,
+and saves it as one `pose.set` (based on the version the preview started from) when no pointer is down
+and nothing has changed for 300 ms. A change from the server for a joint this page is still changing
+waits; the save is then refused as stale, the page shows the shared pose again and says why ("Not saved:
+Claude Code · 0c24 — Monitor: height 8 cm lower came first. This page shows the shared scene again.").
+
+**A link with other adjustments** (`pose=` that differs from the shared scene) opens as a preview with
+**Apply** and **Dismiss**: nothing is saved until Apply.
+`viewer.apply()` from a script is treated the same way.
+
+**The activity line** appears only for changes made by someone else: "Claude Code · 3f2a — Monitor:
+height 3 cm lower" with **Undo** (which undoes that entry for everyone, [D-40](../20-decisions/decision-log.md#d-40))
+and ×. Authors are labels the server makes ([D-41](../20-decisions/decision-log.md#d-41)); the page knows
+its own changes by the versions its requests recorded. The words are the same as in the cards and in
+`bun run rig` (`shared/words.ts`).
+
+**The session code** (eight letters and digits) is shown under More, "Shared scene", with "Give it to
+Claude Code to show views here". View commands (`view.set`, `view.show`, `view.select`) reach only the
+page with that code. Under it, "About this sandbox" says what is stored: only the pose of the rig and
+its last 200 changes, each with a random author id, no names and no other text; anyone can change it,
+Undo puts a change back, and the scene is reset on request.
+
+**Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
+after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
+or the network comes back; one resync after each reconnect, asking for the changes after the version it
+has (`since=`) and keeping its session code. A stream that the deployed server ends after 512 kB
+([D-46](../20-decisions/decision-log.md#d-46)) comes back the same way: about a second without live
+updates, then only the missed changes, no full snapshot and nothing visible on the page (*tested*
+2026-11-24 with the real page against a server with a 3 kB budget: two ends in 30 changes, the page
+caught up each time, no console message, no failed request).
+
+**Tested** by `tools/live-accept.ts` (14 of 14, two real browsers and the command line on one local
+server) and by the 53 acceptance checks, which start every page on an empty temporary scene so that no
+pose of the shared scene reaches a test or a published picture ([checks](../40-method/checks.md)).
+
 ## The agent interface by URL
 
 Agents do not click. They open the page with URL parameters, or call `window.viewer.apply({...})`
@@ -227,3 +277,6 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 | No measuring tool that shows a distance with its range | idea [I-21](../60-lessons/ideas.md#i-21) |
 | Pressed or lit states of buttons, key switch and emergency stop are not modelled | provisional in the [asset contract](../40-method/asset-contract.md) |
 | The page has been tested only against the local server; behaviour behind the production server is checked by the deployment step | see [deployment](deployment.md) |
+| The shared scene has not yet run on mightwork.ai: the host setup and the first release with the server wait for the owner's yes | step 1's rollout, see [deployment](deployment.md) |
+| On the laptop (HTTP/1.1) a browser holds six live streams per host, so a seventh viewer tab waits; the public site uses HTTP/2 | by design |
+| After the server ends a stream (byte budget, restart) live changes pause for about a second | accepted |

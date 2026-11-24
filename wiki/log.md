@@ -2,7 +2,7 @@
 title: Project log
 tldr: The dated, append-only record of the project - from the owner's first request through planning, plan approval, implementation, the owner's mid-run requests, the model reviews, the viewer redesign, the usage-limit interruption and recovery, to the final fixes. Newest entries at the bottom; append, never rewrite.
 status: living
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [meta, log, history]
 ---
 
@@ -186,3 +186,43 @@ runner. Start-up limit raised to 30 s; pushed again. [F-32](60-lessons/failures-
 `20261123T223434Z-66c7bbd` went live in 70.1 s, all nine live checks passed, and the server's gate
 allowed each of its commands. From now on every push to `main` deploys.
 [Deployment](50-implementation/deployment.md#continuous-deployment-from-github).
+
+## 2026-11-24
+
+**Time not recorded** — The owner approved the platform plan, version 7, with an independent simplicity
+monitor; step 1 (agent control) started. The monitor blocked the first design three times (undo of
+"own" changes, a commit rule for only some pose paths, the release split); all three were changed
+before building. [Platform plan](30-plan/platform-plan.md), [D-38](20-decisions/decision-log.md#d-38)
+to [D-43](20-decisions/decision-log.md#d-43).
+
+**Time not recorded** — Step 1 built by two builder agents in a separate worktree on top of the
+manikin branch: the command layer, the server with its live channel, the viewer as a live client,
+`bun run rig`, the operating Skill, the host's unit, Caddy route and setup script, and the deploy and
+dist checks. A security review (four must-fix findings, eleven should-fix) and the monitor's checkpoint
+review (the local server's Host check moved to cover every path) were answered before the merge.
+[Viewer](50-implementation/viewer.md#the-shared-scene-platform-step-1),
+[deployment](50-implementation/deployment.md), [checks](40-method/checks.md).
+
+**Time not recorded** — On the host, the setup script's read-only check found port 4180 taken: the
+server moved to 4190 ([D-45](20-decisions/decision-log.md#d-45)); host check H10 added the hiding of
+the host's other applications to the unit. Host check H14 (300 live streams that never read) failed:
+the kernel's TCP memory passed its pressure threshold.
+
+**About 16:15** — The owner decided that the public site gets the platform without the person in the
+seat until the new manikin is approved ([D-44](20-decisions/decision-log.md#d-44)). Step 1 was moved
+onto `main` as the branch `platform-step1-main`, without any manikin file, datum, check, render set or
+control; the engine keeps only the two extension points the live client uses. A harness bug found on
+the way (the setup script's test read "the site file before the setup" from the latest commit, so it
+would have failed after any commit with the new file) was fixed with a fixture.
+
+**About 16:35** — Fix for H14: each live stream ends after 512 kB, its place held until its connection
+is gone; 150 streams in all, 12 per network block ([D-46](20-decisions/decision-log.md#d-46)). H14 run
+again on the host with the new bundle: passed (TCP memory at 49 % of the threshold, the server at
+66 MB, other sites unaffected). Committed as `aec6272` on `platform-step1-main` (not pushed, not
+merged): full check, 53 of 53 viewer checks, 14 of 14 two-browser steps and the deploy's dry run all
+pass; the page loads one script of 733 kB. The setup on the host and the merge wait for the owner's yes.
+[Next steps](90-next/next-steps.md#0-platform-step-1-the-rollout-and-after).
+
+**Later the same day** — This wiki pass for the platform: the new [platform plan](30-plan/platform-plan.md)
+page, decisions D-38 to D-46, and the viewer, deployment, tech stack, checks, tools, skills, next steps
+and summary pages.

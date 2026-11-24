@@ -1,8 +1,8 @@
 ---
 title: Next steps
-tldr: What to do next, in priority order and with who does it - a tape session with four questions for the owner, a planted-error test of the reviewer, a second object built from the Skill against sealed tape values, small fixes, other rig configurations, then the assessment and simulator phases, continuous deployment (an owner's decision) and routine maintenance.
+tldr: What to do next, in priority order and by whom: first the rollout of platform step 1 (host setup, merge, live tests, in a fixed order); then a tape session with four questions for the owner, a planted-error test of the reviewer, the Skill on a second object, small fixes, other rig configurations, the assessment and simulator phases, and routine maintenance.
 status: living
-updated: 2026-11-23
+updated: 2026-11-24
 tags: [next-steps, planning, open-questions]
 ---
 
@@ -10,11 +10,38 @@ tags: [next-steps, planning, open-questions]
 
 ## TL;DR
 
+- **Platform step 1 first** ([the platform plan](../30-plan/platform-plan.md)): it is built on the branch `platform-step1-main` and passes every check. To put it live, in this order: the owner's yes, the host setup, the merge to `main`, then the live tests ([below](#0-platform-step-1-the-rollout-and-after)). The public site gets it without the manikin ([D-44](../20-decisions/decision-log.md#d-44)).
 - **First, a tape session** on the reference rig (owner or client, 30–40 minutes on site) with four questions answered: which of the owner's three figures is right, what really adjusts on the seat, pods and pedals, the touchscreen's model label, and the seat's maker and model. Nothing else improves the model's accuracy as much.
 - **Second, test the reviewer** with planted errors of known size (agents, a few hours). Until then its "accepted" has no stated power.
 - **Third, build a second, different object** with only the Skill, against tape values the owner keeps sealed (owner and agents). That is what turns Skill 0.1.0 into 1.0.
 - Then: small fixes and hardening, other rig configurations as overlays, and the two later phases, **assessment** (a digital human layer has to be built; standards to buy) and **simulator** (real joysticks and pedals through the browser, live pictures on the screens, a first-person view).
 - Continuous deployment from GitHub is **done** (2026-11-23): every push to `main` deploys. Routine changes follow the maintenance steps at the end.
+
+## 0. Platform step 1: the rollout, and after
+
+**Owner and agents, size S.** Platform step 1 is built and checked (2026-11-24); on the host, the setup
+script's read-only check and the load test H14 have run and passed. What remains, in this order (the
+details and commands are on the [deployment page](../50-implementation/deployment.md)):
+
+| # | Step | Who |
+|---|---|---|
+| 1 | The owner's yes to the host setup, after reading `setup-server.sh --check` | owner |
+| 2 | `setup-server.sh --apply` on the host inside tmux (the Caddy route and its 404 rule first, then the service), then `--probe` (host check H7) | agents, with the owner's yes |
+| 3 | Merge `platform-step1-main` to `main` and push; the automatic deploy puts the first release with the server live and requires its health check | owner's go-ahead; agents |
+| 4 | `setup-server.sh --check` again (H8, H12); `bun tools/live-idle-test.ts --url https://mightwork.ai/rigtwin` (10 minutes idle through Caddy, then one change and its undo); the two-browser test on the live site | agents |
+| 5 | The owner tries it: "lower the monitor 3 cm and show me the operator's view", watched on mightwork.ai, then undone | owner (about 15 minutes) |
+| 6 | Re-forecast steps 2–5 with the real hours of step 1 | agents |
+
+Also waiting for the owner:
+
+- **GitHub settings** (security review): move the secret `DEPLOY_SSH_KEY` into the environment
+  `production`, limited to `main`, and protect `main`.
+- **Decision 5 of the plan**: whether to use the prepared, restricted Claude Code setting
+  (`tools/claude-sandbox-settings.json`) for work against the public sandbox.
+- **The manikin**: it stays off the public site until the owner approves the new one
+  ([D-44](../20-decisions/decision-log.md#d-44)); its branch then moves onto `main` after the platform,
+  and the manikin's own wiki pass follows.
+- **Platform step 2** (honest numbers) starts only when the owner says so, after trying step 1.
 
 ## Who does what
 
@@ -137,6 +164,9 @@ borrows its seat's left side from those units, so their photos are partly measur
 
 **Owner (questions, standards) and agents (building), size XL.** It should start after steps 1 and 2,
 because every assessment result depends on taped sizes and on a reviewer whose threshold is known.
+Since 2026-11-24 it is planned in detail as steps 2 and 3 of [the platform plan](../30-plan/platform-plan.md)
+(honest numbers, then the assessment module), with the manikin from the parallel session as its
+digital human.
 
 **What must be built** (the asset itself is ready: named reference frames, joints with limits, screen
 surfaces, classes and ranges):
