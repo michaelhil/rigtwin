@@ -90,6 +90,7 @@ async function setFollow(who: { actor: string; by: string } | null) {
 const ownTrace = (r: TraceRec) => (myActor !== '' && r.actor === myActor) || (r.version !== undefined && mine.has(r.version));
 function tellTrace(r: TraceRec) {
   if (ownTrace(r) || (r.kind === 'person' && r.version === undefined)) return;
+  if (asked && asked.who.actor === r.actor && r.command === 'look') return;      // the open question already says it
   const undid = r.ok && (r.command === 'history.undo' || r.command === 'undo') ? ' undid a change' : '';
   tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r), r.kind !== 'person' ? { actor: r.actor, by: r.by } : null);
 }
@@ -158,9 +159,39 @@ function applied(e: Entry) {
   if (!own) { if (out) later.push(e); else tell(say(e), e.version); }      // while a request is out, it may turn out to be ours
   if (again && version >= awaiting) { again = false; schedule(); }
 }
-/** A view command addressed to this page's session code (or, on a local server, to every page). `look` does what the three
- *  view commands do in one go, and with a reply id sends a picture of the result back (agent interface v2). */
-function view(d: { id: string; args: any; reply?: string }) {
+// ---------------------------------------------------------------------------------------------- consent
+// On the public sandbox a view an agent asks for without naming a browser, while no browser follows it, comes to every
+// page as a question (`ask`): this page shows it only if its owner allows it. Allow follows that agent (its next views
+// come without asking); Always allow is stored in this browser (any agent's views then come straight here); No stops
+// that agent's questions until the page is reloaded. The setting is also under More, Shared scene.
+type AgentViews = 'ask' | 'always' | 'never';
+const VIEWS_KEY = 'rigtwin.agentViews';
+let agentViews: AgentViews = (() => { try { const v = localStorage.getItem(VIEWS_KEY); return v === 'always' || v === 'never' ? v : 'ask'; } catch { return 'ask'; } })();
+const declined = new Set<string>();
+let consent: Note, consentTimer = 0, asked: { d: ViewEvent; who: { actor: string; by: string } } | null = null, viewsSelect: HTMLSelectElement;
+type ViewEvent = { id: string; args: any; reply?: string; ask?: { actor: string; by: string; summary: string } };
+function setAgentViews(v: AgentViews) { agentViews = v; try { localStorage.setItem(VIEWS_KEY, v); } catch { /* private window: for this page only */ } if (viewsSelect) viewsSelect.value = v; }
+function answer(how: 'allow' | 'always' | 'no') {
+  consent.box.hidden = true; clearTimeout(consentTimer);
+  const a = asked; asked = null;
+  if (!a) return;
+  if (how === 'no') { declined.add(a.who.actor); return; }
+  if (how === 'always') setAgentViews('always');
+  void setFollow(a.who); applyView(a.d);
+}
+/** A view command: for this page by its code (or, on a local server, for every page), or a question (consent above). */
+function view(d: ViewEvent) {
+  if (!d.ask) { applyView(d); return; }
+  const who = { actor: d.ask.actor, by: d.ask.by };
+  if (agentViews === 'never' || declined.has(who.actor)) return;
+  if (agentViews === 'always') { void setFollow(who); applyView(d); return; }
+  asked = { d, who };
+  consent.text.textContent = `${who.by} wants to change the view in this browser: ${d.ask.summary}.`;
+  consent.box.hidden = false; clearTimeout(consentTimer);
+  consentTimer = window.setTimeout(() => { consent.box.hidden = true; asked = null; }, 60_000);
+}
+/** `look` does what the three view commands do in one go, and with a reply id sends a picture of the result back. */
+function applyView(d: ViewEvent) {
   const a = d.args;
   try {
     if (d.id === 'view.set') setView(a.view, { ortho: false });
@@ -210,6 +241,10 @@ export async function initLive() {
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';
+  consent = note([['Allow', () => answer('allow')], ['Always allow', () => answer('always')], ['No', () => answer('no')]]);
+  consent.box.classList.add('amber', 'consent');
+  consent.buttons[0].title = 'Show this view and the next ones this agent asks for, in this browser';
+  consent.buttons[1].title = 'Show the views any agent asks for in this browser, without asking (stored in this browser; change it under More)';
   activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
   activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
   activity.buttons[3].setAttribute('aria-label', 'Close');
@@ -220,7 +255,12 @@ export async function initLive() {
   onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
   const traceBtn = el('button', 'trace-open', 'Show the requests (trace)') as HTMLButtonElement; traceBtn.type = 'button';
   traceBtn.addEventListener('click', () => toggleTrace(true));
-  $('live-more').querySelector('.live-code')!.after(traceBtn, followNote);
+  const viewsRow = el('label', 'live-views'); viewsRow.append(document.createTextNode('Views an agent asks for: '));
+  viewsSelect = el('select') as HTMLSelectElement;
+  for (const [v, t] of [['ask', 'ask me first'], ['always', 'always allow'], ['never', 'never']] as const) { const o = el('option', null, t) as HTMLOptionElement; o.value = v; viewsSelect.append(o); }
+  viewsSelect.value = agentViews; viewsSelect.addEventListener('change', () => setAgentViews(viewsSelect.value as AgentViews));
+  viewsRow.append(viewsSelect);
+  $('live-more').querySelector('.live-code')!.after(traceBtn, followNote, viewsRow);
   const box = $('live-more'), more = $('more');
   more.insertBefore(box, more.querySelector('.about')); box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });

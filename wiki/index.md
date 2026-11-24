@@ -31,7 +31,7 @@ tags: [meta, generated]
 
 ## Decisions
 
-- [Decision log](20-decisions/decision-log.md): 54 decisions, D-01 to D-54, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-54 from agent interface v2 (all 2026-11-23 and 24). *(living, updated 2026-11-24)*
+- [Decision log](20-decisions/decision-log.md): 55 decisions, D-01 to D-55, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24). *(living, updated 2026-11-24)*
 - [Options considered](20-decisions/options-considered.md): Every significant option that was weighed, in tables per topic, with the evidence behind it (tested on the machine, desk research or judgment), the verdict and the reason. The chosen route is an agent writing parametric generator code in TypeScript with three.js, delivered as a GLB plus a description file. *(stable, updated 2026-11-23)*
 
 ## Plan

@@ -32,10 +32,11 @@ before acting.
 
 - **The reply is the check.** `adjust` answers with before → after, the request name for undo and what
   else is moved. Don't call `state` before or after it unless the owner asks.
-- **Views on the public sandbox** reach the owner's browser when they click **Follow** on the activity
-  line there (it shows your request, also a refused one), or by the browser's code (More, "Shared scene"),
-  given once as `viewer` and remembered. If `look` is refused with `needs_viewer`, ask the owner to click
-  Follow, then send it again. Locally, `look` goes to every open page.
+- **Views on the public sandbox:** without a code, `look` asks every open browser to allow your views
+  (the reply says so); the owner clicks **Allow** (or has chosen "always allow"), and from then on your views
+  go there. **Follow** on the activity line does the same. The browser's code (More, "Shared scene"), given
+  once as `viewer`, pairs exactly. If `look` is refused with `needs_viewer`, no browser is open, or you asked
+  too often: ask the owner. Locally, `look` goes to every open page.
 - **Camera anywhere:** `eye` gives the operator's view of a person by stature (`stature_cm`, through an
   assumed ratio of sitting eye height to stature: say so), sitting eye height or one of the three model
   persons; it rides with the seat. `camera` puts it at any point (model-frame metres, or a point name with an

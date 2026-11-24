@@ -59,6 +59,11 @@ export const LIMITS = {
   /** ... and per visitor (deployed; also at most one per browser), so that one stranger cannot hold every slot
    *  (security review of agent interface v2, finding 4). */
   picturesPerVisitor: 2,
+  /** Consent (agent interface v2): a view for no named browser, while no browser follows that caller, is put to every open
+   *  page as a question (allow, always, no); at most this many questions per caller and minute ... */
+  asksPerMinutePerCaller: 4,
+  /** ... and a picture asked for with such a view waits this long for the owner's answer. */
+  pictureAskWaitMs: 25_000,
   /** Agent interface v2: MCP sessions remembered (the viewer code given to `look`); the least recently used is forgotten. */
   mcpSessions: 500,
 };

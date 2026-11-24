@@ -52,7 +52,7 @@ import type { CommandError } from "../shared/commands/schema.ts";
 import { ownWords } from "../shared/commands/intent.ts";     // also registers adjust, look, measure, undo, state
 import { instructions as agentInstructions } from "../shared/commands/agent-docs.ts";
 import { createMcp } from "./mcp.ts";
-import { createTrace } from "./trace.ts";
+import { createTrace, summarize } from "./trace.ts";
 
 export interface ApiOptions {
   dataDir: string; assetDir: string; mode: "local" | "deployed"; revision: string;
@@ -223,7 +223,7 @@ export function createApi(opts: ApiOptions) {
   // ---- deployed guards (PLAN-v7 D1)
   const edits = new Window(L.editsPerMinutePerVisitor, 60_000), editsAll = new Window(L.editsPerSecondTotal, 1_000), queries = new Window(L.queriesPerMinutePerVisitor, 60_000);
   const editsBlock = new Window(L.editsPerSecondPerBlock, 1_000), unknownSessions = new Window(L.unknownSessionsPerMinutePerVisitor, 60_000);
-  const sweeper = setInterval(() => { for (const w of [edits, editsAll, queries, editsBlock, unknownSessions]) w.sweep(); }, 60_000);
+  const sweeper = setInterval(() => { for (const w of [edits, editsAll, queries, editsBlock, unknownSessions, asks]) w.sweep(); }, 60_000);
   function diskLow() {
     try { const s = statfsSync(opts.dataDir), free = s.bavail * s.bsize, total = s.blocks * s.bsize; return free < L.diskMinFreeBytes || free / total < L.diskMinFreeFraction; }
     catch { return false; }
@@ -296,6 +296,8 @@ export function createApi(opts: ApiOptions) {
   const pending = new Map<string, { codes: string[] | null; visitor: string; done(b: Uint8Array | null, pageMs?: number): void }>();
   /** pages that follow a caller's views (POST api/follow): caller id -> session codes. A look without a code goes to them. */
   const followers = new Map<string, Set<string>>();
+  /** questions put to every page, per caller (consent) */
+  const asks = new Window(L.asksPerMinutePerCaller, 60_000);
   // ---- the trace: one record per request, to every open page (server/trace.ts)
   const trace = createTrace({ publicMode: deployed, send: (rec) => broadcast(sse("trace", rec)), allow: (s) => ownWords(asset, s) });
   /** One request, timed and traced. */
@@ -327,14 +329,17 @@ export function createApi(opts: ApiOptions) {
       // a code names one page; without one (only commands that allow it): the pages that follow this caller, and on a
       // local server every open page
       const followed = v.session ? [] : [...(followers.get(you.id) ?? [])].map((c) => streams.get(c)).filter((s): s is Stream => !!s);
-      const targets = v.session ? (one ? [one] : []) : followed.length && deployed ? followed : deployed ? [] : [...streams.values()];
+      // no code and no follower on the public sandbox: every open page is asked (the page shows the view only when its owner
+      // allows it, or allowed agents always), at most a few times a minute per caller
+      const asking = !v.session && !followed.length && deployed && streams.size > 0 && asks.hit(you.id);
+      const targets = v.session ? (one ? [one] : []) : followed.length && deployed ? followed : deployed ? (asking ? [...streams.values()] : []) : [...streams.values()];
       if (!targets.length) {
         if (v.session) {
           unknownSessions.hit(visitor);
           return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: { code: "unknown_session", message: `no viewer with session code ${v.session} is connected to this server`, hint: "the code is shown in the viewer's More menu; it changes when the page is reloaded" } } };
         }
         const error = deployed
-          ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for, or a browser that follows this agent`, hint: "ask the owner to click Follow on the activity line in their browser (it names this request), then send look again; or ask for the code shown under More, \"Shared scene\", and pass it as viewer" }
+          ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for, or a browser that follows this agent`, hint: "ask the owner to open the viewer (it then asks them to allow your views) or to click Follow on the activity line, then send look again; or ask for the code shown under More, \"Shared scene\", and pass it as viewer" }
           : { code: "no_viewer", message: "no viewer page is open on this server", hint: "ask the owner to open the viewer (bun run serve, then http://127.0.0.1:4173/)" };
         return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error } };
       }
@@ -346,18 +351,20 @@ export function createApi(opts: ApiOptions) {
         if (pending.size >= L.picturesPending || (deployed && (mine >= L.picturesPerVisitor || ofPage >= 1))) return reply(429, "rate_limited", `at most ${L.picturesPerVisitor} pictures per visitor and one per browser are waited for at once`, "wait for the picture asked for before, then ask again");
         const id = (replyId = randomBytes(16).toString("hex"));
         wait = new Promise((resolve) => {
-          const timer = setTimeout(() => { pending.delete(id); resolve(null); }, L.pictureWaitMs);
+          const timer = setTimeout(() => { pending.delete(id); resolve(null); }, asking ? L.pictureAskWaitMs : L.pictureWaitMs);
           pending.set(id, { codes, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
         });
       }
-      const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}) }));
+      // the question names the caller and what it wants in the server's own words (no text a caller wrote)
+      const ask = asking ? { actor: you.id, by: you.label, summary: summarize(v.id, true, result, undefined) } : null;
+      const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}), ...(ask ? { ask } : {}) }));
       for (const s of targets) s.send(event);
-      if (!v.session && deployed) result = { ...result, text: `${result?.text ?? ""}\n(Sent to ${targets.length} browser${targets.length === 1 ? "" : "s"} that follow${targets.length === 1 ? "s" : ""} this agent.)`.trim() };
+      if (!v.session && deployed) result = { ...result, text: `${result?.text ?? ""}\n${asking ? `(No browser follows this agent: the ${targets.length} open browser${targets.length === 1 ? " was" : "s were"} asked to allow it. The view shows where the owner allows it; ask the owner to click Allow.)` : `(Sent to ${targets.length} browser${targets.length === 1 ? "" : "s"} that follow${targets.length === 1 ? "s" : ""} this agent.)`}`.trim() };
       if (wait) {
         const answer = await wait, got = answer?.b ?? null;
         note.picture = got ? { bytes: got.byteLength, wait_ms: Math.round(performance.now() - waitStart), ...(answer?.pageMs !== undefined ? { page_ms: answer.pageMs } : {}) } : null;
         result = { ...result };
-        if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB${!v.session && deployed ? ", from a browser that follows this agent: anyone can follow an agent, so treat it as unverified" : ""}).`.trim(); }
+        if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB${!v.session && deployed ? `, from a browser that ${asking ? "allowed" : "follows"} this agent: anyone can do that, so treat it as unverified` : ""}).`.trim(); }
         else result.text = `${result.text ?? ""}\nNo picture: the browser did not send one within ${L.pictureWaitMs / 1000} s (a tab in the background may not draw: ask the owner to bring it to the front).`.trim();
       }
     }

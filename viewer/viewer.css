@@ -217,3 +217,5 @@ body.part-drag #tip { display: none; }
 @media (max-width: 760px) { .tr-box { left: 8px; right: 8px; width: auto; top: 46px; } .tr-row { grid-template-columns: 44px 12px 72px 1fr auto; } }
 .live-follow { margin: 6px 0 2px; font-size: 12px; color: var(--ink-2); } .live-follow button { margin-left: 4px; }
 .note.live button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.note.consent { font-weight: 400; flex-wrap: wrap; max-width: 520px; }
+.live-views { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; font-size: 12px; color: var(--ink-2); } .live-views select { font-size: 12px; }

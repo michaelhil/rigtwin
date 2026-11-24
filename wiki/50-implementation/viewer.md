@@ -265,6 +265,12 @@ target and field of view in the model frame, the same as the link's `camera=`). 
 this browser show the views that agent asks for without a code; "Following" stops it, and More → Shared scene says
 which agent the browser follows.
 
+**Consent** ([D-55](../20-decisions/decision-log.md#d-55)). On the public sandbox a view an agent asks for without
+naming a browser, while no browser follows it, comes to every page as an amber question with Allow, Always allow
+and No; the view moves only after Allow. Always allow is stored in this browser (`localStorage`,
+`rigtwin.agentViews`) and shown under More → Shared scene as "Views an agent asks for: ask me first / always allow /
+never". While the question is open the activity line does not repeat the request.
+
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
 or the network comes back; one resync after each reconnect, asking for the changes after the version it

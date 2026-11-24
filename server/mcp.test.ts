@@ -147,18 +147,18 @@ describe("the MCP endpoint", () => {
   test("look with a code goes to that page only, and the code is remembered for the session", async () => {
     const s = start({ mode: "deployed" }), a = page(s.base), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
-    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");          // no code: every page is asked
     expect(text(await call(s.base, "look", { view: "top", viewer: a.code().toLowerCase() }, sid))).toContain("Showing the top view");
     expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("Showing the left view");
     await Bun.sleep(50);
-    expect(a.views.map((v) => v.args.view)).toEqual(["top", "left"]);
-    expect(b.views.length).toBe(0);
+    expect(a.views.filter((v) => !v.ask).map((v) => v.args.view)).toEqual(["top", "left"]);
+    expect(b.views.filter((v) => !v.ask).length).toBe(0);
     a.close(); b.close(); s.stop();
   });
   test("follow: a page that follows an agent gets its views and may answer its pictures; stop ends it", async () => {
     const s = start({ mode: "deployed", limits: { pictureWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
-    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
     const traces = (await (await fetch(`${s.base}/api/trace`)).json() as any).traces, actor = traces.at(-1).actor;
     const follow = (session: string, who: string | null) => fetch(`${s.base}/api/follow`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
     expect((await follow("ZZZZZZZZ", actor)).status).toBe(404);
@@ -169,9 +169,25 @@ describe("the MCP endpoint", () => {
     expect(r.body.result.content[1]?.type).toBe("image");
     await Bun.sleep(30);
     expect(a.views.at(-1)).toMatchObject({ id: "look", args: { view: "operator", eye: 0.819, picture: true } });
-    expect(b.views.length).toBe(0);
+    expect(a.views.at(-1).ask).toBeUndefined();
+    expect(b.views.filter((v) => !v.ask).length).toBe(0);                                                   // only the question
     expect((await follow(a.code(), null)).status).toBe(200);
-    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
+    a.close(); b.close(); s.stop();
+  });
+  test("consent: with no code and no follower every page gets the question, in the server's words; a few a minute per agent", async () => {
+    const s = start({ mode: "deployed", limits: { asksPerMinutePerCaller: 2, pictureAskWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } });
+    const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");               // no page open: nobody to ask
+    const a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
+    const r = await call(s.base, "look", { eye: { stature_cm: 180 }, picture: true }, sid);
+    expect(text(r)).toContain("asked to allow it");
+    expect(r.body.result.content[1]?.type).toBe("image");                                                  // the page that allowed answered
+    expect(text(r)).toContain("allowed this agent");
+    await Bun.sleep(30);
+    for (const p of [a, b]) expect(p.views[0]).toMatchObject({ id: "look", args: { view: "operator", eye: 0.819 }, ask: { by: expect.stringMatching(/^Claude Code · /), summary: expect.stringContaining("person 180 cm tall") } });
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
+    expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("needs_viewer");               // the third question in a minute
     a.close(); b.close(); s.stop();
   });
   test("no picture within the wait: the reply says so", async () => {

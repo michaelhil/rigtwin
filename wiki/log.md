@@ -342,3 +342,11 @@ with Follow; after Follow the same request reached that browser (link `view=oper
 came back marked as from a following browser. A camera "looking at Seat" aimed at the seat's mount point on the
 deck, so the picture showed mostly floor: a part named as a camera point now means its middle (the box around it
 and its parts, moved with its frame).
+
+**About 21:20** — The owner proposed a consent dialog when an agent asks for a view, with the choice stored
+([D-55](20-decisions/decision-log.md#d-55)). Built: the server puts such a view to every open page as a question
+(4 a minute per agent), the page shows an amber question with Allow, Always allow and No, and More → Shared scene
+holds the stored choice. Tried against a local server in public mode: the question named the agent and the 180 cm
+view and left the view alone; Allow showed it and the agent's next view came straight in; with Always allow a third
+agent's camera view and its picture came in without a question. 36 server tests, 53 of 53 viewer checks.
+
