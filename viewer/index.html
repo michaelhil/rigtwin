@@ -33,6 +33,14 @@
     <button id="more-btn" aria-expanded="false" aria-controls="more" title="Views, colours, help">More</button>
   </div>
   <div id="more" class="ui pop" hidden></div>
+  <!-- the shared scene (live.ts moves this into More once the page is connected) -->
+  <div id="live-more" hidden>
+    <h3>Shared scene</h3>
+    <p class="live-code">This browser’s code: <b id="live-code"></b><span>Give it to Claude Code to show views here.</span></p>
+    <details class="live-about"><summary>About this sandbox</summary>
+      <p>Everyone who opens this page on this server sees one shared scene. The server keeps only the pose of the rig and its last 200 changes, each with a random author id: no names and no other text. Anyone can change it, and Undo puts a change back. The scene is reset on request.</p>
+    </details>
+  </div>
   <aside id="card" class="ui" hidden aria-label="Selected part"></aside>
   <div id="toast" class="ui" hidden role="status"></div>
 </div>

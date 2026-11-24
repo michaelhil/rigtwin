@@ -6,6 +6,7 @@
 //   interact.ts  pointer on the 3D view: point, click, double-click, drag a selected part
 //   ui.ts        parts list, card for the selected part, notices, More, keys, link and picture
 //   words.ts     plain-language names of parts and adjustments
+//   live.ts      the shared scene: the server's live channel, commits of local changes, view commands
 //
 // URL parameters (all optional; lists are comma-separated; ids may be component ids, group names, or
 // the units joystick_L, joystick_R, touchscreen):
@@ -23,6 +24,7 @@
 // screen (camera, hidden parts, selection, adjustments), so a copied link reproduces the view.
 import { Q, apply, load, layout, status, stageEl, viewerApi, invalidate } from './engine.ts';
 import { initUi } from './ui.ts';
+import { initLive } from './live.ts';
 
 declare global { interface Window { viewer: typeof viewerApi; viewerReady?: boolean; viewerError?: string } }
 
@@ -38,6 +40,7 @@ declare global { interface Window { viewer: typeof viewerApi; viewerReady?: bool
     await apply(Object.fromEntries(Q));
     status(null);
     window.viewer = viewerApi; window.viewerReady = true;
+    initLive();                     // the shared scene, when this page's server has one (otherwise nothing happens)
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);

@@ -2,13 +2,21 @@
 # https://mightwork.ai/rigtwin/ with the same script as a manual deploy (`bun run deploy`), which
 # switches releases only after the upload, checks the live site and switches back if a check fails.
 #
-# Credentials: the repository secret DEPLOY_SSH_KEY is the private half of a key that the server
-# accepts only for the unprivileged account `rigtwin-deploy`, and only for the exact commands of
-# the deploy script inside /srv/rigtwin (deploy/rigtwin-deploy-gate.sh; no shell, no forwarding).
-# The server's host key is pinned in deploy/known_hosts.
+# Credentials: the secret DEPLOY_SSH_KEY is the private half of a key that the server accepts only for
+# the unprivileged account `rigtwin-deploy`, and only for the exact commands of the deploy script inside
+# /srv/rigtwin (deploy/rigtwin-deploy-gate.sh; no shell, no forwarding). The server's host key is pinned in
+# deploy/known_hosts. The key is written to disk only after every check and build has run (a dry run of
+# the deploy), for the upload, switch and live checks (`bun run deploy --prepared`), and removed at once.
+# Owner's settings (security review S9, R3b F2): keep DEPLOY_SSH_KEY in the environment `production`, limited
+# to the branch main, not as a repository secret; protect main.
 #
 # Images that need the private photo cameras are not regenerated here (--no-images); they are
 # committed. See wiki/50-implementation/deployment.md.
+#
+# Each action is pinned to the commit its tag pointed to on 2026-11-24 (the tag kept as a comment), so a
+# moved tag cannot change what runs with the deploy key. To update:
+# `git ls-remote https://github.com/<action> 'refs/tags/<tag>' 'refs/tags/<tag>^{}'` (the ^{} line is the commit
+# of an annotated tag).
 
 name: Check and deploy
 
@@ -26,26 +34,40 @@ concurrency:
 
 jobs:
   deploy:
+    # only main deploys, also when started by hand
+    if: github.ref == 'refs/heads/main'
+    environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       RIGTWIN_AGENT: github-actions
       RIGTWIN_CHROME: /usr/bin/google-chrome
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.4.0"
 
+      # setup-bun downloads Bun without a pinned checksum, and this Bun builds the server.js that runs on the host:
+      # at least the build's own commit must be the release's (bun --revision of the official 1.4.0)
+      - name: Check the Bun build
+        run: test "$(bun --revision)" = "1.4.0+34cbb9a40" || { echo "unexpected Bun build $(bun --revision)"; exit 1; }
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # every local step of the deploy (checks, build, dist and its verify in Chromium), without the key
+      - name: Check and build
+        run: bun run deploy --dry-run --no-images
 
       - name: Configure the deploy account
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          test -n "$DEPLOY_SSH_KEY" || { echo "the repository secret DEPLOY_SSH_KEY is not set"; exit 1; }
+          test -n "$DEPLOY_SSH_KEY" || { echo "the secret DEPLOY_SSH_KEY is not set (environment production)"; exit 1; }
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/rigtwin_deploy
           chmod 600 ~/.ssh/rigtwin_deploy
@@ -60,17 +82,17 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-      - name: Check, build and deploy
-        run: bun run deploy --no-images
+      - name: Upload, switch and check
+        run: bun run deploy --prepared
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/rigtwin_deploy ~/.ssh/config
 
       - name: Keep the deploy receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deploy-receipt
           path: dist/deploy-receipt.json
           if-no-files-found: ignore
-
-      - name: Remove the key
-        if: always()
-        run: rm -f ~/.ssh/rigtwin_deploy

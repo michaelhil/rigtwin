@@ -7,6 +7,7 @@
     "check": "bun tools/check.ts",
     "render": "bun tools/render.ts",
     "serve": "bun tools/serve.ts",
+    "rig": "bun tools/rig.ts",
     "dist": "bun tools/dist.ts",
     "wiki": "bun tools/wiki.ts",
     "deploy": "bun tools/deploy.ts",

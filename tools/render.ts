@@ -132,7 +132,8 @@ export class Browser {
 
 /** One viewer session: server + browser + page with the viewer loaded and its UI hidden. */
 export async function openViewer(opts: { workspace?: string; photos?: string; requests?: string[] } = {}) {
-  const server = await startServer({ port: 0, workspace: opts.workspace, photos: opts.photos, requests: opts.requests });
+  // an empty temporary Playground: no pose of the shared scene reaches a picture
+  const server = await startServer({ port: 0, workspace: opts.workspace, photos: opts.photos, requests: opts.requests, data: "temp" });
   const origin = `http://127.0.0.1:${server.port}`;
   const browser = await Browser.launch();
   const page = await browser.page(`${origin}/?ui=0`);

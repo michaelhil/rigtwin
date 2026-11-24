@@ -1,8 +1,8 @@
-// Plain-language wording for the page: names of parts, what a click picks first, and how each
+// Plain-language wording, shared by the page and the commands: names of parts, what a click picks first, and how each
 // adjustment is called, with a word for each end of its travel. Pure data plus small formatters;
 // nothing here touches the model. Everything falls back to the description file's own labels, so a
 // part or joint added later still appears (with its generated name) until a word is written for it.
-import type { ManifestComponent, ManifestJoint } from '../../shared/manifest.ts';
+import type { ManifestComponent, ManifestJoint } from './manifest.ts';
 
 // ---------------------------------------------------------------------------------------------- parts
 /** Rows of the parts list (a group of the description file, or one of its assemblies). */
@@ -167,3 +167,18 @@ export function sayParam(given: unknown, unit: string, range: number | undefined
 }
 /** "joystick.grip_top_height" -> "Grip top height" */
 export const sayKey = (key: string) => { const s = key.split('.').slice(1).join(' ').replaceAll('_', ' ') || key; return s[0].toUpperCase() + s.slice(1); };
+
+// ---------------------------------------------------------------------------------------------- one name for each adjustment
+// Used by the page (activity line) and by the commands (bun run rig), so Claude Code and the page name an
+// adjustment the same way: "Monitor: height", and with a value "Monitor: height 3 cm lower".
+type JointDef = Pick<ManifestJoint, 'id' | 'type' | 'lower' | 'upper' | 'neutral' | 'unit'>;
+/** "Monitor: height"; a three-angle mount by its heading alone ("Touchscreen arm"). */
+export function jointName(j: JointDef): string {
+  const w = adjWords(j)[0];
+  return j.type === 'ball' ? w.section : `${w.section}: ${w.label.toLowerCase()}`;
+}
+/** "Monitor: height 3 cm lower" for an SI value; a three-angle mount by its name alone. */
+export function sayJoint(j: JointDef, value: number | number[]): string {
+  if (j.type === 'ball' || Array.isArray(value)) return jointName(j);
+  return `${jointName(j)} ${sayOffset(adjWords(j)[0], value, { lo: j.lower, hi: j.upper, neutral: j.neutral as number }, j.unit)}`;
+}

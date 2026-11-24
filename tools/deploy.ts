@@ -1,4 +1,7 @@
 // bun run deploy [--dry-run] [--allow-lint] [--allow-dirty] [--no-images]
+// bun run deploy --prepared          upload, switch and check a dist/ that a `--dry-run` of the same commit has just built
+//                                    and checked (the CI runs the two as separate steps, so that the deploy key is on disk
+//                                    only while the network part runs; security review S9)
 // bun run deploy --rollback [--dry-run]
 //   --config <file>  another settings file (default deploy.config.json), for a test server
 //
@@ -14,13 +17,22 @@
 //   (c) ssh <host> mkdir -p <remoteRoot>/releases; rsync -az --delete dist/ to <remoteRoot>/releases/<UTC time>-<revision>/
 //   (d) ln -sfn <release> <remoteRoot>/current.tmp && mv -T <remoteRoot>/current.tmp <remoteRoot>/current
 //   (e) over HTTPS: <publicUrl> is 200 and HTML; <publicUrl>version.json equals dist/version.json; the GLB under
-//       <publicUrl>asset/ has the local size and SHA-256; <publicUrl>wiki/ and two wiki pages are 200. On any failure the
-//       symlink goes back to the previous release, that is checked again, and the command exits non-zero. Only after a
-//       successful check are release folders beyond keepReleases deleted (never the live one or the one before it).
+//       <publicUrl>asset/ has the local size and SHA-256; <publicUrl>wiki/ and two wiki pages are 200;
+//       <publicUrl>server/server.js does not answer 200 (the server's code is in the release but never served); and for
+//       a release with a server (version.json has a `server` entry) <publicUrl>api/health reports the deployed revision
+//       within 20 s, polled every second (any 404 or other answer after 20 s fails and switches back). Before the
+//       switch, a release with a server first asks <publicUrl>api/health: a 404 means the web server has no route for
+//       the API, hence no 404 rule for server/ either, and the deploy stops before the upload (run setup-server.sh
+//       --apply on the host first). On any failure the symlink goes back to the previous release, that is checked again, and the command
+//       exits non-zero. Only after a successful check are release folders beyond keepReleases deleted (never the live one
+//       or the one before it).
 //   (f) prints a summary and writes dist/deploy-receipt.json.
 //
 //   --dry-run    do every local step for real, then print the exact remote commands and HTTPS checks without running them
-//   --rollback   switch `current` to the release before the live one and check the site (no local build)
+//   --rollback   switch `current` to the release before the live one and check the site (no local build). Refused when
+//                the live release has a server and that release has none (both version.json files read with `cat`): once
+//                the host runs the server, the site does not go back to a release without it. (The automatic switch-back
+//                after a failed deploy always returns to the release that was live before, so this never stops it.)
 //
 // What this script expects of the server; it never reads or changes web-server configuration:
 //   - `host` is an SSH alias (~/.ssh/config) that logs in without a password prompt and may write under remoteRoot;
@@ -28,7 +40,9 @@
 //   - a static file server serves the directory <remoteRoot>/current (following the symlink, resolved per request) at
 //     the URL path of publicUrl (/rigtwin/), answers /rigtwin with a redirect to /rigtwin/, serves index.html for a
 //     folder and redirects a folder without its trailing slash. Recommended: the header X-Robots-Tag: noindex.
-//     The site block for Caddy is in wiki/50-implementation/deployment.md.
+//   - for a release with a server: <publicUrl>server/* answers 404 and <publicUrl>api/* goes to the rigtwin server with
+//     the URL path of publicUrl removed; the service restarts from the new release by itself after the switch.
+//     The site block for Caddy is deploy/mightwork-apex.caddy; the service is set up by deploy/setup-server.sh.
 // Server layout:
 //   <remoteRoot>/releases/<YYYYMMDDTHHMMSSZ>-<revision>/   one folder per deployment, never changed after upload
 //   <remoteRoot>/current -> <remoteRoot>/releases/<…>      what the web server shows
@@ -45,8 +59,8 @@ interface Check { what: string; url: string; ok: boolean; detail: string; requir
 interface Step { step: string; seconds: number; ok: boolean; note?: string }
 
 const args = process.argv.slice(2), flag = (n: string) => args.includes(n);
-const dryRun = flag("--dry-run"), rollback = flag("--rollback"), allowLint = flag("--allow-lint"), allowDirty = flag("--allow-dirty"), noImages = flag("--no-images");
-const known = ["--dry-run", "--rollback", "--allow-lint", "--allow-dirty", "--no-images", "--config"];
+const dryRun = flag("--dry-run"), rollback = flag("--rollback"), allowLint = flag("--allow-lint"), allowDirty = flag("--allow-dirty"), noImages = flag("--no-images"), prepared = flag("--prepared");
+const known = ["--dry-run", "--rollback", "--allow-lint", "--allow-dirty", "--no-images", "--config", "--prepared"];
 const configArg = args.includes("--config") ? args[args.indexOf("--config") + 1] : undefined;
 const RELEASE_NAME = /^\d{8}T\d{6}Z-[A-Za-z0-9._+-]+$/;
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=20"];
@@ -149,6 +163,12 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   });
   await html("wiki start page", u + "wiki/");
   for (const p of expect.wikiPages) await html(`wiki page ${p}`, u + "wiki/" + p);
+  // the server's code is in every release with a server, and the web server must never hand it out
+  await attempt("server code not served (server/server.js)", u + "server/server.js", true, async () => {
+    const r = await get(u + "server/server.js" + bust, { redirect: "manual" }); await r.arrayBuffer();
+    return r.status !== 200 ? true : "HTTP 200: the server's code is public; is the 404 rule for server/ in the web server's site block?";
+  });
+  if (expect.version.server) out.push(await serverHealth(u, expect.version.revision));
   // server behaviour the site relies on; reported, but not a reason to roll back
   const base = u.replace(/\/$/, "");
   await attempt(`${new URL(base).pathname} redirects to ${new URL(u).pathname}`, base, false, async () => {
@@ -162,11 +182,54 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   await attempt("X-Robots-Tag: noindex", u, false, async () => { const h = (await get(u)).headers.get("x-robots-tag") ?? ""; return /noindex/i.test(h) ? true : `header ${h ? `is '${h}'` : "missing"} (the pages also carry a robots meta tag)`; });
   return out;
 }
-const printChecks = (checks: Check[]) => { for (const c of checks) say(`  ${c.ok ? "ok  " : c.required ? "FAIL" : "warn"} ${c.what}${c.ok ? "" : `: ${c.detail}`}  (${c.url})`); };
+/** The order of the first rollout (design step 1): the host's route first, then a release with a server. */
+export const FIRST_ROLLOUT = "the web server has no /rigtwin/api/ route, so it has no 404 rule for /rigtwin/server/ either, and this release would make server/server.js public. Order of the first rollout: (1) on the host, deploy/setup-server.sh --apply (the Caddy route and the 404 rule, then the service); (2) then deploy a release with server/; (3) then the health check passes. Nothing was switched.";
+/** Before the switch (the old release still live): a release with a server needs the API route on the host. A 404 (no route) or no
+ *  answer stops the deploy; 200 (an older server) or 502/503 (the route without a running service, as before the first server release) go on. */
+export async function routeProbe(cfg: Pick<Config, "publicUrl">): Promise<{ ok: boolean; status: number | null; detail: string }> {
+  const url = cfg.publicUrl + "api/health";
+  try {
+    const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "rigtwin-deploy-check" }, signal: AbortSignal.timeout(10000), redirect: "manual" });
+    await r.arrayBuffer();
+    if (r.status === 404) return { ok: false, status: 404, detail: `GET ${url} answered 404: ${FIRST_ROLLOUT}` };
+    return { ok: true, status: r.status, detail: `GET ${url} answered ${r.status}: the route is there` };
+  } catch (e: any) { return { ok: false, status: null, detail: `GET ${url} did not answer (${e?.message ?? e}); without it the 404 rule for server/ cannot be confirmed, so nothing was switched` }; }
+}
+/** The rigtwin server of a release: <publicUrl>api/health must report `revision` within 20 s (polled every second; the server of the release that was
+ *  live before keeps answering until it notices the switch and systemd starts the new one). A 404 fails at once (the route has gone); anything else
+ *  after 20 s (502, another revision) is a failure. */
+async function serverHealth(u: string, revision: string): Promise<Check> {
+  const url = u + "api/health", what = `server: api/health reports revision ${revision} within 20 s`, t = Date.now();
+  let detail = "no answer";
+  for (;;) {
+    try {
+      const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "rigtwin-deploy-check" }, signal: AbortSignal.timeout(5000) }), body = await r.text();
+      if (r.status === 404) return { what, url, ok: false, detail: "HTTP 404: the web server has no route for the API", required: true };
+      if (r.status === 200) {
+        const live = (() => { try { return JSON.parse(body); } catch { return null; } })();
+        if (live?.revision === revision) return { what, url, ok: true, detail: `ok after ${((Date.now() - t) / 1000).toFixed(1)} s`, required: true };
+        detail = live ? `reports revision ${live.revision}` : "HTTP 200 but not JSON";
+      } else detail = `HTTP ${r.status}`;
+    } catch (e: any) { detail = e?.message ?? String(e); }
+    if (Date.now() - t >= 20000) return { what, url, ok: false, detail: `${detail} after 20 s`, required: true };
+    await sleep(1000);
+  }
+}
+/** What the receipt records about the server, from the checks of one release. */
+function serverStatus(checks: Check[], version: any): string {
+  const c = checks.find((x) => x.what.startsWith("server: api/health"));
+  if (!version.server) return "no server in this release";
+  if (!c) return "not checked";
+  return c.ok ? `running revision ${version.revision}` : `FAILED: ${c.detail}`;
+}
+const printChecks = (checks: Check[]) => { for (const c of checks) say(`  ${c.ok ? "ok  " : c.required ? "FAIL" : "warn"} ${c.what}${c.ok ? (c.detail !== "ok" ? ` (${c.detail})` : "") : `: ${c.detail}`}  (${c.url})`); };
 const failedRequired = (checks: Check[]) => checks.filter((c) => !c.ok && c.required);
-function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json") {
+function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json", server: { revision: string } | null | "if it has one" = null) {
   const u = cfg.publicUrl;
-  for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["redirect to " + u + " (warning only)", u.replace(/\/$/, "")], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);
+  for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"]]) say(`  would check: GET ${url}  → ${what}`);
+  if (server) say(`  would check: GET ${u}api/health  → ${server === "if it has one" ? "for a release with a server: its revision" : `revision ${server.revision}`} within 20 s, asked every second (404 at once, or 502 or another revision after 20 s: a failure)`);
+  else say(`  (no api/health check: ${source} has no server entry)`);
+  for (const [what, url] of [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);
 }
 
 // ------------------------------------------------------------------------------------------------ rollback
@@ -174,18 +237,23 @@ async function doRollback(cfg: Config) {
   heading(`rollback on ${cfg.host}:${cfg.remoteRoot}${dryRun ? " (dry run: nothing is changed)" : ""}`);
   const live = currentRelease(cfg, `${releasesDir(cfg)}/<live release>`);
   if (dryRun) {
-    say(`  would list ${releasesDir(cfg)}, pick the newest release older than the live one, read its version.json, then run:`);
+    say(`  would list ${releasesDir(cfg)}, pick the newest release older than the live one, read both version.json files, then run:`);
+    remote(cfg, `cat ${releasesDir(cfg)}/<live release>/version.json`);
     remote(cfg, `cat ${releasesDir(cfg)}/<previous release>/version.json`);
+    say("  (refused, before the switch, when the live release's version.json has a server entry and the previous release's has none)");
     remote(cfg, switchCommand(cfg, `${releasesDir(cfg)}/<previous release>`, false));
-    printPlannedChecks(cfg, "asset/rig-b.glb", ["README.html"], "that release's version.json");
+    printPlannedChecks(cfg, "asset/rig-b.glb", ["README.html"], "that release's version.json", "if it has one");
     say("\ndry run finished: nothing was changed on the server"); timeline("rollback dry run", secs(t0), cfg.host); return;
   }
   if (!live) stop(`${cfg.remoteRoot}/current does not point into ${releasesDir(cfg)}; nothing to roll back`);
   const all = listReleases(cfg, []), liveName = live.slice(releasesDir(cfg).length + 1), older = all.filter((r) => r < liveName);
   if (!older.length) stop(`the live release ${liveName} is the oldest one on the server; nothing to roll back to`);
   const target = `${releasesDir(cfg)}/${older[older.length - 1]}`;
-  const version = JSON.parse(remote(cfg, `cat ${q(target + "/version.json")}`).out);
-  say(`  live: ${liveName}\n  back to: ${older[older.length - 1]} (${version.short})`);
+  const readVersion = (release: string) => { const out = remote(cfg, `cat ${q(release + "/version.json")}`).out; try { return JSON.parse(out); } catch { return stop(`${release}/version.json is not JSON`); } };
+  const liveVersion = readVersion(live), version = readVersion(target);
+  say(`  live: ${liveName}${liveVersion.server ? " (with a server)" : ""}\n  back to: ${older[older.length - 1]} (${version.short})${version.server ? " (with a server)" : ""}`);
+  // once the host runs the server, the site does not go back to a release without one (the service would have nothing to start)
+  if (liveVersion.server && !version.server) stop(`refusing to roll back: the live release ${liveName} has a server and ${older[older.length - 1]} has none (no server entry in its version.json). Deploy a fixed release instead, or, if the server must go, run deploy/setup-server.sh --undo on the host and switch ${cfg.remoteRoot}/current there by hand.`);
   const s = performance.now();
   remote(cfg, switchCommand(cfg, target));
   const checks = await verifySite(cfg, { version, glb: { path: `asset/${version.model.asset}.glb`, bytes: version.model.bytes, sha256: version.model.sha256 }, wikiPages: ["README.html"] });
@@ -194,12 +262,24 @@ async function doRollback(cfg: Config) {
     remote(cfg, switchCommand(cfg, live));
     stop(`the site did not pass its checks after the rollback; switched back to ${liveName}`);
   }
-  say(`\nrolled back: ${cfg.publicUrl} now serves ${older[older.length - 1]} (${version.short}); ${liveName} is still on the server`);
+  say(`\nrolled back: ${cfg.publicUrl} now serves ${older[older.length - 1]} (${version.short}); ${liveName} is still on the server; server: ${serverStatus(checks, version)}`);
   timeline("rollback", secs(s), `${liveName} -> ${older[older.length - 1]}`);
 }
 
 // ------------------------------------------------------------------------------------------------ deploy
 async function doDeploy(cfg: Config) {
+  if (prepared) {
+    // (a) and (b) ran in the --dry-run before this; dist/ must be that build of this very commit, unchanged since
+    heading("prepared: dist/ from the dry run of this commit");
+    const rev = sourceRevision(), v = JSON.parse(readFileSync(join(ROOT, "dist", "version.json"), "utf8"));
+    if (dryRun) stop("--prepared and --dry-run do not go together", 2);
+    if (!rev.repository || rev.dirty || v.revision !== rev.revision || v.dirty) stop(`--prepared needs dist/ built by a dry run of the clean commit ${rev.revision}; dist/ is from ${v.revision}${v.dirty ? " with uncommitted changes" : ""}. Run 'bun run deploy --dry-run' first.`);
+    say(`  dist/ is ${v.short}`);
+  } else await prepare();
+  await publish(cfg);
+}
+/** (a) and (b): everything that runs on this machine, before anything is sent anywhere. */
+async function prepare() {
   // (a) refuse early, and say every reason at once
   heading("preflight: working tree, wiki lint, checks");
   const reasons: string[] = [];
@@ -231,6 +311,9 @@ async function doDeploy(cfg: Config) {
     const changed = after.split("\n").filter((l) => l && !before.split("\n").includes(l));
     (allowDirty ? say : (m: string) => stop(m))(`the build changed committed files, so the site would not match revision ${rev.revision}${allowDirty ? " (allowed by --allow-dirty)" : "; commit them and run 'bun run deploy' again (or pass --allow-dirty)"}:\n    ${changed.slice(0, 12).join("\n    ")}`);
   }
+}
+/** (b2) to (f): the route probe, upload, switch, checks, switch back on failure, prune, receipt. */
+async function publish(cfg: Config) {
 
   // what was built
   const dist = join(ROOT, "dist"), version = JSON.parse(readFileSync(join(dist, "version.json"), "utf8"));
@@ -244,6 +327,17 @@ async function doDeploy(cfg: Config) {
   const release = `${releasesDir(cfg)}/${name}`;
   heading(`upload to ${cfg.host}:${release}${dryRun ? " (dry run: printed, not run)" : ""}`);
   say(`  version ${version.short}; model ${glb.bytes.toLocaleString("en")} bytes, sha256 ${glb.sha256.slice(0, 16)}…`);
+
+  // (b2) a release with a server needs the host's API route (and with it the 404 rule for server/) before anything is switched
+  if (version.server) {
+    heading("before the switch: the host's route for the API");
+    if (dryRun) say(`  would check: GET ${cfg.publicUrl}api/health  → anything but 404 (no answer or 404: stop, upload and switch nothing; ${FIRST_ROLLOUT.split(". Order")[0]})`);
+    else {
+      const p = await routeProbe(cfg);
+      say(`  ${p.ok ? "ok  " : "STOP"} ${p.detail}`);
+      if (!p.ok) stop(p.detail);
+    }
+  }
 
   // (c) upload
   let s2 = performance.now();
@@ -271,7 +365,7 @@ async function doDeploy(cfg: Config) {
   const receipt: any = { deployed: new Date().toISOString(), dryRun, host: cfg.host, remoteRoot: cfg.remoteRoot, publicUrl: cfg.publicUrl, release: name, releasePath: release, previous, version, glb, steps, remoteCommands: remoteLog, checks: [] as Check[], pruned: [] as string[], result: "" };
   const writeReceipt = () => writeFileSync(join(dist, "deploy-receipt.json"), JSON.stringify(receipt, null, 1) + "\n");
   if (dryRun) {
-    printPlannedChecks(cfg, glbPath, wikiPages);
+    printPlannedChecks(cfg, glbPath, wikiPages, "dist/version.json", version.server ? { revision: version.revision } : null);
     say(`  if a required check fails: ${switchCommand(cfg, releasesDir(cfg) + "/<previous release>", false)}, then the same checks against its version.json`);
     say(`  after the checks pass: list ${releasesDir(cfg)} and delete all but the ${cfg.keepReleases} newest (never the live release or the one before it):`);
     remote(cfg, `ls -1 ${q(releasesDir(cfg))}`);
@@ -283,7 +377,7 @@ async function doDeploy(cfg: Config) {
   }
   s2 = performance.now();
   const checks = await verifySite(cfg, { version, glb, wikiPages });
-  printChecks(checks); receipt.checks = checks;
+  printChecks(checks); receipt.checks = checks; receipt.server = serverStatus(checks, version);
   steps.push({ step: "verify", seconds: secs(s2), ok: !failedRequired(checks).length });
   if (failedRequired(checks).length) {
     if (!previous) { receipt.result = "FAILED checks; no previous release to go back to, the new release stays live"; writeReceipt(); stop(`the live site failed ${failedRequired(checks).length} check(s) and there is no previous release to return to; ${name} stays live. Is the web server configured (see the header of tools/deploy.ts)?`); }
@@ -292,7 +386,7 @@ async function doDeploy(cfg: Config) {
     const prevVersion = JSON.parse(remote(cfg, `cat ${q(previous + "/version.json")}`).out);
     const again = await verifySite(cfg, { version: prevVersion, glb: { path: `asset/${prevVersion.model.asset}.glb`, bytes: prevVersion.model.bytes, sha256: prevVersion.model.sha256 }, wikiPages: ["README.html"] });
     printChecks(again);
-    receipt.result = `FAILED checks; switched back to ${previous} (${failedRequired(again).length ? "which ALSO fails its checks" : "which passes its checks"})`; receipt.rollbackChecks = again; writeReceipt();
+    receipt.result = `FAILED checks; switched back to ${previous} (${failedRequired(again).length ? "which ALSO fails its checks" : "which passes its checks"})`; receipt.rollbackChecks = again; receipt.rollbackServer = serverStatus(again, prevVersion); writeReceipt();
     stop(`the new release failed its checks; ${receipt.result}. The failed release ${name} is left on the server for inspection.`);
   }
 
@@ -307,6 +401,7 @@ async function doDeploy(cfg: Config) {
   const warn = checks.filter((c) => !c.ok && !c.required);
   say(`\ndeployed ${name} in ${secs(t0).toFixed(1)} s: ${cfg.publicUrl} serves version ${version.short}`);
   say(`  previous release: ${previous ? previous.slice(releasesDir(cfg).length + 1) + " (bun run deploy --rollback switches back to it)" : "none"}; releases on the server: ${all.length - drop.length}${drop.length ? `, ${drop.length} old one(s) deleted` : ""}`);
+  say(`  server: ${receipt.server}`);
   if (warn.length) say(`  ${warn.length} warning(s) about the server configuration: ${warn.map((c) => c.what).join("; ")}`);
   say("  receipt: dist/deploy-receipt.json");
   timeline("deploy", secs(t0), `${name} live at ${cfg.publicUrl}; ${checks.filter((c) => c.ok).length}/${checks.length} checks ok`);

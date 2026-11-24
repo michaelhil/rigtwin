@@ -9,7 +9,7 @@ import {
   jointsFor, setAdjustment, adjustmentValue, adjustmentRange, viewerApi, type Change,
 } from './engine.ts';
 import { initPointer, dragHint } from './interact.ts';
-import { adjWords, partName, knownAs, sayOffset, sayValue, sayParam, sayKey, CLASS_ORDER, CLASS_WORDS, type AdjWord } from './words.ts';
+import { adjWords, partName, knownAs, sayOffset, sayValue, sayParam, sayKey, CLASS_ORDER, CLASS_WORDS, type AdjWord } from '../../shared/words.ts';
 
 const NARROW = 900;
 const narrow = () => window.innerWidth < NARROW;

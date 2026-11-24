@@ -10,7 +10,7 @@ import {
   pickAt, partOf, firstPick, kindOf, members, nameOf, select, setHover, jointsFor, poseJoint, setAdjustment, adjustmentRange, adjustmentValue,
   zoomTo, goHome, lookZoom, stopGlide, type JointState,
 } from './engine.ts';
-import { adjWords } from './words.ts';
+import { adjWords } from '../../shared/words.ts';
 
 /** What a click on this part would select right now. */
 export function wouldPick(part: string): string {

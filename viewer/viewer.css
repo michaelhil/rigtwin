@@ -100,6 +100,10 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
 .help b { font-weight: 600; color: var(--ink); white-space: nowrap; }
 .about { margin: 14px 0 0; padding-top: 9px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
 .about a { color: var(--ink-2); } .about .version { display: block; margin-top: 2px; }
+#live-more h3 { margin-top: 14px; }
+.live-code { margin: 4px 0; font-size: 12px; color: var(--ink-2); } .live-code b { font-size: 14px; letter-spacing: .08em; color: var(--ink); } .live-code span { display: block; }
+.live-about { font-size: 12px; color: var(--ink-2); } .live-about summary { cursor: pointer; min-height: 24px; display: flex; align-items: center; } .live-about p { margin: 2px 0 0; }
+.note.live { font-weight: 400; }
 
 /* ---- the card for the selected part ---- */
 #card { position: absolute; top: 50px; right: 12px; width: 332px; max-height: calc(100% - 62px); overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.16); padding: 10px 12px 10px; z-index: 5; }

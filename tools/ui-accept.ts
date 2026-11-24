@@ -117,13 +117,15 @@ interface Result { id: string; name: string; pass: boolean; value: string; limit
 const results: Result[] = [];
 const record = (id: string, name: string, pass: boolean, value: unknown, limit = "") => { results.push({ id, name, pass, value: String(value), limit }); console.log(`${pass ? "ok  " : "FAIL"} ${id} ${name}: ${value}${limit ? `   (limit: ${limit})` : ""}`); };
 
-let server: { stop: (force?: boolean) => void; port: number } | null = null, ORIGIN = opt("--origin") ?? "";
-if (!ORIGIN) { const { startServer } = await import("./serve.ts"); server = await startServer({ port: 0 }) as any; ORIGIN = `http://127.0.0.1:${server!.port}`; }
+let server: { stop: (force?: boolean) => void; port: number; reset: () => void } | null = null, ORIGIN = opt("--origin") ?? "";
+// the shared scene lives in an empty temporary folder, emptied again before every page (each test starts from a fresh Playground)
+if (!ORIGIN) { const { startServer } = await import("./serve.ts"); server = await startServer({ port: 0, data: "temp" }); ORIGIN = `http://127.0.0.1:${server!.port}`; }
 const BASELINE = opt("--baseline");
 mkdirSync(SHOTS, { recursive: true });
 const browser = await Browser.launch();
 const allErrors: string[] = [];
 async function open(w: number, h: number, query = "", origin = ORIGIN): Promise<Session> {
+  if (origin === ORIGIN) server?.reset();
   const page = await browser.page("about:blank");
   await page.viewport(w, h);
   await page.call("Page.setDownloadBehavior", { behavior: "deny" }).catch(() => {});
@@ -185,9 +187,12 @@ await test("T07", "hint line", async () => {
 });
 await test("T10", "load", async () => {
   const s = await open(1440, 900);
-  const m = await s.ev(`(() => { const n = performance.getEntriesByType('navigation')[0], r = performance.getEntriesByType('resource'); return { bytes: n.transferSize + r.reduce((a, e) => a + e.transferSize, 0), body: n.decodedBodySize + r.reduce((a, e) => a + e.decodedBodySize, 0), requests: r.length + 1, js: (r.find((e) => e.name.endsWith('viewer.js')) || {}).decodedBodySize }; })()`);
+  const m = await s.ev(`(() => { const n = performance.getEntriesByType('navigation')[0], r = performance.getEntriesByType('resource'); return { bytes: n.transferSize + r.reduce((a, e) => a + e.transferSize, 0), body: n.decodedBodySize + r.reduce((a, e) => a + e.decodedBodySize, 0), requests: r.length + 1, js: r.filter((e) => e.initiatorType === 'script' || /\\.m?js(\\?|$)/.test(e.name)).reduce((a, e) => a + e.decodedBodySize, 0), scripts: r.filter((e) => e.initiatorType === 'script' || /\\.m?js(\\?|$)/.test(e.name)).length }; })()`);
   const t = performance.now(); const p = await browser.page("about:blank"); await p.viewport(1440, 900); await p.call("Page.navigate", { url: `${ORIGIN}/` }); await p.waitFor("window.viewerReady", "viewer"); const ready = performance.now() - t; await p.close();
-  record("T10", "load: ready time; download", ready <= 1000 && m.js <= 760e3, `${ready.toFixed(0)} ms navigate-to-ready; ${(m.body / 1e6).toFixed(2)} MB in ${m.requests} requests (script ${(m.js / 1e3).toFixed(0)} kB)`, "≤ 1 s; script ≤ 760 kB (was 687 kB); the rest is the model and its description file, which have grown since the reviews");
+  // Every script the default page loads counts, against 800 kB in all (step-1 checkpoint review): the live client is a
+  // default feature the owner asked for, so splitting it out would only move bytes the visitor loads anyway. Only modules
+  // that are off by default are split, each with its own budget. "Ready in at most 1 s" stays.
+  record("T10", "load: ready time; download", ready <= 1000 && m.js <= 800e3, `${ready.toFixed(0)} ms navigate-to-ready; ${(m.body / 1e6).toFixed(2)} MB in ${m.requests} requests (${m.scripts} script(s), ${(m.js / 1e3).toFixed(0)} kB)`, "≤ 1 s; every script of the default page ≤ 800 kB in all (was 760 kB for viewer.js alone, 687 kB at the reviews); the rest is the model and its description file");
   await close(s);
 });
 

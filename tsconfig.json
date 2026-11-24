@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["shared", "generator", "tools", "viewer/src", "assets/*/src"]
+  "include": ["shared", "generator", "tools", "server", "viewer/src", "assets/*/src"]
 }

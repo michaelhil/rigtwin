@@ -3,14 +3,24 @@
 //   dist/index.html, viewer.css, viewer.js     the bundled viewer (three.js included)
 //   dist/asset/rig-b.glb, rig-b.manifest.json  the asset
 //   dist/wiki/                                 the wiki as a static site (built here, from wiki/*.md and wiki/img/)
-//   dist/version.json                          build time, source revision, model hash and triangle count
+//   dist/server/server.js                      the rigtwin server bundled into one file for Bun (from server/server.ts;
+//                                              only code from server/ and shared/, no npm package). Never served:
+//                                              Caddy answers 404 for /rigtwin/server/* (deploy/mightwork-apex.caddy)
+//   dist/version.json                          build time, source revision, model hash and triangle count; with the
+//                                              server, also server: {format} (the scene format it stores)
 // Nothing from private/ or work/ is copied. All URLs are relative, so the folder works from any
 // sub-path. Unless --no-verify is given, the result is served from the sub-path /rigtwin/ by a
 // throwaway local server and loaded in headless Chromium: the viewer, its link to the documentation,
-// and several wiki pages. Every request must succeed and no page may log an error.
-import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync, readFileSync } from "node:fs";
+// and several wiki pages. Every request must succeed and no page may log an error. Like Caddy, the
+// throwaway server answers /rigtwin/api/* from the built server (started on a free port with an empty
+// temporary data folder, the prefix /rigtwin removed, answers streamed so the live channel works) and
+// refuses /rigtwin/server/*.
+import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { builtinModules } from "node:module";
+import { tmpdir } from "node:os";
 import { ROOT, timeline } from "./timeline.ts";
 import { bundleViewer } from "./bundle.ts";
 import { buildWiki, lintWiki } from "./wiki.ts";
@@ -18,14 +28,33 @@ import { currentVersion } from "./version.ts";
 
 const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp" };
 
-/** Static file server for `dir` under the path `base`, behaving like a plain web server: index.html for a folder, a redirect when the folder's slash is missing, 404 otherwise. Every answer is logged. */
-export function serveFolder(dir: string, base = "/rigtwin/") {
-  const log: { path: string; status: number }[] = [];
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
-    const path = decodeURIComponent(new URL(req.url).pathname);
-    const answer = (status: number, body: BodyInit | null, headers: Record<string, string> = {}) => { log.push({ path, status }); return new Response(body, { status, headers }); };
+/** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/mightwork-apex.caddy): index.html for a folder, a
+ *  redirect when the folder's slash is missing, 404 otherwise; 404 for the server's folder `server/`; and, given `api` (the origin of a running rigtwin
+ *  server), `<base>api/*` forwarded to it as `/api/*`, the answer streamed as it arrives. Every answer is logged; requests carrying the header
+ *  `x-rigtwin-probe` (deliberate checks) are marked as probes. */
+export function serveFolder(dir: string, base = "/rigtwin/", opts: { api?: string; idleTimeout?: number } = {}) {
+  const log: { path: string; status: number; probe: boolean }[] = [];
+  // with a server behind it, a quiet live stream must outlast the heartbeat: the server's own idle timeout (server/limits.ts), not Bun's 10 s
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", ...(opts.idleTimeout !== undefined ? { idleTimeout: opts.idleTimeout } : {}), async fetch(req, srv) {
+    const url = new URL(req.url), path = decodeURIComponent(url.pathname), probe = req.headers.has("x-rigtwin-probe");
+    const answer = (status: number, body: BodyInit | null, headers: Record<string, string> = {}) => { log.push({ path, status, probe }); return new Response(body, { status, headers }); };
     if (path + "/" === base) return answer(301, null, { location: base });
     if (!path.startsWith(base)) return answer(404, "outside the sub-path");
+    const rest = path.slice(base.length);
+    if (rest === "server" || rest.startsWith("server/")) return answer(404, "not found");
+    if (rest.startsWith("api/")) {
+      if (!opts.api) return answer(404, "no rigtwin server");
+      const headers = new Headers(req.headers);
+      for (const h of ["host", "connection", "accept-encoding", "content-length"]) headers.delete(h);
+      headers.set("x-forwarded-for", srv.requestIP(req)?.address ?? "127.0.0.1");
+      const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+      const up = await fetch(opts.api + url.pathname.slice(base.length - 1) + url.search, { method: req.method, headers, body, redirect: "manual", signal: req.signal }).catch(() => null);
+      if (!up) return answer(502, "the rigtwin server did not answer");
+      const out = new Headers(up.headers);
+      for (const h of ["content-encoding", "content-length", "connection", "transfer-encoding"]) out.delete(h);
+      log.push({ path, status: up.status, probe });
+      return new Response(up.body, { status: up.status, headers: out });
+    }
     let file = normalize(join(dir, path.slice(base.length)));
     if (file !== dir && !file.startsWith(dir + sep)) return answer(404, "not found");
     if (existsSync(file) && statSync(file).isDirectory()) {
@@ -36,6 +65,68 @@ export function serveFolder(dir: string, base = "/rigtwin/") {
     return answer(200, Bun.file(file), { "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream" });
   } });
   return { server, log, origin: `http://127.0.0.1:${server.port}`, base };
+}
+
+/** Bundles server/server.ts into `<out>/server/server.js` (one file, for Bun). Refuses a bundle that takes code from anywhere but server/ and shared/
+ *  (no viewer code, no npm package) or that keeps an import the Bun runtime does not provide itself (bun, bun:*, Node's built-in modules). */
+export function buildServer(out: string, entry = "server/server.ts"): { file: string; bytes: number; modules: number } {
+  const file = join(out, "server", "server.js"), tmp = mkdtempSync(join(tmpdir(), "rigtwin-dist-")), meta = join(tmp, "meta.json");
+  try {
+    const r = spawnSync(process.execPath, ["build", entry, "--target=bun", `--outfile=${file}`, `--metafile=${meta}`], { cwd: ROOT, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`bun build ${entry} failed:\n${(r.stderr || r.stdout).trim()}`);
+    const inputs: Record<string, { imports: { path: string; original?: string; external?: boolean }[] }> = JSON.parse(readFileSync(meta, "utf8")).inputs;
+    const foreign = Object.keys(inputs).filter((p) => !/^(server|shared)\//.test(p));
+    const builtin = new Set(builtinModules);
+    const externals = [...new Set(Object.values(inputs).flatMap((i) => i.imports.filter((x) => x.external).map((x) => x.original ?? x.path)))];
+    const strange = externals.filter((p) => !(p === "bun" || p.startsWith("bun:") || p.startsWith("node:") || builtin.has(p)));
+    if (foreign.length || strange.length) {
+      rmSync(join(out, "server"), { recursive: true, force: true });
+      throw new Error(`the server bundle must contain only code from server/ and shared/ and import only what Bun provides;${foreign.length ? ` it takes code from ${foreign.join(", ")}` : ""}${strange.length ? ` it imports ${strange.join(", ")}` : ""}`);
+    }
+    return { file, bytes: statSync(file).size, modules: Object.keys(inputs).length };
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}
+
+/** Starts the built server like the host does, but in local mode, on a free port, with an empty temporary data folder and the release's own asset
+ *  folder; resolves once it prints its {"listening": port} line. */
+async function startBuiltServer(out: string) {
+  const free = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response() }), port = free.port; free.stop(true);
+  const data = mkdtempSync(join(tmpdir(), "rigtwin-dist-data-"));
+  const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", "local", "--port", String(port), "--host", "127.0.0.1", "--data", data, "--asset", join(out, "asset")], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
+  let said = "";
+  const collect = async (s: ReadableStream<Uint8Array>, onText?: (t: string) => void) => { const d = new TextDecoder(), r = s.getReader(); for (;;) { const { done, value } = await r.read(); if (done) return; const t = d.decode(value, { stream: true }); said += t; onText?.(t); } };
+  const stop = () => { proc.kill(); rmSync(data, { recursive: true, force: true }); };
+  const listening = await new Promise<number>((resolve, reject) => {
+    let line = "";
+    const timer = setTimeout(() => reject(new Error(`the built server did not report {"listening": port} within 15 s; it printed: ${said.trim().slice(-800) || "nothing"}`)), 15000);
+    collect(proc.stdout, (t) => { line += t; for (const l of line.split("\n")) { try { const j = JSON.parse(l); if (typeof j?.listening === "number") { clearTimeout(timer); resolve(j.listening); } } catch { /* not that line */ } } });
+    collect(proc.stderr);
+    proc.exited.then((code) => { clearTimeout(timer); reject(new Error(`the built server exited (code ${code}) before listening; it printed: ${said.trim().slice(-800) || "nothing"}`)); });
+  }).catch((e) => { stop(); throw e; });
+  return { origin: `http://127.0.0.1:${listening}`, proc, output: () => said, stop };
+}
+
+/** Reads a server-sent-event stream until an event named `name` has arrived or `ms` has passed; returns the names of the events seen and that event's data. */
+async function waitEvent(res: Response, name: string, ms: number): Promise<{ seen: string[]; data: string | null }> {
+  const reader = res.body!.getReader(), d = new TextDecoder(), until = Date.now() + ms, seen: string[] = [];
+  let text = "";
+  try {
+    while (Date.now() < until) {
+      const r = await Promise.race([reader.read(), Bun.sleep(until - Date.now()).then(() => null)]);
+      if (!r || r.done) break;
+      text += d.decode(r.value, { stream: true });
+      const blocks = text.split("\n\n");
+      text = blocks.pop()!;
+      for (const block of blocks) {
+        const lines = block.split("\n"), data = lines.filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("\n");
+        if (!data) continue;
+        const event = lines.find((l) => l.startsWith("event:"))?.slice(6).trim() ?? "message";
+        seen.push(event);
+        if (event === name) return { seen, data };
+      }
+    }
+    return { seen, data: null };
+  } finally { reader.cancel().catch(() => {}); }
 }
 
 const listFiles = (dir: string) => { const files: string[] = []; const walk = (d: string) => { for (const f of readdirSync(d)) { const p = join(d, f); statSync(p).isDirectory() ? walk(p) : files.push(p); } }; if (existsSync(dir)) walk(dir); return files; };
@@ -51,10 +142,18 @@ if (import.meta.main) {
   if (manifest.missing.length) { console.error(`error: components without geometry and not declared omitted: ${manifest.missing.join(", ")}`); process.exit(1); }
 
   const bundle = await bundleViewer();
-  const version = currentVersion({ buildDir, asset });
+  // the server goes into the release once its source exists (server/server.ts); until then the release has no server/ and version.json no server entry
+  const hasServer = existsSync(join(ROOT, "server", "server.ts"));
+  const sceneFormat: string | null = hasServer ? (await import("../shared/commands/doc.ts")).SCENE_FORMAT : null;
+  const version = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, "asset"), { recursive: true });
   for (const [name, f] of Object.entries(bundle.files)) writeFileSync(join(out, name), f.body);
+  let serverBuild: ReturnType<typeof buildServer> | null = null;
+  if (hasServer) {
+    try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
+    console.log(`server: bundled server/server.ts into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
+  } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /rigtwin/api/)");
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
   writeFileSync(join(out, "version.json"), JSON.stringify(version, null, 1) + "\n");
   const wiki = buildWiki({ out: join(out, "wiki"), version });
@@ -88,10 +187,36 @@ if (import.meta.main) {
   }
 
   if (!args.includes("--no-verify")) {
-    const { server, log, origin, base } = serveFolder(out);
+    let api: Awaited<ReturnType<typeof startBuiltServer>> | null = null, serverSummary = "no server in this release";
+    if (serverBuild) {
+      try { api = await startBuiltServer(out); } catch (e: any) { fail(`server: ${e.message}`); }
+    }
+    const idleTimeout = api ? (await import("../server/limits.ts")).LIMITS.idleTimeoutS : undefined;
+    const { server, log, origin, base } = serveFolder(out, "/rigtwin/", { api: api?.origin, idleTimeout });
+    const errors: string[] = [];
+    // the server, through the sub-path as the viewer reaches it: health, the live channel, and its own code not served
+    if (api) {
+      try {
+        const probe = { headers: { "x-rigtwin-probe": "1" } };
+        const h = await fetch(`${origin}${base}api/health`, { signal: AbortSignal.timeout(10000) }), health: any = h.ok ? await h.json() : null;
+        if (!health?.ok) errors.push(`server: ${base}api/health answered HTTP ${h.status}${health ? " without ok: true" : ""}`);
+        else if (health.format !== sceneFormat) errors.push(`server: health reports format ${health.format}, version.json says ${sceneFormat}`);
+        else if (health.mode !== "local") errors.push(`server: health reports mode ${health.mode}, expected local`);
+        else if (health.revision !== version.revision) errors.push(`server: health reports revision ${health.revision}, version.json says ${version.revision}`);
+        const live = await fetch(`${origin}${base}api/live`, { signal: AbortSignal.timeout(10000) });
+        const type = live.headers.get("content-type") ?? "", ev = live.ok && type.includes("text/event-stream") ? await waitEvent(live, "snapshot", 5000) : null;
+        if (!live.ok || !type.includes("text/event-stream")) errors.push(`server: ${base}api/live answered HTTP ${live.status} (${type || "no content-type"}), expected an event stream`);
+        else if (!ev?.data) errors.push(`server: no snapshot event on ${base}api/live within 5 s (events seen: ${ev?.seen.join(", ") || "none"})`);
+        else { try { if (JSON.parse(ev.data)?.doc?.schema !== sceneFormat) errors.push(`server: the snapshot is not a ${sceneFormat} document`); } catch { errors.push("server: the snapshot event carries no JSON"); } }
+        for (const p of ["server/server.js", "server/", "server"]) {
+          const r = await fetch(`${origin}${base}${p}`, { ...probe, redirect: "manual" }), body = await r.text();
+          if (r.status !== 404 || body.includes("listening")) errors.push(`server: ${base}${p} answered HTTP ${r.status}; the server's code must never be served`);
+        }
+        serverSummary = `server ${health?.revision ?? "?"} (${health?.format ?? "?"}) answered health and streamed ${ev?.seen.join(", ") || "nothing"} through ${base}api/; ${base}server/ refused`;
+      } catch (e: any) { errors.push(`server: ${e.message}`); }
+    }
     const { Browser } = await import("./render.ts");
     const browser = await Browser.launch();
-    const errors: string[] = [];
     try {
       // 1. the viewer, its Documentation link and its version line
       const page = await browser.page(`${origin}${base}`);
@@ -150,17 +275,18 @@ if (import.meta.main) {
         errors.push(...p.errors.map((e) => `${name} console: ${e}`));
         await p.close();
       }
-      const failed = log.filter((l) => l.status >= 400), stray = log.filter((l) => !l.path.startsWith(base.slice(0, -1)) || /(^|\/)(private|work)\//.test(l.path));
+      if (api && api.proc.exitCode !== null) errors.push(`server: the built server stopped during the check (code ${api.proc.exitCode}): ${api.output().trim().slice(-800)}`);
+      const failed = log.filter((l) => l.status >= 400 && !l.probe), stray = log.filter((l) => !l.path.startsWith(base.slice(0, -1)) || /(^|\/)(private|work)\//.test(l.path));
       for (const l of failed) errors.push(`request failed: ${l.path} (${l.status})`);
       for (const l of stray) errors.push(`stray request: ${l.path}`);
       const good = log.filter((l) => l.status === 200).length;
-      console.log(`verify from ${base}: ${errors.length ? "FAILED" : "ok"}: viewer drew ${st?.render.triangles ?? 0} triangles and links to the documentation; ${sample.length} wiki pages loaded (${sample.map((u) => u || "index").join(", ")}) with ${images} images; followed ${clicked || "no links"}; ${good} requests answered, ${failed.length} failed, ${[...new Set(errors)].length} problem(s)`);
+      console.log(`verify from ${base}: ${errors.length ? "FAILED" : "ok"}: viewer drew ${st?.render.triangles ?? 0} triangles and links to the documentation; ${sample.length} wiki pages loaded (${sample.map((u) => u || "index").join(", ")}) with ${images} images; followed ${clicked || "no links"}; ${serverSummary}; ${good} requests answered, ${failed.length} failed, ${[...new Set(errors)].length} problem(s)`);
       for (const e of [...new Set(errors)]) fail(e);
     } catch (e: any) { fail("verify: " + e.message); }
-    await browser.close(); server.stop(true);
+    await browser.close(); server.stop(true); api?.stop();
   }
   const seconds = (performance.now() - t0) / 1000;
   console.log(`dist ${ok ? "done" : "FAILED"} in ${seconds.toFixed(2)} s`);
-  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), viewer bundle ${bundle.files["viewer.js"].body.length} bytes in ${bundle.seconds.toFixed(2)} s, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
+  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), viewer bundle ${bundle.files["viewer.js"].body.length} bytes in ${bundle.seconds.toFixed(2)} s, ${serverBuild ? `server bundle ${serverBuild.bytes} bytes` : "no server"}, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
   process.exit(ok ? 0 : 1);
 }

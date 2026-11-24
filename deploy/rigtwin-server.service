@@ -1,0 +1,88 @@
+# rigtwin server: the live channel and the commands of the public sandbox behind
+# https://mightwork.ai/rigtwin/api/ (Caddy maps /rigtwin/api/* to 127.0.0.1:4190 with /rigtwin removed;
+# see deploy/mightwork-apex.caddy). Installed as /etc/systemd/system/rigtwin-server.service by
+# deploy/setup-server.sh (wiki/50-implementation/deployment.md).
+#
+# The program is the bundled server of the live release (/srv/rigtwin/current/server/server.js, one
+# file, built by `bun run dist`). The server watches the link `current` and exits when a deploy switches
+# it to another release; systemd then starts it again from the new release. Until a release with
+# server/ is live the start fails; without a start limit systemd keeps trying every 2 s, so the first
+# such release starts the service within seconds (design: "Order of the first rollout").
+# No back-off (RestartSteps): the deploy checks api/health within 20 s of the switch.
+
+[Unit]
+Description=rigtwin server (public sandbox: live channel and commands)
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=rigtwin
+Group=rigtwin
+ExecStart=/opt/rigtwin/runtime/bun /srv/rigtwin/current/server/server.js --mode deployed --port 4190 --host 127.0.0.1 --data /var/lib/rigtwin
+Environment=NODE_ENV=production BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+WorkingDirectory=/var/lib/rigtwin
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+# Until the first release with server/ is live every start fails, every 2 s; cap what that writes to the journal
+# (security review S5: about 170,000 lines a day otherwise, which would push other services' lines out)
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
+
+# Files: the whole file system read-only, writes only to the data folder; other sites under /srv hidden.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/rigtwin
+TemporaryFileSystem=/srv:ro
+BindReadOnlyPaths=/srv/rigtwin
+# Other applications on the host (setup check H10, 2026-11-24): their programs under /opt and their settings and
+# data stay out of reach. /opt is replaced by an empty read-only folder holding only rigtwin's runtime; the named
+# settings and data folders are hidden ("-": ignored if absent).
+TemporaryFileSystem=/opt:ro
+BindReadOnlyPaths=/opt/rigtwin
+InaccessiblePaths=-/etc/leitbild -/etc/optifuel -/etc/review -/etc/samsinn-dev-agent -/etc/readback-training.env
+InaccessiblePaths=-/var/lib/leitbild -/var/lib/optifuel -/var/lib/optifuel-deploy -/var/lib/optifuel-ssh -/srv/codexdev
+ProtectHome=yes
+# other sites' files outside /srv and the host's Caddy and backup folders (security review S5; extend after host check H10;
+# the "-" lets a missing path pass)
+InaccessiblePaths=-/etc/caddy -/var/www -/var/backups -/var/lib/caddy
+PrivateTmp=yes
+PrivateDevices=yes
+UMask=0077
+
+# Privileges and kernel.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Not set on purpose: MemoryDenyWriteExecute (Bun's JavaScript engine compiles code at run time) and
+# ProcSubset=pid (the engine may read /proc/meminfo or /proc/sys; untested on the host).
+
+# Network: none in step 1 except loopback (Caddy connects to 127.0.0.1:4190).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# Resources (R3b "Sensible numbers": one core, 512 MB). TasksMax is 128, not R3b's 64: Bun and its
+# JavaScript engine start helper threads per CPU core, and the host's core count is not known here.
+CPUQuota=100%
+# a small share of the shared disk when others need it (doc.json is written at most 4 times a second; review S5)
+IOWeight=20
+MemoryMax=512M
+TasksMax=128
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

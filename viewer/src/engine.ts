@@ -13,7 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { poseFromRest, limitViolation, type JointValue, type Trs } from '../../shared/pose.ts';
 import type { Manifest, ManifestComponent, ManifestJoint, PhotoCamera, Box } from '../../shared/manifest.ts';
-import { UNITS, WHOLE_ROWS, partName, rowName } from './words.ts';
+import { UNITS, WHOLE_ROWS, partName, rowName } from '../../shared/words.ts';
 
 export type Opts = Record<string, unknown>;
 export interface JointState { def: ManifestJoint; obj: THREE.Object3D; rest: Trs; value: JointValue }
@@ -24,6 +24,12 @@ export const Q = new URLSearchParams(location.search);
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export const el = (tag: string, cls?: string | null, text?: string) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const ASSET_DIR = Q.get('asset') ?? 'asset', ASSET = Q.get('name') ?? 'rig-b';
+/** Extension points, so the engine need not know the modules that use them (live.ts, the shared scene):
+ *  beforeApply and onApply run when `apply` starts and finishes resetting the page (with the URL options). */
+export const hooks = {
+  beforeApply: [] as ((o: Opts) => void)[],
+  onApply: [] as ((o: Opts) => void)[],
+};
 const CAMERAS_URL = 'private/evidence/cameras.json';
 export const DEG = Math.PI / 180;
 export const m2w = (p: number[]) => new THREE.Vector3(p[0], p[2], -p[1]);          // model frame -> three world
@@ -792,6 +798,7 @@ function parsePose(v: unknown): Record<string, number | number[]> {
 }
 /** Reset to defaults, then apply a set of options (same keys as the URL parameters). Resolves when drawn. */
 export async function apply(o: Opts = {}) {
+  for (const f of hooks.beforeApply) f(o);
   S.hud = o.hud === true || o.hud === '1'; S.legend = o.legend === true || o.legend === '1';
   document.body.classList.toggle('no-ui', o.ui === false || o.ui === '0');
   S.hidden.clear(); S.hover = null; S.selected = null; S.wire = o.wire === true || o.wire === '1';
@@ -811,6 +818,7 @@ export async function apply(o: Opts = {}) {
   if (o.sel && known(String(o.sel))) S.selected = String(o.sel);
   S.applying = true; updateMask(); emit('visibility'); emit('selection'); S.applying = false;
   const cap = $('caption'); cap.hidden = !o.caption; cap.textContent = o.caption ? String(o.caption) : '';
+  for (const f of hooks.onApply) f(o);
   invalidate();
   await nextFrame();
   return state();
@@ -849,4 +857,6 @@ export const viewerApi = {
   /** filled in by ui.ts: the link that reproduces the current state, and the picture of the 3D view as a PNG data URL */
   shareUrl: () => location.href as string,
   picture: () => canvas.toDataURL('image/png') as string,
+  /** filled in by live.ts: the state of the shared scene on this page (null when the page is local only) */
+  live: (): Record<string, unknown> | null => null,
 };

@@ -1,6 +1,6 @@
 // bun run check [--fast] [--workspace <name>]
 // Runs every check of the build brief (section 10) and exits non-zero if one fails.
-// --fast skips the two checks that need the headless browser (projection self-test, frame rate).
+// --fast skips the checks that need the headless browser (projection self-test, frame rate, the live viewer).
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -31,13 +31,37 @@ const glob = (pattern: string) => new RegExp("^" + pattern.replace(/[.+?^${}()|[
 {
   const r = spawnSync(join(ROOT, "node_modules", ".bin", "tsc"), ["--noEmit", "-p", ROOT], { encoding: "utf8" });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
-  report(r.status === 0, "types", r.status === 0 ? "tsc --noEmit clean (generator, shared, viewer, tools, asset sources)" : `${lines.filter((l) => l.includes("error TS")).length} type error(s)`, r.status === 0 ? [] : lines);
+  report(r.status === 0, "types", r.status === 0 ? "tsc --noEmit clean (generator, shared, server, viewer, tools, asset sources)" : `${lines.filter((l) => l.includes("error TS")).length} type error(s)`, r.status === 0 ? [] : lines);
 }
 
 {
   const r = spawnSync("bun", ["test", join(ROOT, "generator")], { encoding: "utf8", cwd: ROOT });
   const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "kit tests", r.status === 0 ? (out.find((l) => /\bpass\b/.test(l)) ?? "").trim() + " (known-answer tests of the geometry kit, expressions and pose function)" : "bun test generator failed", r.status === 0 ? [] : out.filter((l) => /fail|error|expect/i.test(l)));
+}
+
+// command layer and server (step 1 of the platform): unit tests, then the integration test over real HTTP
+for (const [name, dir, what] of [
+  ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance"],
+  ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check"],
+  ["live client", "viewer/src", "reconnect rules: backoff, one resync, wakes, no reconnect after disconnect (Leitbild's cases)"],
+] as const) {
+  const r = spawnSync("bun", ["test", join(ROOT, dir)], { encoding: "utf8", cwd: ROOT });
+  const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
+  report(r.status === 0, name, r.status === 0 ? `${(out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim()} (${what})` : `bun test ${dir} failed`, r.status === 0 ? [] : out.filter((l) => /\(fail\)|error|expect/i.test(l)));
+}
+
+// the server must never show error pages with code to visitors (R3b F4; security review S10)
+{
+  const src = readFileSync(join(ROOT, "server", "server.ts"), "utf8"), serve = src.slice(src.indexOf("Bun.serve({"), src.indexOf("Bun.serve({") + 600);
+  const ok = serve.includes("development: false") && !/development:\s*true/.test(src);
+  report(ok, "server options", ok ? "server/server.ts passes development: false to Bun.serve" : "server/server.ts must pass development: false to Bun.serve (no error pages with code)");
+}
+// the setup script's harness (deploy/setup-server.sh against a stand-in host; about 9 s, no root, no network)
+{
+  const r = spawnSync("bash", [join(ROOT, "tools", "deploy-tests", "setup-server.test.sh")], { encoding: "utf8", cwd: ROOT });
+  const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
+  report(r.status === 0, "setup script", (lines.find((l) => /^setup-server.sh test: \d+ passed/.test(l)) ?? "no summary").replace(/ \(logs in .*\)$/, "") + " (check, apply, undo, probe, restore after a hang-up or a closed output)", r.status === 0 ? [] : lines.filter((l) => l.includes("FAIL")));
 }
 
 // ---- 2. parameters, spec, build (a failure here stops the run) -------------------------------------
@@ -207,13 +231,11 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
 {
   // The words are stored encoded so that this file does not contain them. More can be added, one per
   // line, in private/banned-words.txt.
-  const dec = (s: string) => Buffer.from(s, "base64").toString("utf8");
-  const anywhere = ["aGl2ZQ==", "ZmVpcmluZw=="].map(dec);                       // rig maker, customer: never, in any spelling
-  const vendors = ["ZmFuYXRlYw==", "c2Ftc3VuZw==", "bG9naXRlY2g=", "ZWxv"].map(dec); // device makers: only in parameter evidence
-  const extra = existsSync(join(ROOT, "private", "banned-words.txt")) ? readFileSync(join(ROOT, "private", "banned-words.txt"), "utf8").split("\n").map((l) => l.trim().toLowerCase()).filter((l) => l && !l.startsWith("#")) : [];
+  const { NEVER: anywhere, VENDORS: vendors, ALLOWED, extraWords } = await import("./banned.ts");   // rig maker, customer: never; device makers: only in parameter evidence
+  const extra = extraWords(ROOT);
   const skip = new Set(["private", "work", "node_modules", ".git", ".venv", ".claude"]);
   const hits: string[] = []; let files = 0;
-  const allowed = dec("YXJjaGl2ZQ==");
+  const allowed = ALLOWED;
   const walk = (dir: string) => {
     for (const f of readdirSync(dir)) {
       if (skip.has(f)) continue;
@@ -271,6 +293,20 @@ if (!fast) {
     if (errs.length) report(false, "viewer console", `${errs.length} error(s) or warning(s)`, errs);
     await v.close();
   } catch (e: any) { report(false, "browser checks", String(e.message)); }
+  // the deploy's live-site checks and its rollback, against local stand-ins of the site (need dist/; about 90 s)
+  if (existsSync(join(ROOT, "dist", "version.json"))) for (const [name, cmd, summary] of [
+    ["deploy checks", ["bun", join(ROOT, "tools", "deploy-tests", "deploy-checks.ts")], /deploy checks test: .*/],
+    ["deploy rollback", ["bash", join(ROOT, "tools", "deploy-tests", "rollback.test.sh")], /rollback test: .*/],
+  ] as [string, string[], RegExp][]) {
+    const r = spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8", cwd: ROOT, timeout: 300_000 });
+    const out = r.stdout + r.stderr;
+    report(r.status === 0, name, (summary.exec(out)?.[0] ?? "no summary") + " (tools/deploy-tests/, local stand-ins, no SSH)", r.status === 0 ? [] : out.split("\n").filter((l) => l.includes("FAIL")));
+  }
+  else report("warn", "deploy checks", "skipped: no dist/ (run bun run dist first)");
+  // the shared scene in two real browsers (tools/live-accept.ts, about 10 s)
+  const r = spawnSync("bun", [join(ROOT, "tools", "live-accept.ts")], { encoding: "utf8", cwd: ROOT, timeout: 180_000 });
+  const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
+  report(r.status === 0, "live viewer", `${lines.filter((l) => l.startsWith("ok ")).length} of ${lines.filter((l) => /^(ok |FAIL)/.test(l)).length} steps (two browsers and the command line on one local server: changes both ways, activity line and its Undo, stale refusal, link preview, view routing, no server)`, r.status === 0 ? [] : lines.filter((l) => l.startsWith("FAIL") || /error/i.test(l)));
 }
 
 const seconds = (performance.now() - t0) / 1000;
