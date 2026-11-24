@@ -385,7 +385,7 @@ function refreshMode() {
 }
 
 // --------------------------------------------------------------------------------------------- the link that reproduces this view, and the picture
-const MANAGED = ['view', 'camera', 'cam', 'overlay', 'only', 'hide', 'fit', 'pose', 'mode', 'sel'];
+const MANAGED = ['view', 'eye', 'camera', 'cam', 'overlay', 'only', 'hide', 'fit', 'pose', 'mode', 'sel'];
 const num = (v: number, d: number) => String(+v.toFixed(d));
 function compress(ids: Set<string>): string[] {
   const out: string[] = [], seen = new Set<string>();
@@ -400,6 +400,7 @@ function shareUrl(): string {
   else if (S.view && !S.userMoved) {               // still at a named view: say its name (the default view needs no parameter)
     if (S.view !== 'three_quarter' || S.fit || currentCamera() !== persp) p.set('view', S.view);
     if (S.fit) p.set('fit', S.fit.join(','));
+    if (S.view === 'operator' && S.eyeHeight !== null) p.set('eye', num(S.eyeHeight, 3));
   } else {
     const pos = currentCamera().position, d = controls.target.clone().sub(pos), t = S.look ? pos.clone().addScaledVector(d.normalize(), 0.3) : controls.target;
     p.set('camera', [...w2m(pos), ...w2m(t)].map((v) => num(v, 3)).concat(num(persp.fov, 1)).join(','));

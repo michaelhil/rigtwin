@@ -21,7 +21,7 @@ If the owner doesn't say and the local server is not running, it is the public s
 | Tool | One call for |
 |---|---|
 | `adjust` | "make the backrest straight" → `{"target": "backrest", "to": "upright"}`; "lower the monitor 3 cm" → `{"target": "monitor height", "by": "-3 cm"}`; several at once in `changes` |
-| `look` | "show me the operator's view" → `{"view": "operator", "picture": true}`; `only`, `hide`, `all`, `select` |
+| `look` | "show me the operator's view" → `{"view": "operator", "picture": true}`; "show me at eye height of a 180 cm person" → `{"eye": {"stature_cm": 180}, "picture": true}`; "from behind and above the seat" → `{"camera": {"at": {"point": "seat", "offset": [-1.2, 0, 1.0]}, "look_at": "monitor screen"}}`; `only`, `hide`, `all`, `select` |
 | `measure` | "how far is the eye from the screen" → `{"from": "median eye", "to": "monitor screen"}` |
 | `undo` | "undo that" → `{}`; a whole request → `{"what": "<request name from the adjust reply>"}` |
 | `state` | what is moved and the last changes; `{"detail": "catalogue"}` for every adjustment |
@@ -32,8 +32,14 @@ before acting.
 
 - **The reply is the check.** `adjust` answers with before → after, the request name for undo and what
   else is moved. Don't call `state` before or after it unless the owner asks.
-- **Views on the public sandbox** need the browser's code. It is under More, "Shared scene", in the
-  viewer. Ask for it once and pass it as `viewer`; it is remembered. Locally, `look` goes to every open page.
+- **Views on the public sandbox** reach the owner's browser when they click **Follow** on the activity
+  line there (it shows your request, also a refused one), or by the browser's code (More, "Shared scene"),
+  given once as `viewer` and remembered. If `look` is refused with `needs_viewer`, ask the owner to click
+  Follow, then send it again. Locally, `look` goes to every open page.
+- **Camera anywhere:** `eye` gives the operator's view of a person by stature (`stature_cm`, through an
+  assumed ratio of sitting eye height to stature: say so), sitting eye height or one of the three model
+  persons; it rides with the seat. `camera` puts it at any point (model-frame metres, or a point name with an
+  offset) looking at another.
 - **Pictures** (`look` with `picture: true`) show what that browser shows. Use them to check a view,
   not as a measurement.
 

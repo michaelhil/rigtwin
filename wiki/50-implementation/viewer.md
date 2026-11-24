@@ -257,6 +257,14 @@ the request as sent, the reply as the caller saw it, a picture's size with the p
 for a change its version, request name and Undo. "pages too" adds the pages' own saves; Copy puts the shown records
 on the clipboard as JSON. The page keeps the last 200 and fills in what it missed from `api/trace` when it connects.
 
+**The camera anywhere and Follow** ([D-54](../20-decisions/decision-log.md#d-54)). `look` can put the camera at the
+eye of a person of a given stature or sitting eye height (`eye`; the operator's view with `eyeHeight` set: the
+point on the line through the model's eye points, which rides with the seat) or anywhere (`camera`: position,
+target and field of view in the model frame, the same as the link's `camera=`). The link of such a view carries it
+(`view=operator&eye=0.819`). On the public sandbox, **Follow** on the activity line of an agent's request makes
+this browser show the views that agent asks for without a code; "Following" stops it, and More → Shared scene says
+which agent the browser follows.
+
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
 or the network comes back; one resync after each reconnect, asking for the changes after the version it

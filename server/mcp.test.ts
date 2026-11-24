@@ -155,6 +155,25 @@ describe("the MCP endpoint", () => {
     expect(b.views.length).toBe(0);
     a.close(); b.close(); s.stop();
   });
+  test("follow: a page that follows an agent gets its views and may answer its pictures; stop ends it", async () => {
+    const s = start({ mode: "deployed", limits: { pictureWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
+    const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");
+    const traces = (await (await fetch(`${s.base}/api/trace`)).json() as any).traces, actor = traces.at(-1).actor;
+    const follow = (session: string, who: string | null) => fetch(`${s.base}/api/follow`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
+    expect((await follow("ZZZZZZZZ", actor)).status).toBe(404);
+    expect((await follow(a.code(), "not an id")).status).toBe(400);
+    expect((await follow(a.code(), actor)).status).toBe(200);
+    const r = await call(s.base, "look", { eye: { stature_cm: 180 }, picture: true }, sid);
+    expect(text(r)).toContain("follows this agent");
+    expect(r.body.result.content[1]?.type).toBe("image");
+    await Bun.sleep(30);
+    expect(a.views.at(-1)).toMatchObject({ id: "look", args: { view: "operator", eye: 0.819, picture: true } });
+    expect(b.views.length).toBe(0);
+    expect((await follow(a.code(), null)).status).toBe(200);
+    expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");
+    a.close(); b.close(); s.stop();
+  });
   test("no picture within the wait: the reply says so", async () => {
     const s = start({ limits: { pictureWaitMs: 200 } }), p = page(s.base); await p.ready;
     const r = await call(s.base, "look", { picture: true });

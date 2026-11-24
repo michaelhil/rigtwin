@@ -17,7 +17,7 @@
 //
 // Quiet when the page has no server: it asks for api/health only when version.json names a server, and
 // stays local when the health check does not answer.
-import { S, $, el, on, hooks, Q, DEG, setJoint, setView, showAll, showOnly, setVisible, select, viewerApi, drawNow, type Opts } from './engine.ts';
+import { S, $, el, on, hooks, Q, DEG, setJoint, setView, setExplicitCamera, showAll, showOnly, setVisible, select, viewerApi, drawNow, type Opts } from './engine.ts';
 import { sayJoint } from '../../shared/words.ts';
 import { createConnection } from './live-connection.ts';
 import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type TraceRec } from './trace.ts';
@@ -42,6 +42,8 @@ let linkNote: Note, activity: Note, undoOf = 0, metaEl: HTMLElement;
 /** this page's own author id, from the replies to its requests (the trace names every caller by its id) */
 let myActor = '';
 const laterTraces: TraceRec[] = [];
+/** the caller whose views this page follows (POST api/follow), and its label; the activity line's latest caller */
+let following: { actor: string; by: string } | null = null, lastCaller: { actor: string; by: string } | null = null, followNote: HTMLElement;
 
 const shared = (id: string) => pose[id] ?? S.joints.get(id)!.def.neutral;
 const differs = (a: JointValue, b: JointValue) => (Array.isArray(a) ? a.some((x, i) => Math.abs(x - (b as number[])[i]) > 1e-9) : Math.abs(a - (b as number)) > 1e-9);
@@ -66,13 +68,30 @@ function note(buttons: [string, () => void][]): Note {
   return { box, text, buttons: bs };
 }
 /** The activity line: a change by someone else (with Undo of that entry), or why this page's change was not saved. */
-function tell(text: string, undo = 0, line = '') { activity.text.textContent = text; metaEl.textContent = line; undoOf = undo; activity.buttons[0].hidden = !undo; activity.box.hidden = false; }
+function tell(text: string, undo = 0, line = '', caller: { actor: string; by: string } | null = null) {
+  activity.text.textContent = text; metaEl.textContent = line; undoOf = undo; activity.buttons[0].hidden = !undo;
+  lastCaller = caller; showFollow(); activity.box.hidden = false;
+}
+/** the activity line's Follow button (for an agent or a script) and the line under More, Shared scene */
+function showFollow() {
+  const b = activity.buttons[2], on = !!lastCaller && following?.actor === lastCaller.actor;
+  b.hidden = !lastCaller; b.textContent = on ? 'Following' : 'Follow'; b.setAttribute('aria-pressed', String(on));
+  b.title = on ? 'This browser shows the views this agent asks for; click to stop' : 'Show the views this agent asks for in this browser, without giving it a code';
+  followNote.hidden = !following; followNote.firstChild!.textContent = following ? `This browser follows the views of ${following.by}. ` : '';
+}
+async function setFollow(who: { actor: string; by: string } | null) {
+  try {
+    const r = await (await fetch('api/follow', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json' }, body: JSON.stringify({ session: code, actor: who?.actor ?? null }) })).json();
+    if (r?.ok) following = who; else if (who) tell(`Not followed: ${r?.error?.message ?? 'the server did not answer'}.`);
+  } catch { /* no server */ }
+  showFollow();
+}
 /** The activity line for a request by someone else, from its trace record: what happened, and when, how and how long. */
 const ownTrace = (r: TraceRec) => (myActor !== '' && r.actor === myActor) || (r.version !== undefined && mine.has(r.version));
 function tellTrace(r: TraceRec) {
   if (ownTrace(r) || (r.kind === 'person' && r.version === undefined)) return;
   const undid = r.ok && (r.command === 'history.undo' || r.command === 'undo') ? ' undid a change' : '';
-  tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r));
+  tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r), r.kind !== 'person' ? { actor: r.actor, by: r.by } : null);
 }
 function onTrace(r: TraceRec) { addTrace(r); if (out) laterTraces.push(r); else tellTrace(r); }
 function setPreview(on: boolean) { preview = on; linkNote.box.hidden = !on; }
@@ -149,7 +168,8 @@ function view(d: { id: string; args: any; reply?: string }) {
     if (d.id === 'view.select') select(a.id);
     if (d.id === 'look') {
       if (a.all) showAll(); if (a.only) showOnly(a.only); if (a.hide) setVisible(a.hide, false);
-      if (a.view) setView(a.view, { ortho: false });
+      if (Array.isArray(a.camera)) setExplicitCamera(a.camera.map(Number));
+      else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null });
       if (a.select) select(a.select);
     }
   } catch { /* an id this model does not have */ }
@@ -168,7 +188,7 @@ const conn = createConnection({
   url: () => `api/live?session=${code}${version >= 0 ? `&since=${version}` : ''}`,
   event(name, d, resync) {
     if (resync) resyncs++;
-    if (name === 'session') { code = d.code; $('live-code').textContent = code; void backfill(); }
+    if (name === 'session') { code = d.code; $('live-code').textContent = code; void backfill(); if (following) void setFollow(following); }
     else if (name === 'trace') onTrace(d);
     else if (name === 'snapshot') snapshot(d.doc);
     else if (name === 'applied') applied(d);
@@ -190,14 +210,17 @@ export async function initLive() {
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';
-  activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['×', () => { activity.box.hidden = true; }]]);
+  activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
   activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
-  activity.buttons[2].setAttribute('aria-label', 'Close');
+  activity.buttons[3].setAttribute('aria-label', 'Close');
+  followNote = el('p', 'live-follow'); followNote.append(document.createTextNode(''));
+  const stop = el('button', null, 'Stop') as HTMLButtonElement; stop.type = 'button'; stop.addEventListener('click', () => void setFollow(null));
+  followNote.append(stop); followNote.hidden = true;
   metaEl = el('span', 'note-meta'); activity.text.after(metaEl);
   onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
   const traceBtn = el('button', 'trace-open', 'Show the requests (trace)') as HTMLButtonElement; traceBtn.type = 'button';
   traceBtn.addEventListener('click', () => toggleTrace(true));
-  $('live-more').querySelector('.live-code')!.after(traceBtn);
+  $('live-more').querySelector('.live-code')!.after(traceBtn, followNote);
   const box = $('live-more'), more = $('more');
   more.insertBefore(box, more.querySelector('.about')); box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });

@@ -165,7 +165,7 @@ adjustments and the MCP instructions are on the generated page [agent interface]
 | Command | Kind | What it does |
 |---|---|---|
 | `adjust` | edit | move adjustments named in plain words: `{"target": "backrest", "to": "upright"}`, `{"target": "monitor height", "by": "-3 cm"}`, several in `changes`; relative changes worked out on the server; a server-made request name; assumed adjustments moved and marked |
-| `look` | view | a named view, `only` / `hide` / `all`, `select`, and with `picture: true` a JPEG of the browser's view; locally without a code to every page |
+| `look` | view | a named view; `eye` (the operator's view of a person by stature, sitting eye height or one of the three model persons); `camera` (`at`, `look_at`, `fov`: model-frame metres or point names with an offset); `only` / `hide` / `all`, `select`, and with `picture: true` a JPEG of the browser's view; locally without a code to every page, on the public sandbox to the code's browser or to browsers that follow the agent |
 | `measure` | query | the distance between two points named in words ("median eye" to "monitor screen") |
 | `undo` | edit | "last" (default), "mine", a request name or a version |
 | `state` | query | what is moved and the last three changes in a few lines; `detail` "catalogue" or "history" |

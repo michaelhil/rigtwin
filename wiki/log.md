@@ -327,3 +327,11 @@ moves while the view is on. Checked in headless Chromium: as photographed exactl
 ([viewer](50-implementation/viewer.md#known-rough-edges)). Also seen: view commands go only to the browser whose code
 they name, so the owner's own browser does not follow an agent's `look` unless the agent has its code.
 
+**About 20:40** — The owner asked to position the camera anywhere, including "show me at eye height of a 180cm
+person", and to see it in their own browser ([D-54](20-decisions/decision-log.md#d-54)). Built: `look` with `eye`
+and `camera`, the viewer's operator view at any sitting eye height (along the line of the model's eye points, riding
+with the seat), the link parameter `eye=`, and **Follow** on the activity line (`POST api/follow`). A new assumed
+parameter `seat.eye_height_per_stature` (0.455) turns a stature into a sitting eye height. Tried in a real page:
+the 195 cm person's view sits 12.2 cm above the median eye; a camera 1.4 m behind, 0.9 m left and 1.3 m above the
+seat looks at the monitor; Follow switches to "Following". 80 command and server tests, 53 of 53 viewer checks.
+

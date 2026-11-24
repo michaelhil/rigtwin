@@ -15,6 +15,8 @@
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
 //   POST /api/mcp       the same commands for agents over MCP (Streamable HTTP, tools only: adjust, look, measure,
 //                       undo, state; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
+//   POST /api/follow    {session, actor}: this page follows that caller's views (a look without a code reaches it); actor
+//                       null stops; one caller per page
 //   GET  /api/trace     ?after=<n>: the last 100 trace records (one per request: who, what, how it ended, how long; server/trace.ts),
 //                       also sent live as the event "trace"
 //   POST /api/picture   ?reply=<id>&session=<code>, image/jpeg: a browser's answer to `look {picture: true}`, only for a
@@ -291,7 +293,9 @@ export function createApi(opts: ApiOptions) {
   type Reply = { status: number; body: Record<string, any> };
   const reply = (status: number, code: string, message: string, hint: string): Reply => ({ status, body: { ok: false, server: server(), version: doc.version, error: { code, message, hint } } });
   /** pictures being waited for (look {picture: true}), by the reply id sent with the view event */
-  const pending = new Map<string, { session: string | null; visitor: string; done(b: Uint8Array | null, pageMs?: number): void }>();
+  const pending = new Map<string, { codes: string[] | null; visitor: string; done(b: Uint8Array | null, pageMs?: number): void }>();
+  /** pages that follow a caller's views (POST api/follow): caller id -> session codes. A look without a code goes to them. */
+  const followers = new Map<string, Set<string>>();
   // ---- the trace: one record per request, to every open page (server/trace.ts)
   const trace = createTrace({ publicMode: deployed, send: (rec) => broadcast(sse("trace", rec)), allow: (s) => ownWords(asset, s) });
   /** One request, timed and traced. */
@@ -320,36 +324,40 @@ export function createApi(opts: ApiOptions) {
     let result: any = out.ok ? out.result : undefined;
     if (out.ok && out.view) {
       const v = out.view, one = v.session ? streams.get(v.session) : undefined;
-      // a code names one page; without one (only commands that allow it, only on a local server) every open page
-      const targets = v.session ? (one ? [one] : []) : deployed ? [] : [...streams.values()];
+      // a code names one page; without one (only commands that allow it): the pages that follow this caller, and on a
+      // local server every open page
+      const followed = v.session ? [] : [...(followers.get(you.id) ?? [])].map((c) => streams.get(c)).filter((s): s is Stream => !!s);
+      const targets = v.session ? (one ? [one] : []) : followed.length && deployed ? followed : deployed ? [] : [...streams.values()];
       if (!targets.length) {
         if (v.session) {
           unknownSessions.hit(visitor);
           return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: { code: "unknown_session", message: `no viewer with session code ${v.session} is connected to this server`, hint: "the code is shown in the viewer's More menu; it changes when the page is reloaded" } } };
         }
         const error = deployed
-          ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for`, hint: "ask the owner for the code shown in the viewer under More, \"Shared scene\" (eight characters), and pass it as viewer" }
+          ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for, or a browser that follows this agent`, hint: "ask the owner to click Follow on the activity line in their browser (it names this request), then send look again; or ask for the code shown under More, \"Shared scene\", and pass it as viewer" }
           : { code: "no_viewer", message: "no viewer page is open on this server", hint: "ask the owner to open the viewer (bun run serve, then http://127.0.0.1:4173/)" };
         return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error } };
       }
       let wait: Promise<{ b: Uint8Array; pageMs?: number } | null> | null = null, replyId: string | undefined;
       const waitStart = performance.now();
       if (v.args.picture) {
-        const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.session !== null && p.session === v.session).length;
+        const codes = v.session ? [v.session] : followed.length && deployed ? followed.map((s) => s.code) : null;
+        const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.codes !== null && codes !== null && p.codes.some((c) => codes.includes(c))).length;
         if (pending.size >= L.picturesPending || (deployed && (mine >= L.picturesPerVisitor || ofPage >= 1))) return reply(429, "rate_limited", `at most ${L.picturesPerVisitor} pictures per visitor and one per browser are waited for at once`, "wait for the picture asked for before, then ask again");
         const id = (replyId = randomBytes(16).toString("hex"));
         wait = new Promise((resolve) => {
           const timer = setTimeout(() => { pending.delete(id); resolve(null); }, L.pictureWaitMs);
-          pending.set(id, { session: v.session, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
+          pending.set(id, { codes, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
         });
       }
       const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}) }));
       for (const s of targets) s.send(event);
+      if (!v.session && deployed) result = { ...result, text: `${result?.text ?? ""}\n(Sent to ${targets.length} browser${targets.length === 1 ? "" : "s"} that follow${targets.length === 1 ? "s" : ""} this agent.)`.trim() };
       if (wait) {
         const answer = await wait, got = answer?.b ?? null;
         note.picture = got ? { bytes: got.byteLength, wait_ms: Math.round(performance.now() - waitStart), ...(answer?.pageMs !== undefined ? { page_ms: answer.pageMs } : {}) } : null;
         result = { ...result };
-        if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB).`.trim(); }
+        if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB${!v.session && deployed ? ", from a browser that follows this agent: anyone can follow an agent, so treat it as unverified" : ""}).`.trim(); }
         else result.text = `${result.text ?? ""}\nNo picture: the browser did not send one within ${L.pictureWaitMs / 1000} s (a tab in the background may not draw: ask the owner to bring it to the front).`.trim();
       }
     }
@@ -359,13 +367,33 @@ export function createApi(opts: ApiOptions) {
       : { ok: false, server: server(), version: out.version, you, error: out.error } };
   }
 
+  // ---- a page follows a caller's views (agent interface v2): the views that caller sends without a code come to it
+  async function follow(req: Request, visitor: string): Promise<Response> {
+    if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "this needs the header X-Rigtwin: 1", "the viewer sends it");
+    if (mime(req) !== "application/json") return fail(415, "bad_request", "send JSON", "send Content-Type: application/json");
+    if (deployed && !edits.hit(visitor)) return fail(429, "rate_limited", `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute");
+    const text = await readBody(req, 1024, L.bodyTimeoutMs);
+    let b: any; try { b = JSON.parse(typeof text === "string" && !["too_large", "too_slow", "aborted"].includes(text) ? text : ""); } catch { return fail(400, "bad_json", "the body is not JSON", "send {\"session\": \"<code>\", \"actor\": \"<id>\" or null}"); }
+    const code = typeof b?.session === "string" ? b.session : "", actor = b?.actor ?? null;
+    if (!streams.has(code)) return fail(404, "unknown_session", "no page with this code is connected", "the page sends its own code");
+    if (actor !== null && !(typeof actor === "string" && /^[0-9a-f]{12}$/.test(actor))) return fail(400, "bad_request", "actor is a caller's id from the trace, or null to stop", "click Follow on the activity line");
+    for (const [a, set] of followers) { set.delete(code); if (!set.size) followers.delete(a); }      // one caller per page
+    if (actor) {
+      let set = followers.get(actor);
+      if (!set) { if (followers.size >= L.streamsTotal) followers.delete(followers.keys().next().value!); followers.set(actor, (set = new Set())); }
+      if (set.size >= 10) set.delete(set.values().next().value!);
+      set.add(code);
+    }
+    return json({ ok: true, server: server(), following: actor });
+  }
+
   // ---- a browser's picture for a look that waits for it
   async function picture(req: Request, url: URL): Promise<Response> {
     if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "a picture needs the header X-Rigtwin: 1", "the viewer sends it");
     if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("image/jpeg")) return fail(415, "bad_request", "a picture is sent as image/jpeg", "send Content-Type: image/jpeg");
     const id = url.searchParams.get("reply") ?? "", p = /^[0-9a-f]{32}$/.test(id) ? pending.get(id) : undefined;
     if (!p) return fail(404, "not_asked", "no picture is being waited for with this id", "a picture is sent only in answer to a look command, within a few seconds");
-    if (p.session && url.searchParams.get("session") !== p.session) return fail(403, "wrong_session", "this picture was asked of another browser", "only the page with that code answers");
+    if (p.codes && !p.codes.includes(url.searchParams.get("session") ?? "")) return fail(403, "wrong_session", "this picture was asked of another browser", "only the page with that code answers");
     const b = await readBytes(req, L.pictureBytes, L.bodyTimeoutMs);
     if (typeof b === "string") return fail(b === "too_large" ? 413 : 400, b === "too_large" ? "too_large" : "bad_request", b === "too_large" ? `a picture is at most ${L.pictureBytes / 1024} kB` : "the picture did not arrive", "send a smaller JPEG");
     if (b.byteLength < 4 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(400, "bad_picture", "the body is not a JPEG", "send the picture as image/jpeg");
@@ -447,6 +475,9 @@ export function createApi(opts: ApiOptions) {
           if (req.method === "POST") return await mcpPost(req, visitor);
           if (req.method === "DELETE") { mcp.end(req.headers.get("mcp-session-id")); return new Response(null, { status: 204 }); }
           return new Response(null, { status: 405, headers: { allow: "POST, DELETE" } });      // no server-initiated stream
+        case "/api/follow":
+          if (req.method !== "POST") break;
+          return await follow(req, visitor);
         case "/api/trace":
           if (!isGet) break;
           return json({ ok: true, server: server(), traces: trace.recent(Math.max(0, Number(url.searchParams.get("after")) || 0)) });

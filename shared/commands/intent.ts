@@ -22,6 +22,7 @@ import { Refusal, type Schema } from "./schema.ts";
 import { planUndo, GROUP_PATTERN, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
 import { checkId, findIds, idTokens, isAssumed, labelOf, sameSI, tokens, unitOf, VIEW_NAMES } from "./core.ts";
 import type { ManifestJoint } from "../manifest.ts";
+import { worldFrames } from "../kinematics.ts";
 import type { JointValue } from "../pose.ts";
 import { adjWords, jointName, rowName, sayJoint, sayOffset, UNITS, type AdjWord } from "../words.ts";
 
@@ -217,6 +218,12 @@ const oneChange: Schema = {
     by: { ...amount, description: "how much it moves from where it is now: \"-3 cm\", \"+5°\", \"2 cm higher\", or a number (metres or degrees)" },
   },
 };
+const xyz: Schema = { type: "array", items: { type: "number", unit: "m" }, minItems: 3, maxItems: 3 };
+const where: Schema = { anyOf: [
+  { ...xyz, description: "a point in the model frame, metres: x forward (toward the main monitor), y to the operator's left, z up, origin at the centre of the deck's top" },
+  { type: "string", maxLength: 80, description: "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\"" },
+  { type: "object", required: ["point"], properties: { point: { type: "string", maxLength: 80 }, offset: { ...xyz, description: "metres added in the model frame (x forward, y left, z up)" } }, description: "a named point moved by an offset" },
+] };
 const words: Schema = { anyOf: [{ type: "string", maxLength: 80 }, { type: "array", items: { type: "string", maxLength: 80 }, minItems: 1, maxItems: 40 }] };
 const asList = (v: string | string[] | undefined) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]);
 
@@ -241,7 +248,8 @@ function resolvePart(asset: AssetInfo, text: string): string {
   if (Object.hasOwn(GROUP_WORDS, q)) return GROUP_WORDS[q];
   const unit = UNITS.find((u) => norm(u.name) === q);
   if (unit) return unit.parts[0];
-  const hit = findIds(asset, text, "part", 3);
+  const hit = findIds(asset, text, "part", 3), same = hit.find((h) => norm(h.label.replace(/\s*\([^)]*\)/g, "")) === q);
+  if (same) return same.id;                                   // a name given exactly wins
   if (!hit.length) throw new Refusal("unknown_target", `no part matches ${JSON.stringify(text)}`, "use a group (stand, seat, pods, pedals, platform) or a part's name, e.g. \"monitor\", \"left joystick\"");
   if (hit[1] && hit[0].score === hit[1].score) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${hit.slice(0, 3).map((h) => `"${h.label}"`).join(" or ")}`, "name it more exactly");
   return hit[0].id;
@@ -249,7 +257,9 @@ function resolvePart(asset: AssetInfo, text: string): string {
 /** a point to measure from: a reference point (eye, grip, seat reference), a screen or a part, by plain words or id */
 function resolvePoint(asset: AssetInfo, text: string): string {
   if (/^[CDSJ]_[A-Za-z0-9_]{1,60}$/.test(text)) { checkId(asset, text, "point"); return text; }
-  const hit = findIds(asset, text, undefined, 4).filter((h) => h.kind !== "joint");
+  const hit = findIds(asset, text, undefined, 6).filter((h) => h.kind !== "joint"), q = norm(text);
+  const same = hit.find((h) => norm(h.label.replace(/\s*\([^)]*\)/g, "")) === q);
+  if (same) return same.id;                                   // a name given exactly wins
   if (!hit.length) throw new Refusal("unknown_target", `no point matches ${JSON.stringify(text)}`, "e.g. \"median eye\", \"monitor screen\", \"right grip\", \"touchscreen\"");
   if (hit[1] && hit[0].score === hit[1].score) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${hit.slice(0, 3).map((h) => `"${h.label}"`).join(" or ")}`, "name it more exactly (for the eye: small, median or large)");
   return hit[0].id;
@@ -372,15 +382,52 @@ const intent: CommandSpec[] = [
   },
   {
     id: "look", kind: "view", tool: "look", sessionOptional: true,
-    summary: "One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner), what it shows (only, hide, all), what is selected, and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox it needs the code shown under More, \"Shared scene\". Changes nothing in the scene.",
-    args: { type: "object", properties: { view: { type: "string", maxLength: 40, description: "operator (the operator's eye), overview, front, back, left, right, top, front corner" }, only: { ...words, description: "show only these groups or parts: \"stand\", \"seat\", \"monitor\", \"left joystick\"" }, hide: { ...words, description: "hide these groups or parts" }, all: { type: "boolean", description: "show everything again" }, select: { type: "string", maxLength: 80, description: "select a part or group, as a click would (its card opens)" }, picture: { type: "boolean", description: "return a picture of the browser's view after the change" } } },
-    examples: [{ args: { view: "operator", picture: true }, note: "the operator's view, and a picture of it" }, { args: { only: ["stand", "seat"] }, note: "only the monitor stand and the seat" }],
-    run({ asset }, a: { view?: string; only?: string | string[]; hide?: string | string[]; all?: boolean; select?: string; picture?: boolean }) {
+    summary: "One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene.",
+    args: { type: "object", properties: { view: { type: "string", maxLength: 40, description: "operator (the operator's eye), overview, front, back, left, right, top, front corner" },
+      eye: { type: "object", properties: { stature_cm: { type: "number", unit: "cm", minimum: 100, maximum: 230, description: "standing height of the person in the seat" }, sitting_eye_height_cm: { type: "number", unit: "cm", minimum: 50, maximum: 110, description: "eye height above the seat surface" }, person: { type: "string", enum: ["small", "median", "large"], description: "the model's three eye points: a small woman (5th percentile), a median adult, a tall man (95th percentile)" } }, description: "the operator's view from the eye of this person (one of the three); it moves with the seat" },
+      camera: { type: "object", required: ["at"], properties: { at: where, look_at: where, fov: { type: "number", unit: "deg", minimum: 10, maximum: 120, description: "vertical field of view, default 50" } }, description: "the camera anywhere: where it is and what it looks at (default: the middle of the rig)" }, only: { ...words, description: "show only these groups or parts: \"stand\", \"seat\", \"monitor\", \"left joystick\"" }, hide: { ...words, description: "hide these groups or parts" }, all: { type: "boolean", description: "show everything again" }, select: { type: "string", maxLength: 80, description: "select a part or group, as a click would (its card opens)" }, picture: { type: "boolean", description: "return a picture of the browser's view after the change" } } },
+    examples: [
+      { args: { view: "operator", picture: true }, note: "the operator's view, and a picture of it" },
+      { args: { eye: { stature_cm: 180 }, picture: true }, note: "the operator's view at the eye height of a person 180 cm tall" },
+      { args: { camera: { at: { point: "seat", offset: [-1.2, 0.4, 1.0] }, look_at: "monitor screen" } }, note: "a camera 1.2 m behind, 0.4 m left of and 1 m above the seat, looking at the screen" },
+      { args: { only: ["stand", "seat"] }, note: "only the monitor stand and the seat" },
+    ],
+    run({ doc, asset }, a: { view?: string; eye?: { stature_cm?: number; sitting_eye_height_cm?: number; person?: string }; camera?: { at: unknown; look_at?: unknown; fov?: number }; only?: string | string[]; hide?: string | string[]; all?: boolean; select?: string; picture?: boolean }) {
       const out: Record<string, unknown> = {}, said: string[] = [], nameOf = (x: string) => (asset.manifest.groups.includes(x) ? rowName(x, x) : labelOf(asset, x));
-      if (a.view !== undefined) {
+      if (a.view !== undefined && a.eye === undefined && a.camera === undefined) {
         const w = norm(a.view).replace(/^the /, ""), v = VIEW_NAMES.includes(a.view) ? a.view : Object.hasOwn(VIEW_WORDS, w) ? VIEW_WORDS[w] : undefined;
         if (!v) throw new Refusal("invalid_args", `look: ${JSON.stringify(a.view)} is not a view`, `one of: operator, overview, front, back, left, right, top, front corner`);
         out.view = v; said.push(v === "operator" ? "the operator's eye view" : `the ${v.replace("_", " ")} view`);
+      }
+      if (a.eye !== undefined && a.camera !== undefined) throw new Refusal("invalid_args", "look: give eye or camera, not both", "eye puts the camera at a person's eye in the seat; camera puts it anywhere");
+      if (a.eye !== undefined) {
+        const P = asset.manifest.parameters, val = (k: string) => P[k]?.value as number | undefined, hm = val("seat.eye_height_median");
+        const e = a.eye, given = [e.stature_cm, e.sitting_eye_height_cm, e.person].filter((x) => x !== undefined).length;
+        if (given !== 1 || hm === undefined) throw new Refusal("invalid_args", "look eye: give exactly one of stature_cm, sitting_eye_height_cm or person", "e.g. {\"eye\": {\"stature_cm\": 180}}");
+        let h: number, who: string;
+        if (e.person !== undefined) { h = val(`seat.eye_height_${e.person}`)!; who = { small: "a small woman (5th percentile)", median: "a median adult", large: "a tall man (95th percentile)" }[e.person]!; }
+        else if (e.sitting_eye_height_cm !== undefined) { h = e.sitting_eye_height_cm / 100; who = `a person with a sitting eye height of ${r1(e.sitting_eye_height_cm)} cm`; }
+        else { const ratio = val("seat.eye_height_per_stature")!; h = (e.stature_cm! / 100) * ratio; who = `a person ${r1(e.stature_cm!)} cm tall (sitting eye height about ${r1(h * 100)} cm: ${ratio} of stature, an assumed ratio)`; }
+        const d = r1((h - hm) * 100);
+        out.view = "operator"; out.eye = Math.round(h * 1e4) / 1e4;
+        said.push(`the operator's view from the eye of ${who}, ${d === 0 ? "at" : `${Math.abs(d)} cm ${d > 0 ? "above" : "below"}`} the median eye point along the torso line; it moves with the seat`);
+      }
+      if (a.camera !== undefined) {
+        const w = worldFrames(asset.nodes, doc.pose), round = (v: number[]) => v.map((x) => Math.round(x * 1e4) / 1e4);
+        const point = (p: any, what: string): { v: number[]; said: string } => {
+          if (Array.isArray(p)) {
+            if (p.some((x) => !Number.isFinite(x) || Math.abs(x) > 10)) throw new Refusal("invalid_args", `look camera ${what}: coordinates must be metres within 10 m of the deck`, "x forward, y to the operator's left, z up, origin at the centre of the deck's top");
+            return { v: p, said: `(${p.map((x: number) => r1(x * 100) / 100).join(", ")}) m` };
+          }
+          const name = typeof p === "string" ? p : p?.point, id = resolvePoint(asset, name), base = w[id].t, off: number[] = typeof p === "object" && Array.isArray(p.offset) ? p.offset : [0, 0, 0];
+          const label = labelOf(asset, id).replace(/\s*\([^)]*\)/g, "");
+          return { v: base.map((x, i) => x + (off[i] ?? 0)), said: off.some((x) => x) ? `${label} + (${off.map((x) => r1(x * 100) / 100).join(", ")}) m` : label };
+        };
+        const at = point(a.camera.at, "at"), bb = asset.manifest.totals.bbox;
+        const to = a.camera.look_at !== undefined ? point(a.camera.look_at, "look_at") : { v: bb.min.map((x: number, i: number) => (x + bb.max[i]) / 2), said: "the middle of the rig" };
+        if (Math.hypot(...at.v.map((x, i) => x - to.v[i])) < 0.02) throw new Refusal("invalid_args", "look camera: at and look_at are the same point", "look at something else, or move the camera away from it");
+        out.camera = [...round(at.v), ...round(to.v), a.camera.fov ?? 50];
+        said.push(`the camera at ${at.said}, looking at ${to.said}`);
       }
       if (a.all) { out.all = true; said.push("everything shown"); }
       const only = asList(a.only)?.map((x) => resolvePart(asset, x)), hide = asList(a.hide)?.map((x) => resolvePart(asset, x));

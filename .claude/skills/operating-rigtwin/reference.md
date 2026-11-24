@@ -192,7 +192,7 @@ The distance between two points named in plain words or ids ("median eye" to "mo
 
 ### look
 
-One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner), what it shows (only, hide, all), what is selected, and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox it needs the code shown under More, "Shared scene". Changes nothing in the scene. Examples: {"view":"operator","picture":true}: the operator's view, and a picture of it; {"only":["stand","seat"]}: only the monitor stand and the seat
+One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene. Examples: {"view":"operator","picture":true}: the operator's view, and a picture of it; {"eye":{"stature_cm":180},"picture":true}: the operator's view at the eye height of a person 180 cm tall; {"camera":{"at":{"point":"seat","offset":[-1.2,0.4,1]},"look_at":"monitor screen"}}: a camera 1.2 m behind, 0.4 m left of and 1 m above the seat, looking at the screen; {"only":["stand","seat"]}: only the monitor stand and the seat
 
 ```
 {
@@ -202,6 +202,132 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
       "type": "string",
       "maxLength": 40,
       "description": "operator (the operator's eye), overview, front, back, left, right, top, front corner"
+    },
+    "eye": {
+      "type": "object",
+      "properties": {
+        "stature_cm": {
+          "type": "number",
+          "minimum": 100,
+          "maximum": 230,
+          "description": "standing height of the person in the seat (cm)"
+        },
+        "sitting_eye_height_cm": {
+          "type": "number",
+          "minimum": 50,
+          "maximum": 110,
+          "description": "eye height above the seat surface (cm)"
+        },
+        "person": {
+          "type": "string",
+          "enum": [
+            "small",
+            "median",
+            "large"
+          ],
+          "description": "the model's three eye points: a small woman (5th percentile), a median adult, a tall man (95th percentile)"
+        }
+      },
+      "description": "the operator's view from the eye of this person (one of the three); it moves with the seat"
+    },
+    "camera": {
+      "type": "object",
+      "required": [
+        "at"
+      ],
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "description": "(m)"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "a point in the model frame, metres: x forward (toward the main monitor), y to the operator's left, z up, origin at the centre of the deck's top"
+            },
+            {
+              "type": "string",
+              "maxLength": 80,
+              "description": "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
+            },
+            {
+              "type": "object",
+              "required": [
+                "point"
+              ],
+              "properties": {
+                "point": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "offset": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "description": "(m)"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "metres added in the model frame (x forward, y left, z up)"
+                }
+              },
+              "description": "a named point moved by an offset"
+            }
+          ]
+        },
+        "look_at": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "description": "(m)"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "a point in the model frame, metres: x forward (toward the main monitor), y to the operator's left, z up, origin at the centre of the deck's top"
+            },
+            {
+              "type": "string",
+              "maxLength": 80,
+              "description": "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
+            },
+            {
+              "type": "object",
+              "required": [
+                "point"
+              ],
+              "properties": {
+                "point": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "offset": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "description": "(m)"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "metres added in the model frame (x forward, y left, z up)"
+                }
+              },
+              "description": "a named point moved by an offset"
+            }
+          ]
+        },
+        "fov": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 120,
+          "description": "vertical field of view, default 50 (deg)"
+        }
+      },
+      "description": "the camera anywhere: where it is and what it looks at (default: the middle of the rig)"
     },
     "only": {
       "anyOf": [

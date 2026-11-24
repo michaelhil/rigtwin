@@ -157,6 +157,33 @@ describe("undo, state, measure, look", () => {
   });
 });
 
+describe("look: the camera anywhere", () => {
+  test("eye by stature, sitting eye height or person; refused out of range or with camera", () => {
+    const s = fresh(), look = (args: any) => run(s, agent, { id: "look", args });
+    const r = look({ eye: { stature_cm: 180 } });
+    expect(r.view.args).toEqual({ view: "operator", eye: 0.819 });
+    expect(r.result.text).toContain("an assumed ratio");
+    expect(r.result.text).toContain("5.4 cm above the median eye point");
+    expect(look({ eye: { person: "large" } }).view.args.eye).toBe(0.845);
+    expect(look({ eye: { sitting_eye_height_cm: 70 } }).view.args.eye).toBe(0.7);
+    expect(look({ eye: { stature_cm: 300 } }).error.code).toBe("invalid_args");
+    expect(look({ eye: { stature_cm: 180, person: "small" } }).error.code).toBe("invalid_args");
+    expect(look({ eye: { stature_cm: 180 }, camera: { at: [1, 0, 1] } }).error.code).toBe("invalid_args");
+  });
+  test("camera at coordinates or named points with an offset, at the current pose", () => {
+    const s = fresh(), look = (args: any) => run(s, agent, { id: "look", args });
+    expect(look({ camera: { at: [2, -1.5, 1.6], look_at: [0, 0, 1], fov: 60 } }).view.args.camera).toEqual([2, -1.5, 1.6, 0, 0, 1, 60]);
+    const eye = look({ camera: { at: "median eye", look_at: "monitor screen" } }).view.args.camera;
+    expect(eye.slice(0, 3)).toEqual([-0.5534, 0, 1.1549]);
+    run(s, agent, { id: "adjust", args: { target: "seat forward / back", by: "10 cm forward" } });
+    expect(look({ camera: { at: "median eye", look_at: "monitor screen" } }).view.args.camera[0]).toBeCloseTo(-0.4534, 4);   // moved with the seat
+    const off = look({ camera: { at: { point: "seat", offset: [-1.2, 0.4, 1] }, look_at: "monitor screen" } });
+    expect(off.ok).toBe(true); expect(off.result.text).toContain("Seat + (-1.2, 0.4, 1) m");
+    expect(look({ camera: { at: "monitor screen", look_at: "monitor screen" } }).error.code).toBe("invalid_args");
+    expect(look({ camera: { at: [50, 0, 0] } }).error.code).toBe("invalid_args");
+  });
+});
+
 test("the MCP instructions fit Claude Code's limit and carry every adjustment", () => {
   for (const mode of ["local", "deployed"] as const) {
     const t = instructions(asset, mode);

@@ -138,6 +138,8 @@ export const S = {
   joints: new Map<string, JointState>(), hidden: new Set<string>(), mode: 'normal', wire: false, frames: false, hover: null as string | null, selected: null as string | null,
   cameras: null as Record<string, PhotoCamera> | null, photo: null as (PhotoCamera & { name: string }) | null, overlay: 'none', orthoHalf: 1, view: 'three_quarter' as string | null, aspect: null as number | null, hud: false, legend: false,
   shadowDirty: true, outlineDirty: false, helperList: null as THREE.Object3D[] | null,
+  /** the operator's view at another sitting eye height (metres above the seat), or null for the median eye point */
+  eyeHeight: null as number | null,
   /** the person has moved the camera since the last named view was set */
   userMoved: false,
   /** what the current named view was framed on (fit=), if anything */
@@ -360,7 +362,13 @@ export function setJoint(id: string, value: JointValue, opts: { force?: boolean 
 function eyeAndScreenNow(): { e: number[]; t: number[] } {
   S.root.updateMatrixWorld(true);
   const at = (id: string) => { const o = S.objects.get(id); return o ? w2m(o.getWorldPosition(new THREE.Vector3())) : null; };
-  const e = at('D_eye_median') ?? at('D_eye_provisional') ?? S.manifest.datums.find((d) => d.id === 'D_eye_median')?.origin ?? [-0.6, 0, 1.2];
+  let e = at('D_eye_median') ?? at('D_eye_provisional') ?? S.manifest.datums.find((d) => d.id === 'D_eye_median')?.origin ?? [-0.6, 0, 1.2];
+  // another sitting eye height: the eye points of the three sizes lie on one line (the torso line), so a height between
+  // or beyond them is found along it, from the description file's eye heights (seat.eye_height_median, _large)
+  const hm = S.manifest.parameters['seat.eye_height_median']?.value, hl = S.manifest.parameters['seat.eye_height_large']?.value, large = at('D_eye_large');
+  if (S.eyeHeight !== null && typeof hm === 'number' && typeof hl === 'number' && hl !== hm && large) {
+    const k = (S.eyeHeight - hm) / (hl - hm); e = e.map((x, i) => x + k * (large[i] - x));
+  }
   const t = at('S_mon_screen') ?? S.manifest.surfaces.find((s) => s.id === 'S_mon_screen')?.origin ?? [e[0] + 1, 0, e[2]];
   return { e, t };
 }
@@ -452,7 +460,7 @@ function leaveLook() {
 }
 /** In look-around mode: narrow or widen the field of view (the eye stays where it is). */
 export function lookZoom(factor: number) { persp.fov = THREE.MathUtils.clamp(persp.fov * factor, 20, 95); persp.updateProjectionMatrix(); invalidate(); emit('camera'); }
-export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null } = {}) {
+export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null; eye?: number | null } = {}) {
   const v = VIEWS[name];
   if (!v) throw new Error(`unknown view '${name}' (${Object.keys(VIEWS).join(', ')})`);
   leavePhoto(); leaveLook(); anim = null; gesture = 0;
@@ -460,6 +468,7 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
   const wantOrtho = opts.ortho ?? (camera === ortho);
   const { w, h } = frameSize();
   if (v.special) { // operator's eye, where the eye point and the screen are now (they move with the seat and the monitor)
+    S.eyeHeight = opts.eye ?? null;
     const { e, t } = eyeAndScreenNow();
     lastEye = m2w(e);
     // the camera sits exactly on the eye point; the orbit point lies ahead of it on the line of sight, beyond the orbit control's minimum distance (which would otherwise push the camera back)
@@ -491,7 +500,7 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
   }
   controls.target.copy(target); controls.update(); invalidate(); emit('view');
 }
-function setExplicitCamera(a: number[]) {
+export function setExplicitCamera(a: number[]) {
   leavePhoto(); leaveLook(); anim = null; gesture = 0; useCamera(persp);
   persp.fov = a[6] ?? 35; persp.up.set(0, 1, 0); persp.position.copy(m2w(a.slice(0, 3))); controls.target.copy(m2w(a.slice(3, 6)));
   persp.updateProjectionMatrix(); controls.update(); S.view = null; S.userMoved = false; invalidate(); emit('view');
@@ -832,7 +841,7 @@ export async function apply(o: Opts = {}) {
   layout();
   if (o.cam) await setPhotoCamera(String(o.cam), String(o.overlay ?? 'none'));
   else if (o.camera) setExplicitCamera(list(o.camera).map(Number));
-  else setView(String(o.view ?? 'three_quarter'), { ortho: o.proj === 'ortho', fit: o.fit ? list(o.fit) : null });
+  else setView(String(o.view ?? 'three_quarter'), { ortho: o.proj === 'ortho', fit: o.fit ? list(o.fit) : null, eye: o.eye !== undefined && Number.isFinite(Number(o.eye)) ? Number(o.eye) : null });
   if (o.pose) for (const [id, v] of Object.entries(parsePose(o.pose))) {
     const d = S.joints.get(id)?.def; if (!d) throw new Error(`unknown joint '${id}'`);
     setJoint(id, Array.isArray(v) ? v.map((x) => x * DEG) : d.type === 'prismatic' ? v : v * DEG, { force: true });
@@ -851,7 +860,7 @@ export async function apply(o: Opts = {}) {
 }
 export function state() {
   return {
-    view: S.view, photo: S.photo?.name ?? null, overlay: S.overlay, mode: S.mode, projection: camera === ortho ? 'ortho' : 'persp',
+    view: S.view, eye: S.view === 'operator' ? S.eyeHeight : null, photo: S.photo?.name ?? null, overlay: S.overlay, mode: S.mode, projection: camera === ortho ? 'ortho' : 'persp',
     hidden: [...S.hidden], joints: Object.fromEntries([...S.joints].map(([id, j]) => [id, j.value])),
     frame: frameSize(), render: { triangles: S.info.triangles, calls: S.info.calls }, fps,
     camera: { position: w2m(camera.position), target: w2m(controls.target) },
