@@ -298,3 +298,11 @@ numbers and pictures from the browser the owner names).
 step-1 test expected the command list to hold exactly the eight step-1 commands, and on the Linux runner the
 intent tests ran first in the same process and had registered five more (on the laptop the files ran in the
 other order). The test now checks the step-1 commands among the listed ones; both orders pass.
+
+**About 19:36** — The second push (`5e00724`) deployed: agent interface v2 is live. On mightwork.ai the MCP
+endpoint answers `initialize` with the public-sandbox instructions (3,566 characters) and lists the five tools;
+`state`, the refusals (no code, a foreign origin, GET, an unasked picture) behave as tested. Against a real
+browser on the live site: `look {"view": "operator", "picture": true}` with its code came back with a 48 kB picture
+of the operator's view (with the page's "assumed ranges" band), the code was remembered for the next `look`, and
+`adjust` of the monitor's turn by 1° and `undo` of its request left the scene as found. The two-browser check of
+step 1 (`tools/live-site-check.ts`) passed again, nine lines ok.
