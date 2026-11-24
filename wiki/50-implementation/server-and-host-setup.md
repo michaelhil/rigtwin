@@ -1,6 +1,6 @@
 ---
 title: The rigtwin server and its host setup
-tldr: Platform step 1's server on the production host - one hardened Bun service on 127.0.0.1:4190 behind one Caddy route, installed once by a reviewed setup script with fourteen host checks. The setup ran on 2026-11-24 with the owner's yes; the service waits for the first release that contains the server, which arrives with the merge to main.
+tldr: Platform step 1's server on the production host - one hardened Bun service on 127.0.0.1:4190 behind one Caddy route, installed once by a reviewed setup script with fourteen host checks. The setup ran on 2026-11-24 with the owner's yes, and the server has been live since the release of that evening.
 status: living
 updated: 2026-11-24
 tags: [deployment, server, host, security, platform]
@@ -13,7 +13,7 @@ tags: [deployment, server, host, security, platform]
 - **One service**, `rigtwin-server`: the bundled server of the live release, run by Bun 1.4.0 as its own user on `127.0.0.1:4190`, with no network but loopback, one CPU core and 512 MB, and a view of the file system that holds only rigtwin's own folders.
 - **One Caddy route**: `/rigtwin/api/*` goes to the service; `/rigtwin/server/*` answers 404, so the server's code is in the release but never served ([D-42](../20-decisions/decision-log.md#d-42)).
 - **One setup script**, `deploy/setup-server.sh` (`--check`, `--apply`, `--probe`, `--undo`), run as root on the host only with the owner's yes; it restores the old Caddy file on any failure and compares every other site before and after. `deploy/HOST-CHECKS.md` lists the fourteen host checks.
-- **Done on 2026-11-24:** the check, the setup, the probe and the load test H14 (failed once, passed after a fix: each live stream ends after 512 kB, 150 streams in all, [D-46](../20-decisions/decision-log.md#d-46)). **Still to do:** the unit's last change installed and probed again, then the merge to `main`, the checks after the first release, and the live tests ([order and status](#order-of-the-first-rollout)).
+- **Done on 2026-11-24:** the check, the setup, the probe and the load test H14 (failed once, passed after a fix: each live stream ends after 512 kB, 150 streams in all, [D-46](../20-decisions/decision-log.md#d-46)); then the merge to `main`, the first release with the server (commit `ff90f30`), the checks on the host after it, and the two-browser check on the live site ([order and status](#order-of-the-first-rollout)).
 - How a release is built, uploaded and switched is on the [deployment page](deployment.md).
 
 New in platform step 1 ([the platform plan](../30-plan/platform-plan.md)). The server holds the shared
@@ -130,7 +130,7 @@ every automatic deploy would stop at the route probe. So:
    https://mightwork.ai/rigtwin` (ten minutes idle through Caddy, then one change and its undo in the
    public Playground); then the two-browser test on the live site.
 
-**Status on 2026-11-24.** Steps 1 to 3 have run on the host, with the owner's yes:
+**Status on 2026-11-24.** All five steps have run, with the owner's yes for the setup and for the merge:
 
 | Step | What happened |
 |---|---|
@@ -139,11 +139,11 @@ every automatic deploy would stop at the route probe. So:
 | `--apply` | the user and the data folder; Bun 1.4.0 (checksum matched); the Caddy file installed with a backup, validated and reloaded; every other site answered with the same status before and after; `api/health` answers 502 (the route is there, no server yet) and `server/server.js` 404; the unit installed and enabled, retrying every 2 s until a release with `server/` is live |
 | `--probe` (H7) | passed with the unit as installed then (86 settings): serves on loopback, sees only `rigtwin` under `/srv`, writes its data folder, cannot reach the internet |
 | H14 | failed once on the kernel's TCP memory, passed with the stream byte budget ([above](#host-check-h14-live-streams-that-do-not-read)) |
-| The unit, changed after that | the installed unit hid other programs' folders by name; the repository's unit now uses the rule for `/var/lib` that names nothing, and the probe checks `/opt` and `/var/lib` too. It is installed again with `--apply` and probed again before the merge |
-
-Still to do: step 4 (the merge and push, with the owner's yes) and step 5 (the second `--check`, the
-ten-minute idle test, the two-browser test on the live site). Until the merge the service has nothing to
-run, and the public viewer stays a page on its own.
+| The unit, changed after that | the unit installed first hid other programs' folders by name; the repository's unit uses the rule for `/var/lib` that names nothing, and the probe checks `/opt` and `/var/lib` too. It was installed again and probed again (passed), and H14 passed with the final bundle |
+| The merge and the first release (step 4) | the first push to `main` was refused by the deploy's own check on the runner, before any upload: the new command and server tests ran before the build, and the setup script's test used two commands in their macOS form. Fixed in `ff90f30`, which deployed: `api/health` reports revision `ff90f30`, viewer and wiki answer 200 |
+| The host after the release (step 5) | `--check` again: `server/server.js` answers 404 in seven spellings (H12); the unit's exposure score is 1.4, its limits in effect (H8); the service is active |
+| The two-browser check on the live site (step 5) | `bun tools/live-site-check.ts https://mightwork.ai/rigtwin`: passed, nine lines ok in 4.4 s. A turn of the monitor from the command line appeared in both pages with "Claude Code · 5145 — Monitor: turn 1° right"; Undo on one page put it back in both; a slider move in one page appeared in the other and `history.undo` of its version put it back; a view command reached only the named page; nothing was logged; the public scene's pose was the same before and after |
+| The ten-minute idle test (step 5) | started after the release; its result is recorded in the [project log](../log.md) |
 
 The release that goes out is the platform **without the manikin**: no person in the viewer, no Person
 button, no `manikin.json` in the release. The person appears on mightwork.ai only after the owner approves

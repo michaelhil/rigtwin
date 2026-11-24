@@ -1,6 +1,6 @@
 ---
 title: Next steps
-tldr: What to do next, in priority order and by whom: first the rest of platform step 1's rollout (the host is set up; the merge and the live tests remain); then a tape session with four questions for the owner, a planted-error test of the reviewer, the Skill on a second object, small fixes, other rig configurations, the assessment and simulator phases, and routine maintenance.
+tldr: What to do next, in priority order and by whom: platform step 1 is live (2026-11-24) and the owner tries it; then a tape session with four questions for the owner, a planted-error test of the reviewer, the Skill on a second object, small fixes, other rig configurations, the assessment and simulator phases, and routine maintenance.
 status: living
 updated: 2026-11-24
 tags: [next-steps, planning, open-questions]
@@ -10,7 +10,7 @@ tags: [next-steps, planning, open-questions]
 
 ## TL;DR
 
-- **Platform step 1 first** ([the platform plan](../30-plan/platform-plan.md)): it is built on the branch `platform-step1-main` and passes every check. The host setup is done (2026-11-24, with the owner's yes). What remains, in this order: the merge to `main` and push with the owner's yes, the check on the host after the deploy, the ten-minute idle test and the two-browser test on the live site ([below](#0-platform-step-1-the-rollout-and-after)). The public site gets it without the manikin ([D-44](../20-decisions/decision-log.md#d-44)).
+- **Platform step 1 first** ([the platform plan](../30-plan/platform-plan.md)): it is built on the branch `platform-step1-main` and passes every check. It is live on mightwork.ai since 2026-11-24: the host was set up and the merge deployed, both with the owner's yes, and the two-browser check on the live site passed. What remains: the result of the ten-minute idle test, the owner trying it, and the re-forecast of the later steps ([below](#0-platform-step-1-the-rollout-and-after)). The public site gets it without the manikin ([D-44](../20-decisions/decision-log.md#d-44)).
 - **First, a tape session** on the reference rig (owner or client, 30–40 minutes on site) with four questions answered: which of the owner's three figures is right, what really adjusts on the seat, pods and pedals, the touchscreen's model label, and the seat's maker and model. Nothing else improves the model's accuracy as much.
 - **Second, test the reviewer** with planted errors of known size (agents, a few hours). Until then its "accepted" has no stated power.
 - **Third, build a second, different object** with only the Skill, against tape values the owner keeps sealed (owner and agents). That is what turns Skill 0.1.0 into 1.0.
@@ -25,11 +25,11 @@ commands are on the page [the server and its host setup](../50-implementation/se
 | # | Step | Who | Status |
 |---|---|---|---|
 | 1 | The owner's yes to the host setup, after reading `setup-server.sh --check` | owner | **done** 2026-11-24 (the first check moved the port to 4190) |
-| 2 | `setup-server.sh --apply` on the host (the Caddy route and its 404 rule first, then the service), `--probe` (host check H7), the load test (H14) | agents, with the owner's yes | **done** 2026-11-24; the service waits for the first release with the server. The unit's file rules were made generic afterwards: it is installed and probed once more before step 3 |
-| 3 | Merge `platform-step1-main` to `main` and push; the automatic deploy puts the first release with the server live and requires its health check | agents, with the owner's yes | to do |
-| 4 | `setup-server.sh --check` again on the host (H8, H12) | agents | to do, after step 3 |
-| 5 | `bun tools/live-idle-test.ts --url https://mightwork.ai/rigtwin` (10 minutes idle through Caddy, then one change and its undo) | agents | to do |
-| 6 | The two-browser acceptance on the live site | agents | to do |
+| 2 | `setup-server.sh --apply` on the host (the Caddy route and its 404 rule first, then the service), `--probe` (host check H7), the load test (H14) | agents, with the owner's yes | **done** 2026-11-24. The unit's file rules were made generic afterwards; it was installed and probed again (passed) before step 3 |
+| 3 | Merge `platform-step1-main` to `main` and push; the automatic deploy puts the first release with the server live and requires its health check | agents, with the owner's yes | **done** 2026-11-24. The first push was refused by the deploy's own check on the runner (two faults that only show on a fresh Linux checkout; nothing was uploaded); the second (`ff90f30`) deployed, and `api/health` reports that revision |
+| 4 | `setup-server.sh --check` again on the host (H8, H12) | agents | **done** 2026-11-24: the server's code answers 404 in seven spellings; the unit's exposure score is 1.4 with its limits in effect; the service is active |
+| 5 | `bun tools/live-idle-test.ts --url https://mightwork.ai/rigtwin` (10 minutes idle through Caddy, then one change and its undo) | agents | started after the deploy on 2026-11-24; its result is recorded in the [log](../log.md) |
+| 6 | The two-browser acceptance on the live site (`bun tools/live-site-check.ts https://mightwork.ai/rigtwin`) | agents | **done** 2026-11-24: all nine lines ok, and the public scene left as it was found |
 | 7 | The owner tries it: "lower the monitor 3 cm and show me the operator's view", watched on mightwork.ai, then undone | owner (about 15 minutes) | to do |
 | 8 | Re-forecast steps 2–5 with the real hours of step 1 | agents | to do |
 

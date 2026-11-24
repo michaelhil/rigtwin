@@ -277,6 +277,6 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 | No measuring tool that shows a distance with its range | idea [I-21](../60-lessons/ideas.md#i-21) |
 | Pressed or lit states of buttons, key switch and emergency stop are not modelled | provisional in the [asset contract](../40-method/asset-contract.md) |
 | The page has been tested only against the local server; behaviour behind the production server is checked by the deployment step | see [deployment](deployment.md) |
-| The shared scene has not yet run on mightwork.ai: the host is set up (2026-11-24), the first release with the server comes with the merge to `main`, and the ten-minute idle test and the two-browser test on the live site follow it | step 1's rollout, see [the server and its host setup](server-and-host-setup.md#order-of-the-first-rollout) |
+| On mightwork.ai the shared scene is live since 2026-11-24 and passed the two-browser check there (`tools/live-site-check.ts`); it has not been used by several people at once yet | see [the server and its host setup](server-and-host-setup.md#order-of-the-first-rollout) |
 | On the laptop (HTTP/1.1) a browser holds six live streams per host, so a seventh viewer tab waits; the public site uses HTTP/2 | by design |
 | After a server restart or a dropped connection live changes pause until the page has reconnected (a second or more) | accepted |

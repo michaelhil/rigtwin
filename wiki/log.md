@@ -256,3 +256,16 @@ Fixed: those tests run after the build; the harness uses forms that work on both
 end of a failed run's output; the rollback test's stand-in for `mv -T` no longer assumes macOS. Proved in
 a fresh clone without a build, and with stand-ins for GNU `stat` and `sed` that reproduced exactly the 11
 failures before the fix. [Checks](40-method/checks.md).
+
+**About 17:30** — The second push (`ff90f30`) deployed: platform step 1 is live. `api/health` on
+mightwork.ai reports the deployed revision; on the host the server's code answers 404 in seven
+spellings (H12), the unit's exposure score is 1.4 with its limits in effect (H8) and the service is
+active. The ten-minute idle test through Caddy was started.
+
+**About 17:40** — The two-browser check on the live site, with the new `tools/live-site-check.ts`:
+passed (nine lines ok, 4.4 s). A 1° turn of the monitor from the command line appeared in both pages
+with the line "Claude Code · 5145 — Monitor: turn 1° right"; Undo on one page put it back in both; a
+5 mm slider move in one page appeared in the other, and `history.undo` of its version put it back; a
+view command reached only the named page; nothing was logged; the public scene's pose was the same
+before and after (versions 0 to 4). [The server and its host
+setup](50-implementation/server-and-host-setup.md#order-of-the-first-rollout).
