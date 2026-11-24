@@ -170,6 +170,7 @@ adjustments and the MCP instructions are on the generated page [agent interface]
 | `undo` | edit | "last" (default), "mine", a request name or a version |
 | `state` | query | what is moved and the last three changes in a few lines; `detail` "catalogue" or "history" |
 
+`GET api/trace` returns the last 100 trace records (one per request; [D-53](../20-decisions/decision-log.md#d-53)); the viewer shows them under Trace.
 `bun run rig <command> '<json>' --text` prints only the reply's text; `--out <file>` names where a picture goes.
 `bun tools/agent-docs.ts` regenerates the Skill's reference and the agent-interface page (`--check` only compares).
 `bun tools/agent-eval.ts` is the agent benchmark (ten owner requests, headless Claude Code, the step-1 interface as the

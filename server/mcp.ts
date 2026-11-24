@@ -30,6 +30,8 @@ export interface McpOptions {
   instructions(): string;
   revision: string;
   maxSessions: number;
+  /** a client has connected (initialize): for the trace */
+  onConnect?(you: Actor): void;
 }
 
 export function createMcp(o: McpOptions) {
@@ -74,6 +76,7 @@ export function createMcp(o: McpOptions) {
     switch (m.method) {
       case "initialize": {
         const want = m.params?.protocolVersion;
+        o.onConnect?.(actor(sid));
         return rpc(m.id, {
           protocolVersion: PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },

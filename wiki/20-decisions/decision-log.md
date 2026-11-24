@@ -1,6 +1,6 @@
 ---
 title: Decision log
-tldr: 52 decisions, D-01 to D-52, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-52 from agent interface v2 (all 2026-11-23 and 24).
+tldr: 53 decisions, D-01 to D-53, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-53 from agent interface v2 (all 2026-11-23 and 24).
 status: living
 updated: 2026-11-24
 tags: [decisions, log, platform]
@@ -15,7 +15,7 @@ tags: [decisions, log, platform]
 - The most consequential later ruling is D-24: where the photographs disagree with the owner's three scale figures, the photo value is modelled and the owner's figure is recorded as conflicting evidence. A tape measure must settle it.
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
 - Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
-- Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)).
+- Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)); a trace of every request in the browser ([D-53](#d-53)).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
@@ -410,3 +410,12 @@ project's working files.
 - **Decided by / status:** coordinator of agent interface v2 (2026-11-24); in force. A deviation from the proposal, which put it in the asset's spec.
 - **What:** every adjustment rule in `shared/words.ts` now also says what the value 0 means ("backrest vertical", "as photographed", "released") and gives everyday names ("backrest", "seat back"). The catalogue agents read is generated from it and from the description file; a unit test fails when a joint has no rule, no zero or no names.
 - **Reason:** the page's direction words were already there and shared by the page and the commands; adding the meaning to the spec would have changed the description file and the model's checksum for no gain in step 1.5. When the next asset arrives, its words go in the same place.
+
+<a id="d-53"></a>
+### D-53 — A trace of every request in the browser, simpler than Leitbild's inspector
+
+- **Decided by / status:** owner ("would be nice for inspectability ... and also get some timing information ... it could be somewhat simplified here", 2026-11-24); in force.
+- **What:** the server makes one record per request (an MCP tool call, a command from the command line or a script, a page's save, an MCP connect): who, how (MCP, command line, page), the command, what happened in the server's words, ok or refused with its code, the server's time, the time since that caller's previous reply (for an agent its own time between two tool calls, which is where most of the time goes), a picture's size and the page's time to draw it, and the request and the reply as the caller sent and saw them. It goes to every open page as the live-channel event `trace` and is kept in memory only (the last 100; `GET api/trace`). The activity line names the latest request by someone else with a line of times; its Trace button opens the list: one block per caller's run, a row per request with its offset, and each row opens to the request, the reply and an Undo.
+- **Alternatives:** Leitbild's Prompt & Generation Inspector (stored turns and model calls in SQLite, tabs for instructions and messages, swim lanes, costs; rejected as more than this needs: rigtwin sees no model calls, only tool calls, so the gap between two calls stands in for the model's time); showing only edits (the step-1 activity line; rejected: queries, views, refusals and timing were invisible).
+- **Consequences:** on the public sandbox a record carries no text a caller wrote: arguments are shown as ids, numbers and words of the model's own vocabulary ("backrest", "upright", "-3 cm"), anything else as ‹text›; a refusal by its code and hint; only request names the server made. At most 8 records a second are sent there (the rest are counted). Nothing is written to disk.
+

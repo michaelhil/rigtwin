@@ -84,7 +84,7 @@ unit tests in C-75 (`shared/commands/intent.test.ts`: plain-word targets and the
 directions, `adjust`, `undo`, `state`, `measure`, `look`, every joint with its meaning, the MCP instructions within
 4,096 characters), the MCP endpoint's tests in C-76 (`server/mcp.test.ts`: initialize, the five tools, a call that
 reaches the live channel, refusals as tool errors, `look` to every local page or to the remembered code, a picture
-sent back, the picture endpoint's checks, foreign origins, the deployed edit limits for tool calls), and one new check:
+sent back, the picture endpoint's checks, foreign origins, the deployed edit limits for tool calls; and `server/trace.test.ts`: a record per request over MCP and the command line with its times, the live event, `api/trace`, and on the public sandbox no text a caller wrote), and one new check:
 
 | Id | Name as printed | Verifies, and how | The failure it exists to catch | Result |
 |---|---|---|---|---|

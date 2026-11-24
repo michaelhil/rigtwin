@@ -246,6 +246,17 @@ reply id: the page finishes any camera glide and draws at once (`drawNow()`, whi
 makes a JPEG of the picture "Save picture" would make, smaller and coarser until it is at most 60 kB
 (`viewer.pictureJpeg()`), and posts it to `api/picture` with the id and its own code. Nothing else changes on the page.
 
+**The trace** ([D-53](../20-decisions/decision-log.md#d-53)). Since the trace, the activity line names the latest
+request by anyone else, not only changes: "Claude Code · a3f5 — Monitor: tilt as photographed → 4° down", with a line
+of times under it ("19:53:35 · adjust (MCP) · server 2 ms · 2.2 s since its last request"), Undo for a change, and
+**Trace**. Trace (also under More → Shared scene) opens a list on the right of the 3D view
+(`viewer/src/trace.ts`): one block per caller's run, headed with the number of requests, the time from first to last,
+the server's time and the agent's own time; a row per request with its offset, ✓ or ! (refused, amber), the command,
+the server's words and the server's time, and between two requests of an agent the time on its side. A row opens to
+the request as sent, the reply as the caller saw it, a picture's size with the page's time to draw it and the wait, and
+for a change its version, request name and Undo. "pages too" adds the pages' own saves; Copy puts the shown records
+on the clipboard as JSON. The page keeps the last 200 and fills in what it missed from `api/trace` when it connects.
+
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
 or the network comes back; one resync after each reconnect, asking for the changes after the version it

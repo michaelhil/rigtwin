@@ -439,7 +439,7 @@ function picture(): string { return pictureCanvas().toDataURL('image/png'); }
 /** The same picture as a JPEG of at most `maxBytes` (for an agent's look {picture: true}): smaller and coarser until it fits. */
 async function pictureJpeg(maxBytes: number): Promise<Blob | null> {
   const full = pictureCanvas();
-  for (const [width, q] of [[1280, 0.8], [1024, 0.72], [880, 0.62], [720, 0.55], [560, 0.5], [420, 0.45]] as const) {
+  for (const [width, q] of [[1024, 0.72], [800, 0.62], [640, 0.55], [480, 0.5]] as const) {      // 1024 px usually fits in 60 kB
     const k = Math.min(1, width / full.width), c = document.createElement('canvas');
     c.width = Math.round(full.width * k); c.height = Math.round(full.height * k);
     c.getContext('2d')!.drawImage(full, 0, 0, c.width, c.height);

@@ -306,3 +306,13 @@ browser on the live site: `look {"view": "operator", "picture": true}` with its 
 of the operator's view (with the page's "assumed ranges" band), the code was remembered for the next `look`, and
 `adjust` of the monitor's turn by 1° and `undo` of its request left the scene as found. The two-browser check of
 step 1 (`tools/live-site-check.ts`) passed again, nine lines ok.
+
+**About 20:00** — The owner asked what the browser could show about an agent's requests, "for inspectability"
+and with timing, as in Leitbild but simpler. A survey of Leitbild's inspector (stored turns and model calls,
+tabs, swim lanes, costs) gave the shape to keep: one list per run, each call with its offset, duration and outcome,
+the request and the result on demand, fed live and kept in memory. Built ([D-53](20-decisions/decision-log.md#d-53)):
+`server/trace.ts` (a record per request, the event `trace`, `api/trace`), the activity line with its line of times
+and Trace, `viewer/src/trace.ts` (the list), tests in `server/trace.test.ts`. Tried in a real page: a run of an
+agent shows "connect, state, adjust, look, measure" with "2.2 s on the agent's side" between calls and 1–2 ms on the
+server's; a look with a picture shows how long the page took to draw and pack it (about 0.6 s in the in-app browser).
+

@@ -136,6 +136,29 @@ export function parseAmount(a: Adjustment, given: number | string, mode: "to" | 
   return dir ? { si: a.neutral + si, relative: false } : { si, relative: false };
 }
 
+// ------------------------------------------------------------------------------------------- the vocabulary
+const vocabCache = new WeakMap<AssetInfo, Set<string>>();
+/** Every word of the model's own vocabulary (adjustment names and their other names, directions, named positions, views,
+ *  groups, parts and reference points, units). The public trace shows a caller's text only when it is made of these. */
+export function vocabulary(asset: AssetInfo): Set<string> {
+  let v = vocabCache.get(asset);
+  if (v) return v;
+  v = new Set(["cm", "mm", "m", "deg", "degree", "degrees", "rad", "by", "to", "the", "a", "of", "s"]);
+  const add = (t: string) => { for (const w of tokens(t)) v!.add(w); };
+  for (const a of adjustments(asset)) { for (const w of [...a.main, ...a.extra]) v.add(w); add(`${a.name} ${a.plus} ${a.minus} ${a.words.zero}`); }
+  for (const w of [...NEUTRAL, ...MAX, ...MIN, ...Object.keys(VIEW_WORDS), ...Object.keys(GROUP_WORDS), ...UNITS.map((u) => u.name), ...VIEW_NAMES]) add(w);
+  for (const c of [...asset.manifest.components, ...asset.manifest.surfaces]) add(labelOf(asset, c.id));
+  for (const d of asset.manifest.datums) add(d.label);
+  vocabCache.set(asset, v);
+  return v;
+}
+/** true when every word of `s` is a number or a word of the vocabulary */
+export function ownWords(asset: AssetInfo, s: string): boolean {
+  if (s.length > 80) return false;
+  const v = vocabulary(asset), words = s.toLowerCase().replace(/−/g, "-").split(/[^a-z0-9.+-]+/).filter(Boolean);
+  return words.length > 0 && words.every((w) => /^[+-]?\d*([.,]\d+)?$/.test(w) || v.has(w));
+}
+
 // ------------------------------------------------------------------------------------------- the catalogue
 /** One line per adjustment, for agents: name, travel, what 0 is, the directions, the evidence, other names. */
 export function catalogue(asset: AssetInfo, compact = false): string[] {
@@ -309,7 +332,7 @@ const intent: CommandSpec[] = [
       }
       const pose = { ...doc.pose }; for (const c of plan.changes) pose[c.joint] = c.after as JointValue;
       const lines = changeLines(asset, plan.changes);
-      return { result: { text: [`Undid ${about}:`, ...lines].join("\n"), undid: plan.undoes, also_moved: movedLines(asset, pose, new Set(plan.changes.map((c) => c.joint))) }, changes: plan.changes, undoes: plan.undoes };
+      return { result: { text: [`Undid ${about}:`, ...lines].join("\n"), undid: plan.undoes, lines, also_moved: movedLines(asset, pose, new Set(plan.changes.map((c) => c.joint))) }, changes: plan.changes, undoes: plan.undoes };
     },
     finish(r: any, done) {
       return { ...r, text: `${r.text}\n${done.recorded === null ? "Nothing changed." : `Version ${done.recorded}.`}\n${r.also_moved.length ? `Still moved: ${r.also_moved.join("; ")}.` : "Everything is as photographed now."}`, version: done.recorded };

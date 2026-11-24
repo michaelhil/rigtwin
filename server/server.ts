@@ -15,6 +15,8 @@
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
 //   POST /api/mcp       the same commands for agents over MCP (Streamable HTTP, tools only: adjust, look, measure,
 //                       undo, state; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
+//   GET  /api/trace     ?after=<n>: the last 100 trace records (one per request: who, what, how it ended, how long; server/trace.ts),
+//                       also sent live as the event "trace"
 //   POST /api/picture   ?reply=<id>&session=<code>, image/jpeg: a browser's answer to `look {picture: true}`, only for a
 //                       picture that is being waited for (the id is in the view event), at most 60 kB
 //
@@ -45,9 +47,10 @@ import { assetFromFiles, runCommand, SESSION_ALPHABET, SESSION_PATTERN } from ".
 import { get, list, type AssetInfo } from "../shared/commands/registry.ts";
 import { entriesAfter, newDoc, parseDoc, reconcile, SCENE_FORMAT, type Actor, type SceneDoc } from "../shared/commands/doc.ts";
 import type { CommandError } from "../shared/commands/schema.ts";
-import "../shared/commands/intent.ts";                       // registers adjust, look, measure, undo, state
+import { ownWords } from "../shared/commands/intent.ts";     // also registers adjust, look, measure, undo, state
 import { instructions as agentInstructions } from "../shared/commands/agent-docs.ts";
 import { createMcp } from "./mcp.ts";
+import { createTrace } from "./trace.ts";
 
 export interface ApiOptions {
   dataDir: string; assetDir: string; mode: "local" | "deployed"; revision: string;
@@ -288,8 +291,20 @@ export function createApi(opts: ApiOptions) {
   type Reply = { status: number; body: Record<string, any> };
   const reply = (status: number, code: string, message: string, hint: string): Reply => ({ status, body: { ok: false, server: server(), version: doc.version, error: { code, message, hint } } });
   /** pictures being waited for (look {picture: true}), by the reply id sent with the view event */
-  const pending = new Map<string, { session: string | null; visitor: string; done(b: Uint8Array | null): void }>();
-  async function exec(you: Actor, visitor: string, wire: Record<string, unknown>): Promise<Reply> {
+  const pending = new Map<string, { session: string | null; visitor: string; done(b: Uint8Array | null, pageMs?: number): void }>();
+  // ---- the trace: one record per request, to every open page (server/trace.ts)
+  const trace = createTrace({ publicMode: deployed, send: (rec) => broadcast(sse("trace", rec)), allow: (s) => ownWords(asset, s) });
+  /** One request, timed and traced. */
+  async function exec(you: Actor, visitor: string, wire: Record<string, unknown>, via: "mcp" | "http" = "http"): Promise<Reply> {
+    const at = Date.now(), t0 = performance.now(), note: { picture?: { bytes: number; wait_ms: number; page_ms?: number } | null; entry?: any } = {};
+    const r = await run(you, visitor, wire, note);
+    try {
+      trace.record({ at, ms: performance.now() - t0, you, via, command: String(wire.id ?? "?").slice(0, 40), args: wire.args, session: typeof wire.session === "string" ? wire.session : undefined,
+        ok: r.body.ok === true, result: r.body.result, error: r.body.error, entry: note.entry, picture: note.picture });
+    } catch (e: any) { console.error("trace:", e?.message ?? e); }
+    return r;
+  }
+  async function run(you: Actor, visitor: string, wire: Record<string, unknown>, note: { picture?: { bytes: number; wait_ms: number; page_ms?: number } | null; entry?: any }): Promise<Reply> {
     const kind = get(String(wire.id))?.kind ?? "query";
     if (deployed) {
       if (kind === "query" ? !queries.hit(visitor) : !edits.hit(visitor)) return reply(429, "rate_limited", kind === "query" ? `at most ${L.queriesPerMinutePerVisitor} queries a minute per visitor` : `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute and send fewer commands");
@@ -317,26 +332,28 @@ export function createApi(opts: ApiOptions) {
           : { code: "no_viewer", message: "no viewer page is open on this server", hint: "ask the owner to open the viewer (bun run serve, then http://127.0.0.1:4173/)" };
         return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error } };
       }
-      let wait: Promise<Uint8Array | null> | null = null, replyId: string | undefined;
+      let wait: Promise<{ b: Uint8Array; pageMs?: number } | null> | null = null, replyId: string | undefined;
+      const waitStart = performance.now();
       if (v.args.picture) {
         const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.session !== null && p.session === v.session).length;
         if (pending.size >= L.picturesPending || (deployed && (mine >= L.picturesPerVisitor || ofPage >= 1))) return reply(429, "rate_limited", `at most ${L.picturesPerVisitor} pictures per visitor and one per browser are waited for at once`, "wait for the picture asked for before, then ask again");
         const id = (replyId = randomBytes(16).toString("hex"));
         wait = new Promise((resolve) => {
           const timer = setTimeout(() => { pending.delete(id); resolve(null); }, L.pictureWaitMs);
-          pending.set(id, { session: v.session, visitor, done(b) { clearTimeout(timer); pending.delete(id); resolve(b); } });
+          pending.set(id, { session: v.session, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
         });
       }
       const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}) }));
       for (const s of targets) s.send(event);
       if (wait) {
-        const got = await wait;
+        const answer = await wait, got = answer?.b ?? null;
+        note.picture = got ? { bytes: got.byteLength, wait_ms: Math.round(performance.now() - waitStart), ...(answer?.pageMs !== undefined ? { page_ms: answer.pageMs } : {}) } : null;
         result = { ...result };
         if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB).`.trim(); }
         else result.text = `${result.text ?? ""}\nNo picture: the browser did not send one within ${L.pictureWaitMs / 1000} s (a tab in the background may not draw: ask the owner to bring it to the front).`.trim();
       }
     }
-    if (out.ok && out.entry) { save(); broadcast(sse("applied", out.entry, out.entry.version)); }
+    if (out.ok && out.entry) { save(); broadcast(sse("applied", out.entry, out.entry.version)); note.entry = out.entry; }
     return { status: 200, body: out.ok
       ? { ok: true, server: server(), version: out.version, you, ...(kind === "edit" ? { recorded: out.entry?.version ?? null } : {}), result }
       : { ok: false, server: server(), version: out.version, you, error: out.error } };
@@ -352,13 +369,15 @@ export function createApi(opts: ApiOptions) {
     const b = await readBytes(req, L.pictureBytes, L.bodyTimeoutMs);
     if (typeof b === "string") return fail(b === "too_large" ? 413 : 400, b === "too_large" ? "too_large" : "bad_request", b === "too_large" ? `a picture is at most ${L.pictureBytes / 1024} kB` : "the picture did not arrive", "send a smaller JPEG");
     if (b.byteLength < 4 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(400, "bad_picture", "the body is not a JPEG", "send the picture as image/jpeg");
-    p.done(b);
+    const pageMs = Number(req.headers.get("x-rigtwin-ms"));
+    p.done(b, Number.isFinite(pageMs) && pageMs >= 0 && pageMs < 60_000 ? Math.round(pageMs) : undefined);
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
 
   // ---- MCP (agent interface v2)
   const mcp = createMcp({
-    exec: async (you, wire, visitor) => (await exec(you, visitor, wire as any)).body as any,
+    exec: async (you, wire, visitor) => (await exec(you, visitor, wire as any, "mcp")).body as any,
+    onConnect: (you) => trace.record({ at: Date.now(), ms: 0, you, via: "mcp", command: "connect", args: {}, ok: true, result: { text: "connected over MCP" } }),
     secret, instructions: () => agentInstructions(asset, opts.mode), revision: opts.revision, maxSessions: L.mcpSessions,
   });
   /** an Origin a page of this server would send: exactly https://mightwork.ai deployed, exactly http://<Host> locally */
@@ -428,12 +447,15 @@ export function createApi(opts: ApiOptions) {
           if (req.method === "POST") return await mcpPost(req, visitor);
           if (req.method === "DELETE") { mcp.end(req.headers.get("mcp-session-id")); return new Response(null, { status: 204 }); }
           return new Response(null, { status: 405, headers: { allow: "POST, DELETE" } });      // no server-initiated stream
+        case "/api/trace":
+          if (!isGet) break;
+          return json({ ok: true, server: server(), traces: trace.recent(Math.max(0, Number(url.searchParams.get("after")) || 0)) });
         case "/api/picture":
           if (req.method !== "POST") break;
           if (deployed && !queries.hit(visitor)) return fail(429, "rate_limited", `at most ${L.queriesPerMinutePerVisitor} requests a minute per visitor`, "wait a minute");
           return await picture(req, url);
         default:
-          return fail(404, "not_found", `no ${path} here`, "the API has /api/health, /api/commands, /api/command (POST), /api/live, /api/mcp (POST) and /api/picture (POST)");
+          return fail(404, "not_found", `no ${path} here`, "the API has /api/health, /api/commands, /api/command (POST), /api/live, /api/trace, /api/mcp (POST) and /api/picture (POST)");
       }
       return fail(405, "bad_method", `${req.method} is not used for ${path}`, path === "/api/command" || path === "/api/picture" ? "use POST" : "use GET");
     } catch (e: any) {

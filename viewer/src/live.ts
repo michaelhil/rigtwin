@@ -20,6 +20,7 @@
 import { S, $, el, on, hooks, Q, DEG, setJoint, setView, showAll, showOnly, setVisible, select, viewerApi, drawNow, type Opts } from './engine.ts';
 import { sayJoint } from '../../shared/words.ts';
 import { createConnection } from './live-connection.ts';
+import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type TraceRec } from './trace.ts';
 import type { JointValue } from '../../shared/pose.ts';
 
 type Change = { joint: string; after: JointValue | null };
@@ -37,7 +38,10 @@ const mine = new Set<number>(), later: Entry[] = [];
 let out = 0, resyncs = 0;
 /** base: the version the unsaved local change is based on; awaiting: the version of our last save, until the stream has it */
 let base: number | null = null, awaiting = 0, timer = 0, busy = false, again = false, down = false, remote = false, applying = false, linked = false, preview = false;
-let linkNote: Note, activity: Note, undoOf = 0;
+let linkNote: Note, activity: Note, undoOf = 0, metaEl: HTMLElement;
+/** this page's own author id, from the replies to its requests (the trace names every caller by its id) */
+let myActor = '';
+const laterTraces: TraceRec[] = [];
 
 const shared = (id: string) => pose[id] ?? S.joints.get(id)!.def.neutral;
 const differs = (a: JointValue, b: JointValue) => (Array.isArray(a) ? a.some((x, i) => Math.abs(x - (b as number[])[i]) > 1e-9) : Math.abs(a - (b as number)) > 1e-9);
@@ -62,7 +66,15 @@ function note(buttons: [string, () => void][]): Note {
   return { box, text, buttons: bs };
 }
 /** The activity line: a change by someone else (with Undo of that entry), or why this page's change was not saved. */
-function tell(text: string, undo = 0) { activity.text.textContent = text; undoOf = undo; activity.buttons[0].hidden = !undo; activity.box.hidden = false; }
+function tell(text: string, undo = 0, line = '') { activity.text.textContent = text; metaEl.textContent = line; undoOf = undo; activity.buttons[0].hidden = !undo; activity.box.hidden = false; }
+/** The activity line for a request by someone else, from its trace record: what happened, and when, how and how long. */
+const ownTrace = (r: TraceRec) => (myActor !== '' && r.actor === myActor) || (r.version !== undefined && mine.has(r.version));
+function tellTrace(r: TraceRec) {
+  if (ownTrace(r) || (r.kind === 'person' && r.version === undefined)) return;
+  const undid = r.ok && (r.command === 'history.undo' || r.command === 'undo') ? ' undid a change' : '';
+  tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r));
+}
+function onTrace(r: TraceRec) { addTrace(r); if (out) laterTraces.push(r); else tellTrace(r); }
 function setPreview(on: boolean) { preview = on; linkNote.box.hidden = !on; }
 
 // ---------------------------------------------------------------------------------------------- commands
@@ -71,7 +83,8 @@ async function send(body: object): Promise<any> {
   let r: any = null;
   try { r = await (await fetch('api/command', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json', 'x-rigtwin-client': 'person', 'x-rigtwin-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
   if (typeof r?.recorded === 'number') mine.add(r.recorded);
-  if (--out === 0) for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version);
+  if (typeof r?.you?.id === 'string' && !myActor) { myActor = r.you.id; setTraceOwner(myActor); }
+  if (--out === 0) { for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version); for (const t of laterTraces.splice(0)) tellTrace(t); }
   return r;
 }
 const schedule = () => { clearTimeout(timer); timer = window.setTimeout(save, 300); };
@@ -144,23 +157,29 @@ function view(d: { id: string; args: any; reply?: string }) {
 }
 async function sendPicture(reply: string) {
   try {
+    const t0 = performance.now();
     drawNow();
     const b = await viewerApi.pictureJpeg(60 * 1024);
     if (!b) return;
-    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'image/jpeg' }, body: b });
+    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'image/jpeg', 'x-rigtwin-ms': String(Math.round(performance.now() - t0)) }, body: b });
   } catch { /* the agent hears "no picture" when its wait ends */ }
 }
 const conn = createConnection({
   url: () => `api/live?session=${code}${version >= 0 ? `&since=${version}` : ''}`,
   event(name, d, resync) {
     if (resync) resyncs++;
-    if (name === 'session') { code = d.code; $('live-code').textContent = code; }
+    if (name === 'session') { code = d.code; $('live-code').textContent = code; void backfill(); }
+    else if (name === 'trace') onTrace(d);
     else if (name === 'snapshot') snapshot(d.doc);
     else if (name === 'applied') applied(d);
     else if (name === 'view') view(d);
   },
 }, { EventSource, window, document, setTimeout: (f, ms) => window.setTimeout(f, ms), clearTimeout: (t) => window.clearTimeout(t as number), now: () => Date.now() });
 
+/** Requests the page missed while it was not connected (the server keeps the last 100). */
+async function backfill() {
+  try { const t = await (await fetch(`api/trace?after=${lastSeen()}`, { cache: 'no-store' })).json(); for (const r of t?.traces ?? []) addTrace(r); } catch { /* an older server: no trace */ }
+}
 export async function initLive() {
   linked = Q.has('pose');
   try {
@@ -171,8 +190,14 @@ export async function initLive() {
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';
-  activity = note([['Undo', undo], ['×', () => { activity.box.hidden = true; }]]);
-  activity.buttons[1].setAttribute('aria-label', 'Close');
+  activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['×', () => { activity.box.hidden = true; }]]);
+  activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
+  activity.buttons[2].setAttribute('aria-label', 'Close');
+  metaEl = el('span', 'note-meta'); activity.text.after(metaEl);
+  onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
+  const traceBtn = el('button', 'trace-open', 'Show the requests (trace)') as HTMLButtonElement; traceBtn.type = 'button';
+  traceBtn.addEventListener('click', () => toggleTrace(true));
+  $('live-more').querySelector('.live-code')!.after(traceBtn);
   const box = $('live-more'), more = $('more');
   more.insertBefore(box, more.querySelector('.about')); box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });
