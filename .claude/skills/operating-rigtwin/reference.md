@@ -251,7 +251,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
             {
               "type": "string",
               "maxLength": 80,
-              "description": "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
+              "description": "a reference point, screen or part by name (a part means its middle): \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
             },
             {
               "type": "object",
@@ -293,7 +293,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
             {
               "type": "string",
               "maxLength": 80,
-              "description": "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
+              "description": "a reference point, screen or part by name (a part means its middle): \"median eye\", \"monitor screen\", \"seat\", \"right pedal\""
             },
             {
               "type": "object",

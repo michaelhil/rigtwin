@@ -221,7 +221,7 @@ const oneChange: Schema = {
 const xyz: Schema = { type: "array", items: { type: "number", unit: "m" }, minItems: 3, maxItems: 3 };
 const where: Schema = { anyOf: [
   { ...xyz, description: "a point in the model frame, metres: x forward (toward the main monitor), y to the operator's left, z up, origin at the centre of the deck's top" },
-  { type: "string", maxLength: 80, description: "a reference point, screen or part by name: \"median eye\", \"monitor screen\", \"seat\", \"right pedal\"" },
+  { type: "string", maxLength: 80, description: "a reference point, screen or part by name (a part means its middle): \"median eye\", \"monitor screen\", \"seat\", \"right pedal\"" },
   { type: "object", required: ["point"], properties: { point: { type: "string", maxLength: 80 }, offset: { ...xyz, description: "metres added in the model frame (x forward, y left, z up)" } }, description: "a named point moved by an offset" },
 ] };
 const words: Schema = { anyOf: [{ type: "string", maxLength: 80 }, { type: "array", items: { type: "string", maxLength: 80 }, minItems: 1, maxItems: 40 }] };
@@ -413,13 +413,25 @@ const intent: CommandSpec[] = [
         said.push(`the operator's view from the eye of ${who}, ${d === 0 ? "at" : `${Math.abs(d)} cm ${d > 0 ? "above" : "below"}`} the median eye point along the torso line; it moves with the seat`);
       }
       if (a.camera !== undefined) {
-        const w = worldFrames(asset.nodes, doc.pose), round = (v: number[]) => v.map((x) => Math.round(x * 1e4) / 1e4);
+        const w = worldFrames(asset.nodes, doc.pose), rest = worldFrames(asset.nodes, {}), round = (v: number[]) => v.map((x) => Math.round(x * 1e4) / 1e4);
+        // a part means its middle (the box around it and everything under it), moved as its frame has moved from the
+        // photographed pose; a reference point or a screen is the point itself
+        const parts = [...asset.manifest.components, ...asset.manifest.surfaces];
+        const middle = (id: string): number[] => {
+          const c = parts.find((x) => x.id === id);
+          if (!c || id.startsWith("S_")) return w[id].t;
+          const under = (x: { id: string; parent: string | null }): boolean => x.id === id || (x.parent !== null && under(parts.find((p) => p.id === x.parent) ?? { id: "", parent: null }));
+          const boxes = parts.filter((x) => x.bbox && under(x)).map((x) => x.bbox!);
+          if (!boxes.length) return w[id].t;
+          const lo = [0, 1, 2].map((k) => Math.min(...boxes.map((b) => b.min[k]))), hi = [0, 1, 2].map((k) => Math.max(...boxes.map((b) => b.max[k])));
+          return lo.map((x, k) => (x + hi[k]) / 2 + w[id].t[k] - rest[id].t[k]);
+        };
         const point = (p: any, what: string): { v: number[]; said: string } => {
           if (Array.isArray(p)) {
             if (p.some((x) => !Number.isFinite(x) || Math.abs(x) > 10)) throw new Refusal("invalid_args", `look camera ${what}: coordinates must be metres within 10 m of the deck`, "x forward, y to the operator's left, z up, origin at the centre of the deck's top");
             return { v: p, said: `(${p.map((x: number) => r1(x * 100) / 100).join(", ")}) m` };
           }
-          const name = typeof p === "string" ? p : p?.point, id = resolvePoint(asset, name), base = w[id].t, off: number[] = typeof p === "object" && Array.isArray(p.offset) ? p.offset : [0, 0, 0];
+          const name = typeof p === "string" ? p : p?.point, id = resolvePoint(asset, name), base = middle(id), off: number[] = typeof p === "object" && Array.isArray(p.offset) ? p.offset : [0, 0, 0];
           const label = labelOf(asset, id).replace(/\s*\([^)]*\)/g, "");
           return { v: base.map((x, i) => x + (off[i] ?? 0)), said: off.some((x) => x) ? `${label} + (${off.map((x) => r1(x * 100) / 100).join(", ")}) m` : label };
         };

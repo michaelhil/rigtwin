@@ -179,6 +179,8 @@ describe("look: the camera anywhere", () => {
     expect(look({ camera: { at: "median eye", look_at: "monitor screen" } }).view.args.camera[0]).toBeCloseTo(-0.4534, 4);   // moved with the seat
     const off = look({ camera: { at: { point: "seat", offset: [-1.2, 0.4, 1] }, look_at: "monitor screen" } });
     expect(off.ok).toBe(true); expect(off.result.text).toContain("Seat + (-1.2, 0.4, 1) m");
+    const seat = look({ camera: { at: [-2, 0, 1.5], look_at: "seat" } }).view.args.camera;       // a part means its middle, not its mount on the deck
+    expect(seat[5]).toBeGreaterThan(0.4); expect(seat[3]).toBeGreaterThan(-0.4);
     expect(look({ camera: { at: "monitor screen", look_at: "monitor screen" } }).error.code).toBe("invalid_args");
     expect(look({ camera: { at: [50, 0, 0] } }).error.code).toBe("invalid_args");
   });

@@ -335,3 +335,10 @@ parameter `seat.eye_height_per_stature` (0.455) turns a stature into a sitting e
 the 195 cm person's view sits 12.2 cm above the median eye; a camera 1.4 m behind, 0.9 m left and 1.3 m above the
 seat looks at the monitor; Follow switches to "Following". 80 command and server tests, 53 of 53 viewer checks.
 
+
+**About 20:50** — Deployed (`18e7e05`) and tried on the live site with the browser pane as the owner's browser: a
+`look {"eye": {"stature_cm": 180}}` without a code was refused with `needs_viewer` and showed on the activity line
+with Follow; after Follow the same request reached that browser (link `view=operator&eye=0.819`) and its picture
+came back marked as from a following browser. A camera "looking at Seat" aimed at the seat's mount point on the
+deck, so the picture showed mostly floor: a part named as a camera point now means its middle (the box around it
+and its parts, moved with its frame).
