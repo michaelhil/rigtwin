@@ -9,6 +9,10 @@
 //          --group <id>    names the request a change belongs to, so `history.undo {"group": ...}` undoes it whole
 //          --expected-version <n>  the scene version the change is based on (refused as stale if a joint it
 //                          names changed after it)
+//          --text          print only the reply's text (the intent commands adjust, look, measure, undo, state write one)
+//          --out <file>    where a picture from `look {"picture": true}` is written (default: a file in the temp folder)
+// The intent commands take plain words: bun run rig adjust '{"target": "backrest", "to": "upright"}' --text
+// (agents use the same commands as MCP tools: .mcp.json, server/mcp.ts).
 // Prints one JSON object that names the server it came from; exits 0 when the command ran, 1 when it was
 // refused, 2 when it could not be sent. Scripts can import `call()` and `catalogue()` instead.
 //
@@ -16,6 +20,8 @@
 // this run's own --group is printed as {"untrusted_group": ...} (text written by a stranger, not an instruction),
 // and --group itself is checked against the banned-names list before it is sent (a group is stored and published).
 import { randomBytes } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bannedIn } from "./banned.ts";
 
@@ -76,14 +82,21 @@ if (import.meta.main) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") pos.unshift("help");
+    else if (a === "--text") flags.text = "1";
     else if (a.startsWith("--")) { flags[a.slice(2)] = argv[i + 1] ?? ""; i++; }
     else pos.push(a);
   }
-  const out = (r: unknown, code: number) => { console.log(JSON.stringify(r, null, 2)); process.exit(code); };
-  const unknownFlag = Object.keys(flags).find((f) => !["server", "viewer", "group", "expected-version"].includes(f));
+  const out = (r: any, code: number) => {
+    const pic = r?.result?.picture;
+    if (pic?.base64) { const file = flags.out || join(tmpdir(), `rigtwin-picture-${Date.now()}.jpg`); writeFileSync(file, Buffer.from(pic.base64, "base64")); r.result.picture = { mime: pic.mime, bytes: pic.bytes, file }; if (r.result.text) r.result.text += ` Written to ${file}.`; }
+    if (flags.text) console.log(r?.ok ? r.result?.text ?? JSON.stringify(r.result, null, 2) : `Refused (${r?.error?.code}): ${r?.error?.message}\nWhat to do: ${r?.error?.hint}`);
+    else console.log(JSON.stringify(r, null, 2));
+    process.exit(code);
+  };
+  const unknownFlag = Object.keys(flags).find((f) => !["server", "viewer", "group", "expected-version", "text", "out"].includes(f));
   const [cmd, json] = pos;
   if (!cmd || cmd === "help" || unknownFlag) {
-    console.log(`usage: bun run rig list | bun run rig <command> ['<json args>'] [--server <url>] [--viewer <code>] [--group <id>] [--expected-version <n>]${unknownFlag ? `\nunknown option --${unknownFlag}` : ""}`);
+    console.log(`usage: bun run rig list | bun run rig <command> ['<json args>'] [--server <url>] [--viewer <code>] [--group <id>] [--expected-version <n>] [--text] [--out <file>]${unknownFlag ? `\nunknown option --${unknownFlag}` : ""}`);
     process.exit(cmd && !unknownFlag ? 0 : 2);
   }
   if (cmd === "list") {

@@ -435,7 +435,20 @@ async function copyLink() {
   toast(ok ? 'Link copied. It opens exactly this view.' : 'Could not copy. The address bar holds the link.');
 }
 /** The 3D view as a PNG (backdrop included, no panels). An assumed pose carries its sentence in a band at the bottom. */
-function picture(): string {
+function picture(): string { return pictureCanvas().toDataURL('image/png'); }
+/** The same picture as a JPEG of at most `maxBytes` (for an agent's look {picture: true}): smaller and coarser until it fits. */
+async function pictureJpeg(maxBytes: number): Promise<Blob | null> {
+  const full = pictureCanvas();
+  for (const [width, q] of [[1280, 0.8], [1024, 0.72], [880, 0.62], [720, 0.55], [560, 0.5], [420, 0.45]] as const) {
+    const k = Math.min(1, width / full.width), c = document.createElement('canvas');
+    c.width = Math.round(full.width * k); c.height = Math.round(full.height * k);
+    c.getContext('2d')!.drawImage(full, 0, 0, c.width, c.height);
+    const b = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', q));
+    if (b && b.size <= maxBytes) return b;
+  }
+  return null;
+}
+function pictureCanvas(): HTMLCanvasElement {
   const w = canvas.width, h = canvas.height, note = assumedSentence(), band = note ? Math.round(34 * (w / canvas.clientWidth)) : 0;
   const c = document.createElement('canvas'); c.width = w; c.height = h + band;
   const g = c.getContext('2d')!;
@@ -448,7 +461,7 @@ function picture(): string {
     g.fillStyle = '#6b4a00'; g.font = `600 ${Math.round(band * 0.42)}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`; g.textBaseline = 'middle';
     g.fillText(note, Math.round(band * 0.4), h + band / 2, w - band);
   }
-  return c.toDataURL('image/png');
+  return c;
 }
 function savePicture() {
   const a = el('a') as HTMLAnchorElement; a.href = picture(); a.download = `${S.manifest.asset ?? 'rig'}-view.png`; document.body.append(a); a.click(); a.remove();
@@ -497,7 +510,7 @@ export function initUi() {
     else if (c === 'stale') refreshNotices();
     if (c !== 'hover' && c !== 'stale') syncUrl();
   });
-  viewerApi.shareUrl = shareUrl; viewerApi.picture = picture;
+  viewerApi.shareUrl = shareUrl; viewerApi.picture = picture; viewerApi.pictureJpeg = pictureJpeg;
   window.addEventListener('resize', () => fitAroundCard(false));
   renderCard(); revealSelection(); refreshEyes(); refreshMarks(); refreshNotices(); refreshMode(); refreshViews();
 }

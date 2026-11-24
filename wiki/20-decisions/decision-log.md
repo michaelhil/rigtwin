@@ -1,6 +1,6 @@
 ---
 title: Decision log
-tldr: 46 decisions, D-01 to D-46, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan of 2026-11-23, D-21 to D-37 were taken during the first build, and D-38 to D-46 belong to platform step 1 (2026-11-24), among them a live channel without WebSocket, undo by entry or request, no release split and no manikin on the public site until the owner approves it.
+tldr: 52 decisions, D-01 to D-52, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-52 from agent interface v2 (all 2026-11-23 and 24).
 status: living
 updated: 2026-11-24
 tags: [decisions, log, platform]
@@ -15,6 +15,7 @@ tags: [decisions, log, platform]
 - The most consequential later ruling is D-24: where the photographs disagree with the owner's three scale figures, the photo value is modelled and the owner's figure is recorded as conflicting evidence. A tape measure must settle it.
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
 - Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
+- Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
@@ -364,3 +365,48 @@ project's working files.
 - **Alternatives:** relying on the 1 MB queue limit alone (rejected: on the host's Linux kernel each non-reading stream held about 770 kB in socket buffers before that limit could act).
 - **Reason:** *measured* on the host: without the budget, 300 non-reading streams took the kernel's TCP memory past its pressure threshold (59,172 against 58,837 pages); with it, 150 of 150 were ended by the server and TCP memory peaked at 49 % of the threshold.
 - **Consequences:** at worst about 150 × 0.5 MB = 75 MB of socket memory. A stream that gets only heartbeats and occasional changes lasts for hours; one that reaches its budget ends with an `end` event, on which the page reconnects at once. Details: [the server and its host setup](../50-implementation/server-and-host-setup.md#host-check-h14-live-streams-that-do-not-read).
+
+<a id="d-47"></a>
+### D-47 — Agent interface v2 is built before step 2, in this session, and deployed on the owner's word
+
+- **Decided by / status:** owner (2026-11-24: "do the work here, push and deploy"); in force.
+- **What:** after a slow run of "make the backrest straight" on the public sandbox (six agent turns and about 30 kB read for one number; the server answered each command in 0.3 s), the owner asked for "a very significant re-engineering" of agent control. The proposal (kept in the project's working files) was built at once as a step between 1 and 2, by the session "Platform work status" because the coordinator was busy, on the branch `agent-v2` based on `platform-step1-main`.
+- **Reason:** steps 2 to 5 each add agent-facing commands; building them on the step-1 interface would multiply lookups and prose.
+- **Consequences:** the five owner decisions of the proposal were taken by their recommended answers (step 1.5 now; act-and-mark for assumed adjustments; pictures on the public sandbox with guards; built here; benchmark on demand). The benchmark itself waits for a signed-in Claude Code command line (see [next steps](../90-next/next-steps.md)).
+
+<a id="d-48"></a>
+### D-48 — Intent commands: plain words in, one checked reply out
+
+- **Decided by / status:** owner, on the proposal (2026-11-24); in force.
+- **What:** five commands over the step-1 layer (`shared/commands/intent.ts`): `adjust`, `look`, `measure`, `undo`, `state`. `adjust` resolves its target from plain words or an id (refusing `ambiguous` with the candidates when two are about as likely), takes `to` (a number, units, a named position such as "upright" or "as photographed") or `by` (a relative amount, worked out on the server when the edit is recorded, so no prior read and no expected version), records one request with a name the server makes ("seat-recline-21"), and replies with before → after, the undo handle and what else is moved.
+- **Alternatives:** keeping only `pose.set` with better documentation (rejected: the four-call loop find → summary → set → summary stays); free-text commands parsed by a model on the server (rejected: no model on the server in step 1, and replies must be exact).
+- **Consequences:** the low-level commands stay unchanged for scripts, tests and the page. Agents no longer invent group names, so the banned-name check on group names matters only for the low-level path.
+
+<a id="d-49"></a>
+### D-49 — `adjust` moves an assumed adjustment and marks it, instead of refusing it
+
+- **Decided by / status:** owner, on the proposal (2026-11-24); in force.
+- **What:** `pose.set` still refuses an assumed adjustment without `allowAssumed`; `adjust` moves it and its reply says, every time, that it is an assumed adjustment. The Skill and the MCP instructions tell the agent to say so, and to ask first only when it chose an assumed adjustment the owner did not name.
+- **Reason:** five of the seat's adjustments are assumed, so almost every seat request hit the refusal and a round trip to the owner, although the owner had named the adjustment. The honesty rule needs the words, not the stop.
+
+<a id="d-50"></a>
+### D-50 — MCP served by the rigtwin server itself, tools only; two entries in `.mcp.json`
+
+- **Decided by / status:** owner, on the proposal (2026-11-24); in force.
+- **What:** `POST api/mcp` (Streamable HTTP, JSON answers, no server-initiated stream) offers the five intent commands as tools, on the laptop and on mightwork.ai, through the same path and guards as `api/command`. Tool schemas and descriptions come from the registry; the server's instructions (at most 4,096 characters) carry the rules and one line per adjustment. `.mcp.json` names `rigtwin` (local) and `rigtwin-public` with `alwaysLoad`, so the tool name says which scene an agent acts on and the tools are in context from the first turn.
+- **Alternatives:** a stdio wrapper around `bun run rig` (rejected: the Claude API's MCP connector, the route for the step-4 agent in the app, takes only remote HTTP servers); one entry with a target argument (rejected: the target would again be decided per call).
+- **Consequences:** no host change: Caddy already routes `/rigtwin/api/*`. A foreign `Origin` is refused and a JSON content type is required. The caller is "Claude Code · <id>", with the id made from the MCP session.
+
+<a id="d-51"></a>
+### D-51 — Pictures from the browser on request; views to every page of a local server
+
+- **Decided by / status:** owner, on the proposal (2026-11-24); in force.
+- **What:** `look {picture: true}` sends a reply id with the view event; the page draws at once (also in a background tab), makes a JPEG of at most 60 kB (under Caddy's 64 KiB request limit, so the host needs no change) and posts it to `api/picture`, which accepts it only for a picture being waited for, from the page that was asked, once, as a JPEG; `look` waits at most 8 s and says so when no picture came. At most 20 pictures are waited for at once. On a local server, `look` without a code goes to every open page; on the public sandbox it needs the code, which the MCP session remembers.
+- **Consequences:** agents can check a view by looking at it. A picture from the public sandbox is drawn by whichever page holds the code: data, not evidence.
+
+<a id="d-52"></a>
+### D-52 — What each adjustment means is written next to the page's words
+
+- **Decided by / status:** coordinator of agent interface v2 (2026-11-24); in force. A deviation from the proposal, which put it in the asset's spec.
+- **What:** every adjustment rule in `shared/words.ts` now also says what the value 0 means ("backrest vertical", "as photographed", "released") and gives everyday names ("backrest", "seat back"). The catalogue agents read is generated from it and from the description file; a unit test fails when a joint has no rule, no zero or no names.
+- **Reason:** the page's direction words were already there and shared by the page and the commands; adding the meaning to the spec would have changed the description file and the model's checksum for no gain in step 1.5. When the next asset arrives, its words go in the same place.

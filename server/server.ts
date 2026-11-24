@@ -13,6 +13,10 @@
 //                       whose session code a view command names; a ":hb" comment every 15 s; "end" {reason} as
 //                       the last event of a stream the server ends by its byte budget (the page reconnects at once).
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
+//   POST /api/mcp       the same commands for agents over MCP (Streamable HTTP, tools only: adjust, look, measure,
+//                       undo, state; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
+//   POST /api/picture   ?reply=<id>&session=<code>, image/jpeg: a browser's answer to `look {picture: true}`, only for a
+//                       picture that is being waited for (the id is in the view event), at most 60 kB
 //
 // Who: identify(req) gives the actor from the declared role (X-Rigtwin-Client: person | agent, otherwise a
 // script; the role is only claimed) and an id the server makes: an HMAC, with a secret kept in the data
@@ -41,6 +45,9 @@ import { assetFromFiles, runCommand, SESSION_ALPHABET, SESSION_PATTERN } from ".
 import { get, list, type AssetInfo } from "../shared/commands/registry.ts";
 import { entriesAfter, newDoc, parseDoc, reconcile, SCENE_FORMAT, type Actor, type SceneDoc } from "../shared/commands/doc.ts";
 import type { CommandError } from "../shared/commands/schema.ts";
+import "../shared/commands/intent.ts";                       // registers adjust, look, measure, undo, state
+import { instructions as agentInstructions } from "../shared/commands/agent-docs.ts";
+import { createMcp } from "./mcp.ts";
 
 export interface ApiOptions {
   dataDir: string; assetDir: string; mode: "local" | "deployed"; revision: string;
@@ -100,11 +107,11 @@ class Window {
   sweep(now = Date.now()) { for (const [k, a] of this.hits) if (!a.length || a[a.length - 1] <= now - this.ms) this.hits.delete(k); }
 }
 
-/** The body as text, or why not: larger than `max`, slower than `ms`, or the client went away. */
-async function readBody(req: Request, max: number, ms: number): Promise<string | "too_large" | "too_slow" | "aborted"> {
+/** The body as bytes, or why not: larger than `max`, slower than `ms`, or the client went away. */
+async function readBytes(req: Request, max: number, ms: number): Promise<Uint8Array | "too_large" | "too_slow" | "aborted"> {
   const declared = Number(req.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > max) return "too_large";
-  if (!req.body) return "";
+  if (!req.body) return new Uint8Array(0);
   const reader = req.body.getReader(), parts: Uint8Array[] = [], end = Date.now() + ms;
   let n = 0;
   try {
@@ -120,7 +127,12 @@ async function readBody(req: Request, max: number, ms: number): Promise<string |
       parts.push(got.value);
     }
   } catch { return "aborted"; }
-  return new TextDecoder().decode(Buffer.concat(parts));
+  return new Uint8Array(Buffer.concat(parts));
+}
+/** The body as text (see readBytes). */
+async function readBody(req: Request, max: number, ms: number): Promise<string | "too_large" | "too_slow" | "aborted"> {
+  const b = await readBytes(req, max, ms);
+  return typeof b === "string" ? b : new TextDecoder().decode(b);
 }
 
 const sse = (name: string, data: unknown, id?: number) => `${id !== undefined ? `id: ${id}\n` : ""}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -268,30 +280,97 @@ export function createApi(opts: ApiOptions) {
     let wire: unknown;
     try { wire = JSON.parse(text); } catch { return fail(400, "bad_json", "the body is not valid JSON", "send {\"id\": \"<command>\", \"args\": {...}}"); }
     if (!isObject(wire)) return fail(400, "bad_json", "the body is not a JSON object", "send {\"id\": \"<command>\", \"args\": {...}}");
+    const r = await exec(identify(req, secret), visitor, wire);
+    return json(r.body, r.status);
+  }
+
+  // ---- one command for an actor: the HTTP endpoint and the MCP tools both come here
+  type Reply = { status: number; body: Record<string, any> };
+  const reply = (status: number, code: string, message: string, hint: string): Reply => ({ status, body: { ok: false, server: server(), version: doc.version, error: { code, message, hint } } });
+  /** pictures being waited for (look {picture: true}), by the reply id sent with the view event */
+  const pending = new Map<string, { session: string | null; done(b: Uint8Array | null): void }>();
+  async function exec(you: Actor, visitor: string, wire: Record<string, unknown>): Promise<Reply> {
     const kind = get(String(wire.id))?.kind ?? "query";
     if (deployed) {
-      if (kind === "query" ? !queries.hit(visitor) : !edits.hit(visitor)) return fail(429, "rate_limited", kind === "query" ? `at most ${L.queriesPerMinutePerVisitor} queries a minute per visitor` : `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute and send fewer commands");
-      if (kind !== "query" && !editsBlock.hit(blockKey(visitor))) return fail(429, "rate_limited", `at most ${L.editsPerSecondPerBlock} changes a second per network block`, "try again in a moment");
-      if (kind !== "query" && !editsAll.hit("all")) return fail(429, "rate_limited", `the server takes at most ${L.editsPerSecondTotal} changes a second`, "try again in a moment");
-      if (kind === "view" && unknownSessions.count(visitor) >= L.unknownSessionsPerMinutePerVisitor) return fail(429, "rate_limited", `too many unknown session codes (${L.unknownSessionsPerMinutePerVisitor} a minute)`, "ask for the code shown in the browser's More menu");
-      if (kind === "edit" && diskLow()) return fail(507, "disk_full", "the server's disk is nearly full, so changes are refused", "tell the owner of the server");
+      if (kind === "query" ? !queries.hit(visitor) : !edits.hit(visitor)) return reply(429, "rate_limited", kind === "query" ? `at most ${L.queriesPerMinutePerVisitor} queries a minute per visitor` : `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute and send fewer commands");
+      if (kind !== "query" && !editsBlock.hit(blockKey(visitor))) return reply(429, "rate_limited", `at most ${L.editsPerSecondPerBlock} changes a second per network block`, "try again in a moment");
+      if (kind !== "query" && !editsAll.hit("all")) return reply(429, "rate_limited", `the server takes at most ${L.editsPerSecondTotal} changes a second`, "try again in a moment");
+      if (kind === "view" && unknownSessions.count(visitor) >= L.unknownSessionsPerMinutePerVisitor) return reply(429, "rate_limited", `too many unknown session codes (${L.unknownSessionsPerMinutePerVisitor} a minute)`, "ask for the code shown in the browser's More menu");
+      if (kind === "edit" && diskLow()) return reply(507, "disk_full", "the server's disk is nearly full, so changes are refused", "tell the owner of the server");
     }
     refreshAsset();
-    const you = identify(req, secret), denied = authorize(you, String(wire.id));
-    if (denied) return json({ ok: false, server: server(), version: doc.version, you, error: denied });
+    const denied = authorize(you, String(wire.id));
+    if (denied) return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: denied } };
     const out = runCommand({ doc, asset }, you, wire as any);
+    let result: any = out.ok ? out.result : undefined;
     if (out.ok && out.view) {
-      const s = streams.get(out.view.session);
-      if (!s) {
-        unknownSessions.hit(visitor);
-        return json({ ok: false, server: server(), version: doc.version, you, error: { code: "unknown_session", message: `no viewer with session code ${out.view.session} is connected to this server`, hint: "the code is shown in the viewer's More menu; it changes when the page is reloaded" } });
+      const v = out.view, one = v.session ? streams.get(v.session) : undefined;
+      // a code names one page; without one (only commands that allow it, only on a local server) every open page
+      const targets = v.session ? (one ? [one] : []) : deployed ? [] : [...streams.values()];
+      if (!targets.length) {
+        if (v.session) {
+          unknownSessions.hit(visitor);
+          return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: { code: "unknown_session", message: `no viewer with session code ${v.session} is connected to this server`, hint: "the code is shown in the viewer's More menu; it changes when the page is reloaded" } } };
+        }
+        const error = deployed
+          ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for`, hint: "ask the owner for the code shown in the viewer under More, \"Shared scene\" (eight characters), and pass it as viewer" }
+          : { code: "no_viewer", message: "no viewer page is open on this server", hint: "ask the owner to open the viewer (bun run serve, then http://127.0.0.1:4173/)" };
+        return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error } };
       }
-      s.send(enc.encode(sse("view", { id: out.view.id, args: out.view.args })));
+      let wait: Promise<Uint8Array | null> | null = null, replyId: string | undefined;
+      if (v.args.picture) {
+        if (pending.size >= L.picturesPending) return reply(429, "rate_limited", `at most ${L.picturesPending} pictures are waited for at once`, "try again in a moment");
+        const id = (replyId = randomBytes(16).toString("hex"));
+        wait = new Promise((resolve) => {
+          const timer = setTimeout(() => { pending.delete(id); resolve(null); }, L.pictureWaitMs);
+          pending.set(id, { session: v.session, done(b) { clearTimeout(timer); pending.delete(id); resolve(b); } });
+        });
+      }
+      const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}) }));
+      for (const s of targets) s.send(event);
+      if (wait) {
+        const got = await wait;
+        result = { ...result };
+        if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB).`.trim(); }
+        else result.text = `${result.text ?? ""}\nNo picture: the browser did not send one within ${L.pictureWaitMs / 1000} s (a tab in the background may not draw: ask the owner to bring it to the front).`.trim();
+      }
     }
     if (out.ok && out.entry) { save(); broadcast(sse("applied", out.entry, out.entry.version)); }
-    return json(out.ok
-      ? { ok: true, server: server(), version: out.version, you, ...(kind === "edit" ? { recorded: out.entry?.version ?? null } : {}), result: out.result }
-      : { ok: false, server: server(), version: out.version, you, error: out.error });
+    return { status: 200, body: out.ok
+      ? { ok: true, server: server(), version: out.version, you, ...(kind === "edit" ? { recorded: out.entry?.version ?? null } : {}), result }
+      : { ok: false, server: server(), version: out.version, you, error: out.error } };
+  }
+
+  // ---- a browser's picture for a look that waits for it
+  async function picture(req: Request, url: URL): Promise<Response> {
+    if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "a picture needs the header X-Rigtwin: 1", "the viewer sends it");
+    if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("image/jpeg")) return fail(415, "bad_request", "a picture is sent as image/jpeg", "send Content-Type: image/jpeg");
+    const id = url.searchParams.get("reply") ?? "", p = /^[0-9a-f]{32}$/.test(id) ? pending.get(id) : undefined;
+    if (!p) return fail(404, "not_asked", "no picture is being waited for with this id", "a picture is sent only in answer to a look command, within a few seconds");
+    if (p.session && url.searchParams.get("session") !== p.session) return fail(403, "wrong_session", "this picture was asked of another browser", "only the page with that code answers");
+    const b = await readBytes(req, L.pictureBytes, L.bodyTimeoutMs);
+    if (typeof b === "string") return fail(b === "too_large" ? 413 : 400, b === "too_large" ? "too_large" : "bad_request", b === "too_large" ? `a picture is at most ${L.pictureBytes / 1024} kB` : "the picture did not arrive", "send a smaller JPEG");
+    if (b.byteLength < 4 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(400, "bad_picture", "the body is not a JPEG", "send the picture as image/jpeg");
+    p.done(b);
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
+
+  // ---- MCP (agent interface v2)
+  const mcp = createMcp({
+    exec: async (you, wire, visitor) => (await exec(you, visitor, wire as any)).body as any,
+    secret, instructions: () => agentInstructions(asset, opts.mode), revision: opts.revision, maxSessions: L.mcpSessions,
+  });
+  const ownOrigin = (origin: string) => { try { const h = new URL(origin).host; return deployed ? h === "mightwork.ai" : LOCAL_HOSTS.test(h); } catch { return false; } };
+  async function mcpPost(req: Request, visitor: string): Promise<Response> {
+    const origin = req.headers.get("origin");
+    if (origin && !ownOrigin(origin)) return fail(403, "bad_origin", "the MCP endpoint answers only to MCP clients, not to other web pages", "connect from an MCP client such as Claude Code");
+    if (!(req.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) return fail(415, "bad_request", "an MCP request is sent as JSON", "send Content-Type: application/json");
+    if (deployed && !queries.hit(visitor)) return fail(429, "rate_limited", `at most ${L.queriesPerMinutePerVisitor} requests a minute per visitor`, "wait a minute");
+    const text = await readBody(req, deployed ? L.bodyBytes : Number.POSITIVE_INFINITY, L.bodyTimeoutMs);
+    if (text === "too_large" || text === "too_slow" || text === "aborted") return fail(text === "too_large" ? 413 : 400, text, "the request could not be read", "send it again, smaller");
+    let body: unknown;
+    try { body = JSON.parse(text); } catch { return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error: the body is not JSON" } }, { status: 400 }); }
+    return mcp.handle(req, body, visitor);
   }
 
   // ---- release watch (deployed): exit when `current` no longer points at our release
@@ -342,10 +421,18 @@ export function createApi(opts: ApiOptions) {
         case "/api/command":
           if (req.method !== "POST") break;
           return await command(req, visitor);
+        case "/api/mcp":
+          if (req.method === "POST") return await mcpPost(req, visitor);
+          if (req.method === "DELETE") { mcp.end(req.headers.get("mcp-session-id")); return new Response(null, { status: 204 }); }
+          return new Response(null, { status: 405, headers: { allow: "POST, DELETE" } });      // no server-initiated stream
+        case "/api/picture":
+          if (req.method !== "POST") break;
+          if (deployed && !queries.hit(visitor)) return fail(429, "rate_limited", `at most ${L.queriesPerMinutePerVisitor} requests a minute per visitor`, "wait a minute");
+          return await picture(req, url);
         default:
-          return fail(404, "not_found", `no ${path} here`, "the API has /api/health, /api/commands, /api/command (POST) and /api/live");
+          return fail(404, "not_found", `no ${path} here`, "the API has /api/health, /api/commands, /api/command (POST), /api/live, /api/mcp (POST) and /api/picture (POST)");
       }
-      return fail(405, "bad_method", `${req.method} is not used for ${path}`, path === "/api/command" ? "POST a JSON command" : "use GET");
+      return fail(405, "bad_method", `${req.method} is not used for ${path}`, path === "/api/command" || path === "/api/picture" ? "use POST" : "use GET");
     } catch (e: any) {
       console.error(`error on ${req.method} ${path}:`, e?.stack ?? e);
       return json({ ok: false, error: { code: "internal", message: "internal error", hint: "try again; if it keeps failing, tell the owner of the server" } }, 500);

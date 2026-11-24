@@ -785,6 +785,12 @@ function tick(now: number) {
 /** Resolves after the pending frame (if any) has been drawn. A frame that also redrew the shadow map is followed by a plain
  *  one, so that state().render reports what a still view costs (as it did when every frame was drawn). */
 const nextFrame = () => new Promise<boolean>((r) => requestAnimationFrame(() => requestAnimationFrame(() => { if (needsRender) render(); if (shadowDrawn) render(); r(true); })));
+/** Finish any camera glide and draw at once: a picture for an agent (look {picture: true}); works in a background tab,
+ *  where no frames run. */
+export function drawNow() {
+  if (anim) { persp.position.copy(anim.p1); controls.target.copy(anim.t1); anim = null; }
+  controls.update(); render(); if (shadowDrawn) render();
+}
 /** Stop any camera glide at once (the person grabbed the view). */
 export const stopGlide = () => { anim = null; };
 
@@ -857,6 +863,8 @@ export const viewerApi = {
   /** filled in by ui.ts: the link that reproduces the current state, and the picture of the 3D view as a PNG data URL */
   shareUrl: () => location.href as string,
   picture: () => canvas.toDataURL('image/png') as string,
+  /** filled in by ui.ts: the picture as a JPEG of at most maxBytes, for an agent */
+  pictureJpeg: (async (_maxBytes: number) => null) as (maxBytes: number) => Promise<Blob | null>,
   /** filled in by live.ts: the state of the shared scene on this page (null when the page is local only) */
   live: (): Record<string, unknown> | null => null,
 };

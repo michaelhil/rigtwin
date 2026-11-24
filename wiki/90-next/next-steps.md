@@ -33,6 +33,15 @@ commands are on the page [the server and its host setup](../50-implementation/se
 | 7 | The owner tries it: "lower the monitor 3 cm and show me the operator's view", watched on mightwork.ai, then undone | owner (about 15 minutes) | to do |
 | 8 | Re-forecast steps 2–5 with the real hours of step 1 | agents | to do |
 
+**Step 1.5, agent interface v2** (2026-11-24, [D-47](../20-decisions/decision-log.md#d-47)): built, checked and
+deployed. What remains:
+
+| # | Step | Who | Status |
+|---|---|---|---|
+| 1 | Sign in the Claude Code command line on this machine once (`claude`, then `/login`), so the benchmark can start headless runs | owner | to do |
+| 2 | `bun tools/agent-eval.ts --baseline-dir <checkout of 8898e66>`: the ten requests with the step-1 interface and with v2; record the numbers on the [platform plan](../30-plan/platform-plan.md#step-15-agent-interface-v2-2026-11-24) | agents | waiting for 1 |
+| 3 | The owner tries it in a new Claude Code session in this repository: approve the two MCP servers once, then "make the backrest straight", "show me the operator's view" (with the browser's code) | owner | to do |
+
 Also waiting for the owner:
 
 - **GitHub settings** (security review): move the secret `DEPLOY_SSH_KEY` into the environment

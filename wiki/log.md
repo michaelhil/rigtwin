@@ -269,3 +269,16 @@ with the line "Claude Code · 5145 — Monitor: turn 1° right"; Undo on one pag
 view command reached only the named page; nothing was logged; the public scene's pose was the same
 before and after (versions 0 to 4). [The server and its host
 setup](50-implementation/server-and-host-setup.md#order-of-the-first-rollout).
+
+**Evening** — The owner asked why one request ("make the backrest straight") took so long and for "a very
+significant re-engineering" of agent control. Measured: six agent turns and about 30 kB read for one number;
+the server answered each command in 0.3 s. A proposal (intent commands, MCP served by the server, a
+generated catalogue of what each adjustment means, pictures, a smaller Skill, an agent benchmark) was written,
+and the owner said "do the work here, push and deploy" ([D-47](20-decisions/decision-log.md#d-47)). Built on
+the branch `agent-v2` from `platform-step1-main`: `shared/commands/intent.ts`, `server/mcp.ts`, `api/picture`,
+the page's `look` and pictures, `.mcp.json`, the Skill v2, `tools/agent-docs.ts` and `tools/agent-eval.ts`
+([D-48](20-decisions/decision-log.md#d-48) to [D-52](20-decisions/decision-log.md#d-52)). Tried by hand
+through MCP against a local server with a real page: one `look {"view": "operator", "picture": true}` came
+back with a 41 kB picture of the operator's view. The benchmark could not run: the Claude Code command line on
+this machine is not signed in. [Platform plan](30-plan/platform-plan.md#step-15-agent-interface-v2-2026-11-24),
+[agent interface](80-reference/agent-interface.md).

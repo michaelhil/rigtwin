@@ -239,6 +239,13 @@ page with that code. Under it, "About this sandbox" says what is stored: only th
 its last 200 changes, each with a random author id, no names and no other text; anyone can change it,
 Undo puts a change back, and the scene is reset on request.
 
+**Agent interface v2** ([D-51](../20-decisions/decision-log.md#d-51)). The page also carries out `look`, the
+one-call view command of the intent layer: what it shows, the named view and the selection in one go. On a local
+server a `look` without a code reaches every open page. When the command asks for a picture, its view event brings a
+reply id: the page finishes any camera glide and draws at once (`drawNow()`, which also works in a background tab),
+makes a JPEG of the picture "Save picture" would make, smaller and coarser until it is at most 60 kB
+(`viewer.pictureJpeg()`), and posts it to `api/picture` with the id and its own code. Nothing else changes on the page.
+
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
 or the network comes back; one resync after each reconnect, asking for the changes after the version it

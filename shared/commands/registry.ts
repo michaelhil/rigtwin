@@ -20,6 +20,8 @@ export interface RunOutput<R> {
   joints?: string[];
   /** edits: the versions this edit reverts */
   undoes?: number[];
+  /** view commands: the arguments to send to the browser, when they differ from the command's own (resolved words) */
+  view?: Record<string, unknown>;
 }
 
 export interface CommandSpec<A = any, R = any> {
@@ -29,6 +31,15 @@ export interface CommandSpec<A = any, R = any> {
   args: Schema;
   examples: { args: A; note: string }[];
   run?(ctx: { doc: SceneDoc; asset: AssetInfo; actor: Actor }, args: A): RunOutput<R>;
+  /** intent commands (intent.ts): the request name the server gives an edit when the caller names none ("backrest-recline");
+   *  runCommand appends the version, so every request has its own name and agents never invent one */
+  autoGroup?(args: A, out: RunOutput<R>): string;
+  /** intent commands: complete the reply once the edit is recorded (its version and request name are known then) */
+  finish?(result: R, done: { recorded: number | null; group?: string }): R;
+  /** view commands that may go without a session code: a local server then sends them to every open page */
+  sessionOptional?: boolean;
+  /** agent interface v2: offered as an MCP tool (server/mcp.ts) under this name */
+  tool?: string;
 }
 
 const specs = new Map<string, CommandSpec>();
@@ -41,8 +52,10 @@ export const get = (id: string) => specs.get(id);
 
 /** The catalogue: every command without its code, in registration order. */
 export function list() {
-  return [...specs.values()].map(({ id, summary, kind, args, examples }) => ({ id, summary, kind, args, examples }));
+  return [...specs.values()].map(({ id, summary, kind, args, examples, tool }) => ({ id, summary, kind, args, examples, ...(tool ? { tool } : {}) }));
 }
+/** The commands offered as MCP tools, in registration order. */
+export const tools = () => [...specs.values()].filter((s) => s.tool);
 
 /** The command and its checked arguments, or the error to send back. */
 export function validate(id: unknown, args: unknown): { spec: CommandSpec; args: any } | { error: CommandError } {

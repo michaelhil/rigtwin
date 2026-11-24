@@ -52,7 +52,7 @@ export const toSI = (j: ManifestJoint, v: JointValue): JointValue => (Array.isAr
 /** Abbreviations in ids, for searching (the names themselves come from shared/words.ts). */
 const WORDS: Record<string, string> = { mon: "monitor", ts: "touchscreen", joy: "joystick", pod: "armrest", estop: "emergency stop", L: "left", R: "right" };
 /** The page's name of a joint, part or datum ("Monitor: height", "Monitor", or the datum's label). */
-function labelOf(asset: AssetInfo, id: string): string {
+export function labelOf(asset: AssetInfo, id: string): string {
   const j = asset.joints.get(id);
   if (j) return jointName(j);
   const c = [...asset.manifest.components, ...asset.manifest.surfaces].find((x) => x.id === id);
@@ -72,21 +72,21 @@ export function describeJoint(asset: AssetInfo, j: ManifestJoint) {
   };
 }
 
-function sameSI(a: JointValue, b: JointValue) { return Array.isArray(a) ? (a as number[]).every((x, i) => Math.abs(x - (b as number[])[i]) < 1e-6) : Math.abs(a - (b as number)) < 1e-6; }
-function showChange(asset: AssetInfo, c: JointChange) {
+export function sameSI(a: JointValue, b: JointValue) { return Array.isArray(a) ? (a as number[]).every((x, i) => Math.abs(x - (b as number[])[i]) < 1e-6) : Math.abs(a - (b as number)) < 1e-6; }
+export function showChange(asset: AssetInfo, c: JointChange) {
   const j = asset.joints.get(c.joint);
   if (!j) return { joint: c.joint, label: c.joint, before: c.before, after: c.after, unit: "SI (joint no longer in the asset)" };
   return { joint: c.joint, label: jointName(j), before: fromSI(j, c.before), after: fromSI(j, c.after), unit: unitOf(j), ...(c.after !== null ? { said: sayJoint(j, c.after) } : {}) };
 }
-const showEntry = (asset: AssetInfo, e: Entry) => ({
+export const showEntry = (asset: AssetInfo, e: Entry) => ({
   version: e.version, by: e.actor.label, actor_kind: e.actor.kind, ...(e.group ? { group: e.group } : {}), command: e.command, at: e.at,
   ...(e.undoes ? { undoes: e.undoes } : {}), changes: e.changes.map((c) => showChange(asset, c)),
 });
 
 // ------------------------------------------------------------------------------------------- scene.find
 type Candidate = { id: string; kind: "part" | "joint" | "datum"; label: string; main: Set<string>; extra: Set<string> };
-const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
-const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => WORDS[x] ?? x).join(" "));
+export const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+export const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => WORDS[x] ?? x).join(" "));
 const STOP = new Set(["the", "a", "an", "of", "to", "and", "in", "on", "at", "for", "with", "by", "from", "me", "my", "its", "it", "show", "set", "move", "make", "please", "cm", "mm", "deg", "degrees", "s"]);
 /** Everyday words that point at a word of the model's vocabulary. */
 const ALSO: Record<string, string[]> = {
@@ -133,7 +133,7 @@ function refuseUnknownJoint(asset: AssetInfo, id: string): never {
   const near = findIds(asset, id.replace(/^J_/, "").replaceAll("_", " "), "joint", 3).map((x) => x.id);
   throw new Refusal("unknown_joint", `${id} is not a joint of ${asset.name}`, `${near.length ? `similar joints: ${near.join(", ")}; ` : ""}scene.find {"text": "...", "kind": "joint"} finds joints by plain words`);
 }
-function checkId(asset: AssetInfo, id: string, what: string) {
+export function checkId(asset: AssetInfo, id: string, what: string) {
   const known = asset.nodes.some((n) => n.name === id) || asset.manifest.groups.includes(id);
   if (!known) throw new Refusal("unknown_id", `${what} ${JSON.stringify(id)} is not a part, group, joint or datum of ${asset.name}`, `scene.find {"text": "..."} gives ids from plain words`);
 }
@@ -275,10 +275,15 @@ for (const c of commands) register(c);
 /** A command as it arrives: POST api/command {id, args, expectedVersion?, group?, session?}. */
 export interface WireCommand { id: unknown; args?: unknown; expectedVersion?: unknown; group?: unknown; session?: unknown }
 export type Outcome =
-  | { ok: true; version: number; result: unknown; entry?: Entry; view?: { session: string; id: string; args: Record<string, unknown> } }
+  | { ok: true; version: number; result: unknown; entry?: Entry; view?: { session: string | null; id: string; args: Record<string, unknown> } }
   | { ok: false; version: number; error: CommandError };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+/** "backrest-recline" + version 21 -> "backrest-recline-21" (within the group pattern: [a-z0-9-], 40 characters) */
+export function autoName(slug: string, version: number): string {
+  const tail = `-${version}`, s = slug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "change";
+  return s.slice(0, 40 - tail.length).replace(/-+$/, "") + tail;
+}
 
 /** Validate and run one command. Edits change `state.doc` in place and return the new entry; view commands
  *  return what to send to the addressed browser. Refusals come back as `{ok: false, error}`. */
@@ -290,13 +295,16 @@ export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Ac
     if (wire.group !== undefined && (typeof wire.group !== "string" || !new RegExp(GROUP_PATTERN).test(wire.group))) return refuse({ code: "invalid_args", message: `group ${JSON.stringify(wire.group)} does not match ${GROUP_PATTERN}`, hint: "lower-case letters, digits and dashes, e.g. lower-monitor" });
     if (wire.expectedVersion !== undefined && !(Number.isInteger(wire.expectedVersion) && (wire.expectedVersion as number) >= 0)) return refuse({ code: "invalid_args", message: "expectedVersion must be a whole number", hint: "the scene version from scene.summary" });
     const { spec } = checked;
-    if (spec.kind === "view" && !(typeof wire.session === "string" && new RegExp(SESSION_PATTERN).test(wire.session))) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (${JSON.stringify(wire.session)} is not one: eight characters)`}`, hint: "a view command is carried out by one browser: pass --viewer <code>, the code shown in that browser's More menu" });
+    const hasSession = typeof wire.session === "string" && new RegExp(SESSION_PATTERN).test(wire.session);
+    if (spec.kind === "view" && !hasSession && (!spec.sessionOptional || wire.session !== undefined)) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (${JSON.stringify(wire.session)} is not one: eight characters)`}`, hint: "a view command is carried out by one browser: pass --viewer <code>, the code shown in that browser's More menu" });
     const out = spec.run!({ doc, asset, actor }, checked.args);
     if (spec.kind === "query") return { ok: true, version: doc.version, result: out.result };
-    if (spec.kind === "view") return { ok: true, version: doc.version, result: out.result, view: { session: wire.session as string, id: spec.id, args: checked.args } };
+    if (spec.kind === "view") return { ok: true, version: doc.version, result: out.result, view: { session: hasSession ? (wire.session as string) : null, id: spec.id, args: (out.view ?? checked.args) as Record<string, unknown> } };
     const changes = out.changes ?? [];
-    const entry = apply(doc, { actor, command: spec.id, group: wire.group as string | undefined, joints: out.joints ?? changes.map((c) => c.joint), changes, expectedVersion: wire.expectedVersion as number | undefined, undoes: out.undoes });
-    const result = isObject(out.result) ? { ...out.result, ...(entry ? {} : { note: "no value changed; nothing recorded" }) } : out.result;
+    const group = (wire.group as string | undefined) ?? (spec.autoGroup ? autoName(spec.autoGroup(checked.args, out), doc.version + 1) : undefined);
+    const entry = apply(doc, { actor, command: spec.id, group, joints: out.joints ?? changes.map((c) => c.joint), changes, expectedVersion: wire.expectedVersion as number | undefined, undoes: out.undoes });
+    let result = isObject(out.result) ? { ...out.result, ...(entry ? {} : { note: "no value changed; nothing recorded" }) } : out.result;
+    if (spec.finish) result = spec.finish(result, { recorded: entry?.version ?? null, group: entry ? group : undefined });
     return { ok: true, version: doc.version, result, ...(entry ? { entry } : {}) };
   } catch (e) {
     if (e instanceof Refusal) return refuse(e.toError());

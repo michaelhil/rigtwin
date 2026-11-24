@@ -158,6 +158,23 @@ of step 1, from `shared/commands/core.ts` (`bun run rig list` shows each with it
 | `view.show` | view | choose what one browser shows: `only`, `hide`, or `all` again |
 | `view.select` | view | select a part or group in one browser, as a click would (its card opens) |
 
+**Agent interface v2** ([D-48](../20-decisions/decision-log.md#d-48)) adds five intent commands over these, in
+`shared/commands/intent.ts`, and offers them as MCP tools at `POST api/mcp`; their full description, the catalogue of
+adjustments and the MCP instructions are on the generated page [agent interface](agent-interface.md).
+
+| Command | Kind | What it does |
+|---|---|---|
+| `adjust` | edit | move adjustments named in plain words: `{"target": "backrest", "to": "upright"}`, `{"target": "monitor height", "by": "-3 cm"}`, several in `changes`; relative changes worked out on the server; a server-made request name; assumed adjustments moved and marked |
+| `look` | view | a named view, `only` / `hide` / `all`, `select`, and with `picture: true` a JPEG of the browser's view; locally without a code to every page |
+| `measure` | query | the distance between two points named in words ("median eye" to "monitor screen") |
+| `undo` | edit | "last" (default), "mine", a request name or a version |
+| `state` | query | what is moved and the last three changes in a few lines; `detail` "catalogue" or "history" |
+
+`bun run rig <command> '<json>' --text` prints only the reply's text; `--out <file>` names where a picture goes.
+`bun tools/agent-docs.ts` regenerates the Skill's reference and the agent-interface page (`--check` only compares).
+`bun tools/agent-eval.ts` is the agent benchmark (ten owner requests, headless Claude Code, the step-1 interface as the
+baseline; it spends tokens and needs a signed-in Claude Code command line).
+
 The request-level values `group`, `expectedVersion` and `session` (the browser's code) travel with the request,
 never inside the arguments. Authors are labels the server makes from a keyed hash of the caller's id ("Person ·
 3f2a", "Claude Code · 3f2a"; [D-41](../20-decisions/decision-log.md#d-41)). Scripts can `import { call, catalogue }

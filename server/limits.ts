@@ -49,5 +49,14 @@ export const LIMITS = {
   releaseWatchMs: 2_000,
   /** Step-1 design, after a stream drops: the reconnect delay the browser is told (the `retry:` field of the live channel). */
   retryMs: 2_000,
+  /** Agent interface v2: a picture a browser sends back for `look {picture: true}`, as JPEG, at most this large (under
+   *  Caddy's 64 KiB request limit for api/, so the host needs no change; the page lowers size and quality to fit) ... */
+  pictureBytes: 60 * 1024,
+  /** ... how long `look` waits for it before it answers without a picture ... */
+  pictureWaitMs: 8_000,
+  /** ... and how many pictures may be waited for at once, in all. */
+  picturesPending: 20,
+  /** Agent interface v2: MCP sessions remembered (the viewer code given to `look`); the least recently used is forgotten. */
+  mcpSessions: 500,
 };
 export type Limits = typeof LIMITS;

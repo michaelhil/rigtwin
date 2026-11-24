@@ -89,30 +89,34 @@ export interface AdjWord {
   pad?: [string, string]; padLabel?: string;
   /** tucked under "Fine adjustments" */
   fine?: boolean;
+  /** what the value 0 means, for agents ("backrest vertical", "as photographed"); empty for a joint without a rule */
+  zero: string;
+  /** other everyday names people use for this adjustment (agents resolve targets with them) */
+  aliases: string[];
 }
-type Rule = [RegExp, number | null, Partial<AdjWord> & { label: string; lo: string; hi: string; section: string; order: number }];
+type Rule = [RegExp, number | null, Partial<AdjWord> & { label: string; lo: string; hi: string; section: string; order: number; zero: string; aliases: string[] }];
 const ADJ_RULES: Rule[] = [
-  [/^J_seat_slide$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: 'Seat position', order: 10 }],
-  [/^J_seat_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Seat position', order: 11 }],
-  [/^J_seat_recline$/, null, { label: 'Recline', lo: 'upright', hi: 'reclined', section: 'Backrest', order: 12 }],
-  [/^J_seat_swivel$/, null, { label: 'Swivel', lo: 'right', hi: 'left', section: 'Turn and tilt', order: 13 }],
-  [/^J_seat_tilt$/, null, { label: 'Seat tilt', lo: 'back', hi: 'forward', section: 'Turn and tilt', order: 14 }],
-  [/^J_pod_armrest_([LR])$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: '$s armrest pad', order: 20 }],
-  [/^J_joy_([LR])_roll$/, null, { label: 'Left / right', lo: 'left', hi: 'right', section: '$s joystick', order: 30, pad: ['J_joy_$S_roll', 'J_joy_$S_pitch'], padLabel: 'Push the stick' }],
-  [/^J_joy_([LR])_pitch$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: '$s joystick', order: 31, pad: ['J_joy_$S_roll', 'J_joy_$S_pitch'], padLabel: 'Push the stick' }],
-  [/^J_ts_arm$/, 0, { label: 'Lean sideways', lo: 'left', hi: 'right', section: 'Touchscreen arm', order: 40, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm' }],
-  [/^J_ts_arm$/, 1, { label: 'Lean', lo: 'back', hi: 'forward', section: 'Touchscreen arm', order: 41, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm' }],
-  [/^J_ts_arm$/, 2, { label: 'Twist', lo: 'right', hi: 'left', section: 'Touchscreen arm', order: 42, fine: true }],
-  [/^J_ts_screen$/, 2, { label: 'Turn', lo: 'left', hi: 'right', section: 'Touchscreen display', order: 50, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display' }],
-  [/^J_ts_screen$/, 1, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Touchscreen display', order: 51, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display' }],
-  [/^J_ts_screen$/, 0, { label: 'Level', lo: 'left side down', hi: 'right side down', section: 'Touchscreen display', order: 52, fine: true }],
-  [/^J_mon_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Monitor', order: 60 }],
-  [/^J_mon_pan$/, null, { label: 'Turn', lo: 'left', hi: 'right', section: 'Monitor', order: 61, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt' }],
-  [/^J_mon_tilt$/, null, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Monitor', order: 62, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt' }],
-  [/^J_pedal_tray$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: 'Pedal tray', order: 70 }],
-  [/^J_pedal_1$/, null, { label: 'Left pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 71 }],
-  [/^J_pedal_2$/, null, { label: 'Middle pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 72 }],
-  [/^J_pedal_3$/, null, { label: 'Right pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 73 }],
+  [/^J_seat_slide$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: 'Seat position', order: 10, zero: 'as photographed', aliases: ['seat slide', 'seat fore aft', 'chair forward', 'slide the seat'] }],
+  [/^J_seat_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Seat position', order: 11, zero: 'as photographed', aliases: ['seat height', 'chair height', 'raise the seat', 'lower the seat'] }],
+  [/^J_seat_recline$/, null, { label: 'Recline', lo: 'upright', hi: 'reclined', section: 'Backrest', order: 12, zero: 'backrest vertical', aliases: ['backrest', 'back rest', 'seat back', 'backrest angle', 'recline', 'lean back', 'straighten the back'] }],
+  [/^J_seat_swivel$/, null, { label: 'Swivel', lo: 'right', hi: 'left', section: 'Turn and tilt', order: 13, zero: 'facing straight ahead, as photographed', aliases: ['swivel', 'turn the seat', 'seat rotation', 'chair turn'] }],
+  [/^J_seat_tilt$/, null, { label: 'Seat tilt', lo: 'back', hi: 'forward', section: 'Turn and tilt', order: 14, zero: 'as photographed', aliases: ['seat tilt', 'cushion tilt', 'seat pan angle'] }],
+  [/^J_pod_armrest_([LR])$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: '$s armrest pad', order: 20, zero: 'as photographed', aliases: ['armrest', 'arm rest', 'armrest pad', 'elbow rest'] }],
+  [/^J_joy_([LR])_roll$/, null, { label: 'Left / right', lo: 'left', hi: 'right', section: '$s joystick', order: 30, pad: ['J_joy_$S_roll', 'J_joy_$S_pitch'], padLabel: 'Push the stick', zero: 'stick centred', aliases: ['joystick sideways', 'stick left right'] }],
+  [/^J_joy_([LR])_pitch$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: '$s joystick', order: 31, pad: ['J_joy_$S_roll', 'J_joy_$S_pitch'], padLabel: 'Push the stick', zero: 'stick centred', aliases: ['joystick forward back', 'push the stick'] }],
+  [/^J_ts_arm$/, 0, { label: 'Lean sideways', lo: 'left', hi: 'right', section: 'Touchscreen arm', order: 40, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm', zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
+  [/^J_ts_arm$/, 1, { label: 'Lean', lo: 'back', hi: 'forward', section: 'Touchscreen arm', order: 41, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm', zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
+  [/^J_ts_arm$/, 2, { label: 'Twist', lo: 'right', hi: 'left', section: 'Touchscreen arm', order: 42, fine: true, zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
+  [/^J_ts_screen$/, 2, { label: 'Turn', lo: 'left', hi: 'right', section: 'Touchscreen display', order: 50, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
+  [/^J_ts_screen$/, 1, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Touchscreen display', order: 51, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
+  [/^J_ts_screen$/, 0, { label: 'Level', lo: 'left side down', hi: 'right side down', section: 'Touchscreen display', order: 52, fine: true, zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
+  [/^J_mon_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Monitor', order: 60, zero: 'as photographed', aliases: ['monitor height', 'screen height', 'display height', 'raise the monitor', 'lower the monitor'] }],
+  [/^J_mon_pan$/, null, { label: 'Turn', lo: 'left', hi: 'right', section: 'Monitor', order: 61, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt', zero: 'facing the operator straight on, as photographed', aliases: ['monitor turn', 'monitor pan', 'rotate the monitor', 'screen turn'] }],
+  [/^J_mon_tilt$/, null, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Monitor', order: 62, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt', zero: 'screen face vertical', aliases: ['monitor tilt', 'screen tilt', 'display tilt', 'monitor angle'] }],
+  [/^J_pedal_tray$/, null, { label: 'Forward / back', lo: 'back', hi: 'forward', section: 'Pedal tray', order: 70, zero: 'as photographed', aliases: ['pedal tray', 'pedal position', 'move the pedals', 'footrest'] }],
+  [/^J_pedal_1$/, null, { label: 'Left pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 71, zero: 'released', aliases: ['left pedal', 'pedal 1'] }],
+  [/^J_pedal_2$/, null, { label: 'Middle pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 72, zero: 'released', aliases: ['middle pedal', 'pedal 2', 'centre pedal'] }],
+  [/^J_pedal_3$/, null, { label: 'Right pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 73, zero: 'released', aliases: ['right pedal', 'pedal 3'] }],
 ];
 /** Words whose left end is the joint's positive direction (so the control reads left-to-right as people expect). */
 const LEFT_IS_POSITIVE = new Set(['right|left']);
@@ -126,14 +130,14 @@ export function adjWords(j: Pick<ManifestJoint, 'id' | 'type'>): AdjWord[] {
     const hit = ADJ_RULES.find(([re, c]) => c === comp && re.test(j.id));
     if (!hit) {
       const name = tidyLabel(j.id.replace(/^J_/, '').replaceAll('_', ' ')) + (comp === null ? '' : ` ${['lean', 'tilt', 'turn'][comp]}`);
-      out.push({ key, joint: j.id, comp, label: name, lo: 'less', hi: 'more', flip: false, section: 'Other', order: 900 + (comp ?? 0) });
+      out.push({ key, joint: j.id, comp, label: name, lo: 'less', hi: 'more', flip: false, section: 'Other', order: 900 + (comp ?? 0), zero: '', aliases: [] });
       continue;
     }
     const m = j.id.match(hit[0])!, S = m[1] === 'L' || m[1] === 'R' ? m[1] : '', s = S === 'L' ? 'Left' : S === 'R' ? 'Right' : '';
     const sub = (t: string) => t.replace('$s', s).replace('$S', S).trim().replace(/^[a-z]/, (c) => c.toUpperCase());
     const w = hit[2], flip = LEFT_IS_POSITIVE.has(`${w.lo}|${w.hi}`);
     out.push({
-      key, joint: j.id, comp, label: w.label, lo: flip ? w.hi : w.lo, hi: flip ? w.lo : w.hi, flip, section: sub(w.section), order: w.order,
+      key, joint: j.id, comp, label: w.label, lo: flip ? w.hi : w.lo, hi: flip ? w.lo : w.hi, flip, section: sub(w.section), order: w.order, zero: w.zero, aliases: w.aliases,
       ...(w.pad ? { pad: [sub(w.pad[0]), sub(w.pad[1])] as [string, string], padLabel: w.padLabel } : {}), ...(w.fine ? { fine: true } : {}),
     });
   }

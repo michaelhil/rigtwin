@@ -10,7 +10,7 @@ tags: [checks, quality, method, viewer]
 
 ## TL;DR
 
-- `bun run check` runs 28 checks and exits non-zero if one fails: the 20 checks of the asset (about 4 s) and 8 added by [platform step 1](../30-plan/platform-plan.md) for the command layer, the server, the live page and the deploy (C-75 to C-82). The full run now takes about 105 s, most of it the deploy tests. On 2026-11-24 all pass, with one standing warning (11 parameters read by nothing).
+- `bun run check` runs 29 checks and exits non-zero if one fails: the 20 checks of the asset (about 4 s), 8 added by [platform step 1](../30-plan/platform-plan.md) for the command layer, the server, the live page and the deploy (C-75 to C-82), and 1 by agent interface v2 for the generated agent documents (C-84). The full run now takes about 105 s, most of it the deploy tests. On 2026-11-24 all pass, with one standing warning (11 parameters read by nothing).
 - The checks read the built GLB through an **independent reader** written in Python that shares no code with the generator. A writer checked only by its own reader hides its own mistakes.
 - Each check exists because of a real failure or a named risk. The coverage check exists because an early trial silently lacked the whole left armrest pod and joystick.
 - `bun tools/ui-accept.ts` drives the viewer page like a person (real pointer, wheel and key events) through 53 checks in about 2 min. All pass. Since step 1 the load check (T10) counts every script of the default page against 800 kB in all ([D-43](../20-decisions/decision-log.md#d-43)).
@@ -22,8 +22,8 @@ Ids `C-01 …` are stable; refer to them from other pages. Commands and options 
 
 <!-- UPDATE after the final modelling round: the "Result" columns and the counts quoted in them -->
 Results of C-01 to C-74 below are **as of round 2** (build `c32727406a5c…`, run on 2026-11-23 on one Apple M2
-machine), except T10 (C-31), which is as of 2026-11-24. The platform's checks (C-75 to C-83) and the totals are
-**as of 2026-11-24**, on the branch `platform-step1-main` (build `0b6d8248…`, same machine).
+machine), except T10 (C-31), which is as of 2026-11-24. The platform's checks (C-75 to C-84) and the totals are
+**as of 2026-11-24**, on the branches `platform-step1-main` and `agent-v2` (build `0b6d8248…`, same machine).
 
 ## How a check run behaves
 
@@ -78,6 +78,17 @@ live client and the deployed service. Their checks run in the same `bun run chec
 | C-80 | deploy checks | `bun tools/deploy-tests/deploy-checks.ts`: the live-site checks of `tools/deploy.ts` against local stand-ins of the site built from `dist/`: a release without a server; the route probe before the switch; an old revision, then the new one; a 502 for 20 s; a wrong revision; `server/server.js` served | A deploy that switches to a release whose server never comes up, or that publishes the server's code | ok, 16 passed, 0 failed |
 | C-81 | deploy rollback | `bash tools/deploy-tests/rollback.test.sh`: `bun run deploy --rollback` with a stand-in `ssh` on a local folder: refused to go back to a release without a server once the live one has one; the server checks after a rollback; the dry run | A rollback that silently drops the server or exposes its code | ok, 17 passed, 0 failed |
 | C-82 | live viewer | `bun tools/live-accept.ts`: two headless browsers and the real command line on one local server with an empty temporary scene (steps listed in the [tool reference](../80-reference/tools.md#the-shared-scene-commands-and-tests)) | Everything above working in a real page: a slider move, a command, Undo on the activity line, a stale refusal, a link preview, view routing, a forged author id, a server restart, the network coming back, and the page without a server | ok, 14 of 14 steps |
+
+Agent interface v2 ([D-47](../20-decisions/decision-log.md#d-47)) added to the same run: the intent commands'
+unit tests in C-75 (`shared/commands/intent.test.ts`: plain-word targets and the ambiguity rule, amounts with units and
+directions, `adjust`, `undo`, `state`, `measure`, `look`, every joint with its meaning, the MCP instructions within
+4,096 characters), the MCP endpoint's tests in C-76 (`server/mcp.test.ts`: initialize, the five tools, a call that
+reaches the live channel, refusals as tool errors, `look` to every local page or to the remembered code, a picture
+sent back, the picture endpoint's checks, foreign origins, the deployed edit limits for tool calls), and one new check:
+
+| Id | Name as printed | Verifies, and how | The failure it exists to catch | Result |
+|---|---|---|---|---|
+| C-84 | agent docs | `bun tools/agent-docs.ts --check`: the Skill's `reference.md` and the wiki page [agent interface](../80-reference/agent-interface.md) equal what the registry and the catalogue generate | documentation for agents that no longer says what the server does | ok |
 
 Two older checks changed with step 1: `bun run render` and `ui-accept` start the server with an **empty
 temporary scene**, so no pose of the shared Playground can reach a published picture, and `ui-accept` empties it
@@ -212,7 +223,7 @@ To `bun run check` (`tools/check.ts`):
    `--fast` skips.
 5. **Prove it can fail.** Break the model on purpose once and see the check go red with a useful
    message (the infrastructure agent did this with a zero-height cylinder and a misspelt key).
-6. Add a row here with the next free id (`C-84`), and say what it exists to catch.
+6. Add a row here with the next free id (`C-85`), and say what it exists to catch.
 
 To the viewer acceptance script (`tools/ui-accept.ts`): add
 `await test("T54", "name", async () => { const s = await open(1440, 900); … record("T54", "name", pass, value, limit); await close(s); })`.

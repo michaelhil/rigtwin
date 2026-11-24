@@ -72,13 +72,19 @@ try {
 // After the build on purpose: these tests read the built asset (assets/<asset>/build/), which a fresh checkout does not
 // have (the first automatic deploy with them failed for that reason, 2026-11-24).
 for (const [name, dir, what] of [
-  ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance"],
-  ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check"],
+  ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance; intent commands: plain-word targets, amounts, adjust, undo, state, measure, look, MCP instructions"],
+  ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check; MCP endpoint, look and pictures"],
   ["live client", "viewer/src", "reconnect rules: backoff, one resync, wakes, no reconnect after disconnect (Leitbild's cases)"],
 ] as const) {
   const r = spawnSync("bun", ["test", join(ROOT, dir)], { encoding: "utf8", cwd: ROOT });
   const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, name, r.status === 0 ? `${(out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim()} (${what})` : `bun test ${dir} failed`, r.status === 0 ? [] : out.filter((l) => /\(fail\)|error|expect/i.test(l)));
+}
+
+// the agent interface v2 documents are generated (tools/agent-docs.ts): the Skill's reference and the wiki page must match the code
+{
+  const r = spawnSync("bun", [join(ROOT, "tools", "agent-docs.ts"), "--check"], { encoding: "utf8", cwd: ROOT });
+  report(r.status === 0, "agent docs", (r.stdout + r.stderr).trim().split("\n").at(-1) + " (.claude/skills/operating-rigtwin/reference.md, wiki/80-reference/agent-interface.md)");
 }
 
 // ---- 3. determinism: a second build in a separate process must give the same bytes -------------------

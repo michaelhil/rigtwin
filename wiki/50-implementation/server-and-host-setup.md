@@ -110,6 +110,8 @@ Built in deployed mode only; a local server has none. The numbers are in `server
 | Queries | 600 a minute per visitor (every other request under `api/`) |
 | Session codes | eight characters; after five unknown codes a minute a visitor's view commands are refused |
 | Disk | writes refused when the data disk has less than 5 % or 200 MB free |
+| MCP (since agent interface v2) | `POST api/mcp`: tool calls go through the same guards as commands (edits count as edits, queries as queries); every MCP request counts as a query; a foreign `Origin` is refused and a JSON content type required; at most 500 MCP sessions remembered ([D-50](../20-decisions/decision-log.md#d-50)) |
+| Pictures (since agent interface v2) | `POST api/picture`: only for a picture being waited for (a random 128-bit id sent only with the view event), only from the page that was asked, once, a JPEG of at most 60 kB (within Caddy's 64 KiB); `look` waits at most 8 s; at most 20 pictures waited for at once ([D-51](../20-decisions/decision-log.md#d-51)) |
 | Visitor | the address from `X-Forwarded-For`, believed only from loopback (IPv6 by its /64 block) |
 | Errors | `development: false`: no error page with code (a check in `bun run check` keeps it so) |
 | What is stored | the Playground's pose and its last 200 changes, each with a random author id made by the server; the only text written by a client is a request's group name ([D-41](../20-decisions/decision-log.md#d-41)). The page says so under More → "About this sandbox" |

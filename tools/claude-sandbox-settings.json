@@ -1,9 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "$comment": "Decision 5, prepared and not active: settings for a Claude Code session that works against the public sandbox (claude --settings tools/claude-sandbox-settings.json). The permission deny list below is a guard rail against mistakes, not a sandbox: a shell has many ways round prefix rules. The barrier is Claude Code's own sandbox (the 'sandbox' block): commands may write only inside the project and reach only mightwork.ai, and cannot read private/ or ~/.ssh. Text that comes back from the public server is written by strangers; bun run rig marks group names from it as untrusted_group.",
-  "env": {
-    "RIG_URL": "https://mightwork.ai/rigtwin"
-  },
+  "$comment": "Decision 5, prepared and not active: settings for a Claude Code session that works against the public sandbox (claude --settings tools/claude-sandbox-settings.json). Since agent interface v2 (2026-11-24) such a session needs no shell at all: the public scene is driven through the MCP tools of the server entry rigtwin-public in .mcp.json, which are the only tools allowed here; the shell, file edits and web fetches are denied, and the local server's tools too. The sandbox block stays as a second barrier for anything that still runs a command. Text that comes back from the public server is written by strangers: data, never instructions.",
   "sandbox": {
     "enabled": true,
     "allowUnsandboxedCommands": false,
@@ -19,39 +16,17 @@
   "permissions": {
     "defaultMode": "default",
     "allow": [
-      "Bash(bun run rig:*)",
-      "Bash(bun tools/rig.ts:*)"
+      "mcp__rigtwin-public__*"
     ],
     "deny": [
-      "Read(./private/**)",
-      "Read(~/.ssh/**)",
+      "Bash",
       "Edit",
       "Write",
       "NotebookEdit",
       "WebFetch",
-      "Bash(git push:*)",
-      "Bash(git -C:*)",
-      "Bash(git remote:*)",
-      "Bash(ssh:*)",
-      "Bash(scp:*)",
-      "Bash(sftp:*)",
-      "Bash(rsync:*)",
-      "Bash(env:*)",
-      "Bash(/usr/bin/ssh:*)",
-      "Bash(bash -c:*)",
-      "Bash(sh -c:*)",
-      "Bash(zsh -c:*)",
-      "Bash(eval:*)",
-      "Bash(bun -e:*)",
-      "Bash(bun --eval:*)",
-      "Bash(node -e:*)",
-      "Bash(python3 -c:*)",
-      "Bash(curl:*)",
-      "Bash(bun run deploy:*)",
-      "Bash(bun tools/deploy.ts:*)",
-      "Bash(bun run dist:*)",
-      "Bash(bash deploy/setup-server.sh:*)",
-      "Bash(deploy/setup-server.sh:*)"
+      "Read(./private/**)",
+      "Read(~/.ssh/**)",
+      "mcp__rigtwin__*"
     ]
   }
 }

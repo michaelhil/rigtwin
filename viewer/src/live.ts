@@ -17,7 +17,7 @@
 //
 // Quiet when the page has no server: it asks for api/health only when version.json names a server, and
 // stays local when the health check does not answer.
-import { S, $, el, on, hooks, Q, DEG, setJoint, setView, showAll, showOnly, setVisible, select, viewerApi, type Opts } from './engine.ts';
+import { S, $, el, on, hooks, Q, DEG, setJoint, setView, showAll, showOnly, setVisible, select, viewerApi, drawNow, type Opts } from './engine.ts';
 import { sayJoint } from '../../shared/words.ts';
 import { createConnection } from './live-connection.ts';
 import type { JointValue } from '../../shared/pose.ts';
@@ -126,14 +126,29 @@ function applied(e: Entry) {
   if (!own) { if (out) later.push(e); else tell(say(e), e.version); }      // while a request is out, it may turn out to be ours
   if (again && version >= awaiting) { again = false; schedule(); }
 }
-/** A view command addressed to this page's session code. */
-function view(d: { id: string; args: any }) {
+/** A view command addressed to this page's session code (or, on a local server, to every page). `look` does what the three
+ *  view commands do in one go, and with a reply id sends a picture of the result back (agent interface v2). */
+function view(d: { id: string; args: any; reply?: string }) {
   const a = d.args;
   try {
     if (d.id === 'view.set') setView(a.view, { ortho: false });
     if (d.id === 'view.show') { if (a.all) showAll(); if (a.only) showOnly(a.only); if (a.hide) setVisible(a.hide, false); }
     if (d.id === 'view.select') select(a.id);
+    if (d.id === 'look') {
+      if (a.all) showAll(); if (a.only) showOnly(a.only); if (a.hide) setVisible(a.hide, false);
+      if (a.view) setView(a.view, { ortho: false });
+      if (a.select) select(a.select);
+    }
   } catch { /* an id this model does not have */ }
+  if (d.reply) void sendPicture(d.reply);
+}
+async function sendPicture(reply: string) {
+  try {
+    drawNow();
+    const b = await viewerApi.pictureJpeg(60 * 1024);
+    if (!b) return;
+    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'image/jpeg' }, body: b });
+  } catch { /* the agent hears "no picture" when its wait ends */ }
 }
 const conn = createConnection({
   url: () => `api/live?session=${code}${version >= 0 ? `&since=${version}` : ''}`,

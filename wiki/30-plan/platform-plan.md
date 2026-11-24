@@ -14,6 +14,7 @@ tags: [plan, platform, agents, server, process]
 - **Five steps**, each ending with a review and the hours used: 1 agent control, 2 honest numbers, 3 assessment, 4 an agent in the app, 5 a control room. The owner decides after each step whether to go on.
 - **Approved** by the owner on 2026-11-24 with an independent "could this be simpler?" monitor that approves each design before building and reviews each checkpoint ([D-38](../20-decisions/decision-log.md#d-38)).
 - **Step 1 is built** on the branch `platform-step1-main`: the commands, the server, the viewer as a live client, `bun run rig`, the operating Skill and the deployed service with its guards. It is live on mightwork.ai since 2026-11-24 (host setup and merge with the owner's yes); the public site gets it **without the manikin** until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)).
+- **Step 1.5, agent interface v2** (2026-11-24, [D-47](../20-decisions/decision-log.md#d-47)): five intent commands in plain words (`adjust`, `look`, `measure`, `undo`, `state`), offered as MCP tools by the server itself on the laptop and on mightwork.ai, with every adjustment's meaning in one generated catalogue and pictures from the browser on request. An everyday request is one tool call.
 - **Changed from the plan in step 1:** no release split ([D-42](../20-decisions/decision-log.md#d-42)), undo by entry or request ([D-40](../20-decisions/decision-log.md#d-40)), the scene document holds the pose only, port 4190 ([D-45](../20-decisions/decision-log.md#d-45)), a byte budget per live stream and lower stream limits ([D-46](../20-decisions/decision-log.md#d-46)); `view.picture`, projects and saved versions move to step 2.
 
 ## About this page
@@ -128,6 +129,30 @@ the load test H14); the merge to `main` deployed the same evening, and the two-b
 
 Effort: the builders reported about 1.5 agent hours to the checkpoint against 18–28 estimated; the
 re-forecast of steps 2–5 is still to be made.
+
+## Step 1.5: agent interface v2 (2026-11-24)
+
+After step 1 went live, one request on the public sandbox ("make the backrest straight") took six agent
+turns and about 30 kB of reading for one number. The server answered each command in 0.3 s, so the time
+went into the agent's turns: finding the Skill, choosing the scene, looking ids up, reading the current
+value, learning from source files what 0° means, a stop for an assumed adjustment the owner had named,
+and a read to verify. The owner asked for a significant re-engineering and approved it to be built and
+deployed at once ([D-47](../20-decisions/decision-log.md#d-47)).
+
+| Part | What exists |
+|---|---|
+| Meaning of every adjustment | what 0 is, the two direction words, everyday names; in `shared/words.ts`, next to the page's words ([D-52](../20-decisions/decision-log.md#d-52)); a test fails when a joint lacks them |
+| Intent commands | `adjust`, `look`, `measure`, `undo`, `state` in `shared/commands/intent.ts`: plain-word targets with an ambiguity rule, amounts with units and directions, relative changes worked out on the server, server-made request names, replies that are their own check ([D-48](../20-decisions/decision-log.md#d-48)); assumed adjustments moved and marked ([D-49](../20-decisions/decision-log.md#d-49)) |
+| MCP | `POST api/mcp` in the server, tools only, the same locally and deployed; `.mcp.json` with `rigtwin` and `rigtwin-public`, loaded from the first turn; the instructions carry the rules and the catalogue ([D-50](../20-decisions/decision-log.md#d-50)) |
+| Eyes | `look {picture: true}`: the page sends back a JPEG of its view (at most 60 kB); views without a code go to every local page ([D-51](../20-decisions/decision-log.md#d-51)) |
+| Generated documents | the Skill's `reference.md` and the wiki page [agent interface](../80-reference/agent-interface.md), from the registry and the catalogue; `bun run check` fails when they are out of date |
+| Skill | `operating-rigtwin` v2: the tools, how to report, the honesty words, when to ask; 147 lines became about 80 |
+| Benchmark | `bun tools/agent-eval.ts`: ten owner requests, each given to a fresh headless Claude Code against a temporary scene with one page open, scored from the scene (pose, view, asked or not, words), with tool calls, time and cost; the step-1 interface as the baseline |
+
+The same request now takes one call: `adjust {"target": "backrest", "to": "upright"}`, answered with
+"Backrest: recline 25° reclined → upright (25° → 0°)", the request name for undo, the note that it is an
+assumed adjustment, whose change it replaced and what else is moved. The benchmark's numbers are not yet in
+(it needs a signed-in Claude Code command line on this machine; [next steps](../90-next/next-steps.md)).
 
 ## Where the details are
 
