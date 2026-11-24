@@ -293,3 +293,8 @@ server, `state` no longer shows names that callers chose, and the command line w
 fresh private folder. Kept as it is: `.mcp.json` loads the public sandbox's tools in every session of
 this repository (the owner's request for fast agent control; what they return is now server-made text,
 numbers and pictures from the browser the owner names).
+
+**About 19:30** — The first push of v2 (`45c6122`) was refused by the deploy's own check before any upload: a
+step-1 test expected the command list to hold exactly the eight step-1 commands, and on the Linux runner the
+intent tests ran first in the same process and had registered five more (on the laptop the files ran in the
+other order). The test now checks the step-1 commands among the listed ones; both orders pass.

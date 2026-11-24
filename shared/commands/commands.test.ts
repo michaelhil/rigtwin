@@ -62,7 +62,8 @@ describe("validation and the error shape", () => {
   });
   test("every command is listed with a summary, a schema and an example that validates", () => {
     const l = list();
-    expect(l.map((c) => c.id)).toEqual(["scene.summary", "scene.find", "pose.set", "history.undo", "measure.distance", "view.set", "view.show", "view.select"]);
+    // the step-1 commands; the intent commands (intent.ts) are listed too once another test file has loaded them, in any order
+    expect(l.filter((c) => !c.tool).map((c) => c.id)).toEqual(["scene.summary", "scene.find", "pose.set", "history.undo", "measure.distance", "view.set", "view.show", "view.select"]);
     for (const c of l) {
       expect(c.summary.length).toBeGreaterThan(20);
       for (const e of c.examples) expect([c.id, check(c.args, e.args)]).toEqual([c.id, null]);
