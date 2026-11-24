@@ -81,7 +81,7 @@ install_stubs() {
   logger() { printf '%s\n' "$*" >>"$HOST/state/syslog"; }
   journalctl() { echo "(journal lines)"; }
   keep_owner_mode() { log "keep_owner_mode $1"; echo "-m 644"; }   # the host's GNU stat; here the mode only
-  systemd-run() { log "systemd-run $*"; if [[ -n "${PROBE_FAILS:-}" ]]; then echo "serve ok"; echo 'srv ["rigtwin","other-site"]'; echo "write ok"; echo "EGRESS OPEN"; else echo "serve ok"; echo 'srv ["rigtwin"]'; echo "write ok"; echo "egress blocked"; fi; }
+  systemd-run() { log "systemd-run $*"; if [[ -n "${PROBE_FAILS:-}" ]]; then echo "serve ok"; echo 'srv ["rigtwin","other-site"]'; echo 'opt ["rigtwin"]'; echo 'varlib ["rigtwin"]'; echo "write ok"; echo "EGRESS OPEN"; elif [[ -n "${PROBE_SEES_VARLIB:-}" ]]; then echo "serve ok"; echo 'srv ["rigtwin"]'; echo 'opt ["rigtwin"]'; echo 'varlib ["other-data","rigtwin"]'; echo "write ok"; echo "egress blocked"; else echo "serve ok"; echo 'srv ["rigtwin"]'; echo 'opt ["rigtwin"]'; echo 'varlib ["rigtwin"]'; echo "write ok"; echo "egress blocked"; fi; }
   flock() { log "flock $*"; }
   ss() { :; }
   sleep() {   # the script sleeps once, right after the reload: the moment to cut it off
@@ -360,6 +360,9 @@ expect "with the unit's hardening as systemd-run properties" 'called "$H" "syste
 expect "but not how the service starts" '! called "$H" "systemd-run .*-p ExecStart=" && ! called "$H" "systemd-run .*-p Restart="'
 PROBE_FAILS=1 run probe-fails "$H" --probe
 expect "a probe that sees other sites or the internet fails loudly" '[[ $(rc probe-fails) == 1 ]] && has probe-fails "do not merge yet"'
+PROBE_SEES_VARLIB=1 run probe-varlib "$H" --probe
+expect "a probe that sees another program's data folder under /var/lib fails loudly" '[[ $(rc probe-varlib) == 1 ]] && has probe-varlib "do not merge yet"'
+expect "the unit names no path of another program (only rigtwin's own, and the host's Caddy, web root and backups)" '! grep -E "^(InaccessiblePaths|BindPaths|BindReadOnlyPaths|ReadWritePaths|TemporaryFileSystem)=" "$REPO/deploy/rigtwin-server.service" | tr " " "\n" | sed "s/^[A-Za-z]*=//" | grep -vE "^-?/(srv|opt|var/lib)(/rigtwin)?(:ro)?$|^-/etc/caddy$|^-/var/www$|^-/var/backups$" | grep -q .'
 
 echo
 echo "setup-server.sh test: $PASS passed, $FAIL failed (logs in $OUT)"

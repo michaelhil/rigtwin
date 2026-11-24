@@ -15,10 +15,10 @@ unit and a probe file that is removed).
 | H4 | before | the host reaches its own sites | no `000`; `/rigtwin/` 200, `api/health` 404, `server/server.js` 404 | `--check` ("status before") |
 | H5 | before | no proxy or CDN in front (the visitor keys depend on it) | the A/AAAA records are among the host's own addresses | `--check` |
 | H6 | before | systemd, kernel, cgroups, cores | systemd ≥ 247, kernel ≥ 5.8, `cgroup2fs`, ≤ 32 cores (`TasksMax=128`) | `--check` |
-| H7 | after `--apply`, before the merge | Bun 1.4.0 starts under the unit's hardening | `serve ok`, `srv ["rigtwin"]`, `write ok`, `egress blocked`, then "probe passed" | `setup-server.sh --probe` (the settings are read from the unit file itself) |
+| H7 | after `--apply`, before the merge, and after every change of the unit | Bun 1.4.0 starts under the unit's hardening | `serve ok`, `srv ["rigtwin"]`, `opt ["rigtwin"]`, `varlib ["rigtwin"]`, `write ok`, `egress blocked`, then "probe passed" | `setup-server.sh --probe` (the settings are read from the unit file itself) |
 | H8 | after the first release with `server/` | exposure score and limits in effect | exposure ≲ 2; `IPAddressDeny`, `MemoryMax`, `TasksMax`, CPU quota as in the unit | `--check` |
 | H9 | before | room in the journal for the start attempts before the first server release | room for about 170,000 lines a day, or the unit's `LogRateLimit*` (now set) | `--check` |
-| H10 | before | other sites' files outside `/srv` | none; or add each to the unit's `InaccessiblePaths=` before `--apply` | `--check` |
+| H10 | before | other sites' files outside `/srv` | none, or only under `/opt` and `/var/lib`: the unit replaces `/srv`, `/opt` and `/var/lib` by empty read-only folders holding only rigtwin's own part, without naming anything else (`--probe` checks it). A site root anywhere else: hide it in the unit before `--apply` | `--check` |
 | H11 | before | data disk; Caddy access logs | free space well above 200 MB and 5 %; whether access logs are kept (the page says visitors' addresses are not stored by rigtwin) | `--check` |
 | H12 | after the first release with `server/` | nothing of `server/` is served, in any spelling | every line 404 | `--check` |
 | H13 | before | the tools the script needs | every one found | `--check` |
@@ -61,12 +61,15 @@ The script prints the TCP memory every 5 s itself (from `/proc/net/sockstat`, ag
 - Second run (the bundle with the fix, SHA-256 `270ec3ab…`, 60 s, 300 streams asked for): **passed.** 150 of 150
   taken streams ended by the server, largest 527,904 bytes, server peak 66 MB, health 0–1 ms throughout, TCP memory
   peak 28,698 pages (49 % of the pressure threshold), the host's other sites unaffected.
+- After that run the server gained one small change: a stream that reaches its budget ends with an `end` event (the
+  page reconnects at once). The limits are unchanged.
 
 ## The order of the first rollout
 
 1. `--check`, read every line (H1–H6, H9–H11, H13); the owner says yes.
 2. `--apply` inside tmux (the Caddy route and its 404 rule, then the service, which retries every 2 s).
-3. `--probe` (H7) and H14.
+3. `--probe` (H7) and H14. After any later change of the unit: `--apply` (it installs the new unit and restarts the
+   service) and `--probe` again, before a release relies on it.
 4. Only then: merge the platform branch (`platform-step1-main`) to `main` and push. The deploy first asks `api/health` (with the old release still
    live): a 404 would mean the route is missing, and it stops without uploading or switching anything.
 5. After the deploy: `--check` again (H8, H12), then `bun tools/live-idle-test.ts --url https://mightwork.ai/rigtwin`.

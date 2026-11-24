@@ -331,7 +331,7 @@ project's working files.
 - **Decided by / status:** simplicity monitor (blocking objection 3), accepted by the coordinator; supersedes the plan's release split; in force.
 - **What:** `server/server.js` is part of each release next to the viewer. Caddy answers 404 for `/rigtwin/server/*` (installed by the setup script before any release with a server), the deploy checks that 404, and a rollback refuses a release without a server once the host runs one. The deploy account's gate is unchanged.
 - **Alternatives:** separate `site/` and `server/` folders per release (rejected: two new gate patterns, a reinstall of the gate as root, a rollback floor for the whole site, and most of the security review's release risks).
-- **Consequences:** the order of the first rollout matters: the Caddy rule must be on the host before a release with `server/` reaches `main` ([deployment](../50-implementation/deployment.md)).
+- **Consequences:** the order of the first rollout matters: the Caddy rule must be on the host before a release with `server/` reaches `main` ([order of the first rollout](../50-implementation/server-and-host-setup.md#order-of-the-first-rollout)); it was installed on 2026-11-24.
 
 <a id="d-43"></a>
 ### D-43 — The viewer's download budget counts every script of the default page: at most 800 kB, ready within 1 s
@@ -363,4 +363,4 @@ project's working files.
 - **What:** the server ends a live stream once it has been given 512 kB in all, read or not (the browser reconnects with `since=` and receives only what it missed); the ended stream's place still counts in the limits until its connection is gone (at most 45 s). The plan's 300 streams in all and the security review's 30 per network block become 150 and 12.
 - **Alternatives:** relying on the 1 MB queue limit alone (rejected: on the host's Linux kernel each non-reading stream held about 770 kB in socket buffers before that limit could act).
 - **Reason:** *measured* on the host: without the budget, 300 non-reading streams took the kernel's TCP memory past its pressure threshold (59,172 against 58,837 pages); with it, 150 of 150 were ended by the server and TCP memory peaked at 49 % of the threshold.
-- **Consequences:** at worst about 150 × 0.5 MB = 75 MB of socket memory. A stream that gets only heartbeats and occasional changes lasts for hours. Details: [deployment](../50-implementation/deployment.md).
+- **Consequences:** at worst about 150 × 0.5 MB = 75 MB of socket memory. A stream that gets only heartbeats and occasional changes lasts for hours; one that reaches its budget ends with an `end` event, on which the page reconnects at once. Details: [the server and its host setup](../50-implementation/server-and-host-setup.md#host-check-h14-live-streams-that-do-not-read).

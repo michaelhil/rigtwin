@@ -1,6 +1,6 @@
 ---
 title: Summary
-tldr: From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is built and waits for the host setup and the merge.
+tldr: From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is built, the host is set up, and it goes live with the merge.
 status: living
 updated: 2026-11-24
 tags: [overview, summary, results]
@@ -14,7 +14,7 @@ tags: [overview, summary, results]
 - **Built:** a model of Rig B with 46 parts that have shape, 20 joints and 14 reference points, generated from 305 parameter records by code; 28,070 triangles, 0.72 MB; a browser viewer to turn, hide and adjust every part; 20 automatic checks; an Agent Skill for the next asset.
 - **Shown:** an independent reviewer that never saw the builders' notes accepted the model after two rounds (41 of 46 parts accepted, 5 with minor fixes, none rejected); the three small fixes it required were then made. Every joint moves to both limits without tearing or collision.
 - **Not shown:** that the sizes are right. They are photo estimates with stated ranges, unchecked against any tape. All three of the owner's remembered figures conflict with the photos, and the seat's five adjustments are assumed, not seen.
-- **Platform step 1** (2026-11-24, [plan](../30-plan/platform-plan.md)): Claude Code can move parts and steer a browser's view through `bun run rig`; every open viewer shows each change at once with who made it and an Undo; one small server keeps the shared scene, the same program on the laptop and on mightwork.ai. Built and checked on the branch `platform-step1-main`; not live yet (host setup and merge first), and the public site gets it without the manikin until the owner approves it.
+- **Platform step 1** (2026-11-24, [plan](../30-plan/platform-plan.md)): Claude Code can move parts and steer a browser's view through `bun run rig`; every open viewer shows each change at once with who made it and an Undo; one small server keeps the shared scene, the same program on the laptop and on mightwork.ai. Built and checked on the branch `platform-step1-main`; the host is set up (2026-11-24, with the owner's yes) and its service waits for the first release with the server. Not live yet: the merge to `main` comes next. The public site gets it without the manikin until the owner approves it.
 - **Cost:** about 3.5 hours of planning with 16 agents, then 2 h 46 min to the reviewed model with 14 agent runs; 12.3 agent-hours and 9.4 million tokens in those two phases.
 
 New here? Read this page, then the [index](../index.md). Terms are in the [glossary](glossary.md).
@@ -97,7 +97,7 @@ All figures come from one Apple M2 machine and one run of the project on 2026-11
 | What was asked, in the owner's words | [The owner's requests](../10-request/original-request.md), [Requirements](../10-request/requirements.md) |
 | Why it was done this way | [Decision log](../20-decisions/decision-log.md), [Options considered](../20-decisions/options-considered.md), [Approved plan](../30-plan/approved-plan.md), [Deviations](../30-plan/deviations.md), [Platform plan](../30-plan/platform-plan.md) |
 | How an asset is made | [Pipeline](../40-method/pipeline.md), [Measuring from photos](../40-method/measuring-from-photos.md), [Filling gaps](../40-method/filling-gaps.md), [Decomposition](../40-method/decomposition.md), [Asset contract](../40-method/asset-contract.md), [Agent process](../40-method/agent-process.md), [Checks](../40-method/checks.md) |
-| What happened and how long it took | [Modelling rounds](../50-implementation/modeling-rounds.md), [Measurement results](../50-implementation/measurement-results.md), [Viewer](../50-implementation/viewer.md), [Timeline and performance](../50-implementation/timeline-and-performance.md), [Tech stack](../50-implementation/tech-stack.md), [Deployment](../50-implementation/deployment.md), [Project log](../log.md) |
+| What happened and how long it took | [Modelling rounds](../50-implementation/modeling-rounds.md), [Measurement results](../50-implementation/measurement-results.md), [Viewer](../50-implementation/viewer.md), [Timeline and performance](../50-implementation/timeline-and-performance.md), [Tech stack](../50-implementation/tech-stack.md), [Deployment](../50-implementation/deployment.md), [The server and its host setup](../50-implementation/server-and-host-setup.md), [Project log](../log.md) |
 | What was learned | [Lessons learned](../60-lessons/lessons-learned.md), [Failures and fixes](../60-lessons/failures-and-fixes.md), [Patterns](../60-lessons/patterns.md), [Ideas](../60-lessons/ideas.md) |
 | The result and its critique | [Model card](../70-results/rig-b-model-card.md), [Goal assessment](../70-results/goal-assessment.md) |
 | What to do next | [Next steps](../90-next/next-steps.md); the most useful single action is a tape measurement of the ten values listed in [measurement results](../50-implementation/measurement-results.md#the-most-useful-tape-measurements) |
@@ -111,11 +111,11 @@ As of 2026-11-24 (the model's rows unchanged since 2026-11-23, about 22:00 local
 |---|---|
 | Model | round 3 done: the three fixes required by the round-2 reviewer and a joint-limit bug; all checks pass; spot-checked by the coordinator |
 | Viewer | redesigned, 53 of 53 acceptance checks (one of them a skip; see [viewer](../50-implementation/viewer.md#the-redesign)) |
-| Wiki | 38 pages on the platform branch (37 published on main); lint clean; published with the viewer |
+| Wiki | 39 pages on the platform branch (37 published on main); lint clean; published with the viewer |
 | Skill | version 0.1.0; not yet tested on a second object |
 | Tape measurements, seat make and model, which adjustments exist | requested, not received |
 | GitHub repository (private) | <https://github.com/michaelhil/rigtwin> |
 | Live viewer | <https://mightwork.ai/rigtwin/>; every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
 | Live wiki | <https://mightwork.ai/rigtwin/wiki/> |
-| Platform step 1 (agent control) | built on the branch `platform-step1-main`: all checks pass (full check, 53 viewer acceptance checks, 14 two-browser steps, the deploy's dry run); on the host the read-only setup check and the load test H14 passed; the setup itself, the merge to `main` and the live tests wait for the owner's yes ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
+| Platform step 1 (agent control) | built on the branch `platform-step1-main`: all checks pass (full check, 53 viewer acceptance checks, 14 two-browser steps, the deploy's dry run); the host setup ran on 2026-11-24 with the owner's yes (check, setup, probe, load test H14), and the installed service waits for the first release with the server. Remaining: the merge to `main` and push with the owner's yes, then the checks and tests on the live site ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
 | Manikin | built in a parallel session on its own branch; not on the public site until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)) |

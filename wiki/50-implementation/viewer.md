@@ -243,10 +243,10 @@ Undo puts a change back, and the scene is reset on request.
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
 or the network comes back; one resync after each reconnect, asking for the changes after the version it
 has (`since=`) and keeping its session code. A stream that the deployed server ends after 512 kB
-([D-46](../20-decisions/decision-log.md#d-46)) comes back the same way: about a second without live
-updates, then only the missed changes, no full snapshot and nothing visible on the page (*tested*
-2026-11-24 with the real page against a server with a 3 kB budget: two ends in 30 changes, the page
-caught up each time, no console message, no failed request).
+([D-46](../20-decisions/decision-log.md#d-46)) closes with an `end` event, and the page reconnects at
+once instead of waiting: it gets only the missed changes, no full snapshot, and nothing shows on the
+page (*tested* 2026-11-24 with the real page against a server with a 3 kB budget: two ends in 30
+changes, the page never fell behind, no console message, no failed request).
 
 **Tested** by `tools/live-accept.ts` (14 of 14, two real browsers and the command line on one local
 server) and by the 53 acceptance checks, which start every page on an empty temporary scene so that no
@@ -277,6 +277,6 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 | No measuring tool that shows a distance with its range | idea [I-21](../60-lessons/ideas.md#i-21) |
 | Pressed or lit states of buttons, key switch and emergency stop are not modelled | provisional in the [asset contract](../40-method/asset-contract.md) |
 | The page has been tested only against the local server; behaviour behind the production server is checked by the deployment step | see [deployment](deployment.md) |
-| The shared scene has not yet run on mightwork.ai: the host setup and the first release with the server wait for the owner's yes | step 1's rollout, see [deployment](deployment.md) |
+| The shared scene has not yet run on mightwork.ai: the host is set up (2026-11-24), the first release with the server comes with the merge to `main`, and the ten-minute idle test and the two-browser test on the live site follow it | step 1's rollout, see [the server and its host setup](server-and-host-setup.md#order-of-the-first-rollout) |
 | On the laptop (HTTP/1.1) a browser holds six live streams per host, so a seventh viewer tab waits; the public site uses HTTP/2 | by design |
-| After the server ends a stream (byte budget, restart) live changes pause for about a second | accepted |
+| After a server restart or a dropped connection live changes pause until the page has reconnected (a second or more) | accepted |

@@ -51,6 +51,22 @@ function setup() {
 }
 
 describe("the live channel reconnects after a close the page did not ask for", () => {
+  test("an `end` event from the server (a stream's byte budget) reconnects at once, with the version the page has; a stream under a second old backs off", () => {
+    const { seen, advance, latest, setVersion } = setup();
+    latest().emit("session"); latest().emit("snapshot", { doc: { version: 3 } });
+    advance(5000); setVersion(9);
+    latest().emit("end", { reason: "budget" });
+    expect(FakeES.made.length).toBe(2);                              // no wait, no attempt counted
+    expect(FakeES.made[0].closedByPage).toBe(true);
+    expect(latest().url).toBe("api/live?session=ABCDEFGH&since=9");
+    expect(seen).toEqual(["ready"]);
+    latest().emit("session");
+    expect(seen).toEqual(["ready", "ready, resync"]);
+    latest().emit("end", { reason: "budget" });                      // ended again within the same second: the usual backoff
+    expect(FakeES.made.length).toBe(2);
+    expect(seen.at(-1)).toBe("closed, attempt 1 in 1000 ms");
+    advance(1000); expect(FakeES.made.length).toBe(3);
+  });
   test("close, reconnecting with backoff, ready, and that ready is one resync", () => {
     const { seen, advance, latest } = setup();
     latest().emit("session"); latest().emit("snapshot", { doc: { version: 3 } });

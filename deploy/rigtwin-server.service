@@ -30,22 +30,23 @@ TimeoutStopSec=10
 LogRateLimitIntervalSec=30s
 LogRateLimitBurst=200
 
-# Files: the whole file system read-only, writes only to the data folder; other sites under /srv hidden.
+# Files: the whole file system read-only, writes only to the data folder. Whatever else the host runs stays out
+# of reach by one rule that names nothing (setup check H10): each of /srv, /opt and /var/lib is replaced by an empty
+# read-only folder that holds only rigtwin's own part: the releases, the runtime, and the data folder (the one
+# writable place: BindPaths= makes a writable bind mount, systemd.exec(5), so no ReadWritePaths= is needed).
+# `setup-server.sh --probe` checks all of it on the host: the three folders list only "rigtwin", and a write succeeds.
 ProtectSystem=strict
-ReadWritePaths=/var/lib/rigtwin
 TemporaryFileSystem=/srv:ro
 BindReadOnlyPaths=/srv/rigtwin
-# Other applications on the host (setup check H10, 2026-11-24): their programs under /opt and their settings and
-# data stay out of reach. /opt is replaced by an empty read-only folder holding only rigtwin's runtime; the named
-# settings and data folders are hidden ("-": ignored if absent).
 TemporaryFileSystem=/opt:ro
 BindReadOnlyPaths=/opt/rigtwin
-InaccessiblePaths=-/etc/leitbild -/etc/optifuel -/etc/review -/etc/samsinn-dev-agent -/etc/readback-training.env
-InaccessiblePaths=-/var/lib/leitbild -/var/lib/optifuel -/var/lib/optifuel-deploy -/var/lib/optifuel-ssh -/srv/codexdev
+TemporaryFileSystem=/var/lib:ro
+BindPaths=/var/lib/rigtwin
 ProtectHome=yes
-# other sites' files outside /srv and the host's Caddy and backup folders (security review S5; extend after host check H10;
-# the "-" lets a missing path pass)
-InaccessiblePaths=-/etc/caddy -/var/www -/var/backups -/var/lib/caddy
+# the host's Caddy settings, web root and backups (security review S5; the "-" lets a missing path pass). Other
+# programs' settings under /etc are not named here: they are guarded by their own file permissions (this service
+# runs as an unprivileged user without capabilities).
+InaccessiblePaths=-/etc/caddy -/var/www -/var/backups
 PrivateTmp=yes
 PrivateDevices=yes
 UMask=0077

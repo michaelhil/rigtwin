@@ -316,7 +316,7 @@ host_checks() {
   else say "  H8 (after the first release with server/)"; fi
   say "  H9 the journal's room for the start attempts before the first server release (expect: room, or the unit's LogRateLimit)"
   { journalctl --disk-usage 2>/dev/null; grep -hE '^(SystemMaxUse|RateLimit)' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf 2>/dev/null; } | indent || true
-  say "  H10 site roots outside /srv (expect: none, or each in the unit's InaccessiblePaths=)"
+  say "  H10 site roots outside /srv (expect: none, or only under /opt and /var/lib, which the unit hides whole except rigtwin's own folders; anything elsewhere: add it to the unit before --apply)"
   grep -hE '^[[:space:]]*root\b' "$CADDY_MAIN" "$CADDY_SITES"/*.caddy 2>/dev/null | grep -v '/srv/' | indent || true
   say "  H11 data disk and access logs (expect: free space; whether Caddy keeps access logs: the page says addresses are not stored)"
   { df -h /var/lib 2>/dev/null | tail -1; grep -nE '^[[:space:]]*log\b' "$CADDY_MAIN" "$CADDY_SITES"/*.caddy 2>/dev/null; } | indent || true
@@ -331,7 +331,7 @@ host_checks() {
 # ------------------------------------------------------------------------------------------------ --probe (H7)
 # The unit's confinement, read from the unit file itself: every [Service] setting except how it is started and restarted.
 unit_properties() { awk '/^\[Service\]/{f=1; next} /^\[/{f=0} f && /^[A-Za-z]+=/' "$NEW_UNIT" | grep -vE '^(Type|ExecStart|Restart|RestartSec|TimeoutStopSec)='; }
-PROBE_JS='(async()=>{const fs=require("fs");const s=Bun.serve({port:4181,hostname:"127.0.0.1",development:false,fetch:()=>new Response("ok")});console.log("serve",await (await fetch("http://127.0.0.1:4181/")).text());console.log("srv",JSON.stringify(fs.readdirSync("/srv")));fs.writeFileSync("/var/lib/rigtwin/.probe","x");console.log("write ok");try{await fetch("https://mightwork.ai/",{signal:AbortSignal.timeout(3000)});console.log("EGRESS OPEN")}catch{console.log("egress blocked")}s.stop(true)})()'
+PROBE_JS='(async()=>{const fs=require("fs");const s=Bun.serve({port:4181,hostname:"127.0.0.1",development:false,fetch:()=>new Response("ok")});console.log("serve",await (await fetch("http://127.0.0.1:4181/")).text());console.log("srv",JSON.stringify(fs.readdirSync("/srv")));console.log("opt",JSON.stringify(fs.readdirSync("/opt")));console.log("varlib",JSON.stringify(fs.readdirSync("/var/lib")));fs.writeFileSync("/var/lib/rigtwin/.probe","x");console.log("write ok");try{await fetch("https://mightwork.ai/",{signal:AbortSignal.timeout(3000)});console.log("EGRESS OPEN")}catch{console.log("egress blocked")}s.stop(true)})()'
 do_probe() {
   header --probe
   [[ -x "$RUNTIME_DIR/bun" ]] || die "Bun is not installed at $RUNTIME_DIR/bun: run --apply first"
@@ -342,8 +342,8 @@ do_probe() {
   out=$(systemd-run --wait --pipe --collect --quiet "${props[@]}" "$RUNTIME_DIR/bun" -e "$PROBE_JS" 2>&1 || true)
   printf '%s\n' "$out" | indent
   rm -f "$DATA_DIR/.probe"
-  if [[ "$out" == *"serve ok"* && "$out" == *'srv ["rigtwin"]'* && "$out" == *"write ok"* && "$out" == *"egress blocked"* ]]; then say "probe passed: Bun serves on loopback, sees only /srv/rigtwin, writes its data folder, cannot reach the internet"
-  else loud "probe did not give 'serve ok', 'srv [\"rigtwin\"]', 'write ok', 'egress blocked': the unit's hardening and Bun do not fit; do not merge yet"; return 1; fi
+  if [[ "$out" == *"serve ok"* && "$out" == *'srv ["rigtwin"]'* && "$out" == *'opt ["rigtwin"]'* && "$out" == *'varlib ["rigtwin"]'* && "$out" == *"write ok"* && "$out" == *"egress blocked"* ]]; then say "probe passed: Bun serves on loopback, sees only rigtwin's own folders in /srv, /opt and /var/lib, writes its data folder, cannot reach the internet"
+  else loud "probe did not give 'serve ok', 'srv [\"rigtwin\"]', 'opt [\"rigtwin\"]', 'varlib [\"rigtwin\"]', 'write ok', 'egress blocked': the unit's hardening and Bun do not fit; do not merge yet"; return 1; fi
 }
 
 do_check() {

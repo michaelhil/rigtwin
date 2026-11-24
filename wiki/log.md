@@ -226,3 +226,23 @@ pass; the page loads one script of 733 kB. The setup on the host and the merge w
 **Later the same day** — This wiki pass for the platform: the new [platform plan](30-plan/platform-plan.md)
 page, decisions D-38 to D-46, and the viewer, deployment, tech stack, checks, tools, skills, next steps
 and summary pages.
+
+**16:17 (the Caddy change; the rest within the hour before and after)** — The host setup, with the
+owner's yes, which the entries above leave out: `setup-server.sh --check` twice (the first stopped at
+the taken port, the second passed every host check), then `--apply` (the system user and data folder,
+Bun 1.4.0 with a matching checksum, the Caddy route installed with a backup while every other site on
+the host answered as before, the unit installed and retrying every 2 s), then `--probe` (passed: Bun
+serves on loopback under the unit's hardening, sees only rigtwin's folders, cannot reach the internet),
+then the load test H14 (failed once, passed after the fix noted above). The service now waits for the
+first release that contains the server.
+[The server and its host setup](50-implementation/server-and-host-setup.md#order-of-the-first-rollout).
+
+**Later the same day** — The simplicity monitor's review before the merge: approved with changes. The
+wiki still said the setup was waiting for the owner's yes; corrected on the deployment, viewer, summary,
+plan and next-steps pages, and the server's part of the deployment page became a page of its own. The
+unit no longer names other programs on the host: `/var/lib` is hidden whole except rigtwin's data
+folder, like `/srv` and `/opt`, and the probe checks all three (the changed unit is installed and
+probed again before the merge). A stream that reaches its byte budget now ends with an `end` event, on
+which the page reconnects at once instead of after a second. What remains: the merge and push with the
+owner's yes, the check on the host after the deploy, the ten-minute idle test and the two-browser test
+on the live site. [Next steps](90-next/next-steps.md#0-platform-step-1-the-rollout-and-after).

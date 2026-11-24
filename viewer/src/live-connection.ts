@@ -11,6 +11,8 @@
 //     is not doubled); a page that was hidden for a long time reconnects on becoming visible even if its stream
 //     still looks open (a locked device's connection can be dead without an error);
 //   - every attempt asks for the url() of that moment (the version and session code the page last adopted).
+// Ours, not Leitbild's: the server ends a stream that has been given its byte budget with an `end` event; the page
+// then reconnects at once, without counting an attempt (unless the stream lasted under a second: then the backoff).
 export const reconnectDelayMs = (attempt: number) => Math.min(30_000, 1000 * 2 ** Math.max(0, attempt - 1));
 /** a page hidden longer than this reconnects when it becomes visible, whatever its stream says */
 export const STALE_HIDDEN_MS = 30_000;
@@ -37,9 +39,14 @@ export function createConnection(h: Handlers, env: Env) {
   function open() {
     if (stopped) return;
     if (timer !== null) { env.clearTimeout(timer); timer = null; }
-    const me = new env.EventSource(h.url()), resumed = everReady;
+    const me = new env.EventSource(h.url()), resumed = everReady, openedAt = env.now();
     es = me; ready = false;
     let first = true;
+    me.addEventListener('end', () => {
+      if (es !== me) return;
+      if (env.now() - openedAt < 1000) { drop(); return; }
+      try { me.close(); } catch { /* closed */ } es = null; ready = false; open();
+    });
     for (const name of NAMES) me.addEventListener(name, (m) => {
       if (es !== me) return;
       if (name === 'session') { ready = true; everReady = true; attempt = 0; }

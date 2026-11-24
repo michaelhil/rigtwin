@@ -268,6 +268,7 @@ describe("deployed-mode guards", () => {
     for (let i = 1; i <= 40 && !a.ended; i++) { v = (await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: (i % 10) + 1, J_mon_tilt: -(i % 10) / 4 } } }, { "x-forwarded-for": "198.51.100.1" })).json()).version; await Bun.sleep(5); }
     for (const t0 = Date.now(); !a.ended && Date.now() - t0 < 2000; ) await Bun.sleep(10);
     expect(a.ended).toBe(true);
+    expect(a.events.at(-1)).toMatchObject({ event: "end", data: { reason: "budget" } });   // the page reconnects at once on this
     const bytes = a.events.reduce((n, e) => n + JSON.stringify(e.data).length, 0);
     expect(bytes).toBeGreaterThan(4000);
     expect(bytes).toBeLessThan(6000 + 2000);                                   // the budget plus at most the last event

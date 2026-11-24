@@ -10,7 +10,8 @@
 //                       (HTTP 200 whenever the command was looked at; 4xx/5xx only for requests that never got that far)
 //   GET  /api/live      server-sent events: "session" {code, ...} first, then "snapshot" {doc} or the "applied"
 //                       entries after Last-Event-ID (or ?since=<version>); "view" {id, args} only to the stream
-//                       whose session code a view command names; a ":hb" comment every 15 s.
+//                       whose session code a view command names; a ":hb" comment every 15 s; "end" {reason} as
+//                       the last event of a stream the server ends by its byte budget (the page reconnects at once).
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
 //
 // Who: identify(req) gives the actor from the declared role (X-Rigtwin-Client: person | agent, otherwise a
@@ -237,6 +238,7 @@ export function createApi(opts: ApiOptions) {
         if (why === "spent") {
           const place = { visitor, block: stream.block }, free = () => { clearTimeout(t); draining.delete(place); }, t = setTimeout(free, L.streamDrainMs);
           (t as any).unref?.(); draining.add(place); req.signal?.addEventListener("abort", free, { once: true });
+          try { ctrl.enqueue(enc.encode(sse("end", { reason: "budget" }))); } catch { /* closed */ }      // the page reconnects at once
         }
         try { if (why === "slow") ctrl.error(new Error("the client does not read its live stream")); else ctrl.close(); } catch { /* already closed */ }
       },

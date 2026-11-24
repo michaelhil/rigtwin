@@ -13,7 +13,7 @@ tags: [plan, platform, agents, server, process]
 - **What:** every action on the scene becomes a command that the viewer's buttons, Claude Code and later an agent inside the app all use; one small server program, the same on the laptop and on mightwork.ai, keeps the shared scene and shows every change at once in every open viewer.
 - **Five steps**, each ending with a review and the hours used: 1 agent control, 2 honest numbers, 3 assessment, 4 an agent in the app, 5 a control room. The owner decides after each step whether to go on.
 - **Approved** by the owner on 2026-11-24 with an independent "could this be simpler?" monitor that approves each design before building and reviews each checkpoint ([D-38](../20-decisions/decision-log.md#d-38)).
-- **Step 1 is built** on the branch `platform-step1-main`: the commands, the server, the viewer as a live client, `bun run rig`, the operating Skill and the deployed service with its guards. It goes live only after the host setup and a merge to `main`; the public site gets it **without the manikin** until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)).
+- **Step 1 is built** on the branch `platform-step1-main`: the commands, the server, the viewer as a live client, `bun run rig`, the operating Skill and the deployed service with its guards. The host is set up (2026-11-24); it goes live with the merge to `main`; the public site gets it **without the manikin** until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)).
 - **Changed from the plan in step 1:** no release split ([D-42](../20-decisions/decision-log.md#d-42)), undo by entry or request ([D-40](../20-decisions/decision-log.md#d-40)), the scene document holds the pose only, port 4190 ([D-45](../20-decisions/decision-log.md#d-45)), a byte budget per live stream and lower stream limits ([D-46](../20-decisions/decision-log.md#d-46)); `view.picture`, projects and saved versions move to step 2.
 
 ## About this page
@@ -97,9 +97,9 @@ exists; numbers in scene files carry class, range and evidence like the asset's 
 ## Step 1 as built (2026-11-24)
 
 Built by two builder agents and reviewed by the simplicity monitor at the design, at the checkpoint and
-before the merge, and by a security review. All of it runs locally; on the host, the setup script's
-read-only check and the load test H14 have run (2026-11-24), the setup itself and the first release
-with the server wait for the owner's yes ([deployment](../50-implementation/deployment.md)).
+before the merge, and by a security review. All of it runs locally. The host setup ran on 2026-11-24 with the owner's yes (check, setup, probe and
+the load test H14); the installed service waits for the first release with the server, which comes
+with the merge to `main` ([the server and its host setup](../50-implementation/server-and-host-setup.md)).
 
 | Part | What exists |
 |---|---|
@@ -109,8 +109,8 @@ with the server wait for the owner's yes ([deployment](../50-implementation/depl
 | Viewer | a live client for every pose change: one line saying who changed what with its Undo, the session code and a statement about the sandbox under More; a link with a different pose opens as a preview with Apply ([viewer](../50-implementation/viewer.md)) |
 | Command line | `bun run rig <command> '<json>'` with `--server`, `--viewer`, `--group`, `--expected-version` ([tools](../80-reference/tools.md)) |
 | Skill | the operating Skill v0, `.claude/skills/operating-rigtwin/` ([skills and agents](../80-reference/skills-and-agents.md)) |
-| Host | a hardened unit, a Caddy route, a setup script with `--check`, `--apply`, `--probe`, `--undo` and fourteen host checks; deploy and dist checks for the server |
-| Checks | about 170 new automatic test cases (commands 26, server 19, reconnect rules 5, setup script 72, deploy 16 and 33 with rollback, two real browsers 14) ([checks](../40-method/checks.md)) |
+| Host | a hardened unit, a Caddy route, a setup script with `--check`, `--apply`, `--probe`, `--undo` and fourteen host checks ([the server and its host setup](../50-implementation/server-and-host-setup.md)); deploy and dist checks for the server |
+| Checks | about 170 new automatic test cases (commands 26, server 19, reconnect rules 6, setup script 74, deploy 16 and 33 with rollback, two real browsers 14) ([checks](../40-method/checks.md)) |
 
 ### What step 1 changed from the plan
 
