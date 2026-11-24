@@ -1,7 +1,7 @@
 #!/bin/bash
 # Local test of `bun run deploy --rollback` (tools/deploy.ts, builder D, step 1): the rollback floor (no going back to a
 # release without a server once the live one has one) and the server checks after a rollback. The server side is a
-# folder on this machine: a stand-in `ssh` on PATH runs each remote command locally (BSD `mv -h` for GNU `mv -T`),
+# folder on this machine: a stand-in `ssh` on PATH runs each remote command locally (on macOS with BSD `mv -h` for GNU `mv -T`),
 # and a local web server serves <root>/current under /rigtwin/ like Caddy, with /rigtwin/api/* answered by a stand-in
 # server that reports the revision of the live release. No network beyond 127.0.0.1. Run `bun run dist` first.
 #   bash tools/deploy-tests/rollback.test.sh
@@ -18,7 +18,8 @@ mkdir -p "$T/bin" "$T/srv/rigtwin/releases"
 cat >"$T/bin/ssh" <<'EOF'
 #!/bin/bash
 cmd="${!#}"
-exec /bin/sh -c "${cmd//mv -T /mv -h }"
+# GNU mv (Linux, the CI) knows -T; BSD mv (macOS) has -h for the same purpose
+if mv --version 2>/dev/null | grep -q GNU; then exec /bin/sh -c "$cmd"; else exec /bin/sh -c "${cmd//mv -T /mv -h }"; fi
 EOF
 chmod +x "$T/bin/ssh"
 

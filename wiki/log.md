@@ -246,3 +246,13 @@ probed again before the merge). A stream that reaches its byte budget now ends w
 which the page reconnects at once instead of after a second. What remains: the merge and push with the
 owner's yes, the check on the host after the deploy, the ten-minute idle test and the two-browser test
 on the live site. [Next steps](90-next/next-steps.md#0-platform-step-1-the-rollout-and-after).
+
+**About 17:06** — The owner said yes to the merge; `main` was pushed with platform step 1. The automatic
+deploy refused it in its own check, before anything was uploaded; the live site stayed as it was. Two
+causes, both only visible on a fresh checkout on Linux: the new command and server tests ran before the
+build, so the built model they read did not exist yet; and the setup script's test harness used two
+commands in their macOS form (`stat -f`, `sed -i ''`), so 11 of its 74 cases failed on the Ubuntu runner.
+Fixed: those tests run after the build; the harness uses forms that work on both systems and prints the
+end of a failed run's output; the rollback test's stand-in for `mv -T` no longer assumes macOS. Proved in
+a fresh clone without a build, and with stand-ins for GNU `stat` and `sed` that reproduced exactly the 11
+failures before the fix. [Checks](40-method/checks.md).

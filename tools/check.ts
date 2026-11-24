@@ -37,18 +37,7 @@ const glob = (pattern: string) => new RegExp("^" + pattern.replace(/[.+?^${}()|[
 {
   const r = spawnSync("bun", ["test", join(ROOT, "generator")], { encoding: "utf8", cwd: ROOT });
   const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
-  report(r.status === 0, "kit tests", r.status === 0 ? (out.find((l) => /\bpass\b/.test(l)) ?? "").trim() + " (known-answer tests of the geometry kit, expressions and pose function)" : "bun test generator failed", r.status === 0 ? [] : out.filter((l) => /fail|error|expect/i.test(l)));
-}
-
-// command layer and server (step 1 of the platform): unit tests, then the integration test over real HTTP
-for (const [name, dir, what] of [
-  ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance"],
-  ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check"],
-  ["live client", "viewer/src", "reconnect rules: backoff, one resync, wakes, no reconnect after disconnect (Leitbild's cases)"],
-] as const) {
-  const r = spawnSync("bun", ["test", join(ROOT, dir)], { encoding: "utf8", cwd: ROOT });
-  const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
-  report(r.status === 0, name, r.status === 0 ? `${(out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim()} (${what})` : `bun test ${dir} failed`, r.status === 0 ? [] : out.filter((l) => /\(fail\)|error|expect/i.test(l)));
+  report(r.status === 0, "kit tests", r.status === 0 ? (out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim() + " (known-answer tests of the geometry kit, expressions and pose function)" : "bun test generator failed", r.status === 0 ? [] : out.filter((l) => /fail|error|expect/i.test(l)));
 }
 
 // the server must never show error pages with code to visitors (R3b F4; security review S10)
@@ -61,7 +50,7 @@ for (const [name, dir, what] of [
 {
   const r = spawnSync("bash", [join(ROOT, "tools", "deploy-tests", "setup-server.test.sh")], { encoding: "utf8", cwd: ROOT });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
-  report(r.status === 0, "setup script", (lines.find((l) => /^setup-server.sh test: \d+ passed/.test(l)) ?? "no summary").replace(/ \(logs in .*\)$/, "") + " (check, apply, undo, probe, restore after a hang-up or a closed output)", r.status === 0 ? [] : lines.filter((l) => l.includes("FAIL")));
+  report(r.status === 0, "setup script", (lines.find((l) => /^setup-server.sh test: \d+ passed/.test(l)) ?? "no summary").replace(/ \(logs in .*\)$/, "") + " (check, apply, undo, probe, restore after a hang-up or a closed output)", r.status === 0 ? [] : lines.filter((l) => l.includes("FAIL") || l.includes("log> ")));
 }
 
 // ---- 2. parameters, spec, build (a failure here stops the run) -------------------------------------
@@ -78,6 +67,19 @@ try {
   if (manifest.parameters_unused.length) report("warn", "parameters", `${manifest.parameters_unused.length} record(s) read by nothing`, [manifest.parameters_unused.join(", ")]);
   report(true, "build", `${res.seconds.toFixed(2)} s`);
 } catch (e: any) { report(false, "parameters / build", String(e.message).split("\n")[0], String(e.message).split("\n").slice(1)); process.exit(1); }
+
+// ---- 2b. command layer and server (step 1 of the platform): unit tests, then the integration test over real HTTP.
+// After the build on purpose: these tests read the built asset (assets/<asset>/build/), which a fresh checkout does not
+// have (the first automatic deploy with them failed for that reason, 2026-11-24).
+for (const [name, dir, what] of [
+  ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance"],
+  ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check"],
+  ["live client", "viewer/src", "reconnect rules: backoff, one resync, wakes, no reconnect after disconnect (Leitbild's cases)"],
+] as const) {
+  const r = spawnSync("bun", ["test", join(ROOT, dir)], { encoding: "utf8", cwd: ROOT });
+  const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
+  report(r.status === 0, name, r.status === 0 ? `${(out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim()} (${what})` : `bun test ${dir} failed`, r.status === 0 ? [] : out.filter((l) => /\(fail\)|error|expect/i.test(l)));
+}
 
 // ---- 3. determinism: a second build in a separate process must give the same bytes -------------------
 {

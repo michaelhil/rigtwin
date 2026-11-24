@@ -5,12 +5,18 @@
 #
 #   bash tools/deploy-tests/setup-server.test.sh [path/to/setup-server.sh]
 #
-# Each scenario runs in its own subshell and fake root; the output of every run is kept in $OUT for reading.
+# Each scenario runs in its own subshell and fake root; the output of every run is kept in $OUT for reading, and the
+# end of a run's output is printed below its first failed expectation (lines "log> ...", which `bun run check` shows).
+# The harness must run with BSD tools (macOS) and GNU tools (the CI's Ubuntu) alike: no `stat -f`, no `sed -i ''`.
 set -uo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)     # the repository of this test (the site file live before the setup is the fixture tools/deploy-tests/fixtures/mightwork-apex.before-setup.caddy, SHA-256 60efbcdb..., checked on the host as H3)
 SCRIPT=${1:-$REPO/deploy/setup-server.sh}                       # another copy of the script may be tested (e.g. an older one)
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/setup-test.XXXXXX")
-PASS=0 FAIL=0
+PASS=0 FAIL=0 LAST="" SHOWN=""
+# a file's permission bits as digits, with GNU stat (-c) or BSD stat (-f)
+mode_of() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+# replace the status the fake Caddy gives for one site (no `sed -i`: its argument differs between GNU and BSD)
+set_site_code() { sed "s#^$2 .*#$2 $3#" "$1" >"$1.new" && mv "$1.new" "$1"; }
 
 # ------------------------------------------------------------------------------------------------ the fake host
 make_host() {   # $1: root folder
@@ -74,7 +80,7 @@ install_stubs() {
   host_is_systemd_linux() { true; }
   cpu_has_avx2() { [[ "${FAKE_AVX2:-yes}" == yes ]]; }
   port_listeners() { printf '%s' "${FAKE_PORT_LISTENER:-}"; }
-  owner_mode() { printf '%s %s' "$(cat "$HOST/state/owner$(echo "$1" | tr / _)" 2>/dev/null || echo root:root)" "$(stat -f '%Lp' "$1")"; }
+  owner_mode() { printf '%s %s' "$(cat "$HOST/state/owner$(echo "$1" | tr / _)" 2>/dev/null || echo root:root)" "$(mode_of "$1")"; }
   chown() { log "chown $*"; echo "$1" >"$HOST/state/owner$(echo "$2" | tr / _)"; }
   useradd() { log "useradd $*"; touch "$HOST/state/user-${!#}"; }
   userdel() { log "userdel $*"; rm -f "$HOST/state/user-$1"; }
@@ -112,8 +118,8 @@ install_stubs() {
         log "systemctl reload ${a[1]}"
         [[ -z "${FAIL_RELOAD:-}" ]] || return 1
         cp "$SITE_FILE" "$HOST/state/caddy-running.caddy"
-        if [[ -n "${BREAK_OTHER_SITE:-}" ]] && grep -q 'rigtwin/api' "$SITE_FILE"; then sed -i '' 's#^https://app.example.net/ .*#https://app.example.net/ 502#' "$HOST/state/site-codes"; fi
-        if ! grep -q 'rigtwin/api' "$SITE_FILE"; then sed -i '' 's#^https://app.example.net/ .*#https://app.example.net/ 302#' "$HOST/state/site-codes"; fi ;;
+        if [[ -n "${BREAK_OTHER_SITE:-}" ]] && grep -q 'rigtwin/api' "$SITE_FILE"; then set_site_code "$HOST/state/site-codes" https://app.example.net/ 502; fi
+        if ! grep -q 'rigtwin/api' "$SITE_FILE"; then set_site_code "$HOST/state/site-codes" https://app.example.net/ 302; fi ;;
       daemon-reload | reset-failed) log "systemctl ${a[*]}" ;;
       enable) log "systemctl enable ${a[1]}"; echo "enabled $(cut -d' ' -f2 "$(unit_file "${a[1]}")" 2>/dev/null || echo inactive)" >"$(unit_file "${a[1]}")" ;;
       restart | start) log "systemctl ${a[*]}"; local st=activating; [[ -e "$SRV_DIR/current/server/server.js" ]] && st=active
@@ -149,12 +155,14 @@ install_stubs() {
 # ------------------------------------------------------------------------------------------------ running a scenario
 run() {   # $1 name, $2 host folder, rest: arguments of the script; environment variables pass through
   local name=$1 R=$2; shift 2
+  LAST=$name
   scenario "$name" "$R" "$@" >"$OUT/$name.log" 2>&1
   echo $? >"$OUT/$name.rc"
 }
 # run, but with the output going through a pipe whose reader stops after the first lines (a `| tee` or an SSH session gone)
 run_piped() {
   local name=$1 R=$2; shift 2
+  LAST=$name
   { scenario "$name" "$R" "$@" 2>&1; echo $? >"$OUT/$name.rc"; } | { head -c 400 >"$OUT/$name.log"; }
 }
 scenario() {
@@ -179,7 +187,15 @@ scenario() {
 }
 tree_sum() { (cd "$1" && find . -path ./state -prune -o -print | sort && find . -path ./state -prune -o -type f -print0 | sort -z | xargs -0 shasum) | shasum | cut -d' ' -f1; }
 ok() { PASS=$((PASS + 1)); printf '  ok    %s\n' "$1"; }
-no() { FAIL=$((FAIL + 1)); printf '  FAIL  %s\n' "$1"; }
+no() {
+  FAIL=$((FAIL + 1)); printf '  FAIL  %s\n' "$1"
+  # once per run: how it ended (exit code and the last lines it printed), so that a failure seen only in a CI log can be read
+  if [[ -n "$LAST" && "$SHOWN" != *" $LAST "* ]]; then
+    SHOWN="$SHOWN $LAST "
+    printf '        log> run "%s" ended with exit code %s; its last lines:\n' "$LAST" "$(cat "$OUT/$LAST.rc" 2>/dev/null || echo '?')"
+    tail -n 12 "$OUT/$LAST.log" 2>/dev/null | cut -c1-300 | while IFS= read -r l; do printf '        log> %s\n' "$l"; done
+  fi
+}
 expect() { if eval "$2"; then ok "$1"; else no "$1"; fi; }   # $1 description, $2 a test expression
 rc() { cat "$OUT/$1.rc"; }
 has() { grep -q -- "$2" "$OUT/$1.log"; }
@@ -207,7 +223,7 @@ echo "2. --apply on that host"
 run apply-1 "$H" --apply
 expect "exit 0" '[[ $(rc apply-1) == 0 ]]'
 expect "user created" 'called "$H" "useradd --system --user-group --no-create-home --home-dir /nonexistent --shell"'
-expect "data folder rigtwin:rigtwin 700" '[[ "$(cat "$H/state/owner$(echo "$H/var/lib/rigtwin" | tr / _)")" == rigtwin:rigtwin && "$(stat -f %Lp "$H/var/lib/rigtwin")" == 700 ]]'
+expect "data folder rigtwin:rigtwin 700" '[[ "$(cat "$H/state/owner$(echo "$H/var/lib/rigtwin" | tr / _)")" == rigtwin:rigtwin && "$(mode_of "$H/var/lib/rigtwin")" == 700 ]]'
 expect "Bun installed, executable" '[[ -x "$H/opt/rigtwin/runtime/bun" && "$("$H/opt/rigtwin/runtime/bun" --version)" == 1.4.0 ]]'
 expect "site file is the new one" 'cmp -s "$H/etc/caddy/managed-sites/mightwork-apex.caddy" "$NEW_SITE_REPO"'
 expect "before-setup copy equals the old file" 'cat "$REPO/tools/deploy-tests/fixtures/mightwork-apex.before-setup.caddy" | cmp -s - "$H/var/backups/rigtwin-setup/mightwork-apex.caddy.before-setup"'
