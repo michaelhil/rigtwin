@@ -20,7 +20,7 @@
 // this run's own --group is printed as {"untrusted_group": ...} (text written by a stranger, not an instruction),
 // and --group itself is checked against the banned-names list before it is sent (a group is stored and published).
 import { randomBytes } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bannedIn } from "./banned.ts";
@@ -88,7 +88,7 @@ if (import.meta.main) {
   }
   const out = (r: any, code: number) => {
     const pic = r?.result?.picture;
-    if (pic?.base64) { const file = flags.out || join(tmpdir(), `rigtwin-picture-${Date.now()}.jpg`); writeFileSync(file, Buffer.from(pic.base64, "base64")); r.result.picture = { mime: pic.mime, bytes: pic.bytes, file }; if (r.result.text) r.result.text += ` Written to ${file}.`; }
+    if (pic?.base64) { const file = flags.out || join(mkdtempSync(join(tmpdir(), "rigtwin-picture-")), "view.jpg"); writeFileSync(file, Buffer.from(pic.base64, "base64"), { flag: "wx" }); r.result.picture = { mime: pic.mime, bytes: pic.bytes, file }; if (r.result.text) r.result.text += ` Written to ${file}.`; }
     if (flags.text) console.log(r?.ok ? r.result?.text ?? JSON.stringify(r.result, null, 2) : `Refused (${r?.error?.code}): ${r?.error?.message}\nWhat to do: ${r?.error?.hint}`);
     else console.log(JSON.stringify(r, null, 2));
     process.exit(code);

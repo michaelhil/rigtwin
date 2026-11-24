@@ -54,8 +54,11 @@ export const LIMITS = {
   pictureBytes: 60 * 1024,
   /** ... how long `look` waits for it before it answers without a picture ... */
   pictureWaitMs: 8_000,
-  /** ... and how many pictures may be waited for at once, in all. */
+  /** ... and how many pictures may be waited for at once, in all ... */
   picturesPending: 20,
+  /** ... and per visitor (deployed; also at most one per browser), so that one stranger cannot hold every slot
+   *  (security review of agent interface v2, finding 4). */
+  picturesPerVisitor: 2,
   /** Agent interface v2: MCP sessions remembered (the viewer code given to `look`); the least recently used is forgotten. */
   mcpSessions: 500,
 };

@@ -175,7 +175,9 @@ function changeLines(asset: AssetInfo, changes: JointChange[]): string[] {
 const ago = (at: string) => { const s = Math.max(0, (Date.now() - Date.parse(at)) / 1000); return s < 90 ? `${Math.round(s)} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
 function entryWords(asset: AssetInfo, e: Entry): string {
   const parts = e.changes.map((c) => { const j = asset.joints.get(c.joint); return j && c.after !== null ? sayJoint(j, c.after as number) : c.joint; });
-  return `v${e.version} ${e.actor.label}${e.undoes ? ` undid v${e.undoes.join(", v")}` : ""}${e.group ? ` [${e.group}]` : ""} — ${[...new Set(parts)].join("; ")}`;
+  // only request names the server made are shown: a name a caller chose is text from a stranger on the public sandbox
+  const named = e.group && /-\d+$/.test(e.group) ? ` [${e.group}]` : e.group ? " [a request named by its caller]" : "";
+  return `v${e.version} ${e.actor.label}${e.undoes ? ` undid v${e.undoes.join(", v")}` : ""}${named} — ${[...new Set(parts)].join("; ")}`;
 }
 /** the newest entry by someone else that changed one of `joints` in the last 15 minutes */
 function recentOther(doc: SceneDoc, actor: Actor, joints: string[]): Entry | undefined {
@@ -213,7 +215,7 @@ const GROUP_WORDS: Record<string, string> = {
 function resolvePart(asset: AssetInfo, text: string): string {
   const q = norm(text);
   if (asset.manifest.groups.includes(text) || asset.nodes.some((n) => n.name === text)) return text;
-  if (GROUP_WORDS[q]) return GROUP_WORDS[q];
+  if (Object.hasOwn(GROUP_WORDS, q)) return GROUP_WORDS[q];
   const unit = UNITS.find((u) => norm(u.name) === q);
   if (unit) return unit.parts[0];
   const hit = findIds(asset, text, "part", 3);
@@ -328,7 +330,7 @@ const intent: CommandSpec[] = [
             moved.length ? `Moved from as photographed: ${moved.join("; ")}.` : "Everything is as photographed.",
             recent.length ? `Last changes:\n${recent.map((e) => `  ${entryWords(asset, e)} (${ago(e.at)})`).join("\n")}` : "No changes yet.",
           ].join("\n"),
-          version: doc.version, moved, recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group ? { request: e.group } : {}), at: e.at })),
+          version: doc.version, moved, recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group && /-\d+$/.test(e.group) ? { request: e.group } : {}), at: e.at })),
         },
       };
     },
@@ -353,7 +355,7 @@ const intent: CommandSpec[] = [
     run({ asset }, a: { view?: string; only?: string | string[]; hide?: string | string[]; all?: boolean; select?: string; picture?: boolean }) {
       const out: Record<string, unknown> = {}, said: string[] = [], nameOf = (x: string) => (asset.manifest.groups.includes(x) ? rowName(x, x) : labelOf(asset, x));
       if (a.view !== undefined) {
-        const v = VIEW_NAMES.includes(a.view) ? a.view : VIEW_WORDS[norm(a.view).replace(/^the /, "")];
+        const w = norm(a.view).replace(/^the /, ""), v = VIEW_NAMES.includes(a.view) ? a.view : Object.hasOwn(VIEW_WORDS, w) ? VIEW_WORDS[w] : undefined;
         if (!v) throw new Refusal("invalid_args", `look: ${JSON.stringify(a.view)} is not a view`, `one of: operator, overview, front, back, left, right, top, front corner`);
         out.view = v; said.push(v === "operator" ? "the operator's eye view" : `the ${v.replace("_", " ")} view`);
       }

@@ -17,6 +17,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import type { Actor } from "../shared/commands/doc.ts";
 import { tools as toolSpecs } from "../shared/commands/registry.ts";
 import { toolList } from "../shared/commands/tools.ts";
+import { SESSION_PATTERN } from "../shared/commands/core.ts";
 
 export const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const SESSION_RE = /^[0-9a-f]{32}$/;
@@ -52,7 +53,11 @@ export function createMcp(o: McpOptions) {
     const s = session(sid), a = { ...args };
     let viewer: string | undefined;
     if (spec.id === "look") {
-      if (typeof a.viewer === "string" && a.viewer.trim()) { viewer = a.viewer.trim().toUpperCase(); s.viewer = viewer; } else viewer = s.viewer;
+      if (typeof a.viewer === "string" && a.viewer.trim()) {
+        viewer = a.viewer.trim().toUpperCase();
+        if (!new RegExp(SESSION_PATTERN).test(viewer)) return { content: [{ type: "text", text: "Refused (invalid_args): viewer is not a browser's code\nWhat to do: the code is the eight characters under More, \"Shared scene\", in the viewer" }], isError: true };
+        s.viewer = viewer;                                       // kept only once it looks like a code
+      } else viewer = s.viewer;
       delete a.viewer;
     }
     const r = await o.exec(actor(sid), { id: spec.id, args: a, ...(viewer ? { session: viewer } : {}) }, visitor);
@@ -89,17 +94,19 @@ export function createMcp(o: McpOptions) {
     }
   }
 
-  /** One POST /api/mcp, its body already read and parsed. */
+  /** One POST /api/mcp, its body already read and parsed: one JSON-RPC message. Batches (dropped from MCP in 2025-06-18) are
+   *  refused, so that one request is one rate-limited unit of work (security review of agent interface v2, finding 1). */
   async function handle(req: Request, body: unknown, visitor: string): Promise<Response> {
     const given = req.headers.get("mcp-session-id");
-    const isInit = !Array.isArray(body) && (body as any)?.method === "initialize";
+    const isInit = (body as any)?.method === "initialize";
     const sid = isInit || !given || !SESSION_RE.test(given) ? randomBytes(16).toString("hex") : given;
     const headers: Record<string, string> = { "cache-control": "no-store", "mcp-session-id": sid };
-    const batch = Array.isArray(body) ? body : [body];
-    const out: object[] = [];
-    for (const m of batch) { const r = await one(sid, m, visitor); if (r) out.push(r); }      // in order: a batch may hold edits
-    if (!out.length) return new Response(null, { status: 202, headers });
-    return Response.json(Array.isArray(body) ? out : out[0], { headers });
+    if (Array.isArray(body)) return Response.json(rpcError(null, -32600, "batches are not accepted: send one JSON-RPC message per request"), { status: 400, headers });
+    let out: object | null;
+    try { out = await one(sid, body, visitor); }
+    catch (e: any) { console.error("mcp:", e?.stack ?? e); out = rpcError((body as any)?.id, -32603, "internal error"); }
+    if (!out) return new Response(null, { status: 202, headers });
+    return Response.json(out, { headers });
   }
   const end = (sid: string | null) => { if (sid) sessions.delete(sid); };
   return { handle, end, sessions };

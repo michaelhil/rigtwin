@@ -282,3 +282,14 @@ through MCP against a local server with a real page: one `look {"view": "operato
 back with a 41 kB picture of the operator's view. The benchmark could not run: the Claude Code command line on
 this machine is not signed in. [Platform plan](30-plan/platform-plan.md#step-15-agent-interface-v2-2026-11-24),
 [agent interface](80-reference/agent-interface.md).
+
+**Later** — An independent security review of the v2 diff (before any push): one must-fix, JSON-RPC
+batches (a 60 kB request of 1,276 `tools/list` calls answered with 8.5 MB, counted as one request), and
+four should-fixes: table lookups by names such as "constructor" ended in a 500; the content-type check
+took `text/plain;x=application/json`, and locally any localhost page could post; one stranger could hold
+all 20 picture slots; a viewer code was kept before it was checked. All fixed with tests
+(`server/mcp.test.ts`), and from its notes: request names ending in `-<number>` are reserved for the
+server, `state` no longer shows names that callers chose, and the command line writes a picture into a
+fresh private folder. Kept as it is: `.mcp.json` loads the public sandbox's tools in every session of
+this repository (the owner's request for fast agent control; what they return is now server-made text,
+numbers and pictures from the browser the owner names).

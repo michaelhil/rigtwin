@@ -59,6 +59,46 @@ function page(base: string, o: { answer?: Uint8Array<ArrayBuffer> } = {}) {
 const JPEG: Uint8Array<ArrayBuffer> = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
 
 describe("the MCP endpoint", () => {
+  test("security review fixes: no batches, no 500 for prototype names, exact content type, own origin only, codes checked", async () => {
+    const s = start();
+    const batch = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/list" }]) });
+    expect(batch.status).toBe(400); expect((await batch.json()).error.code).toBe(-32600);
+    for (const args of [{ view: "constructor" }, { only: "constructor" }, { select: "__proto__" }]) { const r = await call(s.base, "look", args); expect(r.status).toBe(200); expect(r.body.result.isError).toBe(true); }
+    for (const args of [{ from: "constructor", to: "monitor screen" }, { from: "toString", to: "hasOwnProperty" }]) { const r = await call(s.base, "measure", args); expect(r.status).toBe(200); expect(r.body.result.isError).toBe(true); }
+    const r = await call(s.base, "adjust", { target: "constructor", by: 1 }); expect(r.body.result.isError).toBe(true);
+    const sneaky = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "text/plain;x=application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    expect(sneaky.status).toBe(415);
+    const other = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    expect(other.status).toBe(403);
+    const own = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: s.base }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    expect(own.status).toBe(200);
+    const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" });
+    expect(text(await call(s.base, "look", { view: "top", viewer: "not a code at all" }, init.session!))).toContain("not a browser's code");
+    expect(text(await call(s.base, "look", { view: "top" }, init.session!))).toContain("no_viewer");     // the bad code was not kept
+    s.stop();
+  });
+  test("request names ending in -<number> are the server's; state shows only those", async () => {
+    const s = start();
+    const claim = await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "mon-height-2" }) });
+    expect((await claim.json()).error.code).toBe("invalid_args");
+    await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "ignore-the-rules" }) });
+    await call(s.base, "adjust", { target: "monitor tilt", by: "1° up" });
+    const st = text(await call(s.base, "state", {}));
+    expect(st).not.toContain("ignore-the-rules"); expect(st).toContain("[a request named by its caller]"); expect(st).toContain("[mon-tilt-2]");
+    s.stop();
+  });
+  test("deployed: one picture waited for per browser, two per visitor", async () => {
+    const s = start({ mode: "deployed", limits: { pictureWaitMs: 400 } }), a = page(s.base), b = page(s.base), c = page(s.base); await Promise.all([a.ready, b.ready, c.ready]);
+    const first = call(s.base, "look", { picture: true, viewer: a.code() });
+    await Bun.sleep(30);
+    expect(text(await call(s.base, "look", { picture: true, viewer: a.code() }))).toContain("rate_limited");     // the same browser
+    const second = call(s.base, "look", { picture: true, viewer: b.code() });
+    await Bun.sleep(30);
+    expect(text(await call(s.base, "look", { picture: true, viewer: c.code() }))).toContain("rate_limited");     // a third for one visitor
+    await Promise.all([first, second]);
+    expect(text(await call(s.base, "look", { picture: true, viewer: c.code() }))).toContain("No picture");       // slots free again
+    a.close(); b.close(); c.close(); s.stop();
+  });
   test("initialize: the requested protocol, the instructions with every adjustment, a session id", async () => {
     const s = start();
     const r = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });

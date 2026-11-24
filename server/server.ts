@@ -272,7 +272,7 @@ export function createApi(opts: ApiOptions) {
 
   async function command(req: Request, visitor: string): Promise<Response> {
     if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "a command needs the header X-Rigtwin: 1", "send the header X-Rigtwin: 1 (bun run rig does)");
-    if (!(req.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) return fail(415, "bad_request", "a command is sent as JSON", "send Content-Type: application/json");
+    if (mime(req) !== "application/json") return fail(415, "bad_request", "a command is sent as JSON", "send Content-Type: application/json");
     const text = await readBody(req, deployed ? L.bodyBytes : Number.POSITIVE_INFINITY, L.bodyTimeoutMs);
     if (text === "too_large") return fail(413, "too_large", `a command is at most ${L.bodyBytes / 1024} kB`, "send a smaller command");
     if (text === "too_slow") return fail(408, "too_slow", `the command did not arrive within ${L.bodyTimeoutMs / 1000} s`, "send it again");
@@ -288,7 +288,7 @@ export function createApi(opts: ApiOptions) {
   type Reply = { status: number; body: Record<string, any> };
   const reply = (status: number, code: string, message: string, hint: string): Reply => ({ status, body: { ok: false, server: server(), version: doc.version, error: { code, message, hint } } });
   /** pictures being waited for (look {picture: true}), by the reply id sent with the view event */
-  const pending = new Map<string, { session: string | null; done(b: Uint8Array | null): void }>();
+  const pending = new Map<string, { session: string | null; visitor: string; done(b: Uint8Array | null): void }>();
   async function exec(you: Actor, visitor: string, wire: Record<string, unknown>): Promise<Reply> {
     const kind = get(String(wire.id))?.kind ?? "query";
     if (deployed) {
@@ -319,11 +319,12 @@ export function createApi(opts: ApiOptions) {
       }
       let wait: Promise<Uint8Array | null> | null = null, replyId: string | undefined;
       if (v.args.picture) {
-        if (pending.size >= L.picturesPending) return reply(429, "rate_limited", `at most ${L.picturesPending} pictures are waited for at once`, "try again in a moment");
+        const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.session !== null && p.session === v.session).length;
+        if (pending.size >= L.picturesPending || (deployed && (mine >= L.picturesPerVisitor || ofPage >= 1))) return reply(429, "rate_limited", `at most ${L.picturesPerVisitor} pictures per visitor and one per browser are waited for at once`, "wait for the picture asked for before, then ask again");
         const id = (replyId = randomBytes(16).toString("hex"));
         wait = new Promise((resolve) => {
           const timer = setTimeout(() => { pending.delete(id); resolve(null); }, L.pictureWaitMs);
-          pending.set(id, { session: v.session, done(b) { clearTimeout(timer); pending.delete(id); resolve(b); } });
+          pending.set(id, { session: v.session, visitor, done(b) { clearTimeout(timer); pending.delete(id); resolve(b); } });
         });
       }
       const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}) }));
@@ -360,11 +361,13 @@ export function createApi(opts: ApiOptions) {
     exec: async (you, wire, visitor) => (await exec(you, visitor, wire as any)).body as any,
     secret, instructions: () => agentInstructions(asset, opts.mode), revision: opts.revision, maxSessions: L.mcpSessions,
   });
-  const ownOrigin = (origin: string) => { try { const h = new URL(origin).host; return deployed ? h === "mightwork.ai" : LOCAL_HOSTS.test(h); } catch { return false; } };
+  /** an Origin a page of this server would send: exactly https://mightwork.ai deployed, exactly http://<Host> locally */
+  const ownOrigin = (origin: string, req: Request) => (deployed ? origin === "https://mightwork.ai" : origin === `http://${req.headers.get("host") ?? ""}`);
+  const mime = (req: Request) => (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   async function mcpPost(req: Request, visitor: string): Promise<Response> {
     const origin = req.headers.get("origin");
-    if (origin && !ownOrigin(origin)) return fail(403, "bad_origin", "the MCP endpoint answers only to MCP clients, not to other web pages", "connect from an MCP client such as Claude Code");
-    if (!(req.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) return fail(415, "bad_request", "an MCP request is sent as JSON", "send Content-Type: application/json");
+    if (origin && !ownOrigin(origin, req)) return fail(403, "bad_origin", "the MCP endpoint answers only to MCP clients, not to other web pages", "connect from an MCP client such as Claude Code");
+    if (mime(req) !== "application/json") return fail(415, "bad_request", "an MCP request is sent as JSON", "send Content-Type: application/json");
     if (deployed && !queries.hit(visitor)) return fail(429, "rate_limited", `at most ${L.queriesPerMinutePerVisitor} requests a minute per visitor`, "wait a minute");
     const text = await readBody(req, deployed ? L.bodyBytes : Number.POSITIVE_INFINITY, L.bodyTimeoutMs);
     if (text === "too_large" || text === "too_slow" || text === "aborted") return fail(text === "too_large" ? 413 : 400, text, "the request could not be read", "send it again, smaller");

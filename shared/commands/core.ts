@@ -86,7 +86,7 @@ export const showEntry = (asset: AssetInfo, e: Entry) => ({
 // ------------------------------------------------------------------------------------------- scene.find
 type Candidate = { id: string; kind: "part" | "joint" | "datum"; label: string; main: Set<string>; extra: Set<string> };
 export const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
-export const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => WORDS[x] ?? x).join(" "));
+export const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => (Object.hasOwn(WORDS, x) ? WORDS[x] : x)).join(" "));
 const STOP = new Set(["the", "a", "an", "of", "to", "and", "in", "on", "at", "for", "with", "by", "from", "me", "my", "its", "it", "show", "set", "move", "make", "please", "cm", "mm", "deg", "degrees", "s"]);
 /** Everyday words that point at a word of the model's vocabulary. */
 const ALSO: Record<string, string[]> = {
@@ -115,7 +115,7 @@ export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 1
     if (c.id.toLowerCase() === exact) return { c, score: 100 };
     let score = 0, all = q.length > 0;
     for (const w of q) {
-      const s = c.main.has(w) ? 3 : (ALSO[w] ?? []).some((x) => c.main.has(x)) ? 2 : [...c.main].some((t) => w.length >= 3 && (t.startsWith(w) || (t.length >= 4 && w.startsWith(t)))) ? 2 : c.extra.has(w) ? 1 : 0;
+      const s = c.main.has(w) ? 3 : (Object.hasOwn(ALSO, w) ? ALSO[w] : []).some((x) => c.main.has(x)) ? 2 : [...c.main].some((t) => w.length >= 3 && (t.startsWith(w) || (t.length >= 4 && w.startsWith(t)))) ? 2 : c.extra.has(w) ? 1 : 0;
       score += s; if (!s) all = false;
     }
     // an alias (a second name for the same point) ranks just below the point itself
@@ -301,6 +301,8 @@ export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Ac
     if (spec.kind === "query") return { ok: true, version: doc.version, result: out.result };
     if (spec.kind === "view") return { ok: true, version: doc.version, result: out.result, view: { session: hasSession ? (wire.session as string) : null, id: spec.id, args: (out.view ?? checked.args) as Record<string, unknown> } };
     const changes = out.changes ?? [];
+    // a request name ending in -<number> is made by the server (intent commands), so nobody can claim one in advance
+    if (typeof wire.group === "string" && /-\d+$/.test(wire.group)) return refuse({ code: "invalid_args", message: `group ${JSON.stringify(wire.group)}: names ending in -<number> are made by the server`, hint: "choose a name without a number at the end, e.g. lower-monitor" });
     const group = (wire.group as string | undefined) ?? (spec.autoGroup ? autoName(spec.autoGroup(checked.args, out), doc.version + 1) : undefined);
     const entry = apply(doc, { actor, command: spec.id, group, joints: out.joints ?? changes.map((c) => c.joint), changes, expectedVersion: wire.expectedVersion as number | undefined, undoes: out.undoes });
     let result = isObject(out.result) ? { ...out.result, ...(entry ? {} : { note: "no value changed; nothing recorded" }) } : out.result;
