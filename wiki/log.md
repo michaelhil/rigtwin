@@ -316,3 +316,14 @@ and Trace, `viewer/src/trace.ts` (the list), tests in `server/trace.test.ts`. Tr
 agent shows "connect, state, adjust, look, measure" with "2.2 s on the agent's side" between calls and 1–2 ms on the
 server's; a look with a picture shows how long the page took to draw and pack it (about 0.6 s in the in-app browser).
 
+**About 20:30** — An agent run on the live site, watched by the owner in their own browser: "in my viewer i
+couldn't see a change in eye point". Cause: the operator's-eye view placed the camera at the eye point as
+photographed, read once from the description file, while `measure` used the eye point moved with the seat (79.6 cm
+to the screen with the seat 10 cm forward and 4 cm up, against 89 cm as photographed). Fixed in the viewer: the
+camera now sits on the current median eye point and aims at the current screen, and rides with the eye when the seat
+moves while the view is on. Checked in headless Chromium: as photographed exactly on `D_eye_median`, with the seat
+10 cm forward and 4 cm up 10 and 4 cm off it, following +5 cm of slide and −2 cm of height, unmoved by the monitor;
+53 of 53 viewer checks. Still open: the eye points do not follow the backrest's recline
+([viewer](50-implementation/viewer.md#known-rough-edges)). Also seen: view commands go only to the browser whose code
+they name, so the owner's own browser does not follow an agent's `look` unless the agent has its code.
+

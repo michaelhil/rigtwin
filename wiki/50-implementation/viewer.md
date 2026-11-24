@@ -289,6 +289,8 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 | Frame rate and exposure were measured only in headless Chromium on one Apple M2, capped at 60 fps | not verified on other devices ([I-15](../60-lessons/ideas.md#i-15)) |
 | Touch input was never driven in a test; narrow layouts were tested with mouse events | not verified |
 | The operator's-eye view needs two clicks (More, then Operator's eye); review B asked for one | accepted deviation |
+| Until 2026-11-24 the operator's-eye view put the camera on the eye point **as photographed**, read once from the description file, so a moved seat (height, slide, swivel, tilt) left the camera where it was; found by the owner watching an agent's run | fixed: the camera sits on the median eye point and the screen centre where they are now, and rides with the eye when the seat moves while the view is on (`eyeAndScreenNow`, `followEye` in `viewer/src/engine.ts`) |
+| The eye points do not move with the backrest's recline: they are placed for the photographed recline (`assets/rig-b/params/seat.toml`), so reclining the backrest does not move the operator's view | open; a change to the asset (the eye riding with the torso line) |
 | Check T49 (comparison with the previous viewer) is skipped unless a second server is given | see above |
 | A hard shadow edge from the seat back falls across the cushion and can be misread as a facet | round-2 finding N7, open |
 | Photo views (`cam=`) work only on the local server, because the camera file stays private | by design |

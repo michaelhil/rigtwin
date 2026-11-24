@@ -350,8 +350,28 @@ export function setJoint(id: string, value: JointValue, opts: { force?: boolean 
   const bad = limitViolation(j.def, value);
   if (bad) throw new Error(`joint '${id}': ${bad}`);
   poseJoint(j, value);
-  S.shadowDirty = true; S.outlineDirty = true;
+  S.shadowDirty = true; S.outlineDirty = true; followEye();
   invalidate(); emit('joints');
+}
+/** The median eye point and the centre of the main screen as they are now, in the model frame. The eye points hang under
+ *  the seat frame, so the seat's height, slide, swivel and tilt move them (the backrest's recline does not: they are
+ *  placed for the photographed recline); the screen moves with the monitor. Before 2026-11-24 the operator's view used
+ *  the eye point as photographed, so a moved seat left the camera where it was. */
+function eyeAndScreenNow(): { e: number[]; t: number[] } {
+  S.root.updateMatrixWorld(true);
+  const at = (id: string) => { const o = S.objects.get(id); return o ? w2m(o.getWorldPosition(new THREE.Vector3())) : null; };
+  const e = at('D_eye_median') ?? at('D_eye_provisional') ?? S.manifest.datums.find((d) => d.id === 'D_eye_median')?.origin ?? [-0.6, 0, 1.2];
+  const t = at('S_mon_screen') ?? S.manifest.surfaces.find((s) => s.id === 'S_mon_screen')?.origin ?? [e[0] + 1, 0, e[2]];
+  return { e, t };
+}
+/** where the operator's-view camera last put the eye (three world), so that it can ride with it */
+let lastEye: THREE.Vector3 | null = null;
+/** In the operator's view the camera rides with the eye point: a seat change moves it, and the line of sight stays. */
+function followEye() {
+  if (S.view !== 'operator' || !lastEye || camera !== persp || S.photo) return;
+  const now = m2w(eyeAndScreenNow().e), d = now.clone().sub(lastEye);
+  if (d.lengthSq() < 1e-12) return;
+  persp.position.add(d); controls.target.add(d); lastEye = now; controls.update();
 }
 /** Move a joint node without any notice or redraw (used for trial moves while a part is dragged). */
 export function poseJoint(j: JointState, value: JointValue) {
@@ -361,7 +381,7 @@ export function poseJoint(j: JointState, value: JointValue) {
 }
 export function resetJoints(only?: string[]) {
   for (const [id, j] of S.joints) { if (only && !only.includes(id)) continue; j.obj.position.fromArray(j.rest.t); j.obj.quaternion.fromArray(j.rest.q); j.value = j.def.neutral; }
-  S.shadowDirty = true; S.outlineDirty = true; invalidate(); emit('joints');
+  S.shadowDirty = true; S.outlineDirty = true; followEye(); invalidate(); emit('joints');
 }
 const same = (a: JointValue, b: JointValue) => (Array.isArray(a) ? a.every((x, i) => Math.abs(x - (b as number[])[i]) < 1e-6) : Math.abs(a - (b as number)) < 1e-6);
 /** joints that are away from their as-photographed value */
@@ -439,9 +459,9 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
   S.view = name; S.userMoved = false; S.fit = opts.fit ?? null;
   const wantOrtho = opts.ortho ?? (camera === ortho);
   const { w, h } = frameSize();
-  if (v.special) { // operator's eye
-    const eye = S.manifest.datums.find((d) => d.id === 'D_eye_provisional'), scr = S.manifest.surfaces.find((s) => s.id === 'S_mon_screen');
-    const e = eye ? eye.origin : [-0.6, 0, 1.2], t = scr ? scr.origin : [e[0] + 1, 0, e[2]];
+  if (v.special) { // operator's eye, where the eye point and the screen are now (they move with the seat and the monitor)
+    const { e, t } = eyeAndScreenNow();
+    lastEye = m2w(e);
     // the camera sits exactly on the eye point; the orbit point lies ahead of it on the line of sight, beyond the orbit control's minimum distance (which would otherwise push the camera back)
     const eyeW = m2w(e), aim = m2w([e[0] + (t[0] - e[0]) * 0.2, 0, e[2] + (t[2] - e[2]) * 0.2 - 0.03]).sub(eyeW).normalize();
     useCamera(persp); persp.fov = 78; persp.up.set(0, 1, 0); persp.position.copy(eyeW); controls.target.copy(eyeW).addScaledVector(aim, LIMITS.minDistance * 1.2);
