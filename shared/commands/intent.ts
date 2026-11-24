@@ -323,7 +323,7 @@ const intent: CommandSpec[] = [
       } else if (["mine", "my last", "my change", "own"].includes(w)) {
         const e = open.find((x) => x.actor.id === actor.id); if (!e) throw new Refusal("nothing_to_undo", "this caller has no change left to undo", "\"mine\" means changes made in this session; state shows who changed what");
         target = { version: e.version }; about = entryWords(asset, e);
-      } else if (new RegExp(GROUP_PATTERN).test(w)) { target = { group: w }; about = `request ${w}`; }
+      } else if (new RegExp(GROUP_PATTERN).test(w)) { target = { group: w }; about = /-\d+$/.test(w) ? `request ${w}` : "a request named by its caller"; }
       else throw new Refusal("invalid_args", `undo: ${JSON.stringify(a.what)} is not "last", "mine", a request name or a version`, "e.g. {\"what\": \"last\"}");
       const plan = planUndo(doc, target);
       for (const c of plan.changes) {
