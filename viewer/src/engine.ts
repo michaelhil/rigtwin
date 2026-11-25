@@ -631,7 +631,11 @@ export async function setPhotoCamera(name: string, overlay?: string) {
   configurePhotoCamera(photoCam, c);
   useCamera(photoCam); layout();
   const img = $<HTMLImageElement>('photo');
-  if (c.image && img.dataset.name !== name) { img.dataset.name = name; img.src = c.image; try { await img.decode(); } catch { /* shown as missing */ } }
+  if (c.image && img.dataset.name !== name) {
+    img.dataset.name = name;
+    img.src = new URL(c.image, location.origin + "/").href; // Camera records name files from the site root.
+    try { await img.decode(); } catch { /* shown as missing */ }
+  }
   setOverlay(overlay ?? S.overlay);
 }
 export function setOverlay(mode: string) {
