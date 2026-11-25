@@ -25,5 +25,6 @@ export function sayPerson(p: PersonState): string {
   const size = `${r1((p.body.stature ?? 0) / 10)} cm, ${r1(p.body.mass ?? 0)} kg`;
   const others = Object.keys(p.body).filter((k) => k !== "stature" && k !== "mass").length;
   const posture = p.posture === OPERATING ? "operating" : p.posture === RELAXED_STAND ? "relaxed stand" : `posture ${p.posture}`;
-  return `${who}${p.preset && p.sex === "female" && !/woman/i.test(p.preset) ? " (woman)" : ""}, ${wear}, ${size}${others ? `, ${others} other body control${others === 1 ? "" : "s"} set` : ""}, ${posture}`;
+  const aims = p.aims && Object.keys(p.aims).length ? ", with seated targets" : "";
+  return `${who}${p.preset && p.sex === "female" && !/woman/i.test(p.preset) ? " (woman)" : ""}, ${wear}, ${size}${others ? `, ${others} other body control${others === 1 ? "" : "s"} set` : ""}, ${posture}${aims}`;
 }

@@ -5,6 +5,8 @@
 import type { ManifestComponent, ManifestJoint } from './manifest.ts';
 
 // ---------------------------------------------------------------------------------------------- parts
+export const TOUCHSCREEN_NAMES = ["touchscreen", "touch screen", "tablet", "side screen", "little monitor", "small screen"];
+
 /** Rows of the parts list (a group of the description file, or one of its assemblies). */
 const ROW_NAMES: Record<string, string> = {
   platform: 'Platform', seat: 'Seat', pods: 'Armrests', stand: 'Monitor stand', pedals: 'Pedals',
@@ -107,9 +109,9 @@ const ADJ_RULES: Rule[] = [
   [/^J_ts_arm$/, 0, { label: 'Lean sideways', lo: 'left', hi: 'right', section: 'Touchscreen arm', order: 40, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm', zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
   [/^J_ts_arm$/, 1, { label: 'Lean', lo: 'back', hi: 'forward', section: 'Touchscreen arm', order: 41, pad: ['J_ts_arm:0', 'J_ts_arm:1'], padLabel: 'Lean the arm', zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
   [/^J_ts_arm$/, 2, { label: 'Twist', lo: 'right', hi: 'left', section: 'Touchscreen arm', order: 42, fine: true, zero: 'an angle of the arm\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen arm', 'screen arm'] }],
-  [/^J_ts_screen$/, 2, { label: 'Turn', lo: 'left', hi: 'right', section: 'Touchscreen display', order: 50, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
-  [/^J_ts_screen$/, 1, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Touchscreen display', order: 51, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
-  [/^J_ts_screen$/, 0, { label: 'Level', lo: 'left side down', hi: 'right side down', section: 'Touchscreen display', order: 52, fine: true, zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: ['touchscreen', 'touch screen', 'tablet', 'side screen'] }],
+  [/^J_ts_screen$/, 2, { label: 'Turn', lo: 'left', hi: 'right', section: 'Touchscreen display', order: 50, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: TOUCHSCREEN_NAMES }],
+  [/^J_ts_screen$/, 1, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Touchscreen display', order: 51, pad: ['J_ts_screen:2', 'J_ts_screen:1'], padLabel: 'Turn and tilt the display', zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: TOUCHSCREEN_NAMES }],
+  [/^J_ts_screen$/, 0, { label: 'Level', lo: 'left side down', hi: 'right side down', section: 'Touchscreen display', order: 52, fine: true, zero: 'an angle of the display\'s own mount frame; use by, or to as photographed', aliases: TOUCHSCREEN_NAMES }],
   [/^J_mon_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Monitor', order: 60, zero: 'as photographed', aliases: ['monitor height', 'screen height', 'display height', 'raise the monitor', 'lower the monitor'] }],
   [/^J_mon_pan$/, null, { label: 'Turn', lo: 'left', hi: 'right', section: 'Monitor', order: 61, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt', zero: 'facing the operator straight on, as photographed', aliases: ['monitor turn', 'monitor pan', 'rotate the monitor', 'screen turn'] }],
   [/^J_mon_tilt$/, null, { label: 'Tilt', lo: 'down', hi: 'up', section: 'Monitor', order: 62, pad: ['J_mon_pan', 'J_mon_tilt'], padLabel: 'Turn and tilt', zero: 'screen face vertical', aliases: ['monitor tilt', 'screen tilt', 'display tilt', 'monitor angle'] }],

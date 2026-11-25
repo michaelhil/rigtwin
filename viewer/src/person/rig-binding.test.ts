@@ -228,3 +228,38 @@ describe("rig binding", () => {
     }
   });
 });
+
+describe("seated targets in the rig binding", () => {
+  test("screen touch and gaze stay on the posed datum; unaimed feet keep their solved operating pose", () => {
+    const { op, rig, b } = bind("M50");
+    seated(op, b);
+    const legs = ["thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r"];
+    const before = legs.map((key) => ({ p: op.P[op.j(key)].slice(), d: op.D[op.j(key)].slice() }));
+    const p = PERSONS.M50;
+    const aims = { look: "S_ts_screen", right_hand: { mode: "touch", target: "S_ts_screen" } } as const;
+    const binding = rigBinding({ op, measures: p.measures }, rig, aims);
+    seated(op, binding);
+    expect(legs.map((key) => ({ p: op.P[op.j(key)].slice(), d: op.D[op.j(key)].slice() }))).toEqual(before);
+    const report = op.aimReport();
+    expect(report.look.on_target).toBe(true);
+    expect(report.right_hand.distance_mm).toBeLessThan(4);
+    expect(report.right_hand.wrist_deg).toBeLessThanOrEqual(op.wristLimit);
+    expect(close(pkgToModel(binding.place, report.right_hand.origin!), rig.point("S_ts_screen")!, 0.004)).toBe(true);
+  });
+
+  test("a component aims at its centre carried by its posed part, including rotation", () => {
+    const { op, rig } = bind("M50", { J_ts_screen: [0, 0.1, 0] });
+    const p = PERSONS.M50;
+    const b = rigBinding({ op, measures: p.measures }, rig, { look: "C_ts_screen", right_hand: { mode: "point", target: "C_stand_soundbar" } });
+    seated(op, b);
+    const r = op.aimReport(), id = "C_ts_screen", box = manifest.components.find((c) => c.id === id)!.bbox!;
+    const centre = box.min.map((x, i) => (x + box.max[i]) / 2);
+    const now = rig.frame(id)!, rest = rig.neutralFrame(id)!;
+    const d = centre.map((x, i) => x - rest.origin[i]);
+    const coordinates = [rest.x, rest.y, rest.z].map((axis) => axis.reduce((sum, x, i) => sum + x * d[i], 0));
+    const want = now.origin.map((x, i) => x + coordinates[0] * now.x[i] + coordinates[1] * now.y[i] + coordinates[2] * now.z[i]);
+    expect(close(pkgToModel(b.place, r.look.point!), want, 1e-6)).toBe(true);
+    expect(r.right_hand.angle_deg).toBeLessThan(2);
+    expect(r.right_hand.wrist_deg).toBeLessThanOrEqual(op.wristLimit);
+  });
+});

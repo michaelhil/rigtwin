@@ -26,10 +26,11 @@ import rawRig from "../../../assets/manikin/params/runtime-rig.toml";
 import { stripRuntime } from "../../../shared/runtime-params.ts";
 import type { Trs } from "../../../shared/pose.ts";
 import { quatRotate } from "../../../shared/math.ts";
+import type { PersonAims } from "../../../shared/person-aims.ts";
 import type { Manifest } from "../../../shared/manifest.ts";
 import { worldFrames, type KNode } from "../../../shared/kinematics.ts";
 import { section } from "./params.ts";
-import { defaultTargets, hold, op_heelBack, type Targets, type Controls, type V3, type ContactPlane, type PanSolid, type Pedal, type Stick } from "./operator.ts";
+import { defaultTargets, hold, op_heelBack, type Targets, type Controls, type V3, type ContactPlane, type PanSolid, type Pedal, type Stick, type AimPoint, type AimResult, type Obstacle, type Operator } from "./operator.ts";
 import type { PersonView, RigView, RigBinding } from "./types.ts";
 import { deriveBodyFit, weightsOf, hasModel, type Capsule } from "./body-fit.ts";
 
@@ -40,7 +41,7 @@ function guard(node: any, path: string): any {
 }
 const RB = guard(stripRuntime(rawRig).rig_binding, "rig_binding");
 const SEAT = RB.seat, ARM = RB.armrest, PED = RB.pedal, FIND = RB.findings;
-const TG = section("operator").targets;
+const TG = section("operator").targets, AIM = section("operator").aim;
 
 // ---- interfaces (the person module's side is viewer/src/person/types.ts) ---------------------------------------------------
 /** A node's frame in the rig model frame: origin and unit axes (as posed now). */
@@ -104,13 +105,47 @@ export function pkgToModel(place: Place, p: N3): V3 {
   const y = place.yawDeg * RAD, c = Math.cos(y), s = Math.sin(y);
   return [place.origin[0] + c * p[2] - s * p[0], place.origin[1] + s * p[2] + c * p[0], place.origin[2] + p[1]];
 }
+/** Shared report geometry in the rig's model frame, suitable for browser and server comparisons. */
+export function modelAimReport(op: Operator, place: Place): Record<string, AimResult> {
+  return Object.fromEntries(Object.entries(op.aimReport()).map(([key, aim]) => {
+    const origin = aim.origin && pkgToModel(place, aim.origin);
+    return [key, {
+      ...aim, point: aim.point && pkgToModel(place, aim.point), origin,
+      direction: aim.direction && sub(pkgToModel(place, aim.direction), place.origin),
+    }];
+  }));
+}
+
 /** A RigView over world frames (shared/kinematics.ts worldFrames), for tests and for callers without a three.js scene. */
-export function rigViewFromFrames(manifest: Manifest, frames: Record<string, Trs>): RigView {
-  const frame = (id: string): RigFrame | null => { const f = frames[id]; return f ? { origin: [...f.t], x: quatRotate(f.q, [1, 0, 0]), y: quatRotate(f.q, [0, 1, 0]), z: quatRotate(f.q, [0, 0, 1]) } : null; };
-  return { manifest, frame, point: (id) => frame(id)?.origin ?? null };
+export function rigViewFromFrames(manifest: Manifest, frames: Record<string, Trs>, neutral = frames): RigView {
+  const frame = (f: Trs | undefined): RigFrame | null => f ? { origin: [...f.t], x: quatRotate(f.q, [1, 0, 0]), y: quatRotate(f.q, [0, 1, 0]), z: quatRotate(f.q, [0, 0, 1]) } : null;
+  return { manifest, frame: (id) => frame(frames[id]), neutralFrame: (id) => frame(neutral[id]), point: (id) => frames[id]?.t ?? null };
 }
 /** The same from the GLB's node tree and joint values (radians or metres; unnamed joints at neutral). */
-export const rigViewFromNodes = (manifest: Manifest, nodes: KNode[], values: Record<string, number | number[]> = {}) => rigViewFromFrames(manifest, worldFrames(nodes, values));
+export const rigViewFromNodes = (manifest: Manifest, nodes: KNode[], values: Record<string, number | number[]> = {}) => rigViewFromFrames(manifest, worldFrames(nodes, values), worldFrames(nodes));
+
+/** Carry a point in the photographed model frame with a part, including its rotation. */
+function carryPoint(p: N3, rest: RigFrame, now: RigFrame): V3 {
+  const d = sub(p, rest.origin);
+  return add(now.origin, add(add(mul(now.x, dot(d, rest.x)), mul(now.y, dot(d, rest.y))), mul(now.z, dot(d, rest.z))));
+}
+
+/** Named surfaces and datums are points. A component is the centre of its box or of the posed parts it contains. */
+export function rigAimPoint(rig: RigView, id: string): RigFrame | null {
+  const frame = rig.frame(id);
+  if (!frame || !id.startsWith("C_")) return frame;
+  const parts = rig.manifest.components, part = parts.find((x) => x.id === id);
+  const extent = (c: NonNullable<typeof part>): V3[] => {
+    if (!c.bbox) return parts.filter((x) => x.parent === c.id).flatMap(extent);
+    const rest = rig.neutralFrame(c.id), now = rig.frame(c.id), { min, max } = c.bbox;
+    if (!rest || !now) return [];
+    return [min[0], max[0]].flatMap((x) => [min[1], max[1]].flatMap((y) => [min[2], max[2]].map((z) => carryPoint([x, y, z], rest, now))));
+  };
+  if (!part) return frame;
+  const bounds = extent(part);
+  if (!bounds.length) return frame;
+  return { ...frame, origin: [0, 1, 2].map((k) => (Math.min(...bounds.map((p) => p[k])) + Math.max(...bounds.map((p) => p[k]))) / 2) };
+}
 
 // ---- the binding ---------------------------------------------------------------------------------------------------------
 /** What the binding reads of the person: its solver and survey measures; for a body that is not a baked person also the
@@ -126,7 +161,7 @@ export function gripProfile(manifest: RigView["manifest"], side: "L" | "R" = "L"
   return { profile: d.profile, hold: d.hold ?? null };
 }
 
-export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding {
+export function rigBinding(person: BindingPerson, rig: RigView, aims?: PersonAims): FullRigBinding {
   const op = person.op, m = rig.manifest, notes: string[] = [];
   // the body's capsules: the baked person's fit where there is one; otherwise derived from the shape weights (body-fit.ts)
   const weights = person.weights ?? (person.manifest && person.controls ? weightsOf(person.manifest, person.controls) : null), sex = person.manifest?.shape?.sex;
@@ -239,6 +274,51 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
   // ---- the hip: survey-true height above the cushion, back on the backrest ------------------------------------------------------
   const base = defaultTargets(op), savedIdle = op.idle;
   const T: Targets = { ...base, grip, elbow, armrest, touch, touchNormal, pedals, feet: { l: pedals[0].heel, r: pedals[1].heel }, screen, recline };
+  const target = (id: string): AimPoint => {
+    const frame = rigAimPoint(rig, id);
+    if (!frame) return { id };
+    return { id, point: pk(frame.origin), ...(id.startsWith("S_") ? { inward: pkd(frame.x) } : {}) };
+  };
+  const named: Targets["aims"] = {};
+  if (aims) {
+    if (aims.look) named.look = target(aims.look);
+    for (const [s, side] of [["l", "left"], ["r", "right"]] as const) {
+      const hand = aims[`${side}_hand`], foot = aims[`${side}_foot`];
+      if (hand) named[`${s}Hand`] = hand.mode === "rest" ? { mode: "rest", id: `D_armrest_${s.toUpperCase()}`, point: armrest[s] } : { mode: hand.mode, ...target(hand.target) };
+      if (!foot) continue;
+      if (foot.mode === "on") named[`${s}Foot`] = { mode: "on", ...target(foot.target) };
+      else {
+        const home = inUnit(md(pedals[s === "l" ? 0 : 1].heel));
+        const p = fromUnit([Math.min(home[0], trayFrom) - AIM.floor_back, home[1], 0]);
+        const platform = m.components.find((c) => c.id === "C_platform")?.bbox;
+        const onDeck = platform && p[0] >= platform.min[0] && p[0] <= platform.max[0] && p[1] >= platform.min[1] && p[1] <= platform.max[1];
+        p[2] = onDeck ? deck : rig.point("D_floor")?.[2] ?? deck;
+        named[`${s}Foot`] = { mode: "floor", id: onDeck ? "D_origin" : "D_floor", point: pk(p) };
+      }
+    }
+    if ([named.lHand, named.rHand].some((h) => h?.mode === "point" || h?.mode === "touch")) {
+      named.obstacles = m.components.flatMap((c): Obstacle[] => {
+        if (!c.bbox || !c.triangles) return [];
+        if (c.id === "C_ts_screen") {
+          // The tilted panel's world-aligned box extends in front of the glass. Use its physical face instead.
+          const half: V3 = [P("touchscreen.depth") / 2, P("touchscreen.outer_width") / 2, P("touchscreen.outer_height") / 2];
+          const mount = F(c.id), mountSize = A("pods.ts_mount_plate") as number[], ball = P("pods.ts_ball_radius");
+          const support = Math.max(ball, P("pods.ts_ball_standoff")), radius = Math.max(mountSize[0], ball);
+          return [{ id: c.id, center: pk(add(ts.origin, mul(ts.x, half[0]))), axes: [pkd(ts.x), pkd(ts.y), pkd(ts.z)], half },
+            { id: c.id, center: pk(add(mount.origin, mul(mount.x, (ball - support) / 2))), axes: [pkd(mount.x), pkd(mount.y), pkd(mount.z)], half: [(ball + support) / 2, radius, radius] }];
+        }
+        const rest = rig.neutralFrame(c.id), now = rig.frame(c.id);
+        if (!rest || !now) return [];
+        const centre = mid(c.bbox.min, c.bbox.max);
+        const center = pk(carryPoint(centre, rest, now));
+        const axes = ([0, 1, 2] as const).map((i) => {
+          const v = [...centre]; v[i] += 1;
+          return norm(sub(pk(carryPoint(v, rest, now)), center));
+        }) as [V3, V3, V3];
+        return [{ id: c.id, center, axes, half: mul(sub(c.bbox.max, c.bbox.min), 0.5) }];
+      });
+    }
+  }
   const still: Controls = { ...hold(), headOverride: [0, 0] };
   const leaned: Controls = { ...still, stick: { l: [...stickLean.l], r: [...stickLean.r] } };
   const solveWith = (t: Targets, c: Controls) => { op.targets = t; op.idle = null; op.resetRun(); op.solve(c, 0); };
@@ -288,6 +368,7 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
 
   // ---- the seated body on the real rig: hands on the grips, head level ---------------------------------------------------------
   T.seat = seat; T.hipAbovePan = hipAbove;
+  if (aims) T.aims = named;
   solveWith(T, leaned);
   const eye = eyeOf(), hip = hipOf(), seatTop = topAt(hip[2]);
   const thighCaps = fitCaps.filter((k) => k.joint === "thigh_l"), rKnee = thighCaps.length ? thighCaps[thighCaps.length - 1].rb : TG.knee_radius_default;
@@ -313,7 +394,7 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
   const bkLen = Number.isFinite(person.measures?.buttockkneelength) ? person.measures.buttockkneelength / 1000 : null;
   const heelY = Math.min(pedals[0].heel[1], pedals[1].heel[1]);
   // the feet on their home pedals: how far the legs fall short (the solver's two-bone reach), and the ball's error
-  const legReach = { left: mm(op.report.legReach.l), right: mm(op.report.legReach.r) }, footErr = { left: mm(op.report.footErr.l), right: mm(op.report.footErr.r) };
+  const legReach = { left: named.lFoot ? null : mm(op.report.legReach.l), right: named.rFoot ? null : mm(op.report.legReach.r) }, footErr = { left: named.lFoot ? null : mm(op.report.footErr.l), right: named.rFoot ? null : mm(op.report.footErr.r) };
 
   // clearances: the body's thigh and pelvis capsules against the rig parts beside and over them
   // legs and hips: the fit's thigh and lower-trunk capsules, and the derived shin capsules (knee included); forearms separately
@@ -360,7 +441,7 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
     const sh = op.P[op.j(`upperarm_${s}`)], el = op.P[op.j(`lowerarm_${s}`)], arm = op.len0(`upperarm_${s}`, `lowerarm_${s}`) + op.len0(`lowerarm_${s}`, `hand_${s}`) + len(op.hands[s].gripPoint);
     const d = len(sub(gripCentre[s], sh)), pt = padTop[s];
     reachRep[s === "l" ? "left" : "right"] = { grip: `D_grip_axis_${S}`, shoulder_to_grip_m: r4([d])[0], arm_length_m: r4([arm])[0], share_of_arm: Math.round((d / arm) * 1000) / 1000,
-      out_of_reach_mm: mm(op.report.reach[s]), hand_error_mm: mm(op.report.handErr[s]), elbow_above_pad_mm: mm(dot(sub(el, pt.o), pt.z)),
+      out_of_reach_mm: named[`${s}Hand`] ? null : mm(op.report.reach[s]), hand_error_mm: named[`${s}Hand`] ? null : mm(op.report.handErr[s]), elbow_above_pad_mm: mm(dot(sub(el, pt.o), pt.z)),
       forearm_skin_above_pad_mm: mm(dot(sub(el, pt.o), pt.z) - (baked?.arm?.fore?.[0] ?? derived?.arm?.fore?.[0] ?? ARM.elbow_above_pad_default)) };
   }
 
@@ -394,7 +475,7 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
   };
   const report: RigReport = {
     person: { survey_eye_m: survey, cushion_compression_m: comp, hip_above_cushion_m: r4([hipAbove])[0], rule, fit: fitSource !== "none", fit_source: fitSource, back_behind_hip_m: r4([dBack - TG.back_clear])[0] },
-    seat: seatRep, clearance, reach: reachRep, eye: eyeRep, pedals: pedalReport,
+    seat: seatRep, clearance, reach: reachRep, eye: eyeRep, pedals: pedalReport.filter((p) => !named[p.foot === "left" ? "lFoot" : "rFoot"]),
     contact: { slab_above_drawn_top_mm: mm(above), slab_below_drawn_top_mm: mm(-below), note: "the contact solid is one flat slab through the cushion top under the hip and the front crest; the drawn top rises toward the front, so between them the slab lies this far above or below it (profile carries the real line)" },
     notes,
   };

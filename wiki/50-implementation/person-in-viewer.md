@@ -201,8 +201,17 @@ in the pods is `viewer.person.shells()`.
 116° (P5 woman, hand breadth 75 mm, length 171 mm), 124° (P50 man, 89 mm, 194 mm) and 133° (P95 man, 92 mm, 205 mm) round it, and the
 middle fingertip stays 76, 67 and 59 mm from the thumb tip: for all three the handle is thicker than a full power grip can close around.
 
+## Seated gaze and named limb targets
+
+The shared scene's target IDs go to the same binding and solver run by the server. The binding carries part centres through their current joint transforms, and looks up reference frames at their current positions. The eyes lock on a named point within their rotation limits. The head follows within its yaw and pitch bounds. The operator camera starts at the solved eye and can show the solved gaze direction.
+
+The pointing hand uses the package's index-point pose. For a touch, the spine can lean forward while the pelvis and untargeted feet keep their operating placement. The arm searches different elbow positions and approaches while respecting the wrist limit and checking its forearm, palm and fingers against posed rigid bounds. The touchscreen has a face-aligned bound so a valid touch can reach the glass. When the target remains outside a clear reach, the hand stops short or goes back to its grip. These checks approximate the drawn skin and rig geometry.
+
+The P5 woman, P50 man and P95 man were rendered from the right side and their own eyes for touchscreen pointing, touchscreen touch and soundbar pointing. The 18 local pictures are under `work/renders/aims/`. [The person’s commands](person-commands.md#seated-targets).
+
 ## Open problems
 
+- The fixed relaxed stand uses the seat location and can pass through the chair. Named targets apply to the seated operating pose.
 - The designer has not seen the person in the product scene: the lights, the tone curve and the exposure are the rig's, not the lab's.
 - No ambient occlusion on the person; folds and contact lines are flatter than in the lab.
 - Done in phase 4 ([the person panel](person-panel.md)): the credits line for the CC-BY garments is on the page and in saved pictures. Clicking the person selects it and opens its panel.

@@ -4,6 +4,7 @@
 // it reads is this frame's). Changes from the lab: no global (`globalThis.synergonEyes`): the person module hands the
 // operator layer's gaze point in through `state.target`; no lil-gui panel.
 // A package without an "eyes" block (the clay style's sculpted eyes) is left alone.
+import { fixationAngles } from "./aim-eyes.ts";
 import { section } from "./params.ts";
 import type { Plugin, FrameContext } from "./plugins.ts";
 
@@ -211,15 +212,18 @@ function late(ctx: FrameContext) {
     const restQ = ctx.restQ.get(s.bone.name) ?? new T.Quaternion(), pq = s.bone.parent.getWorldQuaternion(new T.Quaternion()).multiply(restQ);
     let yaw: number, pitch: number;
     if (st.gaze) { yaw = st.gaze.yaw ?? 0; pitch = st.gaze.pitch ?? 0; }
-    else {
+    else if (st.aim && st.target) {
+      v.fromArray(st.target).sub(s.bone.getWorldPosition(new T.Vector3())).applyQuaternion(pq.clone().invert());
+      [yaw, pitch] = fixationAngles([v.x, v.y, v.z]);
+    } else {
       v.copy(F).sub(s.bone.getWorldPosition(new T.Vector3())).normalize().applyQuaternion(pq.clone().invert());
       yaw = Math.atan2(v.x, v.z) / D2R; pitch = Math.asin(Math.max(-1, Math.min(1, v.y))) / D2R;
       yaw = Math.max(-p.limYaw, Math.min(p.limYaw, yaw)) + s.sign * p.kappa; pitch = Math.max(-p.limDown, Math.min(p.limUp, pitch));
     }
-    yaw -= s.sign * p.blinkRollNasal * blink; pitch -= p.blinkRollDown * blink;
+    if (!st.aim) { yaw -= s.sign * p.blinkRollNasal * blink; pitch -= p.blinkRollDown * blink; }
     // the eye stays inside its range and turns no faster than the main sequence allows
     yaw = Math.max(-p.limYaw, Math.min(p.limYaw, yaw)); pitch = Math.max(-p.limDown, Math.min(p.limUp, pitch));
-    if (Number.isFinite(budget) && s.refYaw !== undefined) { yaw = s.refYaw + Math.max(-budget, Math.min(budget, yaw - s.refYaw)); pitch = s.refPitch + Math.max(-budget, Math.min(budget, pitch - s.refPitch)); }
+    if (!st.aim && Number.isFinite(budget) && s.refYaw !== undefined) { yaw = s.refYaw + Math.max(-budget, Math.min(budget, yaw - s.refYaw)); pitch = s.refPitch + Math.max(-budget, Math.min(budget, pitch - s.refPitch)); }
     s.prevYaw = yaw; s.prevPitch = pitch;
     s.yaw = yaw; s.pitch = pitch;
     const qe = new T.Quaternion().setFromAxisAngle(Y, yaw * D2R).multiply(q.setFromAxisAngle(X, -pitch * D2R));

@@ -19,7 +19,9 @@ import { S, Q, scene, renderer, invalidate, on, hooks, keyLight, w2m, m2w, viewe
 import { SCRIPTS } from "./operator.ts";
 import { Avatar, setAssetRevision } from "./avatar.ts";
 import { section } from "./params.ts";
-import { rigBinding } from "./rig-binding.ts";
+import type { PersonAims } from "../../../shared/person-aims.ts";
+import { worldFrames, type KNode } from "../../../shared/kinematics.ts";
+import { rigBinding, rigViewFromFrames, modelAimReport } from "./rig-binding.ts";
 import type { RigView, RigBinding } from "./types.ts";
 
 const RT = section("runtime"), GROUND = section("ground"), LOOK = section("look"), SECTION_BINS = section("operator").handle.section_bins;
@@ -40,14 +42,37 @@ function say(text: string | null, error = false) {
   status.hidden = !text; status.textContent = text ?? ""; status.classList.toggle("amber", error);
 }
 
+/** Neutral component frames are needed even when the live scene opened with adjustments applied. */
+let neutralRoot: THREE.Object3D | null = null;
+let neutralRig: RigView;
+function neutralFrames(): RigView {
+  if (neutralRoot === S.root) return neutralRig;
+  const nodes: KNode[] = [];
+  const visit = (obj: THREE.Object3D, parent: number) => {
+    const i = nodes.length, rest = S.joints.get(obj.name)?.rest;
+    nodes.push({
+      name: obj.userData.id ?? obj.name, parent,
+      t: parent < 0 ? [0, 0, 0] : (rest?.t as KNode["t"] ?? obj.position.toArray()),
+      q: parent < 0 ? [0, 0, 0, 1] : (rest?.q ?? obj.quaternion.toArray()),
+    });
+    for (const child of obj.children) visit(child, i);
+  };
+  for (const root of S.root.children) visit(root, -1);
+  neutralRoot = S.root;
+  return neutralRig = rigViewFromFrames(S.manifest, worldFrames(nodes));
+}
+let aims: PersonAims | undefined;
+
 /** The rig as the binding reads it: node positions and frames in the MODEL frame, joints as posed now. */
 const rigView = (): RigView => {
+  S.root.updateMatrixWorld(true);
   const at = (id: string) => S.objects.get(id) ?? null;
   return {
     manifest: S.manifest,
-    point(id) { const o = at(id); if (!o) return null; S.root.updateMatrixWorld(true); return w2m(o.getWorldPosition(new THREE.Vector3())); },
+    neutralFrame: (id) => neutralFrames().frame(id),
+    point(id) { const o = at(id); if (!o) return null; return w2m(o.getWorldPosition(new THREE.Vector3())); },
     frame(id) {
-      const o = at(id); if (!o) return null; S.root.updateMatrixWorld(true);
+      const o = at(id); if (!o) return null;
       // the node's own axes are the columns of its world matrix (the GLB root converts model -> world); back into the model frame
       const m = o.matrixWorld, ax = (i: number) => w2m(new THREE.Vector3().setFromMatrixColumn(m, i).normalize());
       return { origin: w2m(o.getWorldPosition(new THREE.Vector3())), x: ax(0), y: ax(1), z: ax(2) };
@@ -64,7 +89,7 @@ function rebind() {
   if (opState.on && av.mode !== "clip") {
     // the binding gets the body itself too: where it is no baked person, its capsules are derived from its shape weights (body-fit.ts)
     if (!opState._op || opState._key !== av.restKey()) av.update(0);   // the solver of THIS body (rebuilt by the plug-in when the rest key changed): never bind with the previous body's
-    if (opState._op) { b = null; try { b = rigBinding({ op: opState._op, measures: av.measures, manifest: av.manifest, controls: av.shape, weights: av.weights }, rigView()); } catch (e) { console.warn("person: the rig binding failed; the stand-in seat is used", e); } }
+    if (opState._op) { b = null; try { b = rigBinding({ op: opState._op, measures: av.measures, manifest: av.manifest, controls: av.shape, weights: av.weights }, rigView(), aims); } catch (e) { console.warn("person: the rig binding failed; the stand-in seat is used", e); } }
     av.binding = b;
   }
   const place = placeOverride ?? b?.place ?? fallbackPlace();
@@ -196,7 +221,7 @@ async function switchPackage(url: string, label: string, keepShape = true) {
   old.dispose(); av = next; scene.add(av.holder); av.holder.visible = shown;
   rebind(); say(null); changedSignal();
 }
-type PersonSet = { style?: string; sex?: "m" | "f" | "male" | "female"; tone?: string; wear?: any; shape?: Record<string, number> | string; pose?: string | Record<string, number> | null; script?: string; clip?: string | null; time?: number | null };
+type PersonSet = { style?: string; sex?: "m" | "f" | "male" | "female"; tone?: string; wear?: any; shape?: Record<string, number> | string; pose?: string | Record<string, number> | null; script?: string; clip?: string | null; time?: number | null; aims?: PersonAims | null };
 async function set(o: PersonSet) {
   if (!av?.ready) throw new Error("the person is not loaded");
   if (o.sex) o = { ...o, sex: o.sex === "female" ? "f" : o.sex === "male" ? "m" : o.sex };
@@ -217,6 +242,7 @@ async function set(o: PersonSet) {
   else if (o.pose && !(pk?.seat)) av.setPose(o.pose);
   else if (pk?.seat) { await av.setClip(null); av.state("operator").on = true; }
   if (o.pose === null || o.script) { await av.setClip(null); const op = av.state("operator"); op.on = true; if (o.script) op.script = o.script; }
+  if (o.aims !== undefined) aims = o.aims ?? undefined;
   restart++; rebind();
   changedSignal();
   return state();
@@ -229,6 +255,7 @@ function state() {
   return {
     loaded: av.ready, shown, suppressed, error: loadError, package: av.manifest?.name ?? null, sex: sexOf(av), style: styleKind(av), tone: av.tone, worn: { ...av.worn }, shape: { ...av.shape }, measures: { ...av.measures },
     still: !(live && idleOn), stillTime: stillAt, look: lookOn, seated: av.seated, person: av.person || null, pose: av.mode === "clip" ? { clip: av.clipName, time: av.action?.time ?? null } : op.on ? { script: op.script } : { dofs: true },
+    aims: av.seated && av.binding && op._op ? modelAimReport(op._op, av.binding.place) : {},
     report: op.report ?? null, eyes: ey.report ? { mode: ey.report.mode, blink: ey.report.blink } : null,
     binding: av.binding ? { place: av.binding.place, report: av.binding.report ?? null } : null, placed: placeOverride,
     timing: { load_ms: Math.round(loadMs), bind_ms: +bindMs.toFixed(1), bake_ms: +av.bakeMs.toFixed(1), swap_ms: +av.swapMs.toFixed(1), sink_renders: av.contact.stats.renders },
@@ -343,6 +370,10 @@ export async function initPerson() {
   hooks.onApply.push((o: Opts) => { live = !(o.ui === "0" || o.ui === false || o.still === "1" || o.still === true); restart++; if (av?.ready) dirty(); });
   if (Q.get("ui") === "0") live = false;
   on((c) => { if (c === "joints" && av?.ready) rebind(); if (c === "view") firstPerson(); });
+  hooks.operatorGaze.push(() => {
+    const op = av?.state("operator")._op;
+    return shown && av?.seated && av.binding && op?.explicitGaze ? modelAimReport(op, av.binding.place).look?.direction ?? null : null;
+  });
   hooks.operatorEye.push(() => (av?.ready && shown && av.seated && av.state("operator").on ? anchor("eye_midpoint") : null));
   requestAnimationFrame(idle);
   if (!hidden) say("Loading the person…");

@@ -21,7 +21,7 @@ const RULES = [
   "- Refusals: ambiguous lists candidates (ask which one); out_of_range gives the travel (ask before using the end); stale means someone changed it meanwhile (tell the owner).",
   "- undo {} undoes the last change; undo {\"what\": \"<request>\"} a whole request.",
   "- look moves the camera: {\"eye\": {\"stature_cm\": 180}} is the operator's view of a person that tall; {\"camera\": {\"at\": ..., \"look_at\": ...}} puts it anywhere (points or model-frame metres). picture: true checks it.",
-  "- person {\"preset\": \"P5 woman\"} seats a person (also style, body, posture, clear: true); measure {\"person\": \"all\"} gives its eye, sight, reach and clearances.",
+  "- person {\"preset\": \"P5 woman\"} seats a person (also style, body, posture, aims, clear: true); measure {\"person\": \"all\"} gives its eye, sight, reach and clearances.",
 ];
 
 /** The MCP server's instructions: the rules, then every adjustment in one line. */
@@ -75,6 +75,7 @@ export function wikiPage(asset: AssetInfo, updated: string): string {
     "- **Plain words in, a checked reply out.** `adjust {\"target\": \"backrest\", \"to\": \"upright\"}` resolves the adjustment, works out relative changes on the server, records one request with a server-made name and replies with before → after, the undo handle and what else is moved.",
     "- **Generated, not written.** The tool schemas and descriptions come from the command registry, the catalogue below from `shared/words.ts` and the model's description file; the same text is the MCP server's instructions and the Skill's reference.",
     "- **The person in the seat** (manikin v1): `person {\"preset\": \"P5 woman\"}` seats the 5th percentile woman; `measure {\"person\": \"all\"}` gives her eye, sight lines to both screens, reach to the grips and clearances, computed by the server from the same solver the page draws with. With a person shown, `look`'s operator view and `eye {stature_cm}` use that person's solved eye.",
+    "- **Seated targets.** `person {\"look_at\": \"little monitor\", \"right_hand\": {\"point\": \"touchscreen\"}}` looks at and points to the same screen in one request. Targets follow the rig as it moves. Use `measure {\"person\": \"aims\"}` for the gaze and contact results. A new target request uses the operating defaults for omitted fields.",
     "- The low-level commands of step 1 stay for scripts and tests: `bun run rig <command> '<json>' [--workspace <id or link>]` (on the laptop the default is the Playground; a remote server needs `--workspace`).",
     "",
     "## The adjustments",

@@ -171,6 +171,41 @@ try {
     const camAt = await until<number[]>(A, "viewer.state().view === 'operator' && viewer.state().camera.position");
     const dc = camAt ? Math.hypot(camAt[0] - eyeNow[0], camAt[1] - eyeNow[1], camAt[2] - eyeNow[2]) * 1000 : Infinity;
     check(lk.ok && dc < 1, "look's operator view sits on the eye of the person in the seat", `${dc.toFixed(2)} mm from the server's eye point (${lk.result?.text ?? lk.error?.message})`);
+    await B.evaluate("viewer.person.still(true)");
+    const aimRows: string[] = [];
+    let agrees = true;
+    for (const preset of ["P5 woman", "P50 man", "P95 man"]) {
+      for (const [target, mode] of [["touchscreen", "touch"], ["soundbar", "point"]]) {
+        const set = await rig(origin, "person", JSON.stringify({ preset, look_at: target, right_hand: { [mode]: target } }));
+        const report = await rig(origin, "measure", '{"person":"all"}');
+        const want = report.result?.aims;
+        const shown = await Promise.all([A, B].map((p) => until(p,
+          `viewer.live()?.person?.preset === ${JSON.stringify(preset)} && viewer.live()?.version === ${set.version} && viewer.person.state()?.aims?.right_hand?.mode === ${JSON.stringify(mode)}`, 20000)));
+        const rows = await Promise.all([A, B].map(async (p) => {
+          await p.evaluate("viewer.frame()");
+          return p.evaluate(`(() => {
+            const api = viewer.person, av = api.avatar(), aims = api.state().aims, j = av.bones.get('index_03_r');
+            // Move the estimated tip offset through the index bone the page actually poses.
+            const op = av.state('operator')._op, d = j.position.clone().fromArray(op.hands.r.tipRest.index);
+            d.applyQuaternion(j.quaternion.clone().fromArray(op.Q0[op.j('index_03_r')]).invert());
+            const tip = j.localToWorld(d), sight = [];
+            for (const side of ['l','r']) {
+              const eye = av.bones.get('eye_' + side), axis = eye.position.clone().set(0,0,1).applyQuaternion(eye.getWorldQuaternion(eye.quaternion.clone()));
+              sight.push([axis.x,-axis.z,axis.y]);
+            }
+            return { aims, tip: [tip.x,-tip.z,tip.y], sight, eye: api.anchor('eye_midpoint') };
+          })()`) as Promise<{ aims: any; tip: number[]; sight: number[][]; eye: number[] }>;
+        }));
+        const gap = (a: number[], b: number[]) => Math.hypot(...a.map((x, i) => x - b[i]));
+        const tip = want ? Math.max(...rows.map((r) => gap(r.tip, want.right_hand.origin))) : Infinity;
+        const gaze = want ? Math.max(...rows.map((r) => gap(r.sight[0].map((x, i) => (x + r.sight[1][i]) / 2), want.look.direction))) : Infinity;
+        const eye = want ? Math.max(...rows.map((r) => gap(r.eye, report.result.eye.midpoint_m))) : Infinity;
+        agrees &&= !!set.ok && shown.every(Boolean) && tip <= 0.003 && eye <= 0.003 && gaze <= 0.01 &&
+          rows.every((r) => r.aims.look.on_target && r.aims.right_hand.status === (mode === "touch" ? "contact" : "aimed"));
+        aimRows.push(`${preset}, ${mode}: ${(tip * 1000).toFixed(2)} mm at the fingertip, ${(eye * 1000).toFixed(2)} mm at the eye`);
+      }
+    }
+    check(agrees, "one CLI aim reaches two pages and matches the server's eye and fingertip", aimRows.join("; "));
     const cl = await rig(origin, "person.clear", "{}"), hidden = await until<boolean>(B, "viewer.person && viewer.person.state().shown === false", 10000);
     const un = await rig(origin, "history.undo", JSON.stringify({ version: cl.recorded })), back = await until<boolean>(B, "viewer.person.state().shown === true", 10000);
     check(cl.ok && !!hidden && un.ok && !!back, "person.clear hides the person on the other page, and its undo shows it again", `hidden: ${!!hidden}, shown again: ${!!back}`);

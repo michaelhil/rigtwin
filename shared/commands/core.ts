@@ -22,7 +22,7 @@ import { Refusal, type CommandError, type Schema } from "./schema.ts";
 import { nodesFromGlb, worldFrames } from "../kinematics.ts";
 import { limitViolation, type JointValue } from "../pose.ts";
 import type { Manifest, ManifestJoint } from "../manifest.ts";
-import { adjWords, jointName, partName, sayJoint } from "../words.ts";
+import { adjWords, jointName, partName, sayJoint, TOUCHSCREEN_NAMES } from "../words.ts";
 import { sayPerson } from "./person-words.ts";
 
 const DEG = Math.PI / 180;
@@ -111,7 +111,7 @@ function index(asset: AssetInfo): Candidate[] {
   return ix;
 }
 /** Ranked matches for plain words: whole words of the name count most, then related everyday words, then word starts, then details. */
-export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 10) {
+export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 10, requireAll = false) {
   const q = tokens(text).filter((w) => !STOP.has(w));
   const exact = text.trim().toLowerCase();
   const scored = index(asset).filter((c) => !kind || c.kind === kind).map((c) => {
@@ -121,6 +121,7 @@ export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 1
       const s = c.main.has(w) ? 3 : (Object.hasOwn(ALSO, w) ? ALSO[w] : []).some((x) => c.main.has(x)) ? 2 : [...c.main].some((t) => w.length >= 3 && (t.startsWith(w) || (t.length >= 4 && w.startsWith(t)))) ? 2 : c.extra.has(w) ? 1 : 0;
       score += s; if (!s) all = false;
     }
+    if (requireAll && !all) return { c, score: 0 };
     // an alias (a second name for the same point) ranks just below the point itself
     return { c, score: score + (all ? 2 : 0) - (score && /\balias of\b/.test(c.label) ? 1 : 0) };
   }).filter((x) => x.score > 0);
@@ -139,6 +140,27 @@ function refuseUnknownJoint(asset: AssetInfo, id: string): never {
 export function checkId(asset: AssetInfo, id: string, what: string) {
   const known = asset.nodes.some((n) => n.name === id) || asset.manifest.groups.includes(id);
   if (!known) throw new Refusal("unknown_id", `${what} ${JSON.stringify(id)} is not a part, group, joint or datum of ${asset.name}`, `scene.find {"text": "..."} gives ids from plain words`);
+}
+
+/** Resolve the same rig vocabulary for measures, cameras and the person. */
+export function resolvePoint(asset: AssetInfo, text: string, aim = false): string {
+  const q = tokens(text.trim()).join(" ");
+  const isAimTarget = (id: string) => /^[CDS]_/.test(id);
+  const named = asset.nodes.find((n) => n.name.toLowerCase() === text.trim().toLowerCase())?.name;
+  if (named && (aim ? isAimTarget(named) : /^[CDSJ]_/.test(named))) return named;
+  if (TOUCHSCREEN_NAMES.includes(q) && asset.manifest.surfaces.some((s) => s.id === "S_ts_screen")) return "S_ts_screen";
+
+  const hits = findIds(asset, text, undefined, 12, aim).filter((h) => h.kind !== "joint");
+  const exact = hits.filter((h) => tokens(h.label.replace(/\s*\([^)]*\)/g, "")).join(" ") === q);
+  const candidates = exact.length ? exact : hits.filter((h) => h.score === hits[0].score);
+  if (candidates.length === 1) return candidates[0].id;
+  const names = (list: { label: string; id: string }[]) => list.slice(0, 4).map((h) => `"${h.label.replace(/\s*\([^)]*\)/g, "")}" (${h.id})`).join(", ");
+  if (candidates.length) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${names(candidates)}`, "name it more exactly, or give the ID");
+  if (!aim && /^[CDSJ]_[A-Za-z0-9_]{1,60}$/.test(text)) checkId(asset, text, "point");
+  const near = findIds(asset, q, undefined, 12).filter((h) => h.kind !== "joint");
+  const examples = index(asset).filter((h) => h.kind !== "joint");
+  throw new Refusal("unknown_target", `no ${aim ? "part or point" : "point"} matches ${JSON.stringify(text)}`,
+    `${near.length ? "Possible matches" : "Examples"}: ${names(near.length ? near : examples)}. scene.find lists names and IDs.`);
 }
 
 // ------------------------------------------------------------------------------------------- commands

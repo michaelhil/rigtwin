@@ -21,11 +21,11 @@
 import { register, get, type AssetInfo, type CommandSpec, type RunOutput } from "./registry.ts";
 import { Refusal, type Schema } from "./schema.ts";
 import { planUndo, GROUP_PATTERN, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
-import { checkId, findIds, idTokens, isAssumed, labelOf, sameSI, tokens, unitOf, VIEW_NAMES } from "./core.ts";
+import { checkId, findIds, resolvePoint, idTokens, isAssumed, labelOf, sameSI, tokens, unitOf, VIEW_NAMES } from "./core.ts";
 import type { ManifestJoint } from "../manifest.ts";
 import { worldFrames } from "../kinematics.ts";
 import type { JointValue } from "../pose.ts";
-import { adjWords, jointName, rowName, sayJoint, sayOffset, UNITS, type AdjWord } from "../words.ts";
+import { adjWords, jointName, rowName, sayJoint, sayOffset, UNITS, TOUCHSCREEN_NAMES, type AdjWord } from "../words.ts";
 import { personCommands, personEye, personChangeLine, sayPersonOrNobody } from "./person.ts";
 import { PRESETS, POSTURE_WORDS, STYLES, SEXES, TONES } from "./person-words.ts";
 
@@ -45,6 +45,7 @@ export interface Adjustment {
   main: Set<string>; phrases: Set<string>; extra: Set<string>;
 }
 const norm = (s: string) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9:]+/g, " ").trim();
+const touchscreenAlias = new RegExp(`\\b(?:${TOUCHSCREEN_NAMES.join("|")})\\b`, "g");
 const cache = new WeakMap<AssetInfo, Adjustment[]>();
 export function adjustments(asset: AssetInfo): Adjustment[] {
   let out = cache.get(asset);
@@ -83,13 +84,13 @@ const value = (a: Adjustment, pose: Record<string, JointValue>) => { const v = p
 
 /** The adjustment meant by plain words or an id; refuses `ambiguous` (with the candidates) when two are about as likely. */
 export function resolveAdjustment(asset: AssetInfo, text: string): Adjustment {
-  const all = adjustments(asset), q = norm(text), t = text.trim().toLowerCase();
+  const all = adjustments(asset), q = norm(text).replace(touchscreenAlias, "touchscreen"), t = text.trim().toLowerCase();
   const exact = all.filter((a) => a.key.toLowerCase() === t || (a.comp === null && a.joint.id.toLowerCase() === t));
   if (exact.length === 1) return exact[0];
   if (all.some((a) => a.comp !== null && a.joint.id.toLowerCase() === t)) {
     throw new Refusal("ambiguous", `${text} is a three-angle mount: name one of its angles`, `one of: ${all.filter((a) => a.joint.id.toLowerCase() === t).map((a) => `"${a.name}" (${a.key})`).join(", ")}`);
   }
-  const words = tokens(text).filter((w) => !STOP.has(w));
+  const words = tokens(q).filter((w) => !STOP.has(w));
   const scored = all.map((a) => {
     let s = 0, every = words.length > 0;
     for (const w of words) { const p = a.main.has(w) ? 3 : a.extra.has(w) ? 1 : [...a.main].some((t) => w.length >= 4 && t.startsWith(w)) ? 2 : 0; s += p; if (!p) every = false; }
@@ -154,7 +155,7 @@ export function vocabulary(asset: AssetInfo): Set<string> {
   for (const c of [...asset.manifest.components, ...asset.manifest.surfaces]) add(labelOf(asset, c.id));
   for (const d of asset.manifest.datums) add(d.label);
   // the person's words (person.ts): presets, styles, sexes, tones, postures, the report's parts, the packages' preset and pose names
-  for (const w of [...Object.keys(PRESETS), ...Object.keys(POSTURE_WORDS), ...STYLES, ...SEXES, ...TONES, "person", "woman", "man", "glasses", "headset", "cap", "eye", "sight", "reach", "clearance", "all", "clear", "body", "stature", "mass"]) add(w);
+  for (const w of [...Object.keys(PRESETS), ...Object.keys(POSTURE_WORDS), ...STYLES, ...SEXES, ...TONES, "person", "woman", "man", "glasses", "headset", "cap", "eye", "sight", "reach", "clearance", "all", "clear", "body", "stature", "mass", "aims", "point", "touch", "grip", "rest", "pedal", "floor"]) add(w);
   for (const pkg of Object.values(asset.people?.packages ?? {})) {
     for (const pr of pkg.manifest.shape?.presets ?? []) add(pr.name);
     for (const po of pkg.manifest.poses ?? []) add(`${po.id ?? ""} ${po.name ?? ""}`.replace(/_/g, " "));
@@ -263,16 +264,6 @@ function resolvePart(asset: AssetInfo, text: string): string {
   if (same) return same.id;                                   // a name given exactly wins
   if (!hit.length) throw new Refusal("unknown_target", `no part matches ${JSON.stringify(text)}`, "use a group (stand, seat, pods, pedals, platform) or a part's name, e.g. \"monitor\", \"left joystick\"");
   if (hit[1] && hit[0].score === hit[1].score) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${hit.slice(0, 3).map((h) => `"${h.label}"`).join(" or ")}`, "name it more exactly");
-  return hit[0].id;
-}
-/** a point to measure from: a reference point (eye, grip, seat reference), a screen or a part, by plain words or id */
-function resolvePoint(asset: AssetInfo, text: string): string {
-  if (/^[CDSJ]_[A-Za-z0-9_]{1,60}$/.test(text)) { checkId(asset, text, "point"); return text; }
-  const hit = findIds(asset, text, undefined, 6).filter((h) => h.kind !== "joint"), q = norm(text);
-  const same = hit.find((h) => norm(h.label.replace(/\s*\([^)]*\)/g, "")) === q);
-  if (same) return same.id;                                   // a name given exactly wins
-  if (!hit.length) throw new Refusal("unknown_target", `no point matches ${JSON.stringify(text)}`, "e.g. \"median eye\", \"monitor screen\", \"right grip\", \"touchscreen\"");
-  if (hit[1] && hit[0].score === hit[1].score) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${hit.slice(0, 3).map((h) => `"${h.label}"`).join(" or ")}`, "name it more exactly (for the eye: small, median or large)");
   return hit[0].id;
 }
 
@@ -385,7 +376,7 @@ const intent: CommandSpec[] = [
     id: "measure", kind: "query", tool: "measure",
     summary: "The distance between two points named in plain words or ids (\"median eye\" to \"monitor screen\"), at the current pose: a point estimate between frame origins, at the sizes estimated from photographs; no range yet. With person instead: what the person in the seat sees and reaches, from its solved pose (eye, sight lines with the gaze cone, reach to the grips, clearances), every number with its unit and source.",
     args: { type: "object", properties: { from: { type: "string", maxLength: 80, description: "a reference point, screen or part: \"median eye\", \"small eye\", \"right grip\", \"D_eye_median\"" }, to: { type: "string", maxLength: 80, description: "e.g. \"monitor screen\", \"touchscreen\", \"S_mon_screen\"" },
-      person: { type: "string", enum: ["eye", "sight", "reach", "clearance", "all"], description: "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), all" } } },
+      person: { type: "string", enum: ["eye", "sight", "reach", "clearance", "aims", "all"], description: "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), aims (gaze and named limb targets), all" } } },
     examples: [{ args: { from: "median eye", to: "monitor screen" }, note: "viewing distance of a median adult" }, { args: { person: "sight" }, note: "the screens from the eye of the person in the seat" }],
     run(ctx, a: { from?: string; to?: string; person?: string }) {
       if (a.person !== undefined) {
@@ -418,7 +409,7 @@ const intent: CommandSpec[] = [
         if (!v) throw new Refusal("invalid_args", `look: ${JSON.stringify(a.view)} is not a view`, `one of: operator, overview, front, back, left, right, top, front corner`);
         out.view = v;
         const pe = v === "operator" ? personEye(asset, doc) : null;          // a person in the seat (operating): its own eye
-        if (pe) { out.eye_point = pe.point; said.push(`the operator's eye view from the eye of ${pe.who}`); }
+        if (pe) { out.eye_point = pe.point; out.follow_person = true; if (pe.direction) out.eye_direction = pe.direction; said.push(`the operator's eye view from the eye of ${pe.who}`); }
         else said.push(v === "operator" ? `the operator's eye view${doc.person && asset.people ? " (from the rig's median eye point: the person in the seat is not in the operating posture)" : ""}` : `the ${v.replace("_", " ")} view`);
       }
       if (a.eye !== undefined && a.camera !== undefined) throw new Refusal("invalid_args", "look: give eye or camera, not both", "eye puts the camera at a person's eye in the seat; camera puts it anywhere");
@@ -434,7 +425,7 @@ const intent: CommandSpec[] = [
         const pe = e.stature_cm !== undefined ? personEye(asset, doc, { stature_mm: e.stature_cm * 10 }) : null;
         out.view = "operator";
         if (pe) {
-          out.eye_point = pe.point; out.eye = Math.round(pe.above_cushion_m * 1e4) / 1e4;
+          out.eye_point = pe.point; if (pe.direction) out.eye_direction = pe.direction; out.eye = Math.round(pe.above_cushion_m * 1e4) / 1e4;
           said.push(`the operator's view from the eye of ${pe.who} (its solved pose: ${r1(pe.above_cushion_m * 100)} cm above the cushion, from the person's shape space, not a ratio); it moves with the seat`);
         } else {
           const d = r1((h - hm) * 100);

@@ -30,6 +30,8 @@ describe("targets in plain words", () => {
     expect(key("seat height")).toBe("J_seat_height");
     expect(key("left armrest")).toBe("J_pod_armrest_L");
     expect(key("touchscreen tilt")).toBe("J_ts_screen:1");
+    expect(key("little monitor tilt")).toBe("J_ts_screen:1");
+    expect(key("small screen turn")).toBe("J_ts_screen:2");
     expect(key("right pedal")).toBe("J_pedal_3");
     expect(key("J_seat_recline")).toBe("J_seat_recline");
     expect(key("J_ts_screen:2")).toBe("J_ts_screen:2");

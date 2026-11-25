@@ -27,7 +27,7 @@ import type { JointValue } from '../../shared/pose.ts';
 
 type Change = { joint: string; after: JointValue | null };
 /** the person in the seat (synergon-scene/1; shared/commands/doc.ts PersonState), null: nobody */
-type Person = { style: string; sex: string; tone: string; glasses: boolean; headset: boolean; body: Record<string, number>; posture: string } | null;
+type Person = import("../../shared/commands/doc.ts").PersonState | null;
 type Entry = { version: number; actor: { id: string; label: string }; command: string; changes: Change[]; person?: { after: Person }; undoes?: number[] };
 type Note = { box: HTMLElement; text: HTMLElement; buttons: HTMLButtonElement[] };
 
@@ -145,7 +145,7 @@ let wantPerson: Person | undefined, shownPerson: Person | undefined, personBusy 
 async function showPerson() {
   const api = viewerApi.person as any;
   if (wantPerson === undefined || personBusy || Q.get('person') === 'off') return;
-  if (!api) { window.setTimeout(showPerson, 500); return; }
+  if (!api) { if (Q.get('person') === '0') return; window.setTimeout(showPerson, 500); return; }
   personBusy = true;
   try {
     if (!(await api.ready)) return;
@@ -158,6 +158,7 @@ async function showPerson() {
         if (p.style === 'dressed' && (!o || o.glasses !== p.glasses || o.headset !== p.headset)) set.wear = { glasses: p.glasses ? slot('glasses') : null, headset: p.headset ? slot('headset') : null };
         if (!o || JSON.stringify(o.body) !== JSON.stringify(p.body)) set.shape = Object.fromEntries((d?.controls ?? []).map((c: any) => [c.id, p.body[c.id] ?? c.default ?? 0]));   // a control left out is at its default
         if (!o || o.posture !== p.posture) set.pose = p.posture === 'operating' ? null : p.posture;
+        if (!o || JSON.stringify(o.aims) !== JSON.stringify(p.aims)) set.aims = p.aims ?? null;
         await api.set(set);
       }
       await api.show(!!p);
@@ -235,7 +236,7 @@ function applyView(d: ViewEvent) {
     if (d.id === 'look') {
       if (a.all) showAll(); if (a.only) showOnly(a.only); if (a.hide) setVisible(a.hide, false);
       if (Array.isArray(a.camera)) setExplicitCamera(a.camera.map(Number));
-      else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null, eyePoint: Array.isArray(a.eye_point) ? a.eye_point.map(Number) : null });
+      else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null, eyePoint: Array.isArray(a.eye_point) ? a.eye_point.map(Number) : null, eyeDirection: Array.isArray(a.eye_direction) ? a.eye_direction.map(Number) : null, followPerson: a.follow_person === true ? true : undefined });
       if (a.select) select(a.select);
     }
   } catch { /* an id this model does not have */ }

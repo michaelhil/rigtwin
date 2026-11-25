@@ -15,6 +15,7 @@ tags: [reference, agents, mcp, commands, generated]
 - **Plain words in, a checked reply out.** `adjust {"target": "backrest", "to": "upright"}` resolves the adjustment, works out relative changes on the server, records one request with a server-made name and replies with before → after, the undo handle and what else is moved.
 - **Generated, not written.** The tool schemas and descriptions come from the command registry, the catalogue below from `shared/words.ts` and the model's description file; the same text is the MCP server's instructions and the Skill's reference.
 - **The person in the seat** (manikin v1): `person {"preset": "P5 woman"}` seats the 5th percentile woman; `measure {"person": "all"}` gives her eye, sight lines to both screens, reach to the grips and clearances, computed by the server from the same solver the page draws with. With a person shown, `look`'s operator view and `eye {stature_cm}` use that person's solved eye.
+- **Seated targets.** `person {"look_at": "little monitor", "right_hand": {"point": "touchscreen"}}` looks at and points to the same screen in one request. Targets follow the rig as it moves. Use `measure {"person": "aims"}` for the gaze and contact results. A new target request uses the operating defaults for omitted fields.
 - The low-level commands of step 1 stay for scripts and tests: `bun run rig <command> '<json>' [--workspace <id or link>]` (on the laptop the default is the Playground; a remote server needs `--workspace`).
 
 ## The adjustments
@@ -70,7 +71,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
 
 ### person
 
-The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), or clear: true for nobody. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"clear":true}: nobody in the seat
+The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. A posture or aim request resets omitted aims to the operating defaults. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"look_at":"little monitor","right_hand":{"point":"touchscreen"}}: look at and point to the touchscreen; {"clear":true}: nobody in the seat
 
 ## The MCP server's instructions (public sandbox)
 
@@ -87,7 +88,7 @@ Use these tools for every request about the scene; one call usually does it.
 - Refusals: ambiguous lists candidates (ask which one); out_of_range gives the travel (ask before using the end); stale means someone changed it meanwhile (tell the owner).
 - undo {} undoes the last change; undo {"what": "<request>"} a whole request.
 - look moves the camera: {"eye": {"stature_cm": 180}} is the operator's view of a person that tall; {"camera": {"at": ..., "look_at": ...}} puts it anywhere (points or model-frame metres). picture: true checks it.
-- person {"preset": "P5 woman"} seats a person (also style, body, posture, clear: true); measure {"person": "all"} gives its eye, sight, reach and clearances.
+- person {"preset": "P5 woman"} seats a person (also style, body, posture, aims, clear: true); measure {"person": "all"} gives its eye, sight, reach and clearances.
 Adjustments (lengths from as photographed; + and − name the directions):
 - Turn and tilt: swivel [J_seat_swivel]: −15° … +15°, photographed 0°, 0 = facing straight ahead; +left −right; ASSUMED
 - Seat position: height [J_seat_height]: −4 … +4 cm; +higher −lower; ASSUMED
@@ -128,9 +129,9 @@ Adjustments (lengths from as photographed; + and − name the directions):
 | `view.show` | view | Choose what one browser shows (--viewer <code>): only some parts or groups, hide some, or all again. |
 | `view.select` | view | Select a part or group in one browser (--viewer <code>), as a click would (its card opens). |
 | `person.set` | edit | Change the person in the seat: preset (P5 woman, P50 man, P95 man, or a preset of the package), sex, style (dressed or clay), tone, glasses and headset on or off (the cap is always worn), body controls by id (stature mm, mass kg, r_* in SD). Adds the default person when nobody is in the seat. Recorded as one change; undo with history.undo. |
-| `person.pose` | edit | The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. Recorded as one change. |
+| `person.pose` | edit | The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. In the operating posture one call can set gaze, hands and feet. A posture or aim request resets omitted aims to the operating defaults. |
 | `person.clear` | edit | Take the person out of the seat (nobody shown). Recorded as one change; undo brings the person back. |
-| `person.report` | query | What the person in the seat sees and reaches, computed on the server without a browser: eye point (both eyes), sight lines to the main monitor and the touchscreen (distance, angle below the eye, angle off the screen normal, the gaze cone), reach to each grip (share of the arm's length), clearances (thighs to the grip mounts, knee crease to the seat front, hips to the armrest pods, head to the frame, feet to the pedals). Every number has its unit and its source. |
+| `person.report` | query | What the person in the seat sees and reaches, computed on the server without a browser: eye point (both eyes), sight lines to the main monitor and the touchscreen (distance, angle below the eye, angle off the screen normal, the gaze cone), reach to each grip (share of the arm's length), clearances (thighs to the grip mounts, knee crease to the seat front, hips to the armrest pods, head to the frame, feet to the pedals). Includes gaze alignment to a named target, fingertip distance and reach share. Every number has its unit and source. |
 
 ## How to connect
 

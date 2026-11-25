@@ -18,7 +18,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import * as MAT from "./materials.ts";
 import { Contact, closestOnSegments, type Capsule } from "./contact.ts";
 import { newPersonUniforms, personDepthMaterial, CAPSULES, type PersonUniforms } from "./shaders.ts";
-import { Operator, defaultTargets, standInProps, adoptHandPoses, SCRIPTS, STILL_SETTLE, FIT_KEY_TOLERANCE, type Q, type Controls } from "./operator.ts";
+import { Operator, defaultTargets, standInProps, adoptHandPoses, SCRIPTS, solveStill, FIT_KEY_TOLERANCE, type Q, type Controls } from "./operator.ts";
 import { eyes } from "./eyes.ts";
 import { clothPose } from "./cloth-pose.ts";
 import { T3, type Plugin, type FrameContext } from "./plugins.ts";
@@ -640,7 +640,7 @@ function operatorPlugin(av: Avatar): Plugin {
     ownsPose: (ctx) => !!ctx.state.on && av.mode !== "clip",
     frame(ctx) {
       const st = ctx.state;
-      if (!st.on || av.mode === "clip") { if (!st.on) { st._op = null; } if (av.mode !== "clip") av.seated = false; av.state("eyes").target = null; return; }   // no seated gaze point when not operating (MPK: standing faces stared at the screen)
+      if (!st.on || av.mode === "clip") { if (!st.on) { st._op = null; } if (av.mode !== "clip") av.seated = false; av.state("eyes").target = null; av.state("eyes").aim = false; return; }   // no seated gaze point when not operating (MPK: standing faces stared at the screen)
       const bones = ctx.bones; if (!bones.has("pelvis") || !bones.has("upperarm_l") || !bones.has("lowerarm_twist_01_l")) { st.report = { error: "this package is not on the 82-joint skeleton: the operator layer is off" }; return; }
       const key = av.restKey();
       if (!st._op || st._key !== key || st._bound !== av.binding) {
@@ -670,13 +670,11 @@ function operatorPlugin(av: Avatar): Plugin {
       av.seated = true;
       const op: Operator = st._op, lean = av.binding?.stickLean, script = SCRIPTS[st.script] ?? SCRIPTS.hold;
       const controls = (t: number): Controls => { const c = script(t); if (lean) { c.stick.l = [c.stick.l[0] + lean.l[0], c.stick.l[1] + lean.l[1]]; c.stick.r = [c.stick.r[0] + lean.r[0], c.stick.r[1] + lean.r[1]]; } return c; };
-      const t = st.time ?? (st._t += ctx.dt), dt = st.time !== undefined ? STILL_SETTLE.step : ctx.dt;
-      const run = () => { if (st.time !== undefined) { op.resetRun(); for (let u = Math.max(0, t - STILL_SETTLE.seconds); u < t; u += STILL_SETTLE.step) { op.time = u; op.solve(controls(u), STILL_SETTLE.step); } op.time = t - dt; } };
+      const t = st.time ?? (st._t += ctx.dt), c = controls(t);
+      const run = () => st.time !== undefined ? solveStill(op, controls, t) : op.solve(c, ctx.dt);
       run();
-      const c = controls(t);
-      op.solve(c, dt);
-      // the fingers on the handle's real cross-section need the hand's orientation on it: fitted again once the hand has been solved
-      if (st._refit) { st._refit = false; op.fitGrips(undefined, true); op.resetRun(); run(); op.solve(c, dt); }
+      // The fingers are fitted again once the hand's orientation on the real cross-section is known.
+      if (st._refit) { st._refit = false; op.fitGrips(undefined, true); op.resetRun(); run(); }
       const L = op.locals();
       (st._order as THREE.Bone[]).forEach((bn, j) => bn.quaternion.set(L.q[j][0], L.q[j][1], L.q[j][2], L.q[j][3]));
       bones.get("pelvis")!.position.set(L.pelvis[0], L.pelvis[1], L.pelvis[2]);
@@ -687,6 +685,7 @@ function operatorPlugin(av: Avatar): Plugin {
       av.root.updateMatrixWorld(true);
       const gp = new THREE.Vector3(op.gazePoint[0], op.gazePoint[1], op.gazePoint[2]).applyMatrix4(av.root.matrixWorld);
       av.state("eyes").target = gp.toArray();
+      av.state("eyes").aim = op.explicitGaze;
     },
   };
 }

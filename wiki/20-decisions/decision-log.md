@@ -1,6 +1,6 @@
 ---
 title: Decision log
-tldr: 57 decisions, D-01 to D-57, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
+tldr: 58 decisions, D-01 to D-58, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
 status: living
 updated: 2026-11-25
 tags: [decisions, log, platform]
@@ -453,3 +453,13 @@ project's working files.
 - **Reason:** several people or groups can work on their own copy of the rig without changing each other's, the way Leitbild's workspaces work, without accounts.
 - **Alternatives:** accounts and private workspaces (rejected by the owner's choice: no accounts, like Leitbild); a fixed set of named workspaces (rejected: nobody could make their own); workspaces deleted after a time without use (rejected: the owner chose "nothing deleted automatically").
 - **Consequences:** anyone with a link can change, rename or delete that workspace; the landing lists them all. Making workspaces is rate-limited on the public site (10 an hour per visitor, 30 per network block, 200 a day in all, at most 5,000), and a delete moves the workspace's folder aside on the server instead of removing it, so the owner can bring one back by hand ([workspaces on the server](../50-implementation/workspaces.md)). Idle workspaces cost disk only: one is loaded on its first request and dropped from memory after 10 minutes without use. The landing loads no 3D code; the viewer loads only on a workspace's address. The recent list lives in the browser's own storage, never in a cookie.
+
+
+<a id="d-58"></a>
+### D-58 — Seated targets are stored as rig IDs
+
+- **Decided by / status.** The owner requested seated targets on 2026-11-25. Implemented on the `person-aims` branch for review.
+- **What.** An optional field in `synergon-scene/1` holds resolved IDs and limb modes. Each aim request specifies the complete set of active targets for the operating posture. Body and clothing edits preserve it. The shared solver works out the pose from the rig's current parts and points.
+- **Reason.** Targets should move when the rig moves. Existing workspace documents and history already describe the operating defaults by omitting the new field.
+- **Alternative considered.** Saving a library pose or a coordinate would tie the aim to one rig arrangement.
+- **Consequences.** One command sets the requested targets and reports the result. Contact and gaze are model estimates. Standing remains a fixed pose. [The person's commands](../50-implementation/person-commands.md#seated-targets).

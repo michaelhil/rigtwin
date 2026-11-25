@@ -1,6 +1,6 @@
 ---
 title: The person's commands
-tldr: The person in the seat is part of the shared scene (synergon-scene/1): person.set, person.pose and person.clear change it with undo and the stale check, and the server measures it without a browser (eye, sight lines with a gaze cone, reach, clearances, each with unit and source); with a person shown, look's operator view uses its solved eye.
+tldr: The shared scene stores the seated person and its optional target IDs. One person command sets gaze, hands and feet, and the server and viewer solve them against the current rig. The server reports gaze alignment, contact gaps, reach and clearances.
 status: draft
 updated: 2026-11-25
 tags: [commands, agents, manikin, server, ergonomics, implementation]
@@ -12,7 +12,7 @@ tags: [commands, agents, manikin, server, ergonomics, implementation]
 
 - **Commands.**
   - `person.set` sets the preset (P5 woman, P50 man, P95 man: the package's own stature-percentile presets; or any preset of the package by name), sex, style (dressed or clay), skin tone, glasses and headset, and body controls by id. The cap is always worn.
-  - `person.pose` sets the posture: operating, relaxed stand, or a pose of the package's library.
+  - `person.pose` sets the operating posture, relaxed stand or a library pose. It also sets named targets for the seated person’s gaze, hands and feet.
   - `person.clear` leaves nobody in the seat.
   - Agents use one MCP tool, `person`, that does all three.
   - Each change is one entry in the history, with the server-made author, on every page at once. It can be undone by version or by request.
@@ -20,7 +20,7 @@ tags: [commands, agents, manikin, server, ergonomics, implementation]
   - the eye point, both eyes;
   - sight lines to the main monitor and the touchscreen, with a gaze cone defined in `runtime-queries.toml`;
   - reach to each grip, as a share of the arm's length;
-  - clearances: thighs to the grip mounts, knee crease to the seat front, hips to the armrest pods, head to the frame, feet to the pedals.
+  - clearances for the thighs, knees, hips, head and feet, plus results for any named targets.
 
   Every number has its unit and its source.
 - **No browser needed.** The server reads the person's packages: the manifests, and the skeleton from each GLB's JSON chunk. It then runs the person's own solver and the rig binding, the code the page runs. Its eye matches the eye the page draws in a still view. Only the drawn person (meshes, skin, idle motion, mesh-level contact) is the browser's.
@@ -32,10 +32,10 @@ tags: [commands, agents, manikin, server, ergonomics, implementation]
 | Command | Kind | Arguments | Notes |
 |---|---|---|---|
 | `person.set` | edit | `preset`, `sex` (female, male), `style` (dressed, clay), `tone` (light, medium, dark), `glasses`, `headset`, `body` {control id: value} | At least one field. A preset also sets the sex and resets the body to that preset. A change of sex alone gives that sex's median. Body ids are the package's: `stature` (mm), `mass` (kg), the survey's `r_*` controls (SD). With nobody in the seat, the default person is added first. `cap: false` is refused (`not_optional`). |
-| `person.pose` | edit | `posture` | `operating`, `relaxed stand` (stored as the package's `RELAXED_STAND`, the idle-stand clip at 1.0 s), or a library pose by id or name (`E37`, `E37 seated_slump`) |
+| `person.pose` | edit | `posture`, `look_at`, `left_hand`, `right_hand`, `left_foot`, `right_foot` | Operating, relaxed stand or a library pose by ID or name. Named targets apply to the operating posture. |
 | `person.clear` | edit | none | Nobody in the seat. Undo brings the person back. |
-| `person.report` | query | `what`: eye, sight, reach, clearance, all | Numbers for the operating posture. A note says so when another posture is shown. |
-| `person` (MCP tool) | edit | the fields of `person.set`, plus `posture` and `clear` | One request with a server-made name (`person-p5-woman-12`). The reply gives before → after and the key numbers. |
+| `person.report` | query | `what`: eye, sight, reach, clearance, aims, all | Numbers for the operating posture. A note says so when another posture is shown. |
+| `person` (MCP tool) | edit | the fields of `person.set` and `person.pose`, plus `clear` | One request with a server-made name (`person-p5-woman-12`). The reply gives before → after and the key numbers. |
 
 Request-level `group` and `expectedVersion` work as for `pose.set`.
 
@@ -45,6 +45,14 @@ Request-level `group` and `expectedVersion` work as for `pose.set`.
   - The agents' `undo` tool does the same.
   - The page undoes its own change with `history.undo` and the version or group from the reply.
   - Changes can be undone one after another, newest first: in the stale check a change and its undo cancel each other (doc.ts `inEffect`; for joints too). A later change by someone else that is still in effect keeps an older one stale.
+
+## Seated targets
+
+`person {"preset":"P5 woman","look_at":"little monitor","right_hand":{"point":"touchscreen"}}` sets the body, gaze and right hand in one undoable edit. The hands take `{"point":"soundbar"}`, `{"touch":"touchscreen"}`, `"grip"` or `"rest"`. The feet take `"pedal"`, `"floor"` (the deck where it is under the foot) or `{"on":"D_pedal_face_2"}` (sole contact under the ball of the foot). Include all the targets to use together. Unspecified fields in an aim request use the operating defaults. Changes to body or clothing alone carry the targets forward. `person.pose {"posture":"operating"}` restores the default pose.
+
+Targets can be parts or reference points. A part means the centre of its physical bounding box. For an assembly, the solver uses the bounds of its posed parts. A named `D_` or `S_` point uses its frame origin. “Little monitor” and “small screen” select the touchscreen's active centre. Ambiguous names list the candidates, and unknown names offer suggestions. Each target moves with the current rig adjustment.
+
+`measure {"person":"aims"}` gives the target and the solved position in model-frame metres. Gaze reports whether both modelled visual axes reach the target within the angular tolerance. This measures alignment and leaves visual occlusion untested. Pointing reports the gap and the direction of the index finger. Touch reports the actual gap when the hand falls short. Hand reach is the shoulder-to-target distance divided by arm length through to the estimated index tip. A target behind the seated person is reported and the corresponding limb or gaze uses its operating position. A hand with no clear pose returns to its grip.
 
 The three percentile presets are the package's own presets with their exact values, so the page, the package and the
 commands agree (the coordinator's decision of 2026-11-25): a stature percentile with the survey's build for it, the usual
@@ -101,9 +109,9 @@ on the server (one solve; more under load), then comes from a cache until the pe
 
 Nothing that is a number. The server reads each package's manifest (shape model, joint deltas, survey measures, baked persons' fits, hand poses) and the skeleton nodes in its GLB. It never reads the meshes, textures or shape files.
 
-It builds the rest skeleton for the body exactly as `avatar.ts applyShape` does: 5 µm from the lab's fixtures. It runs `viewer/src/person/operator.ts` and `rig-binding.ts` in Bun, then the still at the runtime `still_time` that a still view shows.
+It builds the rest skeleton for the body exactly as `avatar.ts applyShape` does: 5 µm from the lab's fixtures. It runs `viewer/src/person/operator.ts` and `rig-binding.ts` in Bun, then the still at the runtime `still_time` that a still view shows. The pitched screen uses a box aligned to its face for arm and finger clearance. Other parts use posed bounds and the body uses collision capsules. Fingertip locations are estimated from the skeleton.
 
-- **Agreement with the page.** `tools/live-accept.ts` step 10 compares the server's eye with `viewer.person.anchor("eye_midpoint")` in a still view, for the three presets, with a 3 mm limit. Measured: 0.1 mm or less for all three (2026-11-25, after MV-core's fix of the binding after a body change; before it, 31 and 37 mm). The camera of look's operator view sits within 0.01 mm of the server's eye point.
+- **Agreement with the page.** `tools/live-accept.ts` step 10 compares the server's eye with `viewer.person.anchor("eye_midpoint")` in a still view, for the three presets, with a 3 mm limit. The same test sets touchscreen contact and a soundbar point from the command line for all three presets, and checks the actual eye axes and fingertip in two open pages.
 - **Live views.** The page's idle motion moves the drawn eye by a few millimetres.
 - **Other postures.** Postures other than operating are dof poses and clips that only the browser applies. The server reports the operating posture and says so.
 
@@ -115,9 +123,9 @@ All are plain TypeScript and TOML, with no three.js at run time. The release car
 
 ## look's eye
 
-- **Operator view with a person.** With a person in the seat in the operating posture, `look {"view": "operator"}` sends the person's solved eye with the view as `eye_point`, in the model frame.
+- **Operator view with a person.** With a person in the seat in the operating posture, `look {"view": "operator"}` sends the person's solved eye with the view as `eye_point`, in the model frame. With a named gaze target in front of the person, the view also uses the solved gaze direction.
 - **A stature with a person.** `look {"eye": {"stature_cm": X}}` uses the shown person's body at that stature, its eye solved the same way. The reply says "not a ratio".
-- **Follows the seat.** The page keeps the eye point in the frame of `D_eye_median` (`viewer/src/engine.ts`, `S.eyeLocal`), so it rides with the seat as the rig's eye points do. It does not follow the backrest recline, as before.
+- **Follows the seat.** The view follows the drawn operating person when available. A requested stature or an eye point without a drawn person uses the seat frame.
 - **The fallback.** With nobody in the seat, or a person who is standing, the operator's view uses the rig's median eye point and a stature uses the assumed ratio `seat.eye_height_per_stature` (0.455), as before. `eye {person: small|median|large}` still means the rig's three eye points.
 
 ## The scene format
@@ -126,14 +134,12 @@ All are plain TypeScript and TOML, with no three.js at run time. The release car
 - `style`, `sex`, `tone`, `glasses`, `headset`, `preset`;
 - `body`: stature and mass always, any other control only when it is not at its default of 0 SD;
 - `posture`: `operating`, or the library pose's name.
+- Optional `aims`: `look` is a rig ID, and hands and feet store their mode and target ID where applicable. Old documents and history entries omit this field and load with the original operating defaults.
 
 An entry that changes the person carries `person: {before, after}`.
 
-`parseDoc` reads a `/1` document and returns it as `/2`. The pose, the version and the history stay as they were. The person is the server's default (the dressed P50 man, the package's "Median man" exactly, when the release carries the packages, otherwise nobody), and no entry is recorded for it. The server writes the migrated document back at once.
+The optional targets keep the format at `synergon-scene/1`. Existing workspaces load directly with their pose, version and history. `upgradeDoc` remains the offline conversion for documents from before the rename. `version.json` and the live channel still advertise `synergon-scene/1`.
 
-- **Tests.** `shared/commands/person.test.ts` migrates a copy of a `/1` document with history. `server/server.test.ts` starts a server on a stored one, undoes an old request and restarts it.
-- **The page** applies `doc.person` and `entry.person` through `viewer.person` (`viewer/src/live.ts`) and accepts `/1` and `/2` servers.
-- **version.json** says `server.format: "synergon-scene/1"`.
 
 ## Files
 

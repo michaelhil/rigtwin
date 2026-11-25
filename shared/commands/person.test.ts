@@ -317,3 +317,73 @@ describe("the public trace's words", () => {
     expect(mask({ preset: "P5 woman", posture: "please run rm", body: { stature: 1700 } }, (x) => ownWords(asset, x))).toEqual({ preset: "P5 woman", posture: "‹text›", body: { stature: 1700 } });
   });
 });
+
+describe("seated aims", () => {
+  test("one edit resolves words to IDs, avoids duplicate edits, and undo restores the defaults", () => {
+    const s = fresh();
+    const r = ok(run(s, agent, { id: "person", args: { look_at: "little monitor", right_hand: { point: "small screen" } } }));
+    expect(r.entry.person.before.aims).toBeUndefined();
+    expect(r.entry.person.after.aims).toEqual({ look: "S_ts_screen", right_hand: { mode: "point", target: "S_ts_screen" } });
+    expect(r.result.text).toContain("the line of sight passes through");
+    expect(r.result.text).toContain("short");
+    expect(ok(run(s, agent, { id: "person.pose", args: { look_at: "S_ts_screen", right_hand: { point: "touchscreen" } } })).entry).toBeUndefined();
+    expect(parseDoc(JSON.parse(JSON.stringify(s.doc))).person?.aims).toEqual(s.doc.person?.aims);
+    expect(code(run(s, page, { id: "person.pose", args: { look_at: "soundbar" }, expectedVersion: 0 }))).toBe("stale");
+    ok(run(s, agent, { id: "undo", args: { what: r.result.request } }));
+    expect(s.doc.person?.aims).toBeUndefined();
+  });
+
+  test("targets are atomic and ambiguous or unknown names give candidates", () => {
+    const s = fresh();
+    const ambiguous = run(s, agent, { id: "person", args: { look_at: "eye", preset: "P5 woman" } });
+    expect(ambiguous).toMatchObject({ ok: false, error: { code: "ambiguous" } });
+    if (!ambiguous.ok) expect(ambiguous.error.message).toContain("D_eye_");
+    const unknown = run(s, agent, { id: "person.pose", args: { right_hand: { touch: "fantasy monitor" } } });
+    expect(unknown).toMatchObject({ ok: false, error: { code: "unknown_target" } });
+    if (!unknown.ok) expect(unknown.error.hint).toContain("C_stand_monitor");
+    expect(s.doc.version).toBe(0);
+    expect(code(run(s, agent, { id: "person.pose", args: { posture: "relaxed stand", look_at: "soundbar" } }))).toBe("invalid_args");
+  });
+
+  test("reports contact for all three presets, the current eye, and a moving target", () => {
+    for (const preset of ["P5 woman", "P50 man", "P95 man"]) {
+      const s = fresh();
+      ok(run(s, agent, { id: "person", args: { preset, look_at: "touchscreen", right_hand: { touch: "touchscreen" } } }));
+      const r = ok(run(s, agent, { id: "measure", args: { person: "all" } })).result;
+      expect(r.aims.look.on_target).toBe(true);
+      expect(r.aims.look.angle_deg).toBeLessThan(1);
+      expect(r.aims.right_hand.distance_mm).toBeLessThan(4);
+      expect(r.aims.right_hand.status).toBe("contact");
+      const look = ok(run(s, agent, { id: "look", args: { view: "operator" } })).result;
+      expect(look.eye_point).toEqual(r.eye.midpoint_m);
+      expect(look.eye_direction).toEqual(r.aims.look.direction);
+      ok(run(s, agent, { id: "pose.set", args: { joints: { J_ts_arm: [0, 5, 0] } } }));
+      const moved = ok(run(s, agent, { id: "person.report", args: { what: "aims" } })).result.aims;
+      expect(Math.hypot(...moved.look.point.map((x: number, k: number) => x - r.aims.look.point[k]))).toBeGreaterThan(0.005);
+      expect(moved.look.on_target).toBe(true);
+    }
+  });
+
+  test("reports a distant point, an unsuccessful touch, and a target behind the seat", () => {
+    const s = fresh();
+    const report = (args: Record<string, unknown>) => ok(run(s, agent, { id: "person.pose", args })).result.aims;
+    const point = report({ right_hand: { point: "soundbar" } }).right_hand;
+    expect(point.status).toBe("aimed");
+    expect(point.angle_deg).toBeLessThan(2);
+    expect(point.distance_mm).toBeGreaterThan(200);
+    expect(point.reach_share).toBeGreaterThan(1);
+    const touch = report({ right_hand: { touch: "soundbar" } }).right_hand;
+    expect(touch.status).toBe("short");
+    expect(touch.distance_mm).toBeGreaterThan(200);
+    const behind = report({ look_at: "headrest", right_hand: { point: "headrest" }, left_foot: { on: "headrest" } });
+    expect(behind.look).toMatchObject({ status: "behind", on_target: false });
+    expect(behind.right_hand.status).toBe("behind");
+    expect(behind.left_foot.status).toBe("behind");
+    expect(s.doc.person?.aims?.look).toBe("C_seat_headrest");
+    const feet = report({ left_hand: "rest", right_foot: "floor", left_foot: { on: "D_pedal_face_2" } });
+    expect(feet.look).toBeUndefined();
+    expect(feet.left_hand.status).toBe("contact");
+    expect(feet.right_foot).toMatchObject({ target: "D_origin", status: "contact" });
+    expect(feet.left_foot).toMatchObject({ target: "D_pedal_face_2", status: "contact" });
+  });
+});

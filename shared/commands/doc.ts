@@ -20,6 +20,7 @@
 // - parseDoc() reads only the current format. Documents of an earlier format are converted once, outside the server, with
 //   upgradeDoc() (shared/commands/scene-upgrade.ts).
 import { limitViolation, type JointKinematics, type JointValue } from "../pose.ts";
+import { AIM_LIMBS, type PersonAims } from "../person-aims.ts";
 import { Refusal } from "./schema.ts";
 
 export const SCENE_FORMAT = "synergon-scene/1";
@@ -37,6 +38,8 @@ export type JointChange = { joint: string; before: JointValue | null; after: Joi
 export interface PersonState {
   style: "dressed" | "clay"; sex: "female" | "male"; tone: string; glasses: boolean; headset: boolean;
   preset: string | null; body: Record<string, number>; posture: string;
+  /** Seated overrides; absent fields keep their operating defaults. */
+  aims?: PersonAims;
 }
 export type PersonChange = { before: PersonState | null; after: PersonState | null };
 export type Entry = { version: number; actor: Actor; group?: string; command: string; changes: JointChange[]; person?: PersonChange; at: string; undoes?: number[] };
@@ -58,13 +61,27 @@ export function newDoc(asset: { name: string; sha256: string }, person: PersonSt
   return { schema: SCENE_FORMAT, version: 0, asset: { name: asset.name, sha256: asset.sha256 }, pose: {}, person: person ? structuredClone(person) : null, history: [] };
 }
 
+function validAims(aims: PersonState["aims"]): boolean {
+  if (aims === undefined) return true;
+  const target = (id: unknown) => typeof id === "string" && /^[CDS]_[A-Za-z0-9_]+$/.test(id);
+  if (!aims || typeof aims !== "object" || Array.isArray(aims) || (aims.look !== undefined && !target(aims.look))) return false;
+  return AIM_LIMBS.every((key) => {
+    const aim = aims[key];
+    if (aim === undefined) return true;
+    if (!aim || typeof aim !== "object") return false;
+    if (key.endsWith("_hand")) return aim.mode === "rest" || ((aim.mode === "point" || aim.mode === "touch") && target(aim.target));
+    return aim.mode === "floor" || (aim.mode === "on" && target(aim.target));
+  });
+}
+
 /** A document read from disk or the wire, checked for shape; throws with a reason. */
 export function parseDoc(raw: unknown): SceneDoc {
   const d = raw as SceneDoc;
   if (!d || d.schema !== SCENE_FORMAT) throw new Error(`not a ${SCENE_FORMAT} document`);
   if (!Number.isInteger(d.version) || d.version < 0 || !d.asset?.name || !d.pose || typeof d.pose !== "object" || !Array.isArray(d.history)) throw new Error("the document is incomplete");
-  if (d.person === undefined || (d.person !== null && (typeof d.person !== "object" || typeof d.person.sex !== "string" || !d.person.body || typeof d.person.posture !== "string"))) throw new Error("the document's person is malformed");
+  if (d.person === undefined || (d.person !== null && (typeof d.person !== "object" || typeof d.person.sex !== "string" || !d.person.body || typeof d.person.posture !== "string" || !validAims(d.person.aims)))) throw new Error("the document's person is malformed");
   for (const [i, e] of d.history.entries()) if (!Number.isInteger(e.version) || e.version > d.version || (i > 0 && e.version <= d.history[i - 1].version)) throw new Error("the history is out of order");
+  if (d.history.some((e) => !validAims(e.person?.before?.aims) || !validAims(e.person?.after?.aims))) throw new Error("the history's person targets are malformed");
   return d;
 }
 
@@ -74,6 +91,11 @@ export function samePerson(a: PersonState | null, b: PersonState | null): boolea
   if (a === null || b === null) return a === b;
   const ka = Object.keys(a.body).sort(), kb = Object.keys(b.body).sort();
   return a.style === b.style && a.sex === b.sex && a.tone === b.tone && a.glasses === b.glasses && a.headset === b.headset && a.preset === b.preset && a.posture === b.posture
+    && a.aims?.look === b.aims?.look
+    && AIM_LIMBS.every((key) => {
+      const x = a.aims?.[key], y = b.aims?.[key];
+      return x?.mode === y?.mode && (x && "target" in x ? x.target : undefined) === (y && "target" in y ? y.target : undefined);
+    })
     && ka.length === kb.length && ka.every((k, i) => k === kb[i] && Math.abs(a.body[k] - b.body[k]) < 1e-9);
 }
 const keyName = (k: string) => (k === PERSON_KEY ? "the person" : k);

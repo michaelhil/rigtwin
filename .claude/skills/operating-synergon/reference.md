@@ -189,9 +189,10 @@ The distance between two points named in plain words or ids ("median eye" to "mo
         "sight",
         "reach",
         "clearance",
+        "aims",
         "all"
       ],
-      "description": "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), all"
+      "description": "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), aims (gaze and named limb targets), all"
     }
   }
 }
@@ -396,7 +397,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
 
 ### person
 
-The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), or clear: true for nobody. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"clear":true}: nobody in the seat
+The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. A posture or aim request resets omitted aims to the operating defaults. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"look_at":"little monitor","right_hand":{"point":"touchscreen"}}: look at and point to the touchscreen; {"clear":true}: nobody in the seat
 
 ```
 {
@@ -458,6 +459,149 @@ The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"
       "type": "string",
       "maxLength": 80,
       "description": "operating (seated, hands on the grips, feet on the pedals), relaxed stand, or a pose of the package's library by id or name (\"E37\", \"E37 seated_slump\")"
+    },
+    "look_at": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+    },
+    "left_hand": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "grip",
+            "rest"
+          ],
+          "description": "grip the hand's own joystick (the default), or rest on its armrest"
+        },
+        {
+          "type": "object",
+          "required": [
+            "point"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "point": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Extend the index finger toward a target. The reply reports how far short it is."
+        },
+        {
+          "type": "object",
+          "required": [
+            "touch"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "touch": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Try to touch the target with the index finger. The reply reports any gap."
+        }
+      ]
+    },
+    "right_hand": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "grip",
+            "rest"
+          ],
+          "description": "grip the hand's own joystick (the default), or rest on its armrest"
+        },
+        {
+          "type": "object",
+          "required": [
+            "point"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "point": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Extend the index finger toward a target. The reply reports how far short it is."
+        },
+        {
+          "type": "object",
+          "required": [
+            "touch"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "touch": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Try to touch the target with the index finger. The reply reports any gap."
+        }
+      ]
+    },
+    "left_foot": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "pedal",
+            "floor"
+          ],
+          "description": "the foot's own pedal (the default), or flat on the floor under the rig, including its deck"
+        },
+        {
+          "type": "object",
+          "required": [
+            "on"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Place the sole under the ball of the foot at a named point."
+        }
+      ]
+    },
+    "right_foot": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "pedal",
+            "floor"
+          ],
+          "description": "the foot's own pedal (the default), or flat on the floor under the rig, including its deck"
+        },
+        {
+          "type": "object",
+          "required": [
+            "on"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+            }
+          },
+          "description": "Place the sole under the ball of the foot at a named point."
+        }
+      ]
     },
     "clear": {
       "type": "boolean",

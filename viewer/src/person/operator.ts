@@ -16,16 +16,26 @@
 //        op.solve(hold(), dt);                      // or operate8(t), demo30(t), or your own Controls
 //        op.locals()  ->  { q: local rotations per joint, pelvis: local translation }        op.report  ->  contact errors
 import { section } from "./params.ts";
+import { fixationAngles } from "./aim-eyes.ts";
 
 const O = section("operator");
-const HAND = O.hand, HDL = O.handle, WRAP = O.wrap, CLAMP = O.clamp, IK = O.ik, IDLE = O.idle, TRUNK = O.trunk, HEAD = O.head, LEGS = O.legs, ARM = O.arm, FING = O.fingers, TG = O.targets, SI = O.standin, SCR = O.scripts, STILL = O.still;
+const HAND = O.hand, HDL = O.handle, WRAP = O.wrap, CLAMP = O.clamp, IK = O.ik, IDLE = O.idle, TRUNK = O.trunk, HEAD = O.head, LEGS = O.legs, ARM = O.arm, FING = O.fingers, TG = O.targets, SI = O.standin, SCR = O.scripts, STILL = O.still, AIM = O.aim;
 
 export type V3 = [number, number, number];
 export type Q = [number, number, number, number];
 export interface Rest { names: string[]; parent: number[]; pos: number[][]; rot: number[][]; tips?: Record<string, number[]> }
 export type GripName = "power" | "relaxed" | "point" | "flat" | "fist";
 export type HandGoal = "grip" | "touch" | "armrest";
+export type AimPoint = { id: string; point?: V3; inward?: V3 };
+type AimedHand = AimPoint & { mode: "point" | "touch" | "rest" };
+type AimedFoot = AimPoint & { mode: "on" | "floor" };
+export type AimResult = {
+  mode: string; target: string; point?: V3; origin?: V3; direction?: V3; status: string;
+  angle_deg?: number; distance_mm?: number; reach_share?: number; wrist_deg?: number; on_target?: boolean;
+};
+export type Obstacle = { id: string; center: V3; half: V3; axes: [V3, V3, V3] };
 export interface Targets {
+  aims?: { look?: AimPoint; lHand?: AimedHand; rHand?: AimedHand; lFoot?: AimedFoot; rFoot?: AimedFoot; obstacles?: Obstacle[] };
   seat: V3;                                  // seat reference point: where the hip centre goes
   recline: number;                           // trunk lean back from vertical, degrees
   grip: { l: Stick; r: Stick };              // joysticks
@@ -148,7 +158,7 @@ void blendPose;
 
 type PoseQ = Record<string, Q>;                      // per joint (name without the side suffix): rotation relative to the parent, in rest world axes
 const OWN = /^(root|pelvis|spine_0\d|neck_0\d|head|eye_[lr]|(clavicle|upperarm|lowerarm|hand|thigh|calf|foot|ball)(_twist_0\d)?_[lr]|(thumb|index|middle|ring|pinky)_(0\d|metacarpal)_[lr])$/;
-interface Hand { palmT?: number; palmR?: number; wrap?: { middle_wrap_deg: number; circumference_mm: number; fingertip_to_thumb_mm: number }; f: V3; n: V3; across: V3; axes: Record<string, V3>; gripPoint: V3; tip: V3; palm: V3; power: HandPose; padPoint: V3; lib: Record<GripName, PoseQ>; tipRest?: Record<string, V3>; segR?: Record<string, number[]> }
+interface Hand { pointDir: V3; pointFingers: { name: string; joints: V3[] }[]; palmT?: number; palmR?: number; wrap?: { middle_wrap_deg: number; circumference_mm: number; fingertip_to_thumb_mm: number }; f: V3; n: V3; across: V3; axes: Record<string, V3>; gripPoint: V3; tip: V3; palm: V3; power: HandPose; padPoint: V3; lib: Record<GripName, PoseQ>; tipRest?: Record<string, V3>; segR?: Record<string, number[]> }
 const SEG_R: Record<string, number[]> = { thumb: HAND.segment_radius[0], index: HAND.segment_radius[1], middle: HAND.segment_radius[2], ring: HAND.segment_radius[3], pinky: HAND.segment_radius[4] };
 const CHAINS: string[][] = [["thumb_01", "thumb_02", "thumb_03"], ...FINGERS.map((f) => [`${f}_metacarpal`, `${f}_01`, `${f}_02`, `${f}_03`])];
 /** RR's hand poses from the manifest, per pose and side, as joint rotations (filled by adoptHandPoses). */
@@ -160,6 +170,11 @@ export class Operator {
   targets!: Targets; hands: { l: Hand; r: Hand };
   idle: { fps: number; frames: number; joints: Record<string, number[][]>; pelvis_sway_m?: number[][] } | null = null; idleGain = 1;
   time = 0; head: [number, number] = [0, 0]; headV: [number, number] = [0, 0]; leanNow = 0; gazePoint: V3 = [0, 0, 0];
+  explicitGaze = false;
+  aimLean = 0;
+  private aimedFeet: Partial<Record<"l" | "r", V3>> = {};
+  private handStatus: Partial<Record<"l" | "r", "behind" | "blocked" | "aimed">> = {};
+  private aimSearch = new Map<string, { roll: number; swivel: number; retreat: number; pitch: number; yaw: number } | null>();
   report = { handErr: { l: 0, r: 0 }, footErr: { l: 0, r: 0 }, reach: { l: 0, r: 0 }, legReach: { l: 0, r: 0 }, eyeInHead: 0, wrist: 0, armPen: { l: -1, r: -1 } as Record<string, number> };
   gripRadius: number = HAND.grip_radius; wristLimit: number = ARM.wrist_limit; fingerOpen: Record<string, Record<string, number>> = { l: {}, r: {} };     // the clamp's opening per finger joint (degrees)
   fit: BodyFit | null = null; margin: number = ARM.margin; swivel: Record<string, number> = { l: 0, r: 0 }; shift: Record<string, number> = { l: 0, r: 0 };
@@ -197,7 +212,7 @@ export class Operator {
     const palm = lerp(h, lerp(g("index_01"), g("pinky_01"), HAND.palm_centre[0]), HAND.palm_centre[1]);   // centre of the palm, in the knuckle plane
     const hs = len(sub(g("middle_01"), h)) / HAND.reference_length;                           // hand size against the median man's
     const thick = HAND.palm_pad * hs;                                                          // palm pad over the joint plane
-    const hand: Hand = { f, n, across, axes, palm: sub(palm, h), tip: sub(tipOf("index"), h), gripPoint: [0, 0, 0], power: GRIPS.power, padPoint: sub(add(palm, mul(n, thick)), h), lib: {} as any };
+    const hand: Hand = { f, n, across, pointDir: f, pointFingers: [], axes, palm: sub(palm, h), tip: sub(tipOf("index"), h), gripPoint: [0, 0, 0], power: GRIPS.power, padPoint: sub(add(palm, mul(n, thick)), h), lib: {} as any };
     const crease = lerp(h, lerp(g("index_01"), g("pinky_01"), HAND.palm_centre[0]), HAND.grip_crease);   // a held stick lies along the knuckle crease, not the palm's centre
     // On a real handle (a profile from the rig): the palm's centre at the middle of the hold section, but no higher than keeps the index
     // knuckle below its top (the button head clear of the palm), and the palm on the handle's surface: its widest radius under the palm.
@@ -251,9 +266,21 @@ export class Operator {
       for (let i = 1; i < mid.length; i++) deg += Math.acos(Math.max(-1, Math.min(1, dot(radial(mid[i - 1]), radial(mid[i]))))) / RAD;
       hand.wrap = { middle_wrap_deg: +deg.toFixed(0), circumference_mm: +(2 * Math.PI * Rpalm * 1000).toFixed(0), fingertip_to_thumb_mm: +(len(sub(mid[mid.length - 1], th[th.length - 1])) * 1000).toFixed(0) };
     }
-    // where the index tip is in the pointing pose (the rest pose carries a natural curl that the pose takes out)
-    { let Dacc: Q = QI, p = sub(g("index_metacarpal"), h); const ch = ["index_metacarpal", "index_01", "index_02", "index_03"];
-      ch.forEach((jn, i) => { Dacc = qmul(Dacc, hand.lib.point[jn] ?? QI); const a = g(jn), b = i < 3 ? g(ch[i + 1]) : tipOf("index"); p = add(p, qrot(Dacc, sub(b, a))); }); hand.tip = p; }
+    // Fingertips and joint centres in the package's authored pointing hand, relative to the wrist.
+    for (const name of [...FINGERS, "thumb"]) {
+      const chain = CHAINS.find((c) => c.includes(`${name}_01`))!;
+      let Dacc: Q = QI, p = sub(g(chain[0]), h);
+      const joints: V3[] = [];
+      chain.forEach((joint, i) => {
+        if (!joint.endsWith("metacarpal")) joints.push(p);
+        Dacc = qmul(Dacc, hand.lib.point[joint] ?? QI);
+        const next = chain[i + 1], delta = next ? sub(g(next), g(joint)) : hand.tipRest![name];
+        p = add(p, qrot(Dacc, delta));
+      });
+      joints.push(p);
+      if (name === "index") { hand.tip = p; hand.pointDir = norm(sub(p, joints[joints.length - 2])); }
+      hand.pointFingers.push({ name, joints });
+    }
     return hand;
   }
   /** Power grip solved on this hand: each finger joint flexes until the next joint (then the tip) touches the cylinder. */
@@ -398,8 +425,141 @@ export class Operator {
     return worst;
   }
 
+  /** A rigid rig box against a limb capsule. Expanding the box is conservative at its edges. */
+  private hitsRig(a: V3, b: V3, radius: number): boolean {
+    const d = sub(b, a);
+    for (const box of this.targets.aims?.obstacles ?? []) {
+      let lo = 0, hi = 1;
+      const start = sub(a, box.center);
+      for (const k of [0, 1, 2] as const) {
+        const x = dot(start, box.axes[k]), dx = dot(d, box.axes[k]), extent = box.half[k] + radius;
+        if (Math.abs(dx) < 1e-9) { if (Math.abs(x) >= extent) { hi = -1; break; } continue; }
+        const m = (-extent - x) / dx, n = (extent - x) / dx;
+        lo = Math.max(lo, Math.min(m, n)); hi = Math.min(hi, Math.max(m, n));
+        if (lo >= hi) break;
+      }
+      if (lo < hi) return true;
+    }
+    return false;
+  }
+
+  /** Search from the requested fingertip back toward the shoulder, keeping the finger on its pointing line. */
+  private aimHand(s: "l" | "r", aim: AimedHand, reachMax: number): Q | null {
+    const H = this.hands[s], target = aim.point!, ua = `upperarm_${s}`, la = `lowerarm_${s}`, hand = `hand_${s}`;
+    const ia = this.j(ua), ie = this.j(la), iw = this.j(hand), cl = this.j(`clavicle_${s}`), sh = this.P[ia], w0 = this.P[iw], e0 = this.P[ie];
+    if (target[2] <= sh[2]) { this.handStatus[s] = "behind"; return null; }
+    if (this.aimSearch.get(s) === null) { this.handStatus[s] = "blocked"; return null; }
+    const cl0 = this.D[cl], ray = norm(sub(target, sh)), toward = aim.inward ? norm(add(aim.inward, ray)) : ray;
+    const clavicle = this.P[cl], clAxis = cross(sub(sh, clavicle), sub(target, clavicle));
+    const distance = len(sub(target, sh));
+    const over = distance - len(H.tip) - reachMax * ARM.clavicle_from;
+    if (over > 0 && len(clAxis) > 1e-6) {
+      this.D[cl] = qmul(qaxis(clAxis, Math.min(ARM.clavicle_max, over * ARM.clavicle_gain)), cl0);
+      this.fk(cl);
+    }
+    const A = this.P[ia];
+    const upper = this.D[ia], lower = this.D[ie], handRest = this.r0(hand);
+    const naturalPole = add(A, [s === "l" ? ARM.pole_offset[0] : -ARM.pole_offset[0], ARM.pole_offset[1], ARM.pole_offset[2]]);
+    const restFore = this.dir0(la, hand), handSize = this.len0(hand, `middle_01_${s}`) / HAND.reference_length;
+    const palms = ["index", "middle", "pinky"].map((f) => sub(this.r0(`${f}_01_${s}`), handRest));
+    const fore = (this.fit?.arm.fore[1] ?? ARM.forearm_radius_default) * AIM.forearm_end_share;
+    const preferred = aim.mode === "touch" ? toward : ray;
+    const attempt = ({ roll, swivel, retreat, pitch, yaw }: { roll: number; swivel: number; retreat: number; pitch: number; yaw: number }): Q | null => {
+      // Tip direction is the posed distal phalanx, and its line goes from the actual tip to the target.
+      const axis = qrot(qmul(qaxis([0, 1, 0], yaw), qaxis([1, 0, 0], pitch)), preferred);
+      const dh = qmul(qaxis(axis, roll), qframes(H.pointDir, H.n, axis, v3(ARM.touch_palm)));
+      const off = qrot(dh, H.tip), end = sub(target, off), d = sub(end, A), along = dot(d, axis);
+      const across = sub(d, mul(axis, along)), available = Math.sqrt(Math.max(0, reachMax * reachMax - dot(across, across)));
+      const back = Math.max(aim.mode === "point" ? AIM.point_standoff : 0, along - available) + retreat * AIM.backoff;
+      const desired = sub(end, mul(axis, back));
+      this.twoBone(ua, la, hand, desired, naturalPole);
+      const axisArm = norm(sub(this.P[iw], A)), elbow = add(A, qrot(qaxis(axisArm, swivel), sub(this.P[ie], A)));
+      this.twoBone(ua, la, hand, desired, elbow);
+      const w = this.P[iw], e = this.P[ie], to = sub(target, add(w, off));
+      if (aim.mode === "point" && (dot(axis, to) <= 0 || Math.atan2(len(cross(axis, to)), dot(axis, to)) > AIM.point_tolerance * RAD)) return null;
+      const restHandAxis = qrot(dh, restFore), foreAxis = norm(sub(w, e));
+      if (dot(restHandAxis, foreAxis) < Math.cos(this.wristLimit * RAD)) return null;
+      if (this.armPen(s, e, w, dh) > this.margin) return null;
+      if (this.hitsRig(e, w, fore) || palms.some((p) => this.hitsRig(w, add(w, qrot(dh, p)), ARM.palm_radius * handSize))) return null;
+      for (const finger of H.pointFingers) {
+        const joints = finger.joints.map((p) => add(w, qrot(dh, p)));
+        for (let i = 0; i < joints.length - 1; i++) {
+          const a = joints[i], b = joints[i + 1], r = H.segR![finger.name][i];
+          if (i < joints.length - 2) {
+            if (this.hitsRig(a, b, r)) return null;
+          } else {
+            // The reported tip is the end of the skin, not the centre of the last capsule cap.
+            const d = norm(sub(b, a)), face = finger.name === "index" && aim.inward;
+            const extent = face ? r / Math.max(AIM.finger_contact_cos, dot(d, face)) : r;
+            const cap = sub(b, mul(d, Math.min(len(sub(b, a)), extent + 1e-9)));
+            if (this.hitsRig(a, cap, r) || this.hitsRig(cap, b, -1e-9)) return null;
+          }
+        }
+      }
+      return dh;
+    };
+    const last = this.aimSearch.get(s);
+    if (last) {
+      const dh = attempt(last);
+      if (dh) { this.handStatus[s] = "aimed"; return dh; }
+    }
+    for (let retreat = 0; retreat <= AIM.backoff_steps; retreat++) {
+      for (const [pitch, yaw] of AIM.approach_angles as number[][]) for (const roll of AIM.hand_rolls as number[]) for (const swivel of AIM.elbow_angles as number[]) {
+        const candidate = { roll, swivel, retreat, pitch, yaw }, dh = attempt(candidate);
+        if (dh) { this.aimSearch.set(s, candidate); this.handStatus[s] = "aimed"; return dh; }
+      }
+    }
+    this.D[cl] = cl0; this.fk(cl);
+    this.P[iw] = w0; this.P[ie] = e0; this.D[ia] = upper; this.D[ie] = lower;
+    this.aimSearch.set(s, null);
+    this.handStatus[s] = "blocked";
+    return null;
+  }
+
+  /** Measure the pose after FK, including the point pose's actual index joints. All coordinates here are package-frame metres. */
+  aimReport() {
+    const aims = this.targets.aims, results: Record<string, AimResult> = {};
+    if (!aims) return results;
+    const at = (name: string) => this.P[this.j(name)];
+    const gaze = aims.look;
+    if (gaze) {
+      results.look = { mode: "look", target: gaze.id, point: gaze.point, status: "missing" };
+      if (gaze.point) {
+        const axes = (["eye_l", "eye_r"] as const).map((name) => qrot(qmul(this.D[this.j(name)], this.Q0[this.j(name)]), [0, 0, 1]));
+        const eyes = [at("eye_l"), at("eye_r")], origin = mul(add(eyes[0], eyes[1]), 0.5);
+        const angle = (a: V3, b: V3) => Math.atan2(len(cross(a, b)), dot(a, b)) / RAD;
+        const error = Math.max(...axes.map((axis, i) => angle(axis, sub(gaze.point!, eyes[i]))));
+        results.look = { ...results.look, origin, direction: norm(add(axes[0], axes[1])), angle_deg: error, on_target: this.explicitGaze && error <= AIM.gaze_tolerance,
+          status: !this.explicitGaze ? "behind" : error <= AIM.gaze_tolerance ? "aimed" : "limited" };
+      }
+    }
+    for (const [s, side] of [["l", "left"], ["r", "right"]] as const) {
+      const h = aims[`${s}Hand`], f = aims[`${s}Foot`];
+      if (h) {
+        const hand = this.hands[s], index = this.j(`index_03_${s}`), shoulder = at(`upperarm_${s}`), wrist = this.j(`hand_${s}`);
+        const fingertip = add(this.P[index], qrot(this.D[index], hand.tipRest!.index));
+        const direction = norm(sub(fingertip, this.P[index])), arm = this.len0(`upperarm_${s}`, `lowerarm_${s}`) + this.len0(`lowerarm_${s}`, `hand_${s}`) + len(hand.tip);
+        const actual = h.mode === "rest" ? add(this.P[wrist], qrot(this.D[wrist], hand.padPoint)) : fingertip;
+        const distance = h.point ? len(sub(h.point, actual)) : undefined;
+        const to = h.point ? sub(h.point, fingertip) : undefined, solved = this.handStatus[s];
+        results[`${side}_hand`] = { mode: h.mode, target: h.id, point: h.point, origin: actual, direction,
+          wrist_deg: Math.acos(Math.max(-1, Math.min(1, dot(qrot(this.D[wrist], this.dir0(`lowerarm_${s}`, `hand_${s}`)), norm(sub(this.P[wrist], at(`lowerarm_${s}`))))))) / RAD,
+          ...(distance === undefined ? {} : { distance_mm: distance * 1000, reach_share: len(sub(h.point!, shoulder)) / arm }),
+          ...(h.mode !== "rest" && to && len(to) > AIM.touch_tolerance ? { angle_deg: Math.atan2(len(cross(direction, to)), dot(direction, to)) / RAD } : {}),
+          status: !h.point ? "missing" : solved === "behind" || solved === "blocked" ? solved : h.mode === "point" ? "aimed" : distance! <= AIM.touch_tolerance ? "contact" : "short" };
+      }
+      if (f) {
+        const fi = this.j(`foot_${s}`), offset = this.aimedFeet[s], origin = offset ? add(this.P[fi], qrot(this.D[fi], offset)) : this.P[fi];
+        const distance = f.point ? len(sub(f.point, origin)) : undefined;
+        results[`${side}_foot`] = { mode: f.mode, target: f.id, point: f.point, origin, ...(distance === undefined ? {} : { distance_mm: distance * 1000 }),
+          status: distance === undefined ? "missing" : !offset ? "behind" : distance <= AIM.touch_tolerance ? "contact" : "short" };
+      }
+    }
+    return results;
+  }
+
   // ---- the solve -----------------------------------------------------------------------------------------------------------------
-  solve(c: Controls, dt: number) {
+  solve(c: Controls, dt: number, still = false) {
     const T = this.targets, t = (this.time += dt), D = this.D;
     for (let j = 0; j < D.length; j++) D[j] = QI;
     // idle life: breathing, slow weight shifts, plus the captured seated layer if one was loaded
@@ -415,22 +575,42 @@ export class Operator {
     const hipC = mul(add(this.r0("thigh_l"), this.r0("thigh_r")), 0.5), pvOff = sub(hipC, this.r0("pelvis"));
     D[this.j("pelvis")] = qmul(qaxis([0, 0, 1], TRUNK.pelvis_shift_deg * shift), qaxis([1, 0, 0], -T.recline + TRUNK.pelvis_lean_share * this.leanNow));
     this.pelvis = sub(add(T.seat, [TRUNK.pelvis_shift_m * shift, 0, 0]), qrot(D[this.j("pelvis")], pvOff));
+    this.aimLean = 0;
     // 2. spine: lean and breathing shared over the five joints; clavicles ride the breath
     const share: number[] = TRUNK.spine_share, chest: number[] = TRUNK.spine_breath_share;
-    for (let k = 1; k <= 5; k++) {
-      const n = `spine_0${k}`, flex = TRUNK.spine_lean_gain * this.leanNow * share[k - 1] - TRUNK.breath_deg * breath * chest[k - 1];
-      D[this.j(n)] = qmul(D[this.parent[this.j(n)]], qmul(rv(idleAt(n)), qmul(qaxis([0, 0, 1], -TRUNK.pelvis_shift_deg * shift * share[k - 1]), qaxis([1, 0, 0], flex))));
+    const spine = () => {
+      for (let k = 1; k <= 5; k++) {
+        const n = `spine_0${k}`, flex = (TRUNK.spine_lean_gain * this.leanNow + this.aimLean) * share[k - 1] - TRUNK.breath_deg * breath * chest[k - 1];
+        D[this.j(n)] = qmul(D[this.parent[this.j(n)]], qmul(rv(idleAt(n)), qmul(qaxis([0, 0, 1], -TRUNK.pelvis_shift_deg * shift * share[k - 1]), qaxis([1, 0, 0], flex))));
+      }
+      for (const s of ["l", "r"] as const) D[this.j(`clavicle_${s}`)] = qmul(D[this.j("spine_05")], qmul(rv(idleAt(`clavicle_${s}`)), qaxis([0, 0, 1], (s === "l" ? 1 : -1) * TRUNK.clavicle_breath_deg * breath)));
+      this.follow(["neck", "head", "eye"]); this.fk();
+    };
+    spine();
+    for (const s of ["l", "r"] as const) {
+      const aim = T.aims?.[`${s}Hand`], p = aim?.point, shoulder = this.P[this.j(`upperarm_${s}`)];
+      if (aim?.mode !== "touch" || !p || p[2] <= shoulder[2]) continue;
+      const arm = this.len0(`upperarm_${s}`, `lowerarm_${s}`) + this.len0(`lowerarm_${s}`, `hand_${s}`) + len(this.hands[s].tip);
+      const short = len(sub(p, shoulder)) - arm * AIM.touch_lean_from;
+      if (short <= 0) continue;
+      const height = shoulder[1] - T.seat[1], fore = norm(sub(p, shoulder))[2];
+      this.aimLean = Math.max(this.aimLean, Math.min(AIM.lean_max, Math.atan2(short, height * fore) / RAD));
     }
-    for (const s of ["l", "r"] as const) D[this.j(`clavicle_${s}`)] = qmul(D[this.j("spine_05")], qmul(rv(idleAt(`clavicle_${s}`)), qaxis([0, 0, 1], (s === "l" ? 1 : -1) * TRUNK.clavicle_breath_deg * breath)));
-    this.follow(["neck", "head", "eye"]); this.fk();
+    if (this.aimLean) spine();
     // 3. head and neck look-at: the eyes go first (eyes.ts gets the same point), the head follows what the eyes cannot hold
     const sc = T.screen; this.gazePoint = [sc.centre[0] + c.gaze[0] * sc.width / 2, sc.centre[1] + c.gaze[1] * sc.height / 2, sc.centre[2] - (sc.curve ?? HEAD.screen_curve * sc.width) * c.gaze[0] * c.gaze[0]];
     const eyeMid = this.ix["eye_l"] !== undefined ? mul(add(this.P[this.j("eye_l")], this.P[this.j("eye_r")]), 0.5) : add(this.P[this.j("head")], v3(HEAD.eye_fallback_offset));
+    const namedGaze = T.aims?.look?.point;
+    this.explicitGaze = !!namedGaze && namedGaze[2] > eyeMid[2];
+    if (this.explicitGaze) this.gazePoint = namedGaze!;
     const local = qrot(qinv(D[this.j("spine_05")]), sub(this.gazePoint, eyeMid));
     const yaw = Math.atan2(local[0], local[2]) / RAD, pitch = -Math.atan2(local[1], Math.hypot(local[0], local[2])) / RAD, comfort = HEAD.comfort_deg;
     const want = (a: number) => Math.sign(a) * Math.max(0, Math.abs(a) - comfort) + HEAD.inside_share * Math.max(-comfort, Math.min(comfort, a));
-    const goal: [number, number] = c.headOverride ? [c.headOverride[0], c.headOverride[1]] : [want(yaw), want(pitch) * HEAD.pitch_gain];
+    const limits = section("eyes").head_follow;
+    const clamped = (a: number, limit: number) => Math.max(-limit, Math.min(limit, a));
+    const goal: [number, number] = this.explicitGaze ? [clamped(want(yaw), limits[3]), clamped(want(pitch) * HEAD.pitch_gain, limits[4])] : c.headOverride ? [c.headOverride[0], c.headOverride[1]] : [want(yaw), want(pitch) * HEAD.pitch_gain];
     for (let k = 0; k < 2; k++) {                                                             // critically damped: the head trails the eyes
+      if (this.explicitGaze && (still || dt === 0)) { this.head[k] = goal[k]; this.headV[k] = 0; continue; }
       const w = HEAD.omega, acc = w * w * (goal[k] - this.head[k]) - 2 * w * this.headV[k];
       this.headV[k] += acc * dt; this.head[k] += this.headV[k] * dt;
     }
@@ -439,6 +619,12 @@ export class Operator {
     this.fk();
     if (this.ix["eye_l"] !== undefined) for (const s of ["l", "r"]) {                         // fallback eye aim (eyes.ts overrides the eye joints afterwards)
       const e = this.j(`eye_${s}`), hd = D[this.j("head")], to = norm(qrot(qinv(hd), sub(this.gazePoint, this.P[e])));
+      if (this.explicitGaze) {
+        const rest: Q = this.Q0[e], eye = qmul(hd, rest);
+        const [ey, ep] = fixationAngles(qrot(qinv(eye), sub(this.gazePoint, this.P[e])));
+        D[e] = qmul(qmul(eye, qmul(qaxis([0, 1, 0], ey), qaxis([1, 0, 0], -ep))), qinv(rest));
+        continue;
+      }
       const ang = Math.acos(Math.max(-1, Math.min(1, to[2]))) / RAD, lim = Math.min(ang, HEAD.eye_fallback_limit), ax = cross([0, 0, 1], to);
       D[e] = qmul(hd, len(ax) < 1e-6 ? QI : qaxis(ax, lim)); if (s === "l") this.report.eyeInHead = ang;
     }
@@ -456,16 +642,23 @@ export class Operator {
         const u = smooth(c.pedal.on), o = onPedal(c.pedal.index, c.pedal.on >= 1 ? c.pedal.press : 0);
         goalP = add(lerp(b0.P, o.P, u), [0, LEGS.pedal_lift * 4 * u * (1 - u), 0]); Df = qslerp(b0.D, o.D, u); contact = c.pedal.on >= 1 ? o.contact : null;
       }
-      const knee = add(lerp(this.P[this.j(`thigh_${s}`)], goalP, 0.5), [sg * T.kneeOut * LEGS.knee_pole[0], LEGS.knee_pole[1], LEGS.knee_pole[2]]);
+      const aim = T.aims?.[`${s}Foot`], hip = this.P[this.j(`thigh_${s}`)];
+      if (aim?.point && (aim.mode === "floor" || aim.point[2] > hip[2])) {
+        const sole: V3 = [ballOff[0], -ankleH, ballOff[2]];
+        goalP = sub(aim.point, sole); Df = QI; contact = aim.point;
+        this.aimedFeet[s] = sole;
+      } else delete this.aimedFeet[s];
+      const knee = add(lerp(hip, goalP, 0.5), [sg * T.kneeOut * LEGS.knee_pole[0], LEGS.knee_pole[1], LEGS.knee_pole[2]]);
       this.report.legReach[s] = this.twoBone(`thigh_${s}`, `calf_${s}`, `foot_${s}`, goalP, knee);
       D[ft] = Df; D[this.j(`ball_${s}`)] = Df;
-      const ball = add(this.P[ft], qrot(Df, sub(this.r0(`ball_${s}`), this.r0(`foot_${s}`))));
+      const ball = add(this.P[ft], qrot(Df, this.aimedFeet[s] ?? ballOff));
       const wantBall = contact ?? ball;
       this.report.footErr[s] = len(sub(ball, wantBall));
     }
     // 5. arms: blend the hand goals, then two-bone IK with the elbow toward the armrest
     for (const s of ["l", "r"] as const) {
-      const sg = s === "l" ? 1 : -1, H = this.hands[s], w = c.hand[s], wg = w.grip ?? 0, wt = w.touch ?? 0, wa = w.armrest ?? 0, W = wg + wt + wa || 1;
+      const aim = T.aims?.[`${s}Hand`], reachAim = aim?.mode === "point" || aim?.mode === "touch" ? aim : undefined;
+      const sg = s === "l" ? 1 : -1, H = this.hands[s], w = aim ? aim.mode === "rest" ? { armrest: 1 } : { grip: 1 } : c.hand[s], wg = w.grip ?? 0, wt = w.touch ?? 0, wa = w.armrest ?? 0, W = wg + wt + wa || 1;
       // (a) joystick: the stick tilts about its pivot; the palm stays wrapped on it, so the wrist and forearm follow
       const st = T.grip[s], tilt = qmul(qaxis([1, 0, 0], c.stick[s][0]), qaxis([0, 0, 1], c.stick[s][1])), axis = qrot(tilt, [0, 1, 0]);
       const centre = add(st.pivot, mul(axis, st.length));
@@ -550,23 +743,29 @@ export class Operator {
         this.twoBone(ua, la, hd, P, pole); const [, m] = at(out * th, P);
         this.report.reach[s] = this.twoBone(ua, la, hd, P, m); this.report.armPen[s] = this.armPen(s, this.P[this.j(la)], this.P[this.j(hd)], Dh);
       }
+      delete this.handStatus[s];
+      let aimed = false;
+      if (reachAim?.point) {
+        const solved = this.aimHand(s, reachAim, reachMax);
+        if (solved) { Dh = solved; aimed = true; }
+      }
       const hj = this.j(`hand_${s}`); D[hj] = Dh;
       { const elb = this.P[this.j(`lowerarm_${s}`)], wr = this.P[hj]; this.elbowPrev[s] = [...elb] as V3;
         if (wg / W > held) { const [, v, d] = segSeg(wr, add(wr, mul(norm(sub(elb, wr)), ARM.forearm_test_length)), pA0, pA1); this.foreBase[s] = Math.max(this.foreBase[s], radiusAt(st, (2 * v - 1) * HAND.grip_half_length, this.gripRadius) + foreR + ARM.grip_clear - d); } }
       const gripNow = add(this.P[hj], qrot(Dh, H.gripPoint)), tipNow = add(this.P[hj], qrot(Dh, H.tip)), padNow = add(this.P[hj], qrot(Dh, H.padPoint));
       this.report.handErr[s] = wg / W > held ? len(sub(gripNow, centre)) : wt / W > held ? len(sub(tipNow, T.touch)) : wa / W > held ? len(sub(padNow, T.armrest[s])) : 0;
-      this.gripNow[s] = { centre, axis, on: wg / W > held };
+      this.gripNow[s] = { centre, axis, on: !aimed && wg / W > held };
       // forearm twist joints take the hand's twist about the forearm, by their place along it
       const la = this.j(`lowerarm_${s}`), a0 = this.dir0(`lowerarm_${s}`, `hand_${s}`), rel = qmul(qinv(D[la]), Dh), sgn = rel[3] < 0 ? -1 : 1;
       const tw = 2 * Math.atan2(sgn * (rel[0] * a0[0] + rel[1] * a0[1] + rel[2] * a0[2]), sgn * rel[3]) / RAD;
       for (const k of [1, 2]) { const n = `lowerarm_twist_0${k}_${s}`; if (this.ix[n] !== undefined) D[this.ix[n]] = qmul(D[la], qaxis(a0, tw * this.len0(`lowerarm_${s}`, n) / this.len0(`lowerarm_${s}`, `hand_${s}`))); }
       for (const seg of ["upperarm"]) for (const k of [1, 2]) { const n = `${seg}_twist_0${k}_${s}`; if (this.ix[n] !== undefined) D[this.ix[n]] = D[this.j(`${seg}_${s}`)]; }
       // fingers: the goal's own pose, opened toward the relaxed hand while travelling, with a little life when not gripping
-      const life = FING.life_deg * Math.sin(t * FING.life_rate + sg) * (1 - wg / W);
+      const life = (aim ? 0 : FING.life_deg) * Math.sin(t * FING.life_rate + sg) * (1 - wg / W);
       // between grip and touchscreen the fingers take the pointing shape only as the hand leaves the stick (the same phase as the
       // hand's travel above): while the fist slides up or down the stick it keeps the grip's shape
       let fg = wg, ft = wt; if (wa === 0 && wg > 0 && wt > 0) { const u = wt / (wg + wt), k = Math.min(1, Math.max(0, (u - SL.travel[0]) / (SL.travel[1] - SL.travel[0]))), e = k * k * (3 - 2 * k); fg = (wg + wt) * (1 - e); ft = (wg + wt) * e; }
-      const parts: [PoseQ, number][] = [[H.lib.power, fg * (1 - c.open[s])], [H.lib.point, ft * (1 - c.open[s])], [H.lib.flat, wa * (1 - c.open[s])], [H.lib.relaxed, W * c.open[s] + 1e-6]];
+      const parts: [PoseQ, number][] = aimed ? [[H.lib.point, 1]] : [[H.lib.power, fg * (1 - c.open[s])], [H.lib.point, ft * (1 - c.open[s])], [H.lib.flat, wa * (1 - c.open[s])], [H.lib.relaxed, W * c.open[s] + 1e-6]];
       for (const chain of CHAINS) {
         let Dp = Dh;
         for (const base of chain) {
@@ -577,7 +776,7 @@ export class Operator {
           Dp = qmul(Dp, e); D[jn] = Dp;
         }
       }
-      this.clampFingers(s, H, centre, axis, dt, wg / W > held);
+      if (!aimed) this.clampFingers(s, H, centre, axis, dt, wg / W > held);
     }
     for (const s of ["l", "r"]) for (const seg of ["thigh", "calf"]) for (const k of [1, 2]) { const n = `${seg}_twist_0${k}_${s}`; if (this.ix[n] !== undefined) D[this.ix[n]] = D[this.j(`${seg}_${s}`)]; }
     for (let j = 0; j < this.names.length; j++) if (!OWN.test(this.names[j]) && this.parent[j] >= 0) D[j] = D[this.parent[j]];     // helper joints beyond the 82 ride on their parent (the rig's drivers pose them afterwards)
@@ -607,7 +806,7 @@ export class Operator {
     return fitted;
   }
   /** Run state back to the start (a new rig, a new body, a still): what defaultTargets resets, in one place. */
-  resetRun() { this.time = 0; this.head = [0, 0]; this.headV = [0, 0]; this.leanNow = 0; this.swivel = { l: 0, r: 0 }; this.shift = { l: 0, r: 0 }; this.elbowPrev = { l: null, r: null }; this.foreBase = { l: 0, r: 0 }; }
+  resetRun() { this.aimSearch.clear(); this.time = 0; this.head = [0, 0]; this.headV = [0, 0]; this.leanNow = 0; this.swivel = { l: 0, r: 0 }; this.shift = { l: 0, r: 0 }; this.elbowPrev = { l: null, r: null }; this.foreBase = { l: 0, r: 0 }; }
 }
 
 // ---- a stand-in rig sized to the body: the fallback when no rig binding supplies the real rig's points -------------------------
@@ -806,7 +1005,17 @@ export function adoptHandPoses(manifest: any): string[] {
   }
   return got;
 }
-/** Settling a still: the solver is run over the last few seconds at a fixed step, so the head has arrived where it would be. */
+/** Rebuild the deterministic still, including explicit fixation on the same frame as the body. */
+export function solveStill(op: Operator, controls: (t: number) => Controls, t: number) {
+  const dt = STILL_SETTLE.step;
+  op.resetRun();
+  for (let u = Math.max(0, t - STILL_SETTLE.seconds); u < t; u += dt) {
+    op.time = u; op.solve(controls(u), dt, true);
+  }
+  op.time = t - dt;
+  op.solve(controls(t), dt, true);
+}
+
 export const STILL_SETTLE = { seconds: STILL.settle_s as number, step: STILL.step_s as number };
 /** How close the rest head and hand positions must be to a baked person's key for its fit to be used, metres. */
 export const FIT_KEY_TOLERANCE: number = STILL.fit_key_tolerance;

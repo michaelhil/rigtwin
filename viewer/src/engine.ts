@@ -36,6 +36,7 @@ export const hooks = {
   /** a click on the 3D view, asked before the rig is picked (`rig`: distance to the rig there, or Infinity): true takes it (person-panel.ts) */
   click: [] as ((x: number, y: number, rig: number) => boolean)[],
   /** the operator's eye when a person sits in the seat (person/index.ts): model frame, or null for the rig's own eye point */
+  operatorGaze: [] as (() => number[] | null)[],
   operatorEye: [] as (() => number[] | null)[],
 };
 const CAMERAS_URL = '/private/evidence/cameras.json';
@@ -153,6 +154,8 @@ export const S = {
   /** the operator's view from a given eye point (look with a person in the seat: the server's solved eye), kept in the median
    *  eye point's own frame so that it rides with the seat as the eye points do; null: eyeHeight or the median eye point */
   eyeLocal: null as number[] | null,
+  eyeTracksPerson: false,
+  eyeDirection: null as number[] | null,
   /** the person has moved the camera since the last named view was set */
   userMoved: false,
   /** what the current named view was framed on (fit=), if anything */
@@ -381,8 +384,9 @@ function eyeAndScreenNow(): { e: number[]; t: number[] } {
   const hm = S.manifest.parameters['seat.eye_height_median']?.value, hl = S.manifest.parameters['seat.eye_height_large']?.value, large = at('D_eye_large');
   const median = S.objects.get('D_eye_median');
   const personEye = hooks.operatorEye.map((f) => f()).find((x) => x) ?? null;
-  if (S.eyeLocal && median) e = w2m(median.localToWorld(new THREE.Vector3().fromArray(S.eyeLocal)));     // a given eye point (look with a person)
-  else if (personEye) e = personEye;                                                                       // the eye of the person in the seat, as this page draws it
+  if (personEye && S.eyeTracksPerson) e = personEye;
+  else if (S.eyeLocal && median) e = w2m(median.localToWorld(new THREE.Vector3().fromArray(S.eyeLocal)));     // a given eye point (look with a person)
+  else if (personEye && S.eyeHeight === null) e = personEye;                                                                       // the eye of the person in the seat, as this page draws it
   else if (S.eyeHeight !== null && typeof hm === 'number' && typeof hl === 'number' && hl !== hm && large) {
     const k = (S.eyeHeight - hm) / (hl - hm); e = e.map((x, i) => x + k * (large[i] - x));
   }
@@ -397,8 +401,11 @@ export function refollowEye() { followEye(); invalidate(); }
 function followEye() {
   if (S.view !== 'operator' || !lastEye || camera !== persp || S.photo) return;
   const now = m2w(eyeAndScreenNow().e), d = now.clone().sub(lastEye);
-  if (d.lengthSq() < 1e-12) return;
-  persp.position.add(d); controls.target.add(d); lastEye = now; controls.update();
+  const direction = !S.userMoved && !S.look ? operatorDirection() : null;
+  if (!direction && d.lengthSq() < 1e-12) return;
+  persp.position.add(d); controls.target.add(d); lastEye = now;
+  if (direction) controls.target.copy(now).addScaledVector(m2w(direction).normalize(), LIMITS.minDistance * 1.2);
+  controls.update();
 }
 /** Move a joint node without any notice or redraw (used for trial moves while a part is dragged). */
 export function poseJoint(j: JointState, value: JointValue) {
@@ -479,7 +486,13 @@ function leaveLook() {
 }
 /** In look-around mode: narrow or widen the field of view (the eye stays where it is). */
 export function lookZoom(factor: number) { persp.fov = THREE.MathUtils.clamp(persp.fov * factor, 20, 95); persp.updateProjectionMatrix(); invalidate(); emit('camera'); }
-export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null; eye?: number | null; eyePoint?: number[] | null } = {}) {
+function operatorDirection() {
+  if (!S.eyeTracksPerson) return S.eyeDirection;
+  if (hooks.operatorEye.some((f) => f())) return hooks.operatorGaze.map((f) => f()).find((x) => x) ?? null;
+  return S.eyeDirection;
+}
+
+export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null; eye?: number | null; eyePoint?: number[] | null; eyeDirection?: number[] | null; followPerson?: boolean } = {}) {
   const v = VIEWS[name];
   if (!v) throw new Error(`unknown view '${name}' (${Object.keys(VIEWS).join(', ')})`);
   leavePhoto(); leaveLook(); anim = null; gesture = 0;
@@ -488,12 +501,15 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
   const { w, h } = frameSize();
   if (v.special) { // operator's eye, where the eye point and the screen are now (they move with the seat and the monitor)
     S.eyeHeight = opts.eye ?? null; S.eyeLocal = null;
+    S.eyeTracksPerson = opts.followPerson ?? (opts.eye == null && opts.eyePoint == null);
+    S.eyeDirection = opts.eyeDirection ?? null;
     const median = S.objects.get('D_eye_median');
     if (opts.eyePoint?.length === 3 && median) { S.root.updateMatrixWorld(true); S.eyeLocal = median.worldToLocal(m2w(opts.eyePoint)).toArray(); }
     const { e, t } = eyeAndScreenNow();
     lastEye = m2w(e);
     // the camera sits exactly on the eye point; the orbit point lies ahead of it on the line of sight, beyond the orbit control's minimum distance (which would otherwise push the camera back)
-    const eyeW = m2w(e), aim = m2w([e[0] + (t[0] - e[0]) * 0.2, 0, e[2] + (t[2] - e[2]) * 0.2 - 0.03]).sub(eyeW).normalize();
+    const eyeW = m2w(e), direction = operatorDirection();
+    const aim = direction ? m2w(direction).normalize() : m2w([e[0] + (t[0] - e[0]) * 0.2, 0, e[2] + (t[2] - e[2]) * 0.2 - 0.03]).sub(eyeW).normalize();
     useCamera(persp); persp.fov = 78; persp.up.set(0, 1, 0); persp.position.copy(eyeW); controls.target.copy(eyeW).addScaledVector(aim, LIMITS.minDistance * 1.2);
     persp.updateProjectionMatrix(); controls.update(); invalidate(); emit('view'); return;
   }

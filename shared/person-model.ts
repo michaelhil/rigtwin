@@ -17,8 +17,8 @@
 // gaze over time; a few millimetres) and by the mesh-level contact the browser does (the sink map; not used for numbers).
 // Postures other than the operating one are dof poses and clips applied in the browser; the server answers for the
 // operating posture only and says so.
-import { Operator, defaultTargets, adoptHandPoses, SCRIPTS, STILL_SETTLE, FIT_KEY_TOLERANCE, type Rest, type Controls, type Targets, type V3 } from "../viewer/src/person/operator.ts";
-import { rigBinding, rigViewFromNodes, pkgToModel, type FullRigBinding } from "../viewer/src/person/rig-binding.ts";
+import { Operator, defaultTargets, adoptHandPoses, SCRIPTS, solveStill, FIT_KEY_TOLERANCE, type Rest, type Controls, type Targets, type V3 } from "../viewer/src/person/operator.ts";
+import { rigBinding, rigViewFromNodes, pkgToModel, modelAimReport, type FullRigBinding } from "../viewer/src/person/rig-binding.ts";
 import { section } from "../viewer/src/person/params.ts";
 import rawQueries from "../assets/manikin/params/runtime-queries.toml";
 import { stripRuntime } from "./runtime-params.ts";
@@ -121,25 +121,24 @@ export interface Seated {
 }
 const v3 = (a: number[]): V3 => [a[0], a[1], a[2]];
 /** The seated operator at the rig's pose (SI joint values): the binding, then the still the page shows. */
-export function seat(pkg: PersonPackage, body: Body, rig: RigInfo, pose: Record<string, JointValue>): Seated {
+export function seat(pkg: PersonPackage, body: Body, rig: RigInfo, pose: Record<string, JointValue>, aims?: PersonState["aims"]): Seated {
   adoptHandPoses(pkg.manifest);                                    // the package's hand poses (a module-level table of the solver)
   const op = new Operator(body.rest); if (body.fit) op.fit = body.fit;
   // the manifest and the shape weights let the binding derive collision capsules for a body that is not a baked person (body-fit.ts)
-  const binding = rigBinding({ op, measures: body.measures, manifest: pkg.manifest, weights: body.weights }, rigViewFromNodes(rig.manifest, rig.nodes, pose));
+  const binding = rigBinding({ op, measures: body.measures, manifest: pkg.manifest, weights: body.weights }, rigViewFromNodes(rig.manifest, rig.nodes, pose), aims);
   // as the operator plug-in does once the binding is there, then a still at the runtime still_time
   op.targets = { ...defaultTargets(op), ...binding.targets } as Targets;
+  op.fitGrips();
   if (binding.contactPlanes?.length) op.contactPlanes = binding.contactPlanes as any;
   const lean = binding.stickLean, script = SCRIPTS.hold;
   const controls = (t: number): Controls => { const c = script(t); c.stick.l = [c.stick.l[0] + lean.l[0], c.stick.l[1] + lean.l[1]]; c.stick.r = [c.stick.r[0] + lean.r[0], c.stick.r[1] + lean.r[1]]; return c; };
-  op.resetRun();
-  const t = RT.still_time as number, dt = STILL_SETTLE.step;
-  for (let u = Math.max(0, t - STILL_SETTLE.seconds); u < t; u += STILL_SETTLE.step) { op.time = u; op.solve(controls(u), STILL_SETTLE.step); }
-  op.time = t - dt; op.solve(controls(t), dt);
+  const t = RT.still_time as number;
+  solveStill(op, controls, t);
   const P = (n: string) => op.P[op.j(n)], M = (p: number[]) => pkgToModel(binding.place, p) as Vec3;
   const l = P("eye_l"), r = P("eye_r"), mid = [(l[0] + r[0]) / 2, (l[1] + r[1]) / 2, (l[2] + r[2]) / 2];
   // avatar.ts anchor("head_centre"): from the eye midpoint, in the head's frame (its turn from rest is the solver's D)
   const hc = ANCH.head_centre as number[], hq = op.D[op.j("head")] as Quat, off = quatRotate(hq, [hc[0], hc[1], hc[2]]);
-  return { binding, op, body, eyes: { left: M(l), right: M(r), mid: M(mid) }, headCentre: M([mid[0] + off[0], mid[1] + off[1], mid[2] + off[2]]), pose: `operating: hands on the grips, feet on pedals 1 and 3, back on the backrest (still at t = ${t} s)` };
+  return { binding, op, body, eyes: { left: M(l), right: M(r), mid: M(mid) }, headCentre: M([mid[0] + off[0], mid[1] + off[1], mid[2] + off[2]]), pose: aims ? `operating with named targets (still at t = ${t} s)` : `operating: hands on the grips, feet on pedals 1 and 3, back on the backrest (still at t = ${t} s)` };
 }
 
 // ---------------------------------------------------------------------------------------------- the numbers
@@ -222,5 +221,5 @@ export function ergonomics(s: Seated, rig: RigInfo, pose: Record<string, JointVa
     feet_to_pedals: { legs_short_of_pedals_mm: seat.leg_short_of_pedal_mm, foot_on_pedal_error_mm: seat.foot_on_pedal_error_mm, pedals: R.pedals,
       source: "the solved legs' reach to the heel on D_heel_rest and the ball on D_pedal_face_1 (left foot) and _3 (right foot), posed; survey poplitealheight, footlength" },
   };
-  return { eye, sight, reach, clearance, notes: R.notes as string[] };
+  return { eye, sight, reach, clearance, aims: modelAimReport(s.op, s.binding.place), notes: R.notes as string[] };
 }

@@ -17,6 +17,9 @@
 // (viewer/src/live.ts). Which fields need the browser: none of the numbers; the drawn person (its meshes, textures, idle
 // motion and the mesh-level seat contact) is the page's.
 import type { AssetInfo, CommandSpec, RunOutput } from "./registry.ts";
+import { labelOf, resolvePoint } from "./core.ts";
+import { modelAimReport } from "../../viewer/src/person/rig-binding.ts";
+import type { PersonAims } from "../person-aims.ts";
 import { Refusal, type Schema } from "./schema.ts";
 import { PERSON_KEY, samePerson, type PersonState, type SceneDoc } from "./doc.ts";
 import { PRESETS, POSTURE_WORDS, OPERATING, RELAXED_STAND, STYLES, SEXES, TONES, sayPerson } from "./person-words.ts";
@@ -62,17 +65,18 @@ const solves = new Map<string, Seated>();
 /** The seated person for a state at a pose (SI joint values): the server's solve, the same as the page's still. */
 export function seated(asset: AssetInfo, p: PersonState, pose: Record<string, JointValue>): Seated {
   const people = needPeople(asset), pkg = packageOf(people, p), values = controlValues(pkg, p.body);
-  const key = JSON.stringify([asset.sha256, pkg.id, values, Object.keys(pose).sort().map((k) => [k, pose[k]])]);
+  const aims = p.posture === OPERATING ? p.aims : undefined;
+  const key = JSON.stringify([asset.sha256, pkg.id, values, aims, Object.keys(pose).sort().map((k) => [k, pose[k]])]);
   let s = solves.get(key);
   if (s) { solves.delete(key); solves.set(key, s); return s; }
-  s = seat(pkg, bodyOf(pkg, values), { manifest: asset.manifest, nodes: asset.nodes }, pose);
+  s = seat(pkg, bodyOf(pkg, values), { manifest: asset.manifest, nodes: asset.nodes }, pose, aims);
   solves.set(key, s);
   while (solves.size > QUERIES.solve.cache_entries) solves.delete(solves.keys().next().value!);
   return s;
 }
 /** The eye the operator's view uses when a person is shown: the shown person's (or, with `stature_mm`, the same body at that
  *  stature), from the server's solve. null when nobody is in the seat or the person is not in the operating posture. */
-export function personEye(asset: AssetInfo, doc: SceneDoc, o: { stature_mm?: number } = {}): { point: number[]; above_cushion_m: number; who: string } | null {
+export function personEye(asset: AssetInfo, doc: SceneDoc, o: { stature_mm?: number } = {}): { point: number[]; above_cushion_m: number; who: string; direction?: number[] } | null {
   const p = doc.person;
   if (!p || !asset.people || p.posture !== OPERATING) return null;
   let q = p;
@@ -82,7 +86,8 @@ export function personEye(asset: AssetInfo, doc: SceneDoc, o: { stature_mm?: num
     q = { ...p, preset: null, body: { ...p.body, stature: o.stature_mm } };
   }
   const s = seated(asset, q, doc.pose);
-  return { point: s.eyes.mid.map((x) => Math.round(x * 1e4) / 1e4), above_cushion_m: (s.binding.report as any).eye.eye_above_cushion_m, who: o.stature_mm !== undefined ? `the shown person's body at a stature of ${r1(o.stature_mm / 10)} cm` : `the person in the seat (${sayPerson(p)})` };
+  const gaze = modelAimReport(s.op, s.binding.place).look;
+  return { direction: s.op.explicitGaze ? gaze?.direction : undefined, point: s.eyes.mid.map((x) => Math.round(x * 1e4) / 1e4), above_cushion_m: (s.binding.report as any).eye.eye_above_cushion_m, who: o.stature_mm !== undefined ? `the shown person's body at a stature of ${r1(o.stature_mm / 10)} cm` : `the person in the seat (${sayPerson(p)})` };
 }
 
 // ------------------------------------------------------------------------------------------- schemas
@@ -97,7 +102,46 @@ const setProps: Record<string, Schema> = {
   body: { type: "object", additionalProperties: { type: "number" }, propertyNames: { pattern: "^[a-z_]{1,40}$" }, description: "body controls by id: stature (mm), mass (kg), the survey's r_* controls (SD, e.g. r_sittingheight, r_buttockkneelength); the others keep their values" },
 };
 const postureSchema: Schema = { type: "string", maxLength: 80, description: "operating (seated, hands on the grips, feet on the pedals), relaxed stand, or a pose of the package's library by id or name (\"E37\", \"E37 seated_slump\")" };
-const whatSchema: Schema = { type: "string", enum: ["eye", "sight", "reach", "clearance", "all"], description: "eye: both eyes; sight: both screens (distance, angles, gaze cone); reach: each grip; clearance: thighs, knees, hips, head, feet; all (default)" };
+const whatSchema: Schema = { type: "string", enum: ["eye", "sight", "reach", "clearance", "aims", "all"], description: "eye: both eyes; sight: both screens (distance, angles, gaze cone); reach: each grip; clearance: thighs, knees, hips, head, feet; aims: gaze and named limb targets; all (default)" };
+
+const targetSchema: Schema = { type: "string", maxLength: 80, description: "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2." };
+const targetAction = (key: string, description: string): Schema =>
+  ({ type: "object", required: [key], additionalProperties: false, properties: { [key]: targetSchema }, description });
+const handSchema: Schema = { anyOf: [
+  { type: "string", enum: ["grip", "rest"], description: "grip the hand's own joystick (the default), or rest on its armrest" },
+  targetAction("point", "Extend the index finger toward a target. The reply reports how far short it is."),
+  targetAction("touch", "Try to touch the target with the index finger. The reply reports any gap."),
+] };
+const footSchema: Schema = { anyOf: [
+  { type: "string", enum: ["pedal", "floor"], description: "the foot's own pedal (the default), or flat on the floor under the rig, including its deck" },
+  targetAction("on", "Place the sole under the ball of the foot at a named point."),
+] };
+const aimProps = { look_at: targetSchema, left_hand: handSchema, right_hand: handSchema, left_foot: footSchema, right_foot: footSchema };
+type PoseArgs = {
+  posture?: string; look_at?: string;
+  left_hand?: "grip" | "rest" | { point: string } | { touch: string };
+  right_hand?: PoseArgs["left_hand"];
+  left_foot?: "pedal" | "floor" | { on: string };
+  right_foot?: PoseArgs["left_foot"];
+};
+const hasAims = (a: PoseArgs) => Object.keys(aimProps).some((key) => a[key as keyof PoseArgs] !== undefined);
+
+function applyPose(asset: AssetInfo, people: People, p: PersonState, a: PoseArgs) {
+  if (a.posture !== undefined) p.posture = resolvePosture(people, p, a.posture);
+  if (a.posture !== undefined || hasAims(a)) delete p.aims;
+  if (!hasAims(a)) return;
+  if (p.posture !== OPERATING) throw new Refusal("invalid_args", "Named targets need the operating posture.", 'Include {"posture": "operating"} with the targets to sit down.');
+  const aims: PersonAims = {}, resolve = (text: string) => resolvePoint(asset, text, true);
+  if (a.look_at !== undefined) aims.look = resolve(a.look_at);
+  for (const side of ["left", "right"] as const) {
+    const h = a[`${side}_hand`], f = a[`${side}_foot`];
+    if (h === "rest") aims[`${side}_hand`] = { mode: "rest" };
+    else if (h && typeof h === "object") aims[`${side}_hand`] = "point" in h ? { mode: "point", target: resolve(h.point) } : { mode: "touch", target: resolve(h.touch) };
+    if (f === "floor") aims[`${side}_foot`] = { mode: "floor" };
+    else if (f && typeof f === "object") aims[`${side}_foot`] = { mode: "on", target: resolve(f.on) };
+  }
+  if (Object.keys(aims).length) p.aims = aims;
+}
 
 // ------------------------------------------------------------------------------------------- building a new state
 type SetArgs = { preset?: string; sex?: "female" | "male"; style?: "dressed" | "clay"; tone?: string; glasses?: boolean; headset?: boolean; cap?: boolean; body?: Record<string, number> };
@@ -152,6 +196,7 @@ type Report = ReturnType<typeof ergonomics>;
 function reportFor(asset: AssetInfo, doc: SceneDoc, p: PersonState) {
   const s = seated(asset, p, doc.pose), r = ergonomics(s, { manifest: asset.manifest, nodes: asset.nodes }, doc.pose);
   const where = {
+    ...(p.aims ? { aim_source: "Posed component box centres or named rig points. Gaze uses the solved eye axes and an angular tolerance. Hand reach is shoulder-to-target distance divided by upper arm, forearm and wrist-to-index-tip length. Hand and foot contact uses the solved fingertip, palm or sole and a distance tolerance. Tolerances are in runtime-person.toml [operator.aim]." } : {}),
     computed_by: "the server (shared/person-model.ts): the person's own solver and the rig binding, the code the page runs; no browser is needed",
     pose: s.pose, posture_shown: p.posture === OPERATING ? "operating" : p.posture,
     ...(p.posture !== OPERATING ? { note: `the person is shown in ${p.posture === RELAXED_STAND ? "the relaxed stand" : `the pose ${p.posture}`}; these numbers are for the operating posture (other postures are poses the browser applies; the server does not measure them)` } : {}),
@@ -161,13 +206,28 @@ function reportFor(asset: AssetInfo, doc: SceneDoc, p: PersonState) {
   };
   return { r, where };
 }
-function lines(r: Report, what: string): string[] {
+function aimLines(asset: AssetInfo, aims: Report["aims"]): string[] {
+  return Object.entries(aims).map(([key, a]) => {
+    const limb = key === "look" ? "Gaze" : key[0].toUpperCase() + key.slice(1).replace("_", " ");
+    const name = a.mode === "floor" ? (a.target === "D_origin" ? "the deck" : "the floor") : labelOf(asset, a.target).replace(/\s*\([^)]*\)/g, "");
+    if (a.status === "missing") return `${limb}: ${name} is missing from this rig.`;
+    if (a.status === "behind") return `${limb}: ${name} is behind the seated person.`;
+    if (a.mode === "look") return `Gaze: ${a.on_target ? "the line of sight passes through" : "the line of sight misses"} ${name} (${r1(a.angle_deg!)}° off).`;
+    const gap = `${Math.round(a.distance_mm!)} mm`, share = a.reach_share === undefined ? "" : ` (${Math.round(a.reach_share * 100)}% of arm length)`;
+    if (a.status === "blocked") return `${limb}: no clear pose toward ${name}; fingertip ${gap} away${share}.`;
+    if (a.mode === "point") return `${limb} points at ${name}; fingertip ${gap} short${share}.`;
+    const action = a.mode === "rest" ? "rests on" : a.mode === "floor" || a.mode === "on" ? "is flat on" : "touches";
+    return a.status === "contact" ? `${limb} ${action} ${name} (${gap} from the target)${share}.` : `${limb} falls ${gap} short of ${name}${share}.`;
+  });
+}
+
+function lines(r: Report, what: string, asset?: AssetInfo): string[] {
   const out: string[] = [], e = r.eye, m = r.sight.main_monitor, t = r.sight.touchscreen, c = r.clearance;
   const cone = (x: typeof m) => (x.gaze_cone.whole_area_inside ? "the whole active area inside the gaze cone" : x.gaze_cone.centre_inside ? `centre inside the gaze cone, ${x.gaze_cone.outside.join(", ").replace(/_/g, " ")} outside it` : `centre outside the gaze cone (${x.gaze_cone.from_down_deg}–${x.gaze_cone.to_down_deg}° below horizontal, ±${x.gaze_cone.side_half_deg}° sideways)`);
   const sl = (x: typeof m, name: string) => `${name}: ${r1(x.distance_m * 100)} cm from the eye, centre ${Math.abs(x.centre_below_eye_deg)}° ${x.centre_below_eye_deg >= 0 ? "below" : "above"} the eye's horizontal and ${Math.abs(x.centre_left_of_ahead_deg)}° to the ${x.centre_left_of_ahead_deg >= 0 ? "left" : "right"}, ${x.off_normal_deg}° off the screen's normal; top edge ${Math.abs(Math.round(x.top_edge_above_eye_mm))} mm ${x.top_edge_above_eye_mm >= 0 ? "above" : "below"} the eye; ${cone(x)}.`;
   if (what === "eye" || what === "all") out.push(`Eye (midpoint): ${e.midpoint_m.map((x) => x.toFixed(3)).join(", ")} m; ${r1(e.above_cushion_m * 100)} cm above the cushion (survey sitting eye height ${r1(e.survey_sitting_eye_height_m * 100)} cm less ${r1(e.cushion_compression_m * 100)} cm of cushion), ${r1(e.above_deck_m * 100)} cm above the deck.`);
   if (what === "sight" || what === "all") out.push(sl(m, "Main monitor"), sl(t, "Touchscreen"));
-  if (what === "reach" || what === "all") out.push(`Reach: left grip at ${Math.round(r.reach.left_grip.share_of_arm * 100)} % of the arm's length (${r1(r.reach.left_grip.shoulder_to_grip_m * 100)} cm from the shoulder), right grip ${Math.round(r.reach.right_grip.share_of_arm * 100)} %; out of reach by ${r.reach.left_grip.out_of_reach_mm} / ${r.reach.right_grip.out_of_reach_mm} mm.`);
+  if (what === "reach" || what === "all") out.push(`Reach: left grip at ${Math.round(r.reach.left_grip.share_of_arm * 100)} % of the arm's length (${r1(r.reach.left_grip.shoulder_to_grip_m * 100)} cm from the shoulder), right grip ${Math.round(r.reach.right_grip.share_of_arm * 100)} %; short of the grip: ${[r.reach.left_grip, r.reach.right_grip].map((g) => g.out_of_reach_mm === null ? "hand aimed elsewhere" : `${g.out_of_reach_mm} mm`).join(" / ")} (left / right).`);
   if (what === "clearance" || what === "all") {
     const k = c.knee_crease_to_seat_front_mm, mmTxt = (x: number | null | undefined) => (x === null || x === undefined ? "not evaluated" : `${Math.round(x)} mm`);
     const side = (x: number) => `${Math.abs(Math.round(x))} mm ${x >= 0 ? "behind" : "in front of"}`;
@@ -176,8 +236,10 @@ function lines(r: Report, what: string): string[] {
     out.push(`Hips to the armrest pods ${mmTxt((c.hips_to_armrest_pods_mm.left as any)?.clearance_mm)} / ${mmTxt((c.hips_to_armrest_pods_mm.right as any)?.clearance_mm)}${c.evaluated ? "" : " (this body has no collision capsules: not one of the baked persons)"}; survey hip room ${mmTxt(c.hips_to_armrest_pods_mm.survey_hip_room_each_side)} each side.`);
     out.push(`Head to the nearest part (${c.head_to_frame_mm.nearest.part}): ${mmTxt(c.head_to_frame_mm.nearest.clearance_mm)}.`);
     const f = c.feet_to_pedals.legs_short_of_pedals_mm as any;
-    out.push(f.left > 0 || f.right > 0 ? `Feet short of the pedals by ${f.left} / ${f.right} mm (left / right).` : "Both feet reach their pedals.");
+    if (f.left !== null && f.right !== null) out.push(f.left > 0 || f.right > 0 ? `Feet short of the pedals by ${f.left} / ${f.right} mm (left / right).` : "Both feet reach their pedals.");
+    else for (const side of ["left", "right"]) if (f[side] !== null) out.push(f[side] > 0 ? `The ${side} foot falls ${f[side]} mm short of its pedal.` : `The ${side} foot reaches its pedal.`);
   }
+  if (asset && (what === "aims" || what === "all")) out.push(...aimLines(asset, r.aims));
   return out;
 }
 const HOW = "A point estimate at the rig's photo-estimated sizes and the survey's body; no range yet.";
@@ -202,12 +264,15 @@ export const personCommands: CommandSpec[] = [
   },
   {
     id: "person.pose", kind: "edit",
-    summary: "The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. Recorded as one change.",
-    args: { type: "object", required: ["posture"], properties: { posture: postureSchema } },
-    examples: [{ args: { posture: "operating" }, note: "back in the seat, hands on the grips" }, { args: { posture: "relaxed stand" }, note: "standing, arms hanging" }, { args: { posture: "E37" }, note: "the library's seated slump" }],
-    run({ doc, asset }, a: { posture: string }) {
-      const people = needPeople(asset), cur = needPerson(doc), next = { ...structuredClone(cur), posture: resolvePosture(people, cur, a.posture) };
-      return { result: { person: next, said: said(next), before: said(cur) }, ...changeOut(cur, next) };
+    summary: "The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. In the operating posture one call can set gaze, hands and feet. A posture or aim request resets omitted aims to the operating defaults.",
+    args: { type: "object", additionalProperties: false, properties: { posture: postureSchema, ...aimProps } },
+    examples: [{ args: { posture: "operating" }, note: "back in the seat, hands on the grips" }, { args: { posture: "relaxed stand" }, note: "standing, arms hanging" }, { args: { posture: "E37" }, note: "the library's seated slump" }, { args: { look_at: "little monitor", right_hand: { point: "touchscreen" } }, note: "look at and point to the touchscreen" }],
+    run({ doc, asset }, a: PoseArgs) {
+      if (a.posture === undefined && !hasAims(a)) throw new Refusal("invalid_args", "person.pose: give a posture or a target", 'Try {"look_at": "touchscreen"}.');
+      const people = needPeople(asset), cur = needPerson(doc), next = structuredClone(cur);
+      applyPose(asset, people, next, a);
+      const aimed = hasAims(a) ? reportFor(asset, doc, next).r.aims : {};
+      return { result: { person: next, said: said(next), before: said(cur), aims: aimed, notes: aimLines(asset, aimed) }, ...changeOut(cur, next) };
     },
   },
   {
@@ -219,41 +284,47 @@ export const personCommands: CommandSpec[] = [
   },
   {
     id: "person.report", kind: "query",
-    summary: "What the person in the seat sees and reaches, computed on the server without a browser: eye point (both eyes), sight lines to the main monitor and the touchscreen (distance, angle below the eye, angle off the screen normal, the gaze cone), reach to each grip (share of the arm's length), clearances (thighs to the grip mounts, knee crease to the seat front, hips to the armrest pods, head to the frame, feet to the pedals). Every number has its unit and its source.",
+    summary: "What the person in the seat sees and reaches, computed on the server without a browser: eye point (both eyes), sight lines to the main monitor and the touchscreen (distance, angle below the eye, angle off the screen normal, the gaze cone), reach to each grip (share of the arm's length), clearances (thighs to the grip mounts, knee crease to the seat front, hips to the armrest pods, head to the frame, feet to the pedals). Includes gaze alignment to a named target, fingertip distance and reach share. Every number has its unit and source.",
     args: { type: "object", properties: { what: whatSchema } },
     examples: [{ args: {}, note: "everything" }, { args: { what: "sight" }, note: "the two screens from the person's eye" }],
     run({ doc, asset }, a: { what?: string }) {
       needPeople(asset);
       const p = needPerson(doc), what = a.what ?? "all", { r, where } = reportFor(asset, doc, p);
       const pick = what === "all" ? r : { [what]: (r as any)[what] };
-      return { result: { text: [`${sayPerson(p)}, scene version ${doc.version}:`, ...lines(r, what), HOW, ...(where.note ? [`Note: ${where.note}.`] : [])].join("\n"), ...pick, ...where, notes: r.notes } };
+      return { result: { text: [`${sayPerson(p)}, scene version ${doc.version}:`, ...lines(r, what, asset), HOW, ...(where.note ? [`Note: ${where.note}.`] : [])].join("\n"), ...pick, ...where, notes: r.notes } };
     },
   },
   {
     id: "person", kind: "edit", tool: "person",
-    summary: "The person in the seat, in one request: preset (\"P5 woman\", \"P50 man\", \"P95 man\"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), or clear: true for nobody. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {\"person\": ...} gives every number with its source.",
-    args: { type: "object", properties: { ...setProps, posture: postureSchema, clear: { type: "boolean", description: "true: nobody in the seat" } } },
+    summary: "The person in the seat, in one request: preset (\"P5 woman\", \"P50 man\", \"P95 man\"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. A posture or aim request resets omitted aims to the operating defaults. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {\"person\": ...} gives every number with its source.",
+    args: { type: "object", properties: { ...setProps, posture: postureSchema, ...aimProps, clear: { type: "boolean", description: "true: nobody in the seat" } } },
     examples: [
       { args: { preset: "P5 woman" }, note: "the small woman in the seat, with her numbers" },
       { args: { style: "clay", glasses: false }, note: "the clay figure; glasses off for the dressed person" },
       { args: { posture: "relaxed stand" }, note: "standing" },
+      { args: { look_at: "little monitor", right_hand: { point: "touchscreen" } }, note: "look at and point to the touchscreen" },
       { args: { clear: true }, note: "nobody in the seat" },
     ],
-    run({ doc, asset }, a: SetArgs & { posture?: string; clear?: boolean }) {
-      const people = needPeople(asset), { clear, posture, ...set } = a, hasSet = Object.values(set).some((v) => v !== undefined);
+    run({ doc, asset }, a: SetArgs & PoseArgs & { clear?: boolean }) {
+      const people = needPeople(asset), { clear, posture, look_at, left_hand, right_hand, left_foot, right_foot, ...set } = a;
+      const aiming = { posture, look_at, left_hand, right_hand, left_foot, right_foot }, hasPose = posture !== undefined || hasAims(aiming);
+      const hasSet = Object.values(set).some((v) => v !== undefined);
       if (clear) {
-        if (hasSet || posture !== undefined) throw new Refusal("invalid_args", "person: clear takes nothing else", "{\"clear\": true}");
+        if (hasSet || hasPose) throw new Refusal("invalid_args", "person: clear takes nothing else", "{\"clear\": true}");
         return { result: { text: "", before: said(doc.person), after: said(null), numbers: [] as string[], notes: [] as string[] }, ...changeOut(doc.person, null) };
       }
-      if (!hasSet && posture === undefined) throw new Refusal("invalid_args", "person: name something to change", "e.g. {\"preset\": \"P5 woman\"}, {\"posture\": \"relaxed stand\"} or {\"clear\": true}");
+      if (!hasSet && !hasPose) throw new Refusal("invalid_args", "person: name something to change", "e.g. {\"preset\": \"P5 woman\"}, {\"posture\": \"relaxed stand\"} or {\"clear\": true}");
       const { next, notes } = hasSet ? applySet(people, doc.person, set) : { next: structuredClone(needPerson(doc)), notes: [] as string[] };
-      if (posture !== undefined) next.posture = resolvePosture(people, next, posture);
-      let numbers: string[] = [];
+      applyPose(asset, people, next, aiming);
+      let numbers: string[] = [], aims: Report["aims"] = {};
       try {
         const after = { ...doc, person: next } as SceneDoc, { r } = reportFor(asset, after, { ...next, posture: OPERATING });
-        numbers = next.posture === OPERATING ? lines(r, "all").filter((l) => /^(Eye|Main monitor|Reach|Knee|Hips|Feet|Both feet)/.test(l)) : [];
+        if (next.posture === OPERATING) {
+          aims = r.aims;
+          numbers = [...aimLines(asset, aims), ...lines(r, "all").filter((l) => /^(Eye|Main monitor|Reach|Knee|Hips|Feet|Both feet)/.test(l))];
+        }
       } catch (e) { if (!(e instanceof Refusal)) numbers = [`(The numbers could not be worked out: ${e instanceof Error ? e.message : e}.)`]; }
-      return { result: { text: "", before: said(doc.person), after: said(next), numbers, notes }, ...changeOut(doc.person, next) };
+      return { result: { text: "", before: said(doc.person), after: said(next), aims, numbers, notes }, ...changeOut(doc.person, next) };
     },
     autoGroup(a: SetArgs & { posture?: string; clear?: boolean }) { return a.clear ? "person-clear" : a.preset ? `person-${a.preset}` : a.posture !== undefined && Object.keys(a).length === 1 ? "person-posture" : "person"; },
     finish(r: any, done) {

@@ -6,7 +6,7 @@
 // y = 0). The rig's MODEL frame is the rig's (metres, Z up, X forward, Y the operator's left); `place` puts the package frame
 // into it.
 import type * as THREE from "three";
-import type { Operator, Targets, ContactPlane } from "./operator.ts";
+import type { Operator, Targets, ContactPlane, V3 } from "./operator.ts";
 import type { Manifest } from "../../../shared/manifest.ts";
 
 export interface PersonView {
@@ -18,11 +18,12 @@ export interface PersonView {
 }
 export interface RigView {
   manifest: Manifest;                            // the rig's description file
+  neutralFrame(id: string): ReturnType<RigView["frame"]>;
   point(id: string): number[] | null;            // current world position of a D_ / S_ / C_ node, rig MODEL frame, joints as posed
   frame(id: string): { origin: number[]; x: number[]; y: number[]; z: number[] } | null;   // the same with its axes (model frame)
 }
 export interface RigBinding {
-  place: { origin: number[]; yawDeg: number };   // the package frame's origin in the rig MODEL frame (on the deck top below the hip), and its turn about model Z (0 = facing model +X; the seat swivel)
+  place: { origin: V3; yawDeg: number };   // the package frame's origin in the rig MODEL frame (on the deck top below the hip), and its turn about model Z (0 = facing model +X; the seat swivel)
   targets: Partial<Targets>;                     // merged over defaultTargets(op), package frame
   contactPlanes: ContactPlane[];                 // seat (with the real cushion as `pan`) and backrest, package frame
   stickLean?: { l: [number, number]; r: [number, number] };   // the real grips' lean, degrees, in the sense of Controls.stick: added to the scripted deflection before each solve
