@@ -398,9 +398,37 @@ const NB = "shadowWorldPosition = worldPosition + vec4( shadowWorldNormal * dire
 const SHADOW_VERTEX = must(C.shadowmap_vertex, NB, "shadowmap_vertex").replace(NB, "shadowWorldPosition = worldPosition + vec4( shadowWorldNormal * personNormalBias, 0 );");
 
 /** Uniforms every person shader shares (one set per person: its contact texture; the shadow numbers of the key light). */
-export interface PersonUniforms { labContact: { value: THREE.Texture }; personShadowTan: { value: number }; personShadowHalf: { value: number }; personShadowRange: { value: number }; personNormalBias: { value: number } }
-export const newPersonUniforms = (contact: THREE.Texture): PersonUniforms => ({ labContact: { value: contact }, personShadowTan: { value: SH.light_tan }, personShadowHalf: { value: 1 }, personShadowRange: { value: 1 }, personNormalBias: { value: SH.normal_bias } });
+/** personNear: in the operator's own view (the camera on this person's eyes) nothing of the person nearer the camera than this is
+ *  drawn, 0 = off. The person's own face otherwise lay across the bottom of the view as a flat skin-coloured sheet, cut by the near
+ *  plane (designer, REVIEW-11: "a web across the men's lap"; the nose is 60 mm below and in front of the eye). The shadow pass is
+ *  measured from the light, so the head still casts its shadow. */
+/** personKey: the person's own soft key (designer, REVIEW-11; [look]), its irradiance (linear RGB; 0 = off), from the camera's side and
+ *  above, no shadow; only the person's materials see it, so the rig is lit exactly as before. personLook: 1 the person's own look on
+ *  (that key, the crease occlusion, the skin's saturation), 0 the materials as they were (for comparing). */
+export interface PersonUniforms { labContact: { value: THREE.Texture }; personShadowTan: { value: number }; personShadowHalf: { value: number }; personShadowRange: { value: number }; personNormalBias: { value: number }; personNear: { value: number }; personKey: { value: THREE.Color }; personLook: { value: number } }
+export const newPersonUniforms = (contact: THREE.Texture): PersonUniforms => ({ labContact: { value: contact }, personShadowTan: { value: SH.light_tan }, personShadowHalf: { value: 1 }, personShadowRange: { value: 1 }, personNormalBias: { value: SH.normal_bias }, personNear: { value: 0 }, personKey: { value: new THREE.Color(0, 0, 0) }, personLook: { value: 1 } });
 
+// ---- the person's own look in the product's light (designer, REVIEW-11; numbers in [look]) -------------------------------------
+const LK = section("look");
+const LOOK_DEFINES = glslDefines({ key_az: LK.key_az * Math.PI / 180, key_el: LK.key_el * Math.PI / 180, cavity: LK.cavity }, "K_LOOK_");
+/** A soft key from the camera's side and above, built in view space each fragment (world up from the view matrix), evaluated with
+ *  the material's own direct-light model and no shadow. */
+const PERSON_KEY = /* glsl */ `
+	#if defined( RE_Direct )
+	if ( personLook > 0.0 ) {
+		vec3 lkUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ), lkH = vec3( 0.0, 0.0, 1.0 ) - lkUp * lkUp.z;
+		lkH = dot( lkH, lkH ) > 1e-6 ? normalize( lkH ) : normalize( cross( lkUp, vec3( 1.0, 0.0, 0.0 ) ) );
+		vec3 lkA = lkH * cos( K_LOOK_KEY_AZ ) + cross( lkUp, lkH ) * sin( K_LOOK_KEY_AZ );
+		IncidentLight lkL; lkL.direction = normalize( lkA * cos( K_LOOK_KEY_EL ) + lkUp * sin( K_LOOK_KEY_EL ) ); lkL.color = personKey * personLook; lkL.visible = true;
+		RE_Direct( lkL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+	}
+	#endif
+`;
+/** Shading in the person's own creases: the per-vertex cavity (avatar.ts cavityOf) darkens the indirect light, and the direct a little. */
+const PERSON_OCCLUSION = /* glsl */ `
+	{ float lkC = clamp( vPersonCav, 0.0, 1.0 ) * personLook; float lkI = 1.0 - K_LOOK_CAVITY.x * lkC;
+	  reflectedLight.indirectDiffuse *= lkI; reflectedLight.indirectSpecular *= lkI; reflectedLight.directDiffuse *= 1.0 - K_LOOK_CAVITY.y * lkC; }
+`;
 const replaceInclude = (src: string, name: string, body: string) => src.split(`#include <${name}>`).join(body);
 /** The person's vertex stage (skinning + contact) in a shader being compiled. */
 export function patchPersonVertex(sh: { vertexShader: string }) {
@@ -409,11 +437,19 @@ export function patchPersonVertex(sh: { vertexShader: string }) {
   v = replaceInclude(v, "skinning_vertex", SKINNING); v = replaceInclude(v, "skinnormal_vertex", SKIN_NORMAL);
   v = replaceInclude(v, "shadowmap_vertex", SHADOW_VERTEX);
   if (!v.includes("uniform float personNormalBias")) v = v.replace("void main() {", "uniform float personNormalBias;\nvoid main() {");
+  if (v.includes("#include <project_vertex>") && !v.includes("vPersonDist")) v = v.replace("void main() {", "varying float vPersonDist;\nvoid main() {").replace("#include <project_vertex>", "#include <project_vertex>\n\tvPersonDist = length( mvPosition.xyz );");
+  if (v.includes("#include <begin_vertex>") && !v.includes("vPersonCav")) v = v.replace("void main() {", "attribute float _cavity; varying float vPersonCav;\nvoid main() {").replace("#include <begin_vertex>", "#include <begin_vertex>\n\tvPersonCav = _cavity;");
   sh.vertexShader = v;
 }
 /** The person's shadow filter in a fragment shader being compiled. */
 export function patchPersonFragment(sh: { fragmentShader: string }) {
-  sh.fragmentShader = replaceInclude(replaceInclude(sh.fragmentShader, "shadowmap_pars_fragment", SHADOW_PARS), "lights_fragment_begin", LIGHTS_BEGIN);
+  let f = replaceInclude(replaceInclude(sh.fragmentShader, "shadowmap_pars_fragment", SHADOW_PARS), "lights_fragment_begin", LIGHTS_BEGIN);
+  if (f.includes("#include <clipping_planes_fragment>") && !f.includes("vPersonDist"))
+    f = f.replace("void main() {", "uniform float personNear; varying float vPersonDist;\nvoid main() {").replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\n\tif ( vPersonDist < personNear ) discard;");
+  if (f.includes("#include <lights_fragment_maps>") && f.includes("#include <aomap_fragment>") && !f.includes("personKey"))
+    f = f.replace("void main() {", LOOK_DEFINES + "uniform vec3 personKey; uniform float personLook; varying float vPersonCav;\nvoid main() {")
+      .replace("#include <lights_fragment_maps>", PERSON_KEY + "#include <lights_fragment_maps>").replace("#include <aomap_fragment>", "#include <aomap_fragment>" + PERSON_OCCLUSION);
+  sh.fragmentShader = f;
 }
 /** Install the person's shader changes on one of its materials, after whatever recipe the material already has. */
 export function personShader<M extends THREE.Material>(m: M, U: PersonUniforms, tag = ""): M {

@@ -26,7 +26,7 @@ import type { RigBinding } from "./types.ts";
 import { deriveBodyFit, hasModel } from "./body-fit.ts";
 import { section } from "./params.ts";
 
-const STYLE = section("materials").style, ANCH = section("anchors"), GROUND = section("ground"), HANDS = section("operator").hand;
+const STYLE = section("materials").style, ANCH = section("anchors"), GROUND = section("ground"), HANDS = section("operator").hand, LOOK = section("look");
 interface Dof { id: string; joint: string; axis: number[]; min: number; max: number; label?: string; group?: string }
 
 let ktx2: KTX2Loader | null = null;
@@ -40,6 +40,32 @@ export function makeLoaders(renderer: THREE.WebGLRenderer, transcoder: string) {
 /** Eight influences per vertex (lab dqs.ts loadSecondInfluences): a package keeps a complete four-influence set in JOINTS_0 /
  *  WEIGHTS_0 and may add the full eight as a separate whole set in _JOINTS8_0/1, _WEIGHTS8_0/1; then the person is skinned with
  *  that set INSTEAD of set 0. Every other skinned mesh gets a zero second weight set (a missing attribute reads 1 in WebGL). */
+/** Where a mesh is a crease, 0 to 1 per vertex (designer, REVIEW-11: shading in the person's own creases; [look]): the vertices
+ *  welded by position (seams), then how far each one's neighbours stand above its tangent plane, per edge length (a concave fold, an
+ *  eye socket, between the fingers: positive), averaged over cavity_smooth passes so it shades a band, times cavity_gain. On the rest
+ *  shape once per geometry: a fold is where it is whatever the body's size. */
+export function cavityOf(g: THREE.BufferGeometry): Float32Array {
+  const P = g.attributes.position, n = P.count, I = g.index, out = new Float32Array(n);
+  const keys = new Map<string, number>(), wid = new Int32Array(n), pos: number[] = [];
+  for (let v = 0; v < n; v++) { const k = `${Math.round(P.getX(v) * 1e5)},${Math.round(P.getY(v) * 1e5)},${Math.round(P.getZ(v) * 1e5)}`; let id = keys.get(k); if (id === undefined) { id = keys.size; keys.set(k, id); pos.push(P.getX(v), P.getY(v), P.getZ(v)); } wid[v] = id; }
+  const W = keys.size, nrm = new Float64Array(W * 3), sum = new Float64Array(W * 3), cnt = new Float64Array(W), el = new Float64Array(W), edges: number[] = [];
+  const nt = I ? I.count : n;
+  for (let t = 0; t < nt; t += 3) {
+    const a = wid[I ? I.getX(t) : t], b = wid[I ? I.getX(t + 1) : t + 1], c = wid[I ? I.getX(t + 2) : t + 2]; if (a === b || b === c || a === c) continue;
+    const ux = pos[3 * b] - pos[3 * a], uy = pos[3 * b + 1] - pos[3 * a + 1], uz = pos[3 * b + 2] - pos[3 * a + 2], vx = pos[3 * c] - pos[3 * a], vy = pos[3 * c + 1] - pos[3 * a + 1], vz = pos[3 * c + 2] - pos[3 * a + 2];
+    const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+    for (const q of [a, b, c]) { nrm[3 * q] += fx; nrm[3 * q + 1] += fy; nrm[3 * q + 2] += fz; }
+    for (const [i, j] of [[a, b], [b, c], [c, a]]) { edges.push(i, j); for (const [p, q] of [[i, j], [j, i]]) { sum[3 * p] += pos[3 * q]; sum[3 * p + 1] += pos[3 * q + 1]; sum[3 * p + 2] += pos[3 * q + 2]; cnt[p]++; el[p] += Math.hypot(pos[3 * q] - pos[3 * p], pos[3 * q + 1] - pos[3 * p + 1], pos[3 * q + 2] - pos[3 * p + 2]); } }
+  }
+  let c = new Float64Array(W);
+  for (let i = 0; i < W; i++) { if (!cnt[i]) continue; const L = Math.hypot(nrm[3 * i], nrm[3 * i + 1], nrm[3 * i + 2]) || 1, e = el[i] / cnt[i] || 1;
+    c[i] = ((sum[3 * i] / cnt[i] - pos[3 * i]) * nrm[3 * i] + (sum[3 * i + 1] / cnt[i] - pos[3 * i + 1]) * nrm[3 * i + 1] + (sum[3 * i + 2] / cnt[i] - pos[3 * i + 2]) * nrm[3 * i + 2]) / L / e; }
+  for (let it = 0; it < LOOK.cavity_smooth; it++) { const acc = new Float64Array(W), k = new Float64Array(W);
+    for (let e = 0; e < edges.length; e += 2) { const i = edges[e], j = edges[e + 1]; acc[i] += c[j]; k[i]++; acc[j] += c[i]; k[j]++; }
+    const nx = new Float64Array(W); for (let i = 0; i < W; i++) nx[i] = k[i] ? 0.5 * c[i] + 0.5 * acc[i] / k[i] : c[i]; c = nx; }
+  for (let v = 0; v < n; v++) out[v] = Math.min(1, Math.max(0, c[wid[v]] * LOOK.cavity_gain));
+  return out;
+}
 const zeroWeights = new Map<number, THREE.BufferAttribute>();
 const zeros = (c: number) => { let z = zeroWeights.get(c); if (!z) { z = new THREE.BufferAttribute(new Uint8Array(c * 4), 4, true); zeroWeights.set(c, z); } return z; };
 async function secondInfluences(gltf: any, meshes: THREE.SkinnedMesh[]) {
@@ -109,6 +135,7 @@ export class Avatar {
     this.rootBone = [...this.bones.values()].find((b) => !(b.parent as any)?.isBone)!;
     this.holder.add(this.root);
     for (const me of this.meshes) me.customDepthMaterial = personDepthMaterial(this.U);
+    for (const me of this.meshes) if (!me.geometry.attributes._cavity) me.geometry.setAttribute("_cavity", new THREE.BufferAttribute(cavityOf(me.geometry), 1));   // shading in its own creases (shaders.ts)
     for (const c of m.shape.controls) this.shape[c.id] = c.default ?? 0;
     await this.loadBakes();
     this.dofs = m.dofs ?? [];
@@ -628,17 +655,21 @@ function operatorPlugin(av: Avatar): Plugin {
         op.targets = defaultTargets(op);
         const b = av.binding;
         if (b) { Object.assign(op.targets, b.targets); if (b.contactPlanes?.length) op.contactPlanes = b.contactPlanes; }
-        op.fitGrips();                                                 // the hands wrap the real handles (their radius and profile, when the binding gives them)
+        const fitted = op.fitGrips();                                  // the hands wrap the real handles (their radius and profile, when the binding gives them)
         if (!b?.contactPlanes?.length) standInProps(op);              // the stand-in pan's solid onto the seat plane (no rig binding)
-        op.resetRun(); st._bound = b; st._t = 0;
+        op.resetRun(); st._bound = b; st._t = 0; st._refit = fitted && !!(op.targets.grip?.l?.section || op.targets.grip?.r?.section);
       }
       av.seated = true;
       const op: Operator = st._op, lean = av.binding?.stickLean, script = SCRIPTS[st.script] ?? SCRIPTS.hold;
       const controls = (t: number): Controls => { const c = script(t); if (lean) { c.stick.l = [c.stick.l[0] + lean.l[0], c.stick.l[1] + lean.l[1]]; c.stick.r = [c.stick.r[0] + lean.r[0], c.stick.r[1] + lean.r[1]]; } return c; };
       const t = st.time ?? (st._t += ctx.dt), dt = st.time !== undefined ? STILL_SETTLE.step : ctx.dt;
-      if (st.time !== undefined) { op.resetRun(); for (let u = Math.max(0, t - STILL_SETTLE.seconds); u < t; u += STILL_SETTLE.step) { op.time = u; op.solve(controls(u), STILL_SETTLE.step); } op.time = t - dt; }
+      const run = () => { if (st.time !== undefined) { op.resetRun(); for (let u = Math.max(0, t - STILL_SETTLE.seconds); u < t; u += STILL_SETTLE.step) { op.time = u; op.solve(controls(u), STILL_SETTLE.step); } op.time = t - dt; } };
+      run();
       const c = controls(t);
-      op.solve(c, dt); const L = op.locals();
+      op.solve(c, dt);
+      // the fingers on the handle's real cross-section need the hand's orientation on it: fitted again once the hand has been solved
+      if (st._refit) { st._refit = false; op.fitGrips(undefined, true); op.resetRun(); run(); op.solve(c, dt); }
+      const L = op.locals();
       (st._order as THREE.Bone[]).forEach((bn, j) => bn.quaternion.set(L.q[j][0], L.q[j][1], L.q[j][2], L.q[j][3]));
       bones.get("pelvis")!.position.set(L.pelvis[0], L.pelvis[1], L.pelvis[2]);
       st.controls = c; st.contactPlanes = op.contactPlanes;

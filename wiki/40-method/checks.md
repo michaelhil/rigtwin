@@ -108,7 +108,9 @@ After MPK's full packet (2026-11-25): **T10h** stands the dressed and the clay f
 take, beside the platform and on the deck, and takes the lowest point of every visible mesh against the floor under the spot (0.0 mm;
 the joint rule alone left A_POSE 7.6 to 8.4 mm under); **T10j** (new) seats the median man, M50_HEAVY and M95H and measures, on the GPU
 as drawn (`viewer.person.shells()`), how deep skin lies inside each pod's inner side before and after the contact (12.5 to 0.7 mm and
-9.5 to 2.5 mm; limit 3 mm).
+9.5 to 2.5 mm; limit 3 mm). After the designer's REVIEW-11: **T10i** measures against the handle's measured cross-section and also wants each index
+finger's skin within 3 mm of the handle (0 to 0.9 mm); **T10k** (new) switches tones and sex and wants each tone's own iris on the eyes; **T10l** (new) wants nothing of the
+person nearer the eyes than 0.15 m in the operator's own view (651 mm; 65 mm with the own face drawn).
 Phase 4 added **T60 to T67** for [the person panel](../50-implementation/person-panel.md#checks):
 - a click on the person, and the rig picked as before
 - clay figure and back

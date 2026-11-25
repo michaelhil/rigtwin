@@ -10,7 +10,8 @@
 //             `person=off` the module and the package load but nothing is shown (the pixel comparison in the wiki uses this).
 //
 // URL parameters: person=0 (no person code at all) | off (loaded, not shown) | <manifest url>; person_style=dressed|clay; person_sex=m|f;
-// person_tone=<id>; person_wear=glasses:none,headset:none; person_shape=<preset name>; person_idle=0.
+// person_tone=<id>; person_wear=glasses:none,headset:none; person_shape=<preset name>; person_idle=0; person_look=0 (the person's own key,
+// crease shading and skin saturation off).
 // Script interface: window.viewer.person (state, definition, show, set, place, anchor, pickAt, depthAt, shells, object, still, bench, ready); every
 // change is announced as the window event 'rigtwin:person' with the state as its detail.
 import * as THREE from "three";
@@ -21,7 +22,9 @@ import { section } from "./params.ts";
 import { rigBinding } from "./rig-binding.ts";
 import type { RigView, RigBinding } from "./types.ts";
 
-const RT = section("runtime"), GROUND = section("ground");
+const RT = section("runtime"), GROUND = section("ground"), LOOK = section("look"), SECTION_BINS = section("operator").handle.section_bins;
+/** The person's own look in the product's light on ([look]; designer, REVIEW-11): look(false) or person_look=0 shows the materials as before. */
+let lookOn = true;
 /** The default person: the dressed operator package (MP, assets/manikin/), served under the asset folder; version.json names it
  *  when the release carries it (tools/serve.ts, tools/dist.ts). */
 export const DEFAULT_PACKAGE = "asset/manikin/operator-m/operator-m.avatar.json";
@@ -68,8 +71,35 @@ function rebind() {
   av.holder.position.copy(m2w(place.origin));
   av.holder.rotation.set(0, Math.PI / 2 + place.yawDeg * DEG, 0);
   av.holder.updateMatrixWorld(true);
+  // the handles' measured cross-sections into the grip targets (the fingers lie on the real front of the handle: gripSection)
+  if (b) for (const [s, S2] of [["l", "L"], ["r", "R"]] as const) { const g: any = (b.targets as any)?.grip?.[s], sec = g?.profile ? gripSection(S2, g.profile) : null; if (sec) { g.section = sec.rows; g.ref = sec.ref; } }
   bindMs = performance.now() - t0;
   dirty(); firstPerson();
+}
+/** The handle's real cross-section (designer, REVIEW-11: the fingers floated past the handle's front): the rig's profile is the largest
+ *  radius round the grip axis at each height, but the handle is 22 to 26 mm deep at its front against 35 at its widest. At each of the
+ *  profile's heights, the radius by direction round the axis ([operator.handle] section_bins, from the grip datum's x axis), measured
+ *  on the lever's mesh in the D_grip_axis frame; `ref` is that x axis in the person's frame (as the holder stands now). Per rig build. */
+const sectionCache = new Map<string, { rows: number[][] }>();
+function gripSection(side: "L" | "R", profile: number[][]): { rows: number[][]; ref: number[] } | null {
+  const lever = S.objects.get(`C_joy_lever_${side}`), frame = S.objects.get(`D_grip_axis_${side}`); if (!lever || !frame || !av) return null;
+  scene.updateMatrixWorld();
+  const key = `${S.manifest?.glb?.sha256 ?? ""}:${side}:${profile.length}`;
+  let hit = sectionCache.get(key);
+  if (!hit) {
+    const N = SECTION_BINS, inv = frame.matrixWorld.clone().invert(), tris: THREE.Vector3[] = [];
+    lever.traverse((o: any) => { if (!o.isMesh) return; const P = o.geometry.attributes.position, I = o.geometry.index, n = I ? I.count : P.count, m = inv.clone().multiply(o.matrixWorld);
+      for (let k = 0; k < n; k++) tris.push(new THREE.Vector3().fromBufferAttribute(P, I ? I.getX(k) : k).applyMatrix4(m)); });
+    const rows = profile.map(([t]) => { const r = new Array(N).fill(0);
+      for (let k = 0; k < tris.length; k += 3) for (let e = 0; e < 3; e++) { const A = tris[k + e], B = tris[k + ((e + 1) % 3)], ha = A.z - t, hb = B.z - t; if ((ha > 0) === (hb > 0)) continue;
+        const u = ha / (ha - hb), x = A.x + (B.x - A.x) * u, y = A.y + (B.y - A.y) * u; let th = Math.atan2(y, x); if (th < 0) th += 2 * Math.PI; const i = Math.round((th / (2 * Math.PI)) * N) % N; r[i] = Math.max(r[i], Math.hypot(x, y)); }
+      for (let pass = 0; pass < N && r.some((x) => !x); pass++) { const c = r.slice(); for (let i = 0; i < N; i++) if (!c[i]) r[i] = Math.max(c[(i + N - 1) % N], c[(i + 1) % N]); }
+      return r; });
+    if (rows.every((r) => r.every((x) => !x))) return null;
+    hit = { rows }; sectionCache.set(key, hit);
+  }
+  const x = new THREE.Vector3().setFromMatrixColumn(frame.matrixWorld, 0).normalize().applyQuaternion(av.holder.getWorldQuaternion(new THREE.Quaternion()).invert());
+  return { rows: hit.rows, ref: x.toArray() };
 }
 /** Without a binding: the package's origin on the deck below the rig's live seat reference point. */
 function fallbackPlace() { const p = rigView().point("D_seat_ref_live") ?? [0, 0, 0]; return { origin: [p[0], p[1], 0], yawDeg: 0 }; }
@@ -82,6 +112,7 @@ function firstPerson() {
   if (!av?.ready) return;
   const fp = S.view === "operator" && !S.photo && shown && av.seated && !!av.state("operator").on;
   if (fp !== av.firstPerson) { av.firstPerson = fp; av.applyView(); dirty(); }
+  av.U.personNear.value = fp ? RT.first_person_near : 0;                 // the own face is not drawn from the own eyes (shaders.ts personNear)
   if (S.view === "operator") { if (fp) poseNow(); refollowEye(); }
 }
 /** Pose the person now for its current binding (the operator layer re-targets on the next update after a new binding), so that what
@@ -96,6 +127,7 @@ function beforeRender() {
   if (!av?.ready || !shown) return;
   const now = performance.now(), U = av.U, cam = keyLight.shadow.camera;
   U.personShadowHalf.value = (cam.right - cam.left) / 2; U.personShadowRange.value = cam.far - cam.near;
+  U.personKey.value.copy(keyLight.color).multiplyScalar(keyLight.intensity * LOOK.key_share); U.personLook.value = lookOn ? 1 : 0;   // the person's own key (shaders.ts)
   const dt = live && idleOn ? Math.min((now - (lastUpdate || now)) / 1000, RT.max_dt) : 0;
   lastUpdate = now;
   if (dt === 0 && !changed) { updateMs = 0; return; }              // a still view whose person has not changed: nothing to do, the shadow map stays
@@ -196,7 +228,7 @@ function state() {
   const op = av.state("operator"), ey = av.state("eyes");
   return {
     loaded: av.ready, shown, suppressed, error: loadError, package: av.manifest?.name ?? null, sex: sexOf(av), style: styleKind(av), tone: av.tone, worn: { ...av.worn }, shape: { ...av.shape }, measures: { ...av.measures },
-    still: !(live && idleOn), stillTime: stillAt, seated: av.seated, person: av.person || null, pose: av.mode === "clip" ? { clip: av.clipName, time: av.action?.time ?? null } : op.on ? { script: op.script } : { dofs: true },
+    still: !(live && idleOn), stillTime: stillAt, look: lookOn, seated: av.seated, person: av.person || null, pose: av.mode === "clip" ? { clip: av.clipName, time: av.action?.time ?? null } : op.on ? { script: op.script } : { dofs: true },
     report: op.report ?? null, eyes: ey.report ? { mode: ey.report.mode, blink: ey.report.blink } : null,
     binding: av.binding ? { place: av.binding.place, report: av.binding.report ?? null } : null, placed: placeOverride,
     timing: { load_ms: Math.round(loadMs), bind_ms: +bindMs.toFixed(1), bake_ms: +av.bakeMs.toFixed(1), swap_ms: +av.swapMs.toFixed(1), sink_renders: av.contact.stats.renders },
@@ -271,7 +303,7 @@ function pickAt(x: number, y: number, near = 0) {
   if (!proxies || proxies.key !== frameNo) {                       // skinned once per drawn frame, on demand
     proxies = { key: frameNo, list: av.meshes.filter((m) => m.visible).map((m) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(av!.skinnedPositions(m), 3)); g.setIndex(m.geometry.index); const px = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })); px.name = m.name; return px; }) };
   }
-  ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), currentCamera()); ray.near = near; ray.far = Infinity;
+  ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), currentCamera()); ray.near = Math.max(near, av.U.personNear.value); ray.far = Infinity;   // what is not drawn is not picked
   const hit = ray.intersectObjects(proxies.list.filter((p) => av!.meshes.find((m) => m.name === p.name)?.visible), false)[0];
   return hit ? { distance: hit.distance, point: w2m(hit.point), mesh: hit.object.name } : null;
 }
@@ -300,8 +332,8 @@ async function defaultPackage(): Promise<string | null> {
 export async function initPerson() {
   const q = Q.get("person"), hidden = q === "off", url = q && q !== "off" && q !== "1" ? q : await defaultPackage();
   if (!url) return;                                                  // no person in this release (version.json names none)
-  idleOn = Q.get("person_idle") !== "0"; suppressed = hidden;
-  viewerApi.person = { state, definition, show, set, place, anchor, pickAt, depthAt, shells, object: () => av?.holder ?? null, bench, ready, avatar: () => av, still: (on: boolean) => { live = !on; restart++; dirty(); changedSignal(); return state(); } };
+  idleOn = Q.get("person_idle") !== "0"; lookOn = Q.get("person_look") !== "0"; suppressed = hidden;
+  viewerApi.person = { state, definition, show, set, place, anchor, pickAt, depthAt, shells, look: (on: boolean) => { lookOn = !!on; if (av) av.U.personLook.value = lookOn ? 1 : 0; dirty(); changedSignal(); return state(); }, object: () => av?.holder ?? null, bench, ready, avatar: () => av, still: (on: boolean) => { live = !on; restart++; dirty(); changedSignal(); return state(); } };
   hooks.beforeRender.push(beforeRender);
   hooks.onApply.push((o: Opts) => { live = !(o.ui === "0" || o.ui === false || o.still === "1" || o.still === true); restart++; if (av?.ready) dirty(); });
   if (Q.get("ui") === "0") live = false;

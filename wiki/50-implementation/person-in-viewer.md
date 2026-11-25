@@ -99,7 +99,7 @@ The person's pose update (solver, drivers, contact rows, eyes) is 0.4 ms of a fr
 
 ## Run-time numbers
 
-Every number the person code uses is a record of `assets/manikin/params/runtime-person.toml` (458 records: value, unit, range, class, tier,
+Every number the person code uses is a record of `assets/manikin/params/runtime-person.toml` (471 records: value, unit, range, class, tier,
 evidence), read through `params.ts`; the bundle carries only the values and refuses an incomplete record, and `bun run check` validates every
 `runtime*.toml` (MV-rig's `runtime-rig.toml` too). What stays in the code is arithmetic (halves, unit vectors, epsilons, indices) and the
 eye model's own method constants.
@@ -112,10 +112,11 @@ eye model's own method constants.
 `state().placed` says which, `on: "deck" | "floor"`, with the height used), `anchor(name)` (model frame: the package's anchors and joints,
 `eye_midpoint`, `head_centre`, `body_centre`, `feet`, `hands`, and `hand_centre_L|R`, the middle of the palm, for framing a hand),
 `pickAt(x, y)`, `depthAt(x, y)`, `shells()` (how deep the drawn skin lies inside each pod's inner side, before and after the contact, mm,
-measured on the GPU: the CPU skinning has no contact), `object()`, `still(on)`, `bench(n, { idle })`. Every change raises the window event
+measured on the GPU: the CPU skinning has no contact), `look(on)` (the person's own look in the product's light, below; on by default),
+`object()`, `still(on)`, `bench(n, { idle })`. Every change raises the window event
 `rigtwin:person` with the state. A swap of package (sex, or the clay figure) keeps the tone, what is worn and the pose; another sex takes
 the new package's default body unless a shape comes in the same call. URL: `person=0` (no person code), `person=off` (loaded, not shown), `person=<manifest url>`, `person_style`,
-`person_sex=m|f`, `person_tone`, `person_wear=glasses:none,headset:none`, `person_shape=<preset>`, `person_idle=0`. The render tool and the rig's checks use
+`person_sex=m|f`, `person_tone`, `person_wear=glasses:none,headset:none`, `person_shape=<preset>`, `person_idle=0`, `person_look=0`. The render tool and the rig's checks use
 `person=0`: the rig's documentation pictures stay pictures of the rig.
 
 ## The designer's packet in the product (phase 5)
@@ -173,6 +174,15 @@ the same.
 | Thighs through the pods' inner sides (M50_HEAVY 8.7 mm, M95H 7 mm) | the contact knew the seat and the backrest only; and the seat's roll of displaced tissue pushed thigh 9–21 mm sideways into the pods even for the median man | the pods' inner sides (MV-rig's `contactPlanes` `pod_L/R`, a `slab` profile) are hard shells in the contact: flesh pressed in is brought out as on the seat (quadratic knee, the lip by the seat's mask, the knee out of it, a roll from each shell's own sink map), the seat's roll stops at a shell (a soft minimum of itself and the room left, as at the backrest), and at the end nothing stays inside (see below) | T10j: M50_HEAVY 12.5 → 0.7 mm, M95H 9.5 → 2.5 mm, median man 0 (was 9 mm from the roll) |
 | No `hand_centre` anchor | not ported | `anchor("hand_centre_L|R")`: the operator's palm centre (`[operator.hand] palm_centre`) from the wrist toward the knuckle line | MPK's hand shots |
 | Hand skin 8–11 mm inside the levers | the solver held a 40 mm cylinder | on the real handle (`targets.grip.profile`, `hold`): the palm on the handle's surface at the middle of the hold section, its skin below where the button head widens; each finger's three joints solved together against the profile at their own height; the thumb opened until it clears; the lab's behaviour unchanged without a profile | T10i: at most 1.6 mm (P5 woman, P50 man, P95 man, both hands) |
+
+## Fixes from the designer's REVIEW-11 (2026-11-25)
+
+| Found | Cause | Fix | Check |
+|---|---|---|---|
+| A flat skin-coloured sheet across the men's lap in the operator's own view (P2), widest on M95H; an outline in clay | not the seat's roll (with every contact term off it stayed) and not the groin's skinning: the person's own nose and cheeks, 60–72 mm from the eye, cut by the camera's near plane; the women's smaller noses stay out of the view | in the operator's own view nothing of the person nearer the eyes than `[runtime] first_person_near` (0.15 m) is drawn or picked (`personNear`, per material; the shadow pass is measured from the light, so the head still casts its shadow) | T10l: nearest drawn person surface 651 mm (65 mm with the face drawn); P2 and down-looks at 45° and 54° (the look-around's limit) clean |
+| Medium and dark tones showed the light tone's pale green iris | the eye material kept its iris uniforms from the first build (they hold what the eye module moves each frame) and with them the first tone's colours | the uniforms are kept, their colours set from the tone's `eye_ball.iris` on every build (tone switch, package swap) | T10k: each tone its own iris, through tone switches and a sex swap |
+| The index finger straight into the air past the handle on every person (F5) | the rig's grip profile is the handle's largest radius at each height (35 mm), but its front, where the fingers lie, is 22–26 mm deep: the fingers wrapped a circle 10 mm larger than the handle; and the finger's solve went joint by joint from straight, its path rising into the button head | the handle's measured cross-section (`index.ts gripSection`: radius in 24 directions at each profile height, from the lever's mesh in the grip datum's frame) and the fingers fitted on it once the hand's orientation on the stick is solved; a coarse grid starts each finger's solve; the index may turn up to 20° toward the middle finger; each finger's nearest point is drawn to the surface (`[operator.handle]` section_bins, wrap_grid, tip_share, index_turn, contact_weight) | T10i (against the cross-section): index skin 0–0.9 mm off the handle, no hand skin inside; the middle finger now wraps 128–145° (was 112–125°) |
+| Close head views (1.2 m) flat in the product's light; skin red pushed by the tone curve | the product's key comes from behind the operator; no occlusion on the person | the person's own look, seen by its materials only (`[look]`): a soft key from the camera side and above (az −40°, el 35°, 0.6 of the product key, no shadow) evaluated by each material's own light model; shading in its own creases from a per-vertex cavity baked at load (`cavityOf`); skin colour 10 % less saturated. `look(false)` or `person_look=0` shows the materials as before | the rig's 16 pictures 0 px against `main`; the named shots re-rendered (`full-03`) |
 
 **The pods' inner sides (contact.ts, shaders.ts `labSlab`).** Each `slab` the binding gives (up to four: rows 2 to 5 of the contact
 texture, with a 64 × 64 sink map each) is the shell's face toward the body as a height field along it, resampled to at most 56 even steps:

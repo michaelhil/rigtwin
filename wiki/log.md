@@ -490,3 +490,12 @@ pods' inner sides from the rig binding are hard shells in the contact, and the s
 pushed even the median man's thighs 9 mm into the pods): M50_HEAVY 12.5 → 0.7 mm, M95H 9.5 → 2.5 mm, measured as drawn
 (`viewer.person.shells()`). `anchor("hand_centre_L|R")` added. T10h extended, T10j new; the rig's 16 pictures still differ from
 `main` by 0 px. [The person in the viewer](50-implementation/person-in-viewer.md), [checks](40-method/checks.md).
+
+**16:00** — MV-core, the designer's REVIEW-11 (conditional pass for the owner's preview). The "web across the men's lap" in the
+operator's own view was the person's own nose and cheeks cut by the near plane, not the seat's roll (it stayed with every contact
+term off) and not the groin: the person is no longer drawn within 0.15 m of its own eyes in that view. The iris now follows the
+skin tone (the eye kept its first tone's iris colours). The fingers lie on the handle's measured cross-section: the rig's profile
+is the largest radius at each height, 10 mm more than the handle's front, so the fingers had wrapped air; the index rests on the
+handle within 1 mm. A person-only look: a soft key from the camera side, crease shading baked per vertex, 10 % less skin saturation,
+seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `work/manikin-v1-packets/full-03`.
+[The person in the viewer](50-implementation/person-in-viewer.md#fixes-from-the-designers-review-11-2026-11-25).

@@ -49,7 +49,19 @@ export interface BodyFit {
     hip_above_pan_m?: number; compress_m?: number; pan_drop_m?: number; depth_m?: number; buttock_popliteal_m?: number; heel_back_m?: number;
     hip_above_pan_compression_m?: number; compress_rule_m?: number; cushion_compress_m?: number };
 }
-export interface Stick { pivot: V3; length: number; radius: number; profile?: number[][]; hold?: number[] }   // hold: [from, to] along the axis, the handle section a closed hand wraps (the rig's D_grip_axis_*.hold)   // pivot at the base; grip centre `length` up the stick; profile: [t, radius] pairs, t metres along the stick from the grip centre (up positive), the real handle's radius there (the rig binding's); without it a cylinder of `radius`
+export interface Stick { pivot: V3; length: number; radius: number; profile?: number[][]; hold?: number[]; section?: number[][]; ref?: V3 }   // section: per profile height, the radius by direction round the axis (bins from ref, counter-clockwise about the axis; index.ts gripSection)   // hold: [from, to] along the axis, the handle section a closed hand wraps (the rig's D_grip_axis_*.hold)   // pivot at the base; grip centre `length` up the stick; profile: [t, radius] pairs, t metres along the stick from the grip centre (up positive), the real handle's radius there (the rig binding's); without it a cylinder of `radius`
+/** The handle's radius at height t in the direction d (from the axis, any length) round the axis `axis`, from its measured cross-section
+ *  (`section`, `ref`); without one, radiusAt. The profile is the largest radius at each height, but the handle is narrower at its front,
+ *  where the fingers lie (designer, REVIEW-11: the fingers floated 10 mm above it). */
+export function radiusAround(st: Stick | undefined, t: number, d: V3, axis: V3, fallback: number): number {
+  const S = st?.section, P = st?.profile; if (!st || !S || !P || !st.ref || S.length !== P.length || !S[0]?.length) return radiusAt(st, t, fallback);
+  const e1 = norm(sub(st.ref, mul(axis, dot(st.ref, axis)))), e2 = cross(axis, e1), N = S[0].length;
+  let th = Math.atan2(dot(d, e2), dot(d, e1)); if (th < 0) th += 2 * Math.PI;
+  const f = (th / (2 * Math.PI)) * N, i0 = Math.floor(f) % N, i1 = (i0 + 1) % N, w = f - Math.floor(f), at = (row: number[]) => row[i0] * (1 - w) + row[i1] * w;
+  if (t <= P[0][0]) return at(S[0]);
+  for (let k = 1; k < P.length; k++) if (t <= P[k][0]) { const u = (t - P[k - 1][0]) / (P[k][0] - P[k - 1][0] || 1); return at(S[k - 1]) * (1 - u) + at(S[k]) * u; }
+  return at(S[S.length - 1]);
+}
 /** The grip's radius at t metres along its axis from the grip centre (up positive): the profile's, else the stick's radius, else `fallback`. */
 export function radiusAt(st: Stick | undefined, t: number, fallback: number): number {
   const P = st?.profile; if (!P || P.length < 2) return st?.radius ?? fallback;
@@ -116,7 +128,7 @@ const v3 = (a: number[]): V3 => [a[0], a[1], a[2]];
 
 // ---- the grip-pose library: knuckle / middle / tip flexion in degrees per finger, thumb base / middle / tip, finger spread -------
 const FINGERS = ["index", "middle", "ring", "pinky"] as const;
-export type HandPose = { index: number[]; middle: number[]; ring: number[]; pinky: number[]; thumb: number[]; spread: number };
+export type HandPose = { index: number[]; middle: number[]; ring: number[]; pinky: number[]; thumb: number[]; spread: number; dev?: Partial<Record<"index" | "middle" | "ring" | "pinky", number>> };   // dev: a finger turned toward the little finger at its knuckle (deg; wrapGrip on a real handle)
 /** A record [[index], [middle], [ring], [pinky], [thumb], [spread]] of runtime-person.toml as a hand pose. */
 const pose6 = (r: number[][]): HandPose => ({ index: [...r[0]], middle: [...r[1]], ring: [...r[2]], pinky: [...r[3]], thumb: [...r[4]], spread: r[5][0] });
 export const GRIPS: Record<GripName, HandPose> = {
@@ -211,7 +223,7 @@ export class Operator {
     // each finger segment's capsule radius, measured on the hand mesh, median man's values per unit hand size
     hand.segR = Object.fromEntries(Object.entries(SEG_R).map(([fn, r]) => [fn, r.map((x) => x * hs)]));
     // the library as joint rotations: RR's poses where the manifest has them (opposed thumb, rest-curl offsets), the built-in angles otherwise
-    const fromAngles = (p: HandPose): PoseQ => { const o: PoseQ = {}; for (const fn of [...FINGERS, "thumb"] as const) for (let k = 1; k <= 3; k++) { let e = qaxis(axes[`${fn}_0${k}`], p[fn][k - 1]); if (k === 1 && fn !== "thumb") e = qmul(qaxis(n, (FINGERS.indexOf(fn as any) - 1.5) * p.spread * (s === "l" ? -1 : 1)), e); o[`${fn}_0${k}`] = e; } return o; };
+    const fromAngles = (p: HandPose): PoseQ => { const o: PoseQ = {}; for (const fn of [...FINGERS, "thumb"] as const) for (let k = 1; k <= 3; k++) { let e = qaxis(axes[`${fn}_0${k}`], p[fn][k - 1]); if (k === 1 && fn !== "thumb") e = qmul(qaxis(n, ((FINGERS.indexOf(fn as any) - 1.5) * p.spread + (p.dev?.[fn as "index"] ?? 0)) * (s === "l" ? -1 : 1)), e); o[`${fn}_0${k}`] = e; } return o; };
     for (const k of Object.keys(GRIPS) as GripName[]) hand.lib[k] = ADOPTED[k]?.[s] ?? fromAngles(k === "power" ? hand.power : GRIPS[k]);
     if (ADOPTED.power) { const wrapped = fromAngles(hand.power), rr = ADOPTED.power[s]; hand.lib.power = { ...rr, ...Object.fromEntries(Object.entries(wrapped).filter(([j]) => !j.startsWith("thumb"))) }; for (const fn of FINGERS) if (hand.power[fn] === GRIPS.power[fn]) for (let k = 1; k <= 3; k++) if (rr[`${fn}_0${k}`]) hand.lib.power[`${fn}_0${k}`] = rr[`${fn}_0${k}`]; }
     // the thumb of the power grip: RR's opposed pose, opened about the stick's own direction until it clears the cylinder by the
@@ -250,22 +262,37 @@ export class Operator {
     const pad: Record<string, number> = { index: WRAP.finger_pad[0], middle: WRAP.finger_pad[1], ring: WRAP.finger_pad[2], pinky: WRAP.finger_pad[3] };   // joint centre to finger pad, measured on the skinned hand
     const distAxis = (p: V3) => { const d = sub(p, c); return len(sub(d, mul(a, dot(d, a)))); };
     const lim: number[][] = WRAP.limits;
+    // the handle's real cross-section where the finger lies, once the hand has been solved on it (its rotation maps the rest hand onto the stick)
+    const Dh = stick?.section && this.gripNow[s] ? this.D[this.j(`hand_${s}`)] : null, axW = this.gripNow[s]?.axis;
+    const Rat = (p: V3, t: number) => (Dh && axW ? radiusAround(stick, t, qrot(Dh, sub(p, c)), axW, this.gripRadius) : radiusAt(stick, t, this.gripRadius));
     if (stick?.profile) {
       // On a real handle (MV-core): each finger's three joints solved together so that every joint centre beyond the knuckle and the tip
       // lie on the handle's surface at their own height plus the finger's pad (this person's phalanx lengths and pad radii), never
       // inside it; a joint stops at its limits, and what cannot reach the handle is left short (the wrap report says so).
       for (const fn of FINGERS) {
         const chain = [1, 2, 3].map((k) => this.r0(`${fn}_0${k}_${s}`)).concat([tipOf(fn)]), pd = pad[fn] * hs;
-        const place = (A: number[]) => { let pts = chain.map((p) => [...p] as V3); for (let k = 0; k < 3; k++) { const q = qaxis(hand.axes[`${fn}_0${k + 1}`], A[k]); pts = pts.map((p, i) => (i <= k ? p : add(pts[k], qrot(q, sub(p, pts[k]))))); } return pts; };
-        const cost = (A: number[]) => { const pts = place(A); let e = 0; for (let i = 1; i < pts.length; i++) { const R = radiusAt(stick, -dot(sub(pts[i], c), a), this.gripRadius) + pd - (i === 3 ? WRAP.tip_clear : 0), d = distAxis(pts[i]) - R; e += d < 0 ? -d * HDL.inside_weight : d; } return e; };
-        const A = [lim[0][0], lim[1][0], lim[2][0]];
+        // A = knuckle, middle and tip flexion, then (A[3]) the finger turned toward the little finger about the palm's normal at its knuckle,
+        // as fromAngles composes it: flexed first, then turned
+        const place = (A: number[]) => { let pts = chain.map((p) => [...p] as V3); for (let k = 0; k < 3; k++) { const q = qaxis(hand.axes[`${fn}_0${k + 1}`], A[k]); pts = pts.map((p, i) => (i <= k ? p : add(pts[k], qrot(q, sub(p, pts[k]))))); }
+          if (A[3]) { const q = qaxis(hand.n, A[3] * (s === "l" ? -1 : 1)); pts = pts.map((p, i) => (i === 0 ? p : add(pts[0], qrot(q, sub(p, pts[0]))))); } return pts; };
+        // every point on the surface, never inside; and the nearest one touching (a finger that rests on the handle: REVIEW-11)
+        const cost = (A: number[]) => { const pts = place(A); let e = 0, near = Infinity; for (let i = 1; i < pts.length; i++) { const R = Rat(pts[i], -dot(sub(pts[i], c), a)) + pd - (i === 3 ? WRAP.tip_clear : 0), d = distAxis(pts[i]) - R; e += d < 0 ? -d * HDL.inside_weight : d; near = Math.min(near, d); } return e + HDL.contact_weight * Math.max(near, 0); };
+        // first a coarse search over the knuckle and the middle joint, the tip joint following at its share of the middle one, so that
+        // a finger whose straight start lies by the button head is not held there by the joint-by-joint search (REVIEW-11: the index
+        // pointed into the air past the handle on every person); then that search from the best of the grid
+        // the index may also turn toward the middle finger (its path otherwise rises into the button head: it lay straight beside it)
+        const dv = fn === "index" ? HDL.index_turn : [0, 0];
+        let A = [lim[0][0], lim[1][0], lim[2][0], 0], be0 = cost(A);
+        for (let d = dv[0]; d <= dv[1] + 1e-9; d += HDL.wrap_grid) for (let x = lim[0][0]; x <= lim[0][1] + 1e-9; x += HDL.wrap_grid) for (let y = lim[1][0]; y <= lim[1][1] + 1e-9; y += HDL.wrap_grid) {
+          const B = [x, y, Math.min(lim[2][1], Math.max(lim[2][0], y * HDL.tip_share)), d], e = cost(B); if (e < be0) { be0 = e; A = B; } }
         for (let pass = 0; pass < HDL.wrap_passes; pass++) for (let k = 0; k < 3; k++) {
           let best = A[k], be = Infinity;
           for (let x = lim[k][0]; x <= lim[k][1] + 1e-9; x += HDL.wrap_step[0]) { A[k] = x; const e = cost(A); if (e < be) { be = e; best = x; } }
           for (let x = best - HDL.wrap_step[0]; x <= best + HDL.wrap_step[0] + 1e-9; x += HDL.wrap_step[1]) { A[k] = Math.min(lim[k][1], Math.max(lim[k][0], x)); const e = cost(A); if (e < be) { be = e; best = A[k]; } }
           A[k] = best;
         }
-        out[fn] = A.map((x) => Math.round(x / WRAP.round) * WRAP.round);
+        out[fn] = A.slice(0, 3).map((x) => Math.round(x / WRAP.round) * WRAP.round);
+        if (A[3]) (out.dev ??= {})[fn] = A[3];
       }
     } else for (const fn of FINGERS) {
       const chain = [1, 2, 3].map((k) => this.r0(`${fn}_0${k}_${s}`)).concat([tipOf(fn)]), ang = [0, 0, 0]; let pts = chain.map((p) => [...p] as V3), ok = true;
@@ -564,7 +591,21 @@ export class Operator {
   }
   /** The hands fitted to the targets' grips (their radius and the real handle's profile): the wrap and the grip point. Without a
    *  profile or a radius of their own the grips are the lab's 40 mm cylinder and nothing changes. */
-  fitGrips(tips?: Record<string, number[]>) { for (const s of ["l", "r"] as const) { const g = this.targets?.grip?.[s]; if (g?.profile || (g && g.radius !== this.gripRadius)) this.hands[s] = this.buildHand(s, tips, g); } }
+  /** The hands fitted to the grips of the targets; true when a hand was fitted anew. Fitted again only when the grip's place or shape
+   *  changed (or `again`: once more on the measured cross-section, the hand's orientation on it now solved): a rebinding for a joint
+   *  elsewhere in the rig (the monitor panned) costs nothing here (a fit takes about 15 ms). */
+  private gripSig: Record<string, string> = {};
+  fitGrips(tips?: Record<string, number[]>, again = false): boolean {
+    let fitted = false;
+    for (const s of ["l", "r"] as const) {
+      const g = this.targets?.grip?.[s]; if (!(g?.profile || (g && g.radius !== this.gripRadius))) continue;
+      const f = (v: number[] | undefined, k = 4) => (v ?? []).map((x) => x.toFixed(k)).join(",");
+      const sig = [f(g.pivot), g.length.toFixed(4), g.radius, g.profile?.length ?? 0, f(g.hold), g.section ? f(g.ref, 3) + ":" + g.section.length : "", tips ? JSON.stringify(tips) : ""].join("|");
+      if (!again && this.gripSig[s] === sig && this.hands[s]) continue;
+      this.gripSig[s] = sig; this.hands[s] = this.buildHand(s, tips, g); fitted = true;
+    }
+    return fitted;
+  }
   /** Run state back to the start (a new rig, a new body, a still): what defaultTargets resets, in one place. */
   resetRun() { this.time = 0; this.head = [0, 0]; this.headV = [0, 0]; this.leanNow = 0; this.swivel = { l: 0, r: 0 }; this.shift = { l: 0, r: 0 }; this.elbowPrev = { l: null, r: null }; this.foreBase = { l: 0, r: 0 }; }
 }

@@ -771,25 +771,56 @@ await test("T10j", "seated thighs press against the pods' inner sides instead of
   await close(s);
   record("T10j", "person: the pods' inner sides hold the thighs", worst <= 3 && pressed, rows.join("; ") || "no skin inside a pod before or after", "the drawn skin at most 3 mm inside a pod's face (MPK full-01: M50_HEAVY 8.7 mm, M95H 7 mm; the seat's roll of displaced tissue also put the median man's thighs 9 mm into them)");
 });
+await test("T10k", "each skin tone shows its own iris, after a tone switch and after a package swap", async () => {
+  const s = await open(1200, 900, "?ui=0"); await s.ev(PERSON_SETTLED);
+  const IRIS = "(() => { const av = viewer.person.avatar(), t = av.manifest.tones.list.find((x) => x.id === viewer.person.state().tone), want = t?.materials?.eye_ball?.iris?.outer; let got = null; for (const me of av.meshes) { const u = me.material?.userData?.labEye; if (u?.labIrisA) { got = u.labIrisA.value.toArray(); break; } } return { tone: t?.id, want, got, ok: !!want && !!got && want.every((x, i) => Math.abs(x - got[i]) < 1e-4) }; })()";
+  const rows: string[] = []; let ok = true;
+  for (const step of ["{ tone: 'medium' }", "{ tone: 'dark' }", "{ tone: 'light' }", "{ tone: 'dark' }", "{ sex: 'female' }", "{ sex: 'male' }", "{ tone: 'medium' }"]) {
+    await s.ev(`viewer.person.set(${step}).then(() => true)`); await s.ev("viewer.frame()");
+    const r = await s.ev<any>(IRIS); ok &&= r.ok; rows.push(`${step.replace(/[{} ']/g, "")}: ${r.tone} ${r.ok ? "its iris" : `iris ${JSON.stringify(r.got)} (wants ${JSON.stringify(r.want)})`}`);
+  }
+  await close(s);
+  record("T10k", "person: the iris follows the skin tone", ok, rows.join("; "), "every step shows the tone's own iris (designer, REVIEW-11: medium and dark showed the light tone's pale green)");
+});
+await test("T10l", "in the operator's own view the person's own face is not drawn", async () => {
+  const s = await open(1600, 1000, "?ui=0"); await s.ev(PERSON_SETTLED);
+  await s.ev("viewer.person.set({ shape: 'M95H', pose: null, script: 'hold', time: null }).then(() => true)"); await s.ev("viewer.apply({ ui: '0', view: 'operator' }).then(() => true)"); await s.ev("viewer.frame()");
+  // the nearest drawn surface of the person over the lower half of the view (the person's own depth pass, as drawn)
+  const NEAR = "(() => { let m = Infinity; for (let y = 520; y < 1000; y += 20) for (let x = 200; x < 1400; x += 40) { const d = viewer.person.depthAt(x, y); if (d && d < m) m = d; } return m; })()";
+  const on = await s.ev<number>(NEAR), clip = await s.ev<number>("viewer.person.avatar().U.personNear.value");
+  await s.ev("viewer.person.avatar().U.personNear.value = 0"); const off = await s.ev<number>(NEAR); await s.ev(`viewer.person.avatar().U.personNear.value = ${clip}`);
+  await close(s);
+  record("T10l", "person: the operator's own face is not in the operator's view", clip > 0 && on >= clip - 1e-3 && off < clip, `M95H, operator's view: nearest drawn person surface in the lower half ${(on * 1000).toFixed(0)} mm from the eyes (${(off * 1000).toFixed(0)} mm with the own face drawn; clip ${(clip * 1000).toFixed(0)} mm)`, "nothing of the person nearer the eyes than [runtime] first_person_near (designer, REVIEW-11: the own nose and cheeks lay across the lap as a flat skin-coloured web)");
+});
 await test("T10i", "the seated hands hold the real levers without sinking into them", async () => {
   const s = await open(1200, 900, "?ui=0"); await s.ev(PERSON_SETTLED);
-  const BODIES: [string, string, string][] = [["P5 woman", "f", "Small woman (stature P5)"], ["P50 man", "m", "Median man"], ["P95 man", "m", "Tall man (stature P95)"]], rows: string[] = []; let worstAll = -1, profAll = true;
+  const BODIES: [string, string, string][] = [["P5 woman", "f", "Small woman (stature P5)"], ["P50 man", "m", "Median man"], ["P95 man", "m", "Tall man (stature P95)"]], rows: string[] = []; let worstAll = -1, profAll = true, gapAll = -Infinity, r0sec = false;
   for (const [label, sex, shape] of BODIES) {
   await s.ev(`viewer.person.set({ sex: '${sex}', shape: ${JSON.stringify(shape)} })`); await s.ev("viewer.frame()");
   const r = await s.ev<any>(`(() => { const av = viewer.person.avatar(), T = av.state('operator')._op.targets, body = av.meshes.find((m) => m.name === 'body'), P = av.skinnedPositions(body), out = {};
     for (const k of ['l', 'r']) { const st = T.grip[k], hb = av.bones.get('hand_' + k).matrixWorld.elements, g = av.state('operator')._op.gripNow[k], ax = g.axis, c = g.centre;
-      const inv = new av.root.matrixWorld.constructor().copy(av.root.matrixWorld).invert().elements; let worst = -1, n = 0;
-      for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2]; if (Math.hypot(x - hb[12], y - hb[13], z - hb[14]) > 0.13) continue;
+      const inv = new av.root.matrixWorld.constructor().copy(av.root.matrixWorld).invert().elements; let worst = -1, n = 0, idxGap = Infinity;
+      const A = body.geometry.attributes, names = body.skeleton.bones.map((b) => b.name), onIndex = (v) => { let w = 0; for (const [ji, wi] of [[A.skinIndex, A.skinWeight], [A.skinIndex1, A.skinWeight1]]) if (ji && wi) for (let c4 = 0; c4 < 4; c4++) if (/^index_0[23]_/.test(names[ji.getComponent(v, c4)])) w += wi.getComponent(v, c4); return w >= 0.5; };
+      for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2], far = Math.hypot(x - hb[12], y - hb[13], z - hb[14]); if (far > 0.24 || (far > 0.13 && !onIndex(i / 3))) continue;
         const lx = inv[0] * x + inv[4] * y + inv[8] * z + inv[12], ly = inv[1] * x + inv[5] * y + inv[9] * z + inv[13], lz = inv[2] * x + inv[6] * y + inv[10] * z + inv[14];
-        const rx = lx - c[0], ry = ly - c[1], rz = lz - c[2], t = rx * ax[0] + ry * ax[1] + rz * ax[2]; if (Math.abs(t) > 0.06) continue; const prof = st.profile, R = prof ? (() => { if (t <= prof[0][0]) return prof[0][1]; for (let j = 1; j < prof.length; j++) if (t <= prof[j][0]) return Math.min(prof[j - 1][1], prof[j][1]); return prof[prof.length - 1][1]; })() : st.radius;   /* the smaller of the two samples around t: a step in the handle (the bellows' top) is not read as a cone */
-        const d = Math.hypot(rx - t * ax[0], ry - t * ax[1], rz - t * ax[2]); worst = Math.max(worst, R - d); n++; }
-      out[k] = { worst_mm: +(worst * 1000).toFixed(1), n, profile: !!st.profile }; }
+        const rx = lx - c[0], ry = ly - c[1], rz = lz - c[2], t = rx * ax[0] + ry * ax[1] + rz * ax[2]; if (Math.abs(t) > 0.06) continue; const prof = st.profile;
+        const qx = rx - t * ax[0], qy = ry - t * ax[1], qz = rz - t * ax[2], d = Math.hypot(qx, qy, qz);
+        /* the handle's radius in this direction: its measured cross-section (st.section, from st.ref), else the profile; "low" takes the smaller of the two heights around t (a step in the handle, the bellows' top, is not read as a cone) */
+        const Rh = (low) => { if (!prof) return st.radius; let w = null; if (st.section && st.ref) { const rf = st.ref, k = rf[0] * ax[0] + rf[1] * ax[1] + rf[2] * ax[2], e1 = [rf[0] - k * ax[0], rf[1] - k * ax[1], rf[2] - k * ax[2]], l1 = Math.hypot(...e1); e1[0] /= l1; e1[1] /= l1; e1[2] /= l1;
+            const e2 = [ax[1] * e1[2] - ax[2] * e1[1], ax[2] * e1[0] - ax[0] * e1[2], ax[0] * e1[1] - ax[1] * e1[0]]; let th = Math.atan2(qx * e2[0] + qy * e2[1] + qz * e2[2], qx * e1[0] + qy * e1[1] + qz * e1[2]); if (th < 0) th += 2 * Math.PI;
+            const N = st.section[0].length, f = th / (2 * Math.PI) * N, i0 = Math.floor(f) % N, i1 = (i0 + 1) % N, u = f - Math.floor(f); w = st.section.map((row) => row[i0] * (1 - u) + row[i1] * u); }
+          const rad = (j) => (w ? w[j] : prof[j][1]); if (t <= prof[0][0]) return rad(0);
+          for (let j = 1; j < prof.length; j++) if (t <= prof[j][0]) return low ? Math.min(rad(j - 1), rad(j)) : rad(j - 1) + (rad(j) - rad(j - 1)) * (t - prof[j - 1][0]) / (prof[j][0] - prof[j - 1][0] || 1);
+          return rad(prof.length - 1); };
+        worst = Math.max(worst, Rh(true) - d); n++;
+        if (prof && onIndex(i / 3)) idxGap = Math.min(idxGap, d - Rh(false)); }
+      out[k] = { worst_mm: +(worst * 1000).toFixed(1), n, profile: !!st.profile, section: !!st.section, index_gap_mm: +(idxGap * 1000).toFixed(1) }; }
     return out; })()`);
   const grip = await s.ev<any>("viewer.person.state().report?.grip");
-  worstAll = Math.max(worstAll, r.l.worst_mm, r.r.worst_mm); profAll &&= r.l.profile && r.r.profile; rows.push(`${label}: left ${r.l.worst_mm} mm, right ${r.r.worst_mm} mm; held hand: middle finger wraps ${grip?.r?.middle_wrap_deg ?? '?'}° round a handle of ${grip?.r?.circumference_mm ?? '?'} mm circumference, middle fingertip ${grip?.r?.fingertip_to_thumb_mm ?? '?'} mm from the thumb tip; hand breadth ${grip?.hand_breadth_mm ?? '?'} mm, length ${grip?.hand_length_mm ?? '?'} mm`);
+  worstAll = Math.max(worstAll, r.l.worst_mm, r.r.worst_mm); profAll &&= r.l.profile && r.r.profile; r0sec = r.l.section && r.r.section; gapAll = Math.max(gapAll, r.l.index_gap_mm, r.r.index_gap_mm); rows.push(`${label}: left ${r.l.worst_mm} mm, right ${r.r.worst_mm} mm; index finger ${r.l.index_gap_mm} / ${r.r.index_gap_mm} mm off the handle; held hand: middle finger wraps ${grip?.r?.middle_wrap_deg ?? '?'}° round a handle of ${grip?.r?.circumference_mm ?? '?'} mm circumference, middle fingertip ${grip?.r?.fingertip_to_thumb_mm ?? '?'} mm from the thumb tip; hand breadth ${grip?.hand_breadth_mm ?? '?'} mm, length ${grip?.hand_length_mm ?? '?'} mm`);
   }
   await close(s);
-  record("T10i", "person: hand skin into the levers (against the handles' radius profile)", profAll && worstAll <= 3, `deepest hand skin inside the handle: ${rows.join("; ")} (${profAll ? "the real handles' radius profile" : "no profile from the rig binding yet: a cylinder of the handle's reference radius"})`, "≤ 3 mm against the real handles' profile (MPK: 8–11 mm into the lever where it flares below the palm); needs targets.grip.profile from the rig binding");
+  record("T10i", "person: hand skin into the levers (against the handles' radius profile), the index resting on them", profAll && worstAll <= 3 && gapAll <= 3, `deepest hand skin inside the handle: ${rows.join("; ")} (${profAll ? (r0sec ? "the real handles' measured cross-section" : "the real handles' radius profile") : "no profile from the rig binding yet: a cylinder of the handle's reference radius"})`, "≤ 3 mm against the real handles' profile (MPK: 8–11 mm into the lever where it flares below the palm); needs targets.grip.profile from the rig binding; the index finger's skin within 3 mm of the handle (designer, REVIEW-11: it pointed into the air past the handle)");
 });
 await test("T44b", "the person idles only in a live view, at a capped rate", async () => {
   const s = await open(1440, 900); await s.ev("viewer.person.ready"); await s.settle(800);

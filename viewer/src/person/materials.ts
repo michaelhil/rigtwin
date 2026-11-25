@@ -101,7 +101,7 @@ export function bodyMasked(base: THREE.Material, mask: { value: THREE.Texture },
   m.customProgramCacheKey = () => "lab-bodymask-" + base.type;
   return personShader(m, U, "-bodymask");
 }
-const SKIN_DEFINES = glslDefines({ blend: SK.blend_normals, back_normal: SK.back_scatter_normal, back_power: SK.back_scatter_power }, "K_SKIN_");
+const SKIN_DEFINES = glslDefines({ blend: SK.blend_normals, back_normal: SK.back_scatter_normal, back_power: SK.back_scatter_power, desaturate: section("look").skin_desaturate }, "K_SKIN_");
 /** Skin: Lambert replaced by a wrapped, colour-shifted diffuse (red light bleeds furthest past the terminator), computed on a
  *  softer normal for red and green than for blue (the "blended normals" trick), a little back-scatter, a broad base specular
  *  plus a sharp thin coat (the oily layer), sheen as peach fuzz. */
@@ -135,9 +135,11 @@ export function skin(src: any, opts: any, load: Loader): THREE.MeshPhysicalMater
     if (pars === THREE.ShaderChunk.lights_physical_pars_fragment) throw new Error("skin shader patch did not apply (three.js chunk changed)");
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <lights_physical_pars_fragment>", SKIN_DEFINES + "uniform vec3 labScatter; uniform float labSkinStrength; uniform float labBackScatter; vec3 labSmoothNormal;\n" + pars)
-      .replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\n\tlabSmoothNormal = nonPerturbedNormal;");
+      .replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\n\tlabSmoothNormal = nonPerturbedNormal;")
+      // less saturation in the skin's colour under the product's tone curve, which pushed its red (designer, REVIEW-11; personLook: shaders.ts)
+      .replace("#include <map_fragment>", "#include <map_fragment>\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), K_SKIN_DESATURATE * personLook );");
   };
-  m.customProgramCacheKey = () => "lab-skin-sss" + (mask ? "-mask" : "");
+  m.customProgramCacheKey = () => "lab-skin-sss-look" + (mask ? "-mask" : "");
   return m;
 }
 /** Eye. B5's eyeball (pipeline/eyes.py marks its eye materials with glTF extras): the shell or the wet line. Without the marker a
@@ -162,9 +164,9 @@ export function eyeShell(src: any, key: string, x: any, opts: any = {}): THREE.M
   const shell = x.kind === "shell";
   const m = new THREE.MeshPhysicalMaterial({ name: src.name, color: 0xffffff, roughness: EY.roughness, metalness: 0, ior: EY.ior, specularIntensity: EY.specular, clearcoat: shell ? EY.clearcoat[0] : EY.clearcoat[1], clearcoatRoughness: EY.clearcoat_roughness });
   const iris = opts.iris ?? { outer: EY.iris_outer, inner: EY.iris_inner }, ls = EY.lid_shadow, ct = EY.catch_light, cs = EY.catch_size, s0 = EY.shell;
-  const old: any = eyeUniforms[key] ?? {};
+  const old: any = eyeUniforms[key] ?? {}, keep = (o: any, rgb: number[]) => (o ? (o.value.fromArray(rgb), o) : { value: new THREE.Color().fromArray(rgb) });
   const u: any = eyeUniforms[key] = { centre: old.centre ?? { value: new THREE.Vector3() }, fwd: old.fwd ?? { value: new THREE.Vector3(0, 0, 1) }, radius: old.radius ?? { value: 0 },
-    labEyeMap: { value: src.map ?? null }, labIrisA: old.labIrisA ?? { value: new THREE.Color().fromArray(iris.outer) }, labIrisB: old.labIrisB ?? { value: new THREE.Color().fromArray(iris.inner) },
+    labEyeMap: { value: src.map ?? null }, labIrisA: keep(old.labIrisA, iris.outer), labIrisB: keep(old.labIrisB, iris.inner),     // the uniform kept, its colour this material's (the tone's iris: REVIEW-11)
     labPupil: old.labPupil ?? { value: opts.pupil ?? EY.pupil }, labSclera: { value: new THREE.Color().fromArray(opts.sclera ?? EY.sclera) },
     labLid: old.labLid ?? { value: [new THREE.Vector4(), new THREE.Vector4()] },      // upper, lower lid plane (normal, offset), eye-local, units of the radius: set by eyes.ts every frame
     labLidK: { value: new THREE.Vector4(opts.lidShadow ?? ls[0], ls[1], opts.lidShadowLower ?? ls[2], ls[3]) },
