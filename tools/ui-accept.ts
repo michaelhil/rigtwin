@@ -711,6 +711,9 @@ await test("T58", "overlapping pop-outs follow focus order", async () => {
   await s.click(...await s.find("S_mon_screen"), "monitor");
   await s.click(...await s.find("C_seat_back_shell", 3), "seat with Shift", 1, 8);
   await s.click(...await s.find("S_ts_screen", 3), "touchscreen with Shift", 1, 8);
+  await s.ev("document.querySelector('#card h2').focus()");
+  await s.clickEl("document.querySelector('#controls-touchscreen h2')", "Touchscreen heading");
+  const headingFocused = await s.ev<boolean>("document.activeElement === document.querySelector('#controls-touchscreen h2')");
   await s.clickEl("document.querySelector('#card .dock-toggle')", "Pop out the monitor controls");
   const front = () => s.ev<string | null>("(() => { const layer = document.getElementById('floating-panels').getBoundingClientRect(); return document.elementFromPoint(layer.x + 395, layer.y + 55)?.closest('.component-card')?.querySelector('h2')?.textContent ?? null; })()");
   await s.ev(`document.querySelectorAll('#floating-panels .component-card').forEach(card => {
@@ -723,8 +726,8 @@ await test("T58", "overlapping pop-outs follow focus order", async () => {
   await s.press("Escape");
   const next = await front();
   record("T58", "overlapping cards retain their order after Escape closes the front card",
-    seatFront === "Seat" && touchFront === "Touchscreen" && next === "Seat" && (await s.state()).selected === "C_stand_monitor",
-    `front after focusing Seat: ${seatFront}; after focusing Touchscreen: ${touchFront}; after Escape: ${next}`);
+    headingFocused && seatFront === "Seat" && touchFront === "Touchscreen" && next === "Seat" && (await s.state()).selected === "C_stand_monitor",
+    `heading click moves focus: ${headingFocused}; front after focusing Seat: ${seatFront}; after focusing Touchscreen: ${touchFront}; after Escape: ${next}`);
   await close(s);
 });
 await test("T56", "keyboard opens Components and reaches an adjustment", async () => {

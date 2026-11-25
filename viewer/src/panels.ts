@@ -87,7 +87,9 @@ function wireCard(panel: HTMLElement) {
     if (!floating.has(panel) || !event.isPrimary || event.button !== 0) return;
     bringForward(panel);
     const target = event.target as Element;
-    if (!target.closest('header') || target.closest('button')) return;
+    const heading = target.closest('header');
+    if (!heading || target.closest('button')) return;
+    heading.querySelector('h2')?.focus({ preventScroll: true });
     const { clientX: x, clientY: y, pointerId } = event;
     const left = panel.offsetLeft, top = panel.offsetTop;
     panel.setPointerCapture(pointerId);
