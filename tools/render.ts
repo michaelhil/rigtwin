@@ -1,4 +1,4 @@
-// bun run render [--set ortho|sheet|ids|groups|matched|focus|ui|selftest|wiki|all] [--only <group or id>[,…]] [--out <dir>]
+// bun run render [--set ortho|sheet|ids|groups|matched|focus|ui|landing|selftest|wiki|all] [--only <group or id>[,…]] [--out <dir>]
 //                [--build <name>] [--pose J_x:val,...] [--cam <name>] [--fit <group or id>[,…]] [--mode ids|class] [--viewer <dir>]
 //                [--photos <dir>]
 // Drives the real viewer page in headless Chromium (same renderer the user sees) and writes PNGs.
@@ -138,7 +138,9 @@ export async function openViewer(opts: { buildFolder?: string; photos?: string; 
   const server = await startServer({ port: 0, buildFolder: opts.buildFolder, photos: opts.photos, requests: opts.requests, data: "temp" });
   const origin = `http://127.0.0.1:${server.port}`;
   const browser = await Browser.launch();
-  const page = await browser.page(`${origin}/?ui=0${opts.person ? "" : "&person=0"}`);
+  // the page of a workspace: the Playground the server made (its real id from the list, not the local alias)
+  const playground = (await (await fetch(`${origin}/api/workspaces?limit=1`)).json()).workspaces?.[0]?.id;
+  const page = await browser.page(`${origin}/workspaces/${playground}?ui=0${opts.person ? "" : "&person=0"}`);
   await page.viewport(1200, 900);
   await page.waitFor("window.viewerReady || window.viewerError", "the viewer to load");
   const err = await page.evaluate("window.viewerError || null");
@@ -351,12 +353,30 @@ if (import.meta.main) {
       } else if (set === "ui") {
         // the page as a person sees it, panels included
         for (const [name, o] of [["default", {}], ["by_component", { mode: "ids" }], ["by_data_source", { mode: "class" }]] as [string, Record<string, unknown>][]) { const f = join(out, `${name}.png`); await v.shot({ ...common, ...o, ui: "1" }, f, 1600, 1000); files.push(f); }
+      } else if (set === "landing") {
+        // the landing's picture (viewer/landing-rig.webp): the rig with the default person seated, from the real viewer, nothing written
+        // in it, at most 60 kB. The camera is the named view below unless --view or --camera says otherwise.
+        const lv = await openViewer({ buildFolder, person: true });
+        try {
+          const file = join(ROOT, "viewer", "landing-rig.webp"), W = 960, H = 720, look = opt("--camera") ? { camera: opt("--camera") } : { view: opt("--view") ?? "three_quarter" };
+          await lv.page.viewport(W, H);
+          await lv.page.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", ...look })})`);
+          const seated = await lv.page.evaluate("viewer.person.state()");
+          if (!seated?.shown) throw new Error("the person is not shown");
+          await sleep(900);
+          let bytes = 0;
+          for (let q = 90; q >= 40; q -= 5) {
+            const buf = Buffer.from((await lv.page.call("Page.captureScreenshot", { format: "webp", quality: q })).data, "base64");
+            if (buf.length <= 60_000 || q === 40) { writeFileSync(file, buf); bytes = buf.length; break; }
+          }
+          files.push(file); console.log(`landing: ${W} × ${H} WebP, ${bytes} bytes`);
+        } finally { await lv.close(); }
       } else if (set === "selftest") {
         const r = await v.page.evaluate("viewer.selfTest()");
         console.log(`selftest: ${r.pass ? "PASS" : "FAIL"}: ${r.checked} points over ${r.cameras.length} camera(s), worst error ${Number(r.worst_px).toFixed(3)} px (tolerance ${r.tolerance_px} px)`);
         mkdirSync(out, { recursive: true }); writeFileSync(join(out, "selftest.json"), JSON.stringify(r, null, 1));
         if (!r.pass) failed = true;
-      } else { console.error(`unknown set '${set}' (ortho, sheet, ids, groups, matched, focus, ui, selftest, wiki, all)`); failed = true; continue; }
+      } else { console.error(`unknown set '${set}' (ortho, sheet, ids, groups, matched, focus, ui, landing, selftest, wiki, all)`); failed = true; continue; }
       const sec = (performance.now() - t0) / 1000, kept = Page.kept; Page.kept = 0;
       const folders = [...new Set(files.map((f) => relative(ROOT, join(f, ".."))))];
       console.log(`${set}: ${files.length} image(s) in ${sec.toFixed(2)} s${files.length ? " → " + (files.length > 1 ? folders.map((d) => `${d}/ (${files.filter((f) => relative(ROOT, join(f, "..")) === d).length})`).join(", ") : relative(ROOT, files[0])) : ""}${kept ? `; ${kept} showed the same picture as before and were left untouched` : ""}`);

@@ -22,7 +22,7 @@ const run = async (name: string, url: string) => {
   console.log(`\n== ${name}: ${url} (exit ${code})\n${out}${err}`);
   return code;
 };
-// one after the other: both change the same joint of the one scene
+// one after the other: both change the same joint of the one scene (the Playground, which live-idle-test finds by name)
 const codes = [await run("direct", `http://127.0.0.1:${port}`), await run("through the Caddy-like proxy", proxy.origin)];
 proxy.server.stop(true); srv.kill(); rmSync(data, { recursive: true, force: true });
 console.log(`idle-local: ${codes.every((c) => c === 0) ? "both ok" : "FAILED"}`);

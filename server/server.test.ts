@@ -11,6 +11,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync, type Subprocess } from "bun";
 import { createApi, visitorKey, type ApiOptions } from "./server.ts";
+import { createWorkspace } from "./workspaces.ts";
+import { viaPlayground } from "./test-support.ts";
 import { call } from "../tools/rig.ts";
 
 const ROOT = join(import.meta.dir, "..");
@@ -19,10 +21,13 @@ const temps: string[] = [];
 const tempDir = () => { const d = mkdtempSync(join(tmpdir(), "synergon-server-test-")); temps.push(d); return d; };
 afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true }); });
 
+/** The folder of the only workspace of a data folder (the Playground a server made at its first start). */
+const playgroundDir = (dataDir: string) => join(dataDir, "workspaces", readdirSync(join(dataDir, "workspaces"))[0]);
+
 /** An in-process server on a free port. */
 function start(o: Partial<ApiOptions> = {}) {
   const api = createApi({ dataDir: o.dataDir ?? tempDir(), assetDir: ASSET, mode: "local", revision: "test", ...o });
-  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
+  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await viaPlayground(api, req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
   const base = `http://127.0.0.1:${srv.port}`;
   return { base, api, stop: () => { api.close(); srv.stop(true); } };
 }
@@ -44,7 +49,7 @@ class Live {
     if (o.xff) headers["x-forwarded-for"] = o.xff;
     try {
       const q = new URLSearchParams({ ...(o.session ? { session: o.session } : {}), ...(o.since !== undefined ? { since: String(o.since) } : {}) }).toString();
-      const res = await fetch(`${this.base}/api/live${q ? `?${q}` : ""}`, { headers, signal: this.ctl.signal });
+      const res = await fetch(`${this.base}/api/workspaces/playground/live${q ? `?${q}` : ""}`, { headers, signal: this.ctl.signal });
       this.status = res.status;
       if (!res.ok) { this.error = await res.json(); opened(); this.ended = true; return; }
       const reader = res.body!.getReader(), dec = new TextDecoder();
@@ -81,7 +86,7 @@ class Live {
 }
 const applied = (version: number) => (e: Ev) => e.event === "applied" && e.data.version === version;
 const post = (base: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(`${base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  fetch(`${base}/api/workspaces/playground/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
 describe("two clients on one server", () => {
   test("health, catalogue and the first events", async () => {
@@ -205,12 +210,12 @@ describe("the person in the seat (synergon-scene/1)", () => {
     const dataDir = tempDir(), at = new Date().toISOString(), who = { kind: "agent", id: "a1a1a1a1a1a1", label: "Claude Code · a1a1" };
     const old = { schema: "earlier-scene/1", version: 2, asset: { name: "rig-b", sha256: JSON.parse(readFileSync(join(ASSET, "rig-b.manifest.json"), "utf8")).glb.sha256 }, pose: { J_mon_height: -0.05 },
       history: [{ version: 1, actor: who, command: "pose.set", changes: [{ joint: "J_mon_height", before: 0, after: -0.05 }], at }] };
-    mkdirSync(join(dataDir, "playground"), { recursive: true });
-    writeFileSync(join(dataDir, "playground", "doc.json"), JSON.stringify(old));
+    const made = createWorkspace(dataDir, { name: "Playground", doc: old });       // a folder with a document the server does not read
     const s = start({ dataDir }), a = new Live(s.base); await a.ready;
     const snap = (await a.waitFor((e) => e.event === "snapshot")).data.doc;
     expect(snap).toMatchObject({ schema: "synergon-scene/1", version: 0, pose: {}, person: { preset: "P50 man", posture: "operating" } });
-    expect(readdirSync(join(dataDir, "playground")).some((f) => f.startsWith("doc.json.unreadable-"))).toBe(true);
+    expect(readdirSync(join(dataDir, "workspaces", made.id)).some((f) => f.startsWith("doc.json.unreadable-"))).toBe(true);
+    expect(s.api.list().total).toBe(1);                // the one workspace is the Playground made by createWorkspace: none is added
     a.close(); s.stop();
   });
   test("person.set reaches the other stream as one entry with the person before and after; the report needs no page; undo by group", async () => {
@@ -255,7 +260,7 @@ describe("restart", () => {
     p.kill("SIGTERM"); await p.exited;
     for (let t = 0; t < 100 && !(a.ended && b.ended); t++) await Bun.sleep(20);
     expect(a.ended && b.ended).toBe(true);
-    expect(JSON.parse(readFileSync(join(dataDir, "playground", "doc.json"), "utf8")).version).toBe(2);
+    expect(JSON.parse(readFileSync(join(playgroundDir(dataDir), "doc.json"), "utf8")).version).toBe(2);
     p = await launch();
     // a change arrives before the browsers are back
     await call("pose.set", { joints: { J_mon_pan: 8 } }, { server: base, client: "agent" });
@@ -269,10 +274,10 @@ describe("restart", () => {
     expect(u).toMatchObject({ ok: true, version: 4, server: `${base} (local, revision restart-test)` });
     await Promise.all([a2.waitFor(applied(4)), b2.waitFor(applied(4))]);
     // doc.json is complete JSON and no temporary file is left
-    expect(readdirSync(join(dataDir, "playground"))).toEqual(["doc.json"]);
+    expect(readdirSync(playgroundDir(dataDir))).toEqual(["doc.json"]);
     // a crash (no warning) after the write interval loses nothing either
     await Bun.sleep(400); p.kill(9); await p.exited;
-    expect(JSON.parse(readFileSync(join(dataDir, "playground", "doc.json"), "utf8")).version).toBe(4);
+    expect(JSON.parse(readFileSync(join(playgroundDir(dataDir), "doc.json"), "utf8")).version).toBe(4);
     a2.close(); b2.close();
   }, 20000);
 });
@@ -395,11 +400,11 @@ describe("deployed-mode guards", () => {
 describe("requests that never reach a command", () => {
   test("header, content type, JSON, method, host", async () => {
     const s = start();
-    expect((await fetch(`${s.base}/api/command`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(400);
-    expect((await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
+    expect((await fetch(`${s.base}/api/workspaces/playground/command`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(400);
+    expect((await fetch(`${s.base}/api/workspaces/playground/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
     const bad = await post(s.base, "{not json");
     expect([bad.status, (await bad.json()).error.code]).toEqual([400, "bad_json"]);
-    expect((await fetch(`${s.base}/api/command`)).status).toBe(405);
+    expect((await fetch(`${s.base}/api/workspaces/playground/command`)).status).toBe(405);
     expect((await fetch(`${s.base}/api/health`, { headers: { host: "rebound.example:4173" } })).status).toBe(403);
     // a refused command is HTTP 200 with ok: false (a browser does not log it as a failed request)
     const refused = await post(s.base, { id: "pose.set", args: { joints: { J_nothing: 1 } } });
@@ -491,7 +496,7 @@ describe("security review fixes", () => {
     const port = Number(new URL(s.base).port);
     const status = await new Promise<string>((resolve) => {
       const c = Bun.connect({ hostname: "127.0.0.1", port, socket: {
-        open(sock) { sock.write("POST /api/command HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Synergon: 1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"id\":"); },
+        open(sock) { sock.write("POST /api/workspaces/playground/command HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Synergon: 1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"id\":"); },
         data(_sock, d) { resolve(new TextDecoder().decode(d).split("\r\n")[0]); },
         close() { resolve("closed"); }, error() { resolve("error"); },
       } });

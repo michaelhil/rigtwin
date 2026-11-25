@@ -19,7 +19,9 @@
 import * as THREE from 'three';
 import { S, $, el, on, hooks, scene, canvas, currentCamera, frameSize, layout, rescaleView, stageEl, select, setHover, outlineExtra, pickAt, drawNow, viewerApi } from './engine.ts';
 import { pictureCredits } from './ui.ts';
+import { workspaceApi } from './workspace.ts';
 import { initPerson } from './person/index.ts';
+import { CLOTHING, LICENCE } from './credits.ts';
 import CREDITS from '../../assets/manikin/CREDITS.md' with { type: 'text' };
 
 // --------------------------------------------------------------------------------------------- words
@@ -62,9 +64,7 @@ const MEASURE: Record<string, [string, string[]]> = {
   r_lowerthighcircumference: ['Thigh girth above the knee', G], r_anklecircumference: ['Ankle girth', G], r_footbreadthhorizontal: ['Foot breadth', B],
 };
 const MAIN: Record<string, string> = { stature: 'Stature', mass: 'Weight' };
-/** MP's credits line for the dressed style (assets/manikin/CREDITS.md); the licence is linked. */
-const CLOTHING = ['Clothing: work shirt by Elvaerwyn and work trousers by Mindfront (MakeHuman community, ', 'CC BY 4.0', ', adapted).'];
-const LICENCE = 'https://creativecommons.org/licenses/by/4.0/';
+// MP's credits line for the dressed style (assets/manikin/CREDITS.md), the licence linked: CLOTHING and LICENCE in credits.ts
 /** MP's credits line for the motion (CREDITS.md, the CMU Graphics Lab terms) */
 const MOTION = ['Motion from the CMU Graphics Lab Motion Capture Database (', 'http://mocap.cs.cmu.edu/'];
 
@@ -155,7 +155,7 @@ const ME = random() + random();
 async function post(body: object): Promise<any> {
   const send = (viewerApi as any).command;                       // live.ts's own sender (same author, its versions known as this page's)
   if (typeof send === 'function') return send(body);
-  try { return await (await fetch('api/command', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { return null; }
+  try { return await (await fetch(workspaceApi('command'), { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { return null; }
 }
 /** Record a change in the shared scene. {ok} when it is recorded or when the page has no shared person (then it is this page's only).
  *  One at a time, and based on the page's own last change as well as on the version it started from: the page's previous change may
@@ -539,7 +539,7 @@ export async function initPersonPanel() {
   addEventListener('synergon:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
   addEventListener('resize', fitSheet);
   window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || document.querySelector('dialog[open]')) return;
     if (creditsBox && !creditsBox.hidden) { closeCredits(); e.stopImmediatePropagation(); return; }
     if (panel.hidden || !$('more').hidden || document.body.classList.contains('parts-open')) return;
     closePanel(true);

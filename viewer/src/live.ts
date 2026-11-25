@@ -21,6 +21,8 @@ import { S, $, el, on, hooks, Q, DEG, setJoint, setView, setExplicitCamera, show
 import { sayJoint } from '../../shared/words.ts';
 import { createConnection } from './live-connection.ts';
 import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type TraceRec } from './trace.ts';
+import { current, workspaceApi, getWorkspace, agentViews as storedViews, setAgentViews as storeViews, mcpAddress, type AgentViews, type Workspace } from './workspace.ts';
+import { renamed, showGone } from './workspace-bar.ts';
 import type { JointValue } from '../../shared/pose.ts';
 
 type Change = { joint: string; after: JointValue | null };
@@ -83,7 +85,7 @@ function showFollow() {
 }
 async function setFollow(who: { actor: string; by: string } | null) {
   try {
-    const r = await (await fetch('api/follow', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json' }, body: JSON.stringify({ session: code, actor: who?.actor ?? null }) })).json();
+    const r = await (await fetch(workspaceApi('follow'), { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json' }, body: JSON.stringify({ session: code, actor: who?.actor ?? null }) })).json();
     if (r?.ok) following = who; else if (who) tell(`Not followed: ${r?.error?.message ?? 'the server did not answer'}.`);
   } catch { /* no server */ }
   showFollow();
@@ -103,7 +105,7 @@ function setPreview(on: boolean) { preview = on; linkNote.box.hidden = !on; }
 async function send(body: object): Promise<any> {
   out++;
   let r: any = null;
-  try { r = await (await fetch('api/command', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
+  try { r = await (await fetch(workspaceApi('command'), { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
   if (typeof r?.recorded === 'number') mine.add(r.recorded);
   if (typeof r?.you?.id === 'string' && !myActor) { myActor = r.you.id; setTraceOwner(myActor); }
   if (--out === 0) { for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version); for (const t of laterTraces.splice(0)) tellTrace(t); }
@@ -195,15 +197,15 @@ function applied(e: Entry) {
 // ---------------------------------------------------------------------------------------------- consent
 // On the public sandbox a view an agent asks for without naming a browser, while no browser follows it, comes to every
 // page as a question (`ask`): this page shows it only if its owner allows it. Allow follows that agent (its next views
-// come without asking); Always allow is stored in this browser (any agent's views then come straight here); No stops
+// come without asking); Always allow is stored in this browser for this workspace (any agent's views then come straight here); No stops
 // that agent's questions until the page is reloaded. The setting is also under More, Shared scene.
-type AgentViews = 'ask' | 'always' | 'never';
-const VIEWS_KEY = 'synergon.agentViews';
-let agentViews: AgentViews = (() => { try { const v = localStorage.getItem(VIEWS_KEY); return v === 'always' || v === 'never' ? v : 'ask'; } catch { return 'ask'; } })();
+// The stored choice belongs to one workspace (workspace.ts keeps `synergon.agentViews` as a table of workspace ids): "always" in one
+// workspace says nothing about another.
+let agentViews: AgentViews = 'ask';
 const declined = new Set<string>();
 let consent: Note, consentTimer = 0, asked: { d: ViewEvent; who: { actor: string; by: string } } | null = null, viewsSelect: HTMLSelectElement;
 type ViewEvent = { id: string; args: any; reply?: string; ask?: { actor: string; by: string; summary: string } };
-function setAgentViews(v: AgentViews) { agentViews = v; try { localStorage.setItem(VIEWS_KEY, v); } catch { /* private window: for this page only */ } if (viewsSelect) viewsSelect.value = v; }
+function setAgentViews(v: AgentViews) { agentViews = v; if (current.id) storeViews(current.id, v); if (viewsSelect) viewsSelect.value = v; }
 function answer(how: 'allow' | 'always' | 'no') {
   consent.box.hidden = true; clearTimeout(consentTimer);
   const a = asked; asked = null;
@@ -245,11 +247,13 @@ async function sendPicture(reply: string) {
     drawNow();
     const b = await viewerApi.pictureJpeg(60 * 1024);
     if (!b) return;
-    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'image/jpeg', 'x-synergon-ms': String(Math.round(performance.now() - t0)) }, body: b });
+    await fetch(`${workspaceApi('picture')}?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'image/jpeg', 'x-synergon-ms': String(Math.round(performance.now() - t0)) }, body: b });
   } catch { /* the agent hears "no picture" when its wait ends */ }
 }
+/** This workspace is deleted: stop the channel for good and say so. */
+function gone() { conn.disconnect(); showGone(); }
 const conn = createConnection({
-  url: () => `api/live?session=${code}${version >= 0 ? `&since=${version}` : ''}`,
+  url: () => `${workspaceApi('live')}?session=${code}${version >= 0 ? `&since=${version}` : ''}`,
   event(name, d, resync) {
     if (resync) resyncs++;
     if (name === 'session') { code = d.code; $('live-code').textContent = code; void backfill(); if (following) void setFollow(following); }
@@ -257,19 +261,41 @@ const conn = createConnection({
     else if (name === 'snapshot') snapshot(d.doc);
     else if (name === 'applied') applied(d);
     else if (name === 'view') view(d);
+    else if (name === 'workspace') renamed((d?.workspace ?? d) as Workspace);     // someone renamed this workspace (or this page did: the same record)
+    else if (name === 'deleted') gone();
   },
+  // the stream cannot be opened again: a workspace deleted while this page was away answers 404, which is not a reason to keep trying
+  closed: () => { void getWorkspace(current.id!).then((r) => { if (r.status === 404) gone(); }); },
 }, { EventSource, window, document, setTimeout: (f, ms) => window.setTimeout(f, ms), clearTimeout: (t) => window.clearTimeout(t as number), now: () => Date.now() });
 
 /** Requests the page missed while it was not connected (the server keeps the last 100). */
 async function backfill() {
-  try { const t = await (await fetch(`api/trace?after=${lastSeen()}`, { cache: 'no-store' })).json(); for (const r of t?.traces ?? []) addTrace(r); } catch { /* an older server: no trace */ }
+  try { const t = await (await fetch(`${workspaceApi('trace')}?after=${lastSeen()}`, { cache: 'no-store' })).json(); for (const r of t?.traces ?? []) addTrace(r); } catch { /* an older server: no trace */ }
+}
+/** "Connect an agent": the address of this workspace's agent endpoint (MCP), with a button to copy it and the one command Claude Code needs. */
+function connectAgent(id: string): HTMLElement {
+  const url = mcpAddress(id), box = el('div', 'connect');
+  const field = el('input') as HTMLInputElement; field.type = 'text'; field.readOnly = true; field.value = url; field.setAttribute('aria-label', 'Agent address of this workspace');
+  field.addEventListener('focus', () => field.select());
+  const copy = el('button', null, 'Copy address') as HTMLButtonElement; copy.type = 'button';
+  copy.addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch { field.select(); try { ok = document.execCommand('copy'); } catch { ok = false; } }
+    copy.textContent = ok ? 'Copied' : 'Select and copy'; window.setTimeout(() => { copy.textContent = 'Copy address'; }, 1800);
+  });
+  const how = el('details', 'live-about'), cmd = el('code', null, `claude mcp add --transport http synergon ${url}`);
+  how.append(el('summary', null, 'How to connect Claude Code'), el('p', null, 'Run this once in a terminal. The agent then works in this workspace only.'), cmd);
+  const row = el('div', 'connect-row'); row.append(field, copy);
+  box.append(el('h3', null, 'Connect an agent'), el('p', 'live-code', 'Give an agent this address and it can change this workspace and show you views of it.'), row, how);
+  return box;
 }
 export async function initLive() {
   linked = Q.has('pose');
+  agentViews = current.id ? storedViews(current.id) : 'ask';
   try {
-    const v = await (await fetch('version.json', { cache: 'no-store' })).json();
+    const v = await (await fetch('/version.json', { cache: 'no-store' })).json();
     if (!v?.server) return;
-    const h = await fetch('api/health', { cache: 'no-store' });
+    const h = await fetch('/api/health', { cache: 'no-store' });
     if (!h.ok || !/^synergon-scene\/1$/.test((await h.json()).format)) return;
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
@@ -277,7 +303,7 @@ export async function initLive() {
   consent = note([['Allow', () => answer('allow')], ['Always allow', () => answer('always')], ['No', () => answer('no')]]);
   consent.box.classList.add('amber', 'consent');
   consent.buttons[0].title = 'Show this view and the next ones this agent asks for, in this browser';
-  consent.buttons[1].title = 'Show the views any agent asks for in this browser, without asking (stored in this browser; change it under More)';
+  consent.buttons[1].title = 'Show the views any agent asks for in this workspace in this browser, without asking (stored in this browser; change it under More)';
   activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
   activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
   activity.buttons[3].setAttribute('aria-label', 'Close');
@@ -294,6 +320,7 @@ export async function initLive() {
   viewsSelect.value = agentViews; viewsSelect.addEventListener('change', () => setAgentViews(viewsSelect.value as AgentViews));
   viewsRow.append(viewsSelect);
   $('live-more').querySelector('.live-code')!.after(traceBtn, followNote, viewsRow);
+  if (current.id) $('live-more').querySelector('.live-about')!.before(connectAgent(current.id));
   const box = $('live-more'), more = $('more');
   more.insertBefore(box, more.querySelector('.about')); box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });

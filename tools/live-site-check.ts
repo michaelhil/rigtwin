@@ -1,4 +1,5 @@
-// bun tools/live-site-check.ts <url>      e.g. https://synergon.mightwork.ai
+// bun tools/live-site-check.ts <url> [--workspace <id or link>]      e.g. https://synergon.mightwork.ai
+// (the workspace is the oldest one named Playground unless one is named; its page is <url>/workspaces/<id>)
 // The two-browser acceptance of the shared scene on a deployed site (tools/live-accept.ts is the same for a local
 // server, with more cases). Two headless Chromium pages on the given address and the real command line:
 //   1. a small pose.set from the command line (the monitor's turn, 1°, in a group) appears in both pages, with
@@ -11,11 +12,15 @@
 // one view command, a handful of queries, and leaves the pose exactly as it found it: it compares the pose before
 // and after, and if it stops half-way it puts its two joints back. Exit code 1 when a step fails.
 import { Browser, type Page } from "./render.ts";
-import { call } from "./rig.ts";
+import { call, playgroundId, workspaceId } from "./rig.ts";
 import { sleep, DEG, until, joint, live, rig, heightSlider, press, release, clickText } from "./live-helpers.ts";
 
 const base = (process.argv[2] ?? "").replace(/\/+$/, "");
-if (!/^https?:\/\//.test(base)) { console.error("usage: bun tools/live-site-check.ts <url>   (e.g. https://synergon.mightwork.ai)"); process.exit(2); }
+if (!/^https?:\/\//.test(base)) { console.error("usage: bun tools/live-site-check.ts <url> [--workspace <id or link>]   (e.g. https://synergon.mightwork.ai)"); process.exit(2); }
+const given = process.argv.indexOf("--workspace") > 0 ? process.argv[process.argv.indexOf("--workspace") + 1] : undefined;
+const WS = given ? workspaceId(given, base) : await playgroundId(base);
+if (!WS) { console.error(`no workspace to check on ${base}: name one with --workspace <id or link>`); process.exit(2); }
+process.env.RIG_WORKSPACE = WS;                    // call() and the command line (bun tools/rig.ts, started by rig()) both work in it
 let failures = 0;
 const check = (ok: boolean, what: string, detail = "") => { if (!ok) failures++; console.log(`${ok ? "ok  " : "FAIL"} ${what}${detail ? `: ${detail}` : ""}`); };
 const PAN = "J_mon_pan", HEIGHT = "J_mon_height", group = `site-check-${Math.random().toString(16).slice(2, 8)}`;
@@ -38,7 +43,7 @@ const pages: Page[] = [];
 const open = async () => {
   const p = await browser.page("about:blank");
   await p.viewport(1440, 900);
-  await p.call("Page.navigate", { url: `${base}/` });
+  await p.call("Page.navigate", { url: `${base}/workspaces/${WS}` });
   await p.waitFor("window.viewerReady || window.viewerError", "the viewer");
   pages.push(p);
   return p;

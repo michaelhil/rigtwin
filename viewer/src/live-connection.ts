@@ -35,7 +35,7 @@ export interface Handlers {
 
 export function createConnection(h: Handlers, env: Env) {
   let es: ES | null = null, ready = false, attempt = 0, timer: unknown = null, stopped = false, everReady = false, hiddenSince = 0;
-  const NAMES = ['session', 'snapshot', 'applied', 'view', 'trace'];
+  const NAMES = ['session', 'snapshot', 'applied', 'view', 'trace', 'workspace', 'deleted'];
   function open() {
     if (stopped) return;
     if (timer !== null) { env.clearTimeout(timer); timer = null; }

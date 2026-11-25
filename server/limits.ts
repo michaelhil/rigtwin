@@ -66,5 +66,34 @@ export const LIMITS = {
   pictureAskWaitMs: 25_000,
   /** Agent interface v2: MCP sessions remembered (the viewer code given to `look`); the least recently used is forgotten. */
   mcpSessions: 500,
+
+  // ---- workspaces (the public site holds many shared scenes; each is a folder on disk and, while in use, a scene in memory)
+  /** A new workspace per visitor and hour: enough to try the site and make a few scenes for a session, too few to fill the
+   *  disk from one address. Not counted: renames and deletes (they are edits, editsPerMinutePerVisitor). */
+  workspacesPerHourPerVisitor: 10,
+  /** ... per network block (IPv6 /48, IPv4 /24): a school or an office shares one, so three times the visitor's number (security review S7). */
+  workspacesPerHourPerBlock: 30,
+  /** ... and in all per day: even a crowd of visitors adds at most 200 folders (each starts under 100 kB) a day, so a flood is
+   *  noticed and stopped long before the disk limit below is near. */
+  workspacesPerDayTotal: 200,
+  /** The most workspaces on the server. Nothing is deleted automatically, so the number only grows; 5,000 × the few hundred kB
+   *  of a busy scene is about a gigabyte, which the data disk holds many times over. The owner raises it, or clears out, when
+   *  the creation answers "full". */
+  workspacesMax: 5_000,
+  /** The most workspaces held in memory at once (a document with its history, streams and trace is some hundreds of kB). The least
+   *  recently used workspace without an open stream is written and dropped when a new one is needed. The stream limit
+   *  (streamsTotal, 150) is lower, so a free place always exists. */
+  workspacesLoaded: 200,
+  /** A workspace with no open stream and no request for this long is written and dropped from memory (it costs disk only). */
+  workspaceIdleMs: 10 * 60_000,
+  /** How often the server looks for idle workspaces. */
+  workspaceSweepMs: 30_000,
+  /** A name is 1 to 80 characters: long enough for a sentence, short enough for a title bar and a list on a phone. */
+  workspaceNameChars: 80,
+  /** The body of a create or rename request is {name}: 80 characters, escaped at worst 6 bytes each, so 2 kB is more than enough. */
+  workspaceBodyBytes: 2 * 1024,
+  /** The list: 50 workspaces a page by default, never more than 100 (a page is small whatever the visitor asks). */
+  workspaceListDefault: 50,
+  workspaceListMax: 100,
 };
 export type Limits = typeof LIMITS;

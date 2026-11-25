@@ -1,6 +1,6 @@
 ---
 title: Decision log
-tldr: 56 decisions, D-01 to D-56, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
+tldr: 57 decisions, D-01 to D-57, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
 status: living
 updated: 2026-11-25
 tags: [decisions, log, platform]
@@ -16,7 +16,7 @@ tags: [decisions, log, platform]
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
 - Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
 - Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)); a trace of every request in the browser ([D-53](#d-53)); the camera anywhere, a person's eye by stature, and Follow ([D-54](#d-54)); a consent question in the browser ([D-55](#d-55)).
-- The name Synergon, its own subdomain and the wiki at `/wiki` are D-56 (2026-11-25).
+- The name Synergon, its own subdomain and the wiki at `/wiki` are D-56; public workspaces modelled on Leitbild's are D-57 (both 2026-11-25).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
@@ -444,3 +444,12 @@ project's working files.
 - **Reason:** the owner wanted a new name, a subdomain of its own, and the wiki at `/wiki` on that subdomain. Every current file, address, format identifier and setting uses the new name, so nothing in the repository refers to an earlier one.
 - **Alternatives:** none recorded.
 - **Consequences:** git history keeps its older commits unchanged (rewriting history is destructive); the check scans every current file for the earlier name so it cannot come back. In the code, the old tool meaning of "workspace" (a modelling output folder) is now called a build folder (`--build`, `SYNERGON_BUILD_DIR`); "workspace" now means the shared, public workspaces.
+
+<a id="d-57"></a>
+### D-57 — Public workspaces, modelled on Leitbild's (2026-11-25)
+
+- **Decided by / status:** owner ("In the deploy, I also want a simple workspace functionality like in Leitbild", 2026-11-25; then the plan's options "Workspaces landing" and "Public like Leitbild"); built on the branch `synergon`, not yet on the public site.
+- **What:** the site has many shared scenes, called workspaces, instead of one. Each is what the single shared scene was: the rig's adjustments, the person, history and undo, the activity line, Follow and consent, pictures and an agent (MCP) address of its own (`/api/workspaces/<id>/mcp`). The address `/` is a landing page: continue in the last workspace, make a new one, the five opened most recently in this browser, and all workspaces newest first with a search box from seven. Each workspace has an unguessable random link, `/workspaces/<id>`, and a menu in the viewer's top bar to copy its link, rename it, make a new one, switch, or delete it with one confirmation. A Manage page deletes several at once. The shared scene that existed before becomes the workspace "Playground".
+- **Reason:** several people or groups can work on their own copy of the rig without changing each other's, the way Leitbild's workspaces work, without accounts.
+- **Alternatives:** accounts and private workspaces (rejected by the owner's choice: no accounts, like Leitbild); a fixed set of named workspaces (rejected: nobody could make their own); workspaces deleted after a time without use (rejected: the owner chose "nothing deleted automatically").
+- **Consequences:** anyone with a link can change, rename or delete that workspace; the landing lists them all. Making workspaces is rate-limited on the public site (10 an hour per visitor, 30 per network block, 200 a day in all, at most 5,000), and a delete moves the workspace's folder aside on the server instead of removing it, so the owner can bring one back by hand ([workspaces on the server](../50-implementation/workspaces.md)). Idle workspaces cost disk only: one is loaded on its first request and dropped from memory after 10 minutes without use. The landing loads no 3D code; the viewer loads only on a workspace's address. The recent list lives in the browser's own storage, never in a cookie.

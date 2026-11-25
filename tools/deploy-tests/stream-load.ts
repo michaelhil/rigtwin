@@ -25,6 +25,8 @@ const ROOT = join(import.meta.dir, "..", ".."), data = mkdtempSync(join(tmpdir()
 const ASSET = str("--asset") ?? join(ROOT, "assets", "rig-b", "build");
 const srv = Bun.spawn([process.execPath, str("--bundle") ?? join(ROOT, "server", "server.ts"), "--mode", "deployed", "--port", "0", "--data", data, "--asset", ASSET, "--revision", "load"], { stdout: "pipe", stderr: "inherit" });
 const port: number = JSON.parse(new TextDecoder().decode((await srv.stdout.getReader().read()).value)).listening;
+// the workspace the load goes to: the Playground the server made in its empty data folder
+const WS: string = ((await (await fetch(`http://127.0.0.1:${port}/api/workspaces?search=Playground`)).json()) as any).workspaces[0].id;
 const rss = () => Number(spawnSync("ps", ["-o", "rss=", "-p", String(srv.pid)], { encoding: "utf8" }).stdout.trim()) / 1024;
 const cpu = () => spawnSync("ps", ["-o", "%cpu=", "-p", String(srv.pid)], { encoding: "utf8" }).stdout.trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -44,7 +46,7 @@ for i in range(${STREAMS}):
     s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
     s.connect(("127.0.0.1", ${port}))
     v = "10.%d.%d.1" % ((i // 6) % 250, i // 6)
-    s.sendall(("GET /api/live HTTP/1.1\\r\\nHost: mightwork.ai\\r\\nX-Forwarded-For: %s\\r\\n\\r\\n" % v).encode())
+    s.sendall(("GET /api/workspaces/${WS}/live HTTP/1.1\\r\\nHost: mightwork.ai\\r\\nX-Forwarded-For: %s\\r\\n\\r\\n" % v).encode())
     head = s.recv(64)
     if not head.startswith(b"HTTP/1.1 200"): refused += 1; s.close()
     else: socks.append(s)
@@ -80,7 +82,7 @@ const tick = setInterval(async () => {
   for (let e = 0; e < EDITS / 10; e++) {
     k++; sent++;
     const joints = Object.fromEntries(movable.map((j: any) => { const f = (k % 7) / 7, v = j.lower + f * (j.upper - j.lower); return [j.id, j.type === "prismatic" ? v : (v * 180) / Math.PI]; }));
-    fetch(`http://127.0.0.1:${port}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.set", args: { joints, allowAssumed: true } }) })
+    fetch(`http://127.0.0.1:${port}/api/workspaces/${WS}/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.set", args: { joints, allowAssumed: true } }) })
       .then((r) => r.json()).then((r) => { if (r.ok) ok++; else refusals[r.error?.code] = (refusals[r.error?.code] ?? 0) + 1; }).catch(() => {});
   }
 }, 100);

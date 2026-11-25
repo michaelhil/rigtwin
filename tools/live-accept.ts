@@ -30,11 +30,14 @@ const t0 = performance.now();
 const dataDir = mkdtempSync(join(tmpdir(), "synergon-live-accept-"));
 let server = await startServer({ port: 0, data: dataDir });
 const origin = server.url;
+// the workspace under test: the Playground the server made in its empty data folder; its page is /workspaces/<id>
+const WS = server.api!.playground()!.id, WSAPI = `${origin}/api/workspaces/${WS}`;
+process.env.RIG_WORKSPACE = WS;                    // the command line (rig()) works in it, whatever port the server has
 const browser = await Browser.launch();
 const open = async (query = "", at = origin) => {
   const p = await browser.page("about:blank");
   await p.viewport(1440, 900);
-  await p.call("Page.navigate", { url: `${at}/${query}` });
+  await p.call("Page.navigate", { url: at === origin ? `${at}/workspaces/${WS}${query}` : `${at}/${query}` });
   await p.waitFor("window.viewerReady || window.viewerError", "the viewer");
   return p;
 };
@@ -106,7 +109,7 @@ try {
   // 7. a forged author id (M3): copy B's id from the live channel and send a change under it
   // B's public id, as anyone can read it on the live channel: the author of B's Undo (step 3)
   const snap = await (async () => {
-    const res = await fetch(`${origin}/api/live`, { headers: { host: "127.0.0.1" } }), rd = res.body!.getReader(), dec = new TextDecoder();
+    const res = await fetch(`${WSAPI}/live`, { headers: { host: "127.0.0.1" } }), rd = res.body!.getReader(), dec = new TextDecoder();
     let buf = "";
     while (!buf.includes("event: snapshot")) buf += dec.decode((await rd.read()).value);
     while (!/event: snapshot\ndata: .*\n\n/.test(buf)) buf += dec.decode((await rd.read()).value);
@@ -115,7 +118,7 @@ try {
   })();
   const idOfB = snap.history.find((e: any) => e.command === "history.undo" && e.actor.kind === "person")?.actor.id;
   const vB = (await live(B))!.version;
-  const forged = await (await fetch(`${origin}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-synergon-client": "person", "x-synergon-client-id": idOfB, host: "127.0.0.1" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_pan: 7 } } }) })).json();
+  const forged = await (await fetch(`${WSAPI}/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-synergon-client": "person", "x-synergon-client-id": idOfB, host: "127.0.0.1" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_pan: 7 } } }) })).json();
   const seenInB = await until<boolean>(B, `viewer.live().version > ${vB} && Math.abs(viewer.state().joints.J_mon_pan - 7 * ${DEG}) < 1e-9`);
   check(!!idOfB && forged.ok && !!seenInB && forged.you.id !== idOfB && /Person/.test((await live(B))!.activity ?? ""), "a change sent under B's public id is applied by B and shown as someone else's (ids are made by the server)", `B's id ${idOfB}; the forger was stored as ${forged.you.id}; B shows the change: ${!!seenInB}, activity "${(await live(B))!.activity}"`);
 

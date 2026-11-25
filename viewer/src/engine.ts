@@ -23,7 +23,9 @@ export type Change = 'visibility' | 'selection' | 'hover' | 'joints' | 'mode' | 
 export const Q = new URLSearchParams(location.search);
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export const el = (tag: string, cls?: string | null, text?: string) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
-const ASSET_DIR = Q.get('asset') ?? 'asset', ASSET = Q.get('name') ?? 'rig-b';
+/** Every address is counted from the site root: the page lives at /workspaces/<id>, where a relative one would not find the model. */
+const fromRoot = (p: string) => (/^([a-z][a-z0-9+.-]*:|\/)/i.test(p) ? p : `/${p}`).replace(/\/+$/, '');
+const ASSET_DIR = fromRoot(Q.get('asset') ?? 'asset'), ASSET = Q.get('name') ?? 'rig-b';
 /** Extension points, so the engine need not know the modules that use them (live.ts, the shared scene):
  *  beforeApply and onApply run when `apply` starts and finishes resetting the page (with the URL options). */
 export const hooks = {
@@ -36,7 +38,7 @@ export const hooks = {
   /** the operator's eye when a person sits in the seat (person/index.ts): model frame, or null for the rig's own eye point */
   operatorEye: [] as (() => number[] | null)[],
 };
-const CAMERAS_URL = 'private/evidence/cameras.json';
+const CAMERAS_URL = '/private/evidence/cameras.json';
 export const DEG = Math.PI / 180;
 export const m2w = (p: number[]) => new THREE.Vector3(p[0], p[2], -p[1]);          // model frame -> three world
 export const w2m = (v: THREE.Vector3): number[] => [v.x, -v.z, v.y];

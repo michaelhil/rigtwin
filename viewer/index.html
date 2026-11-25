@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rig viewer</title>
+<title>Synergon</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./viewer.css">
+<link rel="stylesheet" href="/viewer.css">
 </head>
 <body>
+<!-- the landing, Manage and the notices fill this (app.ts); on a workspace address it is removed -->
+<div id="app" hidden></div>
 <div id="stage">
   <div id="frame">
     <img id="photo" alt="" hidden>
@@ -37,8 +39,8 @@
   <div id="live-more" hidden>
     <h3>Shared scene</h3>
     <p class="live-code">This browser’s code: <b id="live-code"></b><span>Give it to Claude Code to show views here.</span></p>
-    <details class="live-about"><summary>About this sandbox</summary>
-      <p>Everyone who opens this page on this server sees one shared scene. The server keeps only the pose of the rig and its last 200 changes, each with a random author id: no names and no other text. Anyone can change it, and Undo puts a change back. The scene is reset on request.</p>
+    <details class="live-about"><summary>About this workspace</summary>
+      <p>Everyone who opens this workspace’s link sees one shared scene. The server keeps only the pose of the rig and its last 200 changes, each with a random author id: no names and no other text. Anyone with the link can change it, and Undo puts a change back. Anyone with the link can also rename the workspace or delete it.</p>
     </details>
   </div>
   <aside id="card" class="ui" hidden aria-label="Selected part"></aside>
@@ -51,6 +53,6 @@
 </aside>
 <div id="scrim" class="ui" hidden></div>
 
-<script type="module" src="./viewer.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

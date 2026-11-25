@@ -1,6 +1,6 @@
 // bun run dist [--out dist] [--no-verify] [--strict-wiki]
 // Assembles the self-contained deployable folder:
-//   dist/index.html, viewer.css, viewer.js     the bundled viewer (three.js included), split into chunks: viewer.js and the chunk it
+//   dist/index.html, viewer.css, app.js        the bundled page (landing, Manage; the viewer with three.js behind a dynamic import), split into chunks: app.js and the chunks it
 //                                              imports load before the page is ready; the person chunk only after (tools/bundle.ts)
 //   dist/asset/rig-b.glb, rig-b.manifest.json  the asset
 //   dist/asset/manikin/                        the person's packages (assets/manikin/, copied whole); version.json names the default
@@ -161,6 +161,7 @@ if (import.meta.main) {
     try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
     console.log(`server: bundled server/server.ts into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
   } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /api/)");
+  if (existsSync(join(ROOT, "viewer", "landing-rig.webp"))) copyFileSync(join(ROOT, "viewer", "landing-rig.webp"), join(out, "landing-rig.webp"));   // the landing's picture
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
   // the person: MP's packages (assets/manikin/, whole) and three's KTX2 transcoder, which the person chunk loads after the page is ready
   const manikin = join(ROOT, "assets", "manikin"), basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
@@ -207,6 +208,7 @@ if (import.meta.main) {
     const idleTimeout = api ? (await import("../server/limits.ts")).LIMITS.idleTimeoutS : undefined;
     const { server, log, origin, base } = serveFolder(out, "/", { api: api?.origin, idleTimeout });
     const errors: string[] = [];
+    let wsId = "";
     // the server, through the sub-path as the viewer reaches it: health, the live channel, and its own code not served
     if (api) {
       try {
@@ -216,10 +218,13 @@ if (import.meta.main) {
         else if (health.format !== sceneFormat) errors.push(`server: health reports format ${health.format}, version.json says ${sceneFormat}`);
         else if (health.mode !== "local") errors.push(`server: health reports mode ${health.mode}, expected local`);
         else if (health.revision !== version.revision) errors.push(`server: health reports revision ${health.revision}, version.json says ${version.revision}`);
-        const live = await fetch(`${origin}${base}api/live`, { signal: AbortSignal.timeout(10000) });
+        const wsList: any = await (await fetch(`${origin}${base}api/workspaces`, { signal: AbortSignal.timeout(10000) })).json().catch(() => null);
+        wsId = wsList?.workspaces?.[0]?.id ?? "";
+        if (!wsId) errors.push("server: no workspace on a fresh data folder (the Playground should have been made)");
+        const live = await fetch(`${origin}${base}api/workspaces/${wsId}/live`, { signal: AbortSignal.timeout(10000) });
         const type = live.headers.get("content-type") ?? "", ev = live.ok && type.includes("text/event-stream") ? await waitEvent(live, "snapshot", 5000) : null;
-        if (!live.ok || !type.includes("text/event-stream")) errors.push(`server: ${base}api/live answered HTTP ${live.status} (${type || "no content-type"}), expected an event stream`);
-        else if (!ev?.data) errors.push(`server: no snapshot event on ${base}api/live within 5 s (events seen: ${ev?.seen.join(", ") || "none"})`);
+        if (!live.ok || !type.includes("text/event-stream")) errors.push(`server: ${base}api/workspaces/<id>/live answered HTTP ${live.status} (${type || "no content-type"}), expected an event stream`);
+        else if (!ev?.data) errors.push(`server: no snapshot event on ${base}api/workspaces/<id>/live within 5 s (events seen: ${ev?.seen.join(", ") || "none"})`);
         else { try { if (JSON.parse(ev.data)?.doc?.schema !== sceneFormat) errors.push(`server: the snapshot is not a ${sceneFormat} document`); } catch { errors.push("server: the snapshot event carries no JSON"); } }
         for (const p of ["server/server.js", "server/", "server"]) {
           const r = await fetch(`${origin}${base}${p}`, { ...probe, redirect: "manual" }), body = await r.text();
@@ -231,8 +236,17 @@ if (import.meta.main) {
     const { Browser } = await import("./render.ts");
     const browser = await Browser.launch();
     try {
-      // 1. the viewer, its Documentation link and its version line
-      const page = await browser.page(`${origin}${base}`);
+      // 0. the landing: a small page, no viewer files
+      if (api) {
+        const land = await browser.page(`${origin}${base}`);
+        await land.waitFor("document.querySelector('.wl-list li, .wl-status')", "the deployed landing");
+        const lm = await land.evaluate("({ js: performance.getEntriesByType('resource').filter((e) => /\\.m?js(\\?|$)/.test(e.name)).reduce((a, e) => a + e.decodedBodySize, 0), heavy: performance.getEntriesByType('resource').some((e) => /\\.(glb|wasm)|manifest/.test(e.name)), canvas: !!document.querySelector('canvas'), rows: document.querySelectorAll('.wl-list li').length })");
+        if (lm.js > 40e3 || lm.heavy || lm.canvas || lm.rows < 1) errors.push(`landing: ${JSON.stringify(lm)} (a small page with the workspaces listed, no model, no canvas)`);
+        errors.push(...land.errors.map((e) => "landing console: " + e));
+        await land.close();
+      }
+      // 1. the viewer (in the first workspace when there is a server), its Documentation link and its version line
+      const page = await browser.page(`${origin}${base}${api ? `workspaces/${wsId}` : ""}`);
       await page.viewport(1600, 1000);
       await page.waitFor("window.viewerReady || window.viewerError", "the deployed viewer");
       const err = await page.evaluate("window.viewerError || null"), st = await page.evaluate("window.viewerReady ? viewer.state() : null");
@@ -287,7 +301,7 @@ if (import.meta.main) {
             if (!after) { errors.push(`${name}: the ${what} did not lead anywhere`); break; }
             clicked += `${clicked ? ", " : ""}${what} → ${after.replace(base, "") || "viewer"}`;
           }
-          if (clicked.endsWith("viewer")) { await p.waitFor("window.viewerReady || window.viewerError", "the viewer behind the wiki's link"); if (await p.evaluate("window.viewerError || null")) errors.push("viewer reached from the wiki failed to load"); }
+          if (clicked.endsWith("viewer")) { await p.waitFor("window.viewerReady || window.viewerError || document.querySelector('main.pg')", "the page behind the wiki's link (the landing, or the viewer on a server without workspaces)"); if (await p.evaluate("window.viewerError || null")) errors.push("viewer reached from the wiki failed to load"); }
         }
         errors.push(...p.errors.map((e) => `${name} console: ${e}`));
         await p.close();
@@ -304,6 +318,6 @@ if (import.meta.main) {
   }
   const seconds = (performance.now() - t0) / 1000;
   console.log(`dist ${ok ? "done" : "FAILED"} in ${seconds.toFixed(2)} s`);
-  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), viewer bundle ${bundle.files["viewer.js"].body.length} bytes in ${bundle.seconds.toFixed(2)} s, ${serverBuild ? `server bundle ${serverBuild.bytes} bytes` : "no server"}, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
+  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), page bundle ${bundle.files["app.js"].body.length} bytes (app.js) in ${bundle.seconds.toFixed(2)} s, ${serverBuild ? `server bundle ${serverBuild.bytes} bytes` : "no server"}, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
   process.exit(ok ? 0 : 1);
 }

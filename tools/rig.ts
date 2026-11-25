@@ -5,6 +5,9 @@
 //   bun run rig view.set '{"view": "operator"}' --viewer K7Q2
 // Options: --server <url>  the synergon server (default $RIG_URL or http://127.0.0.1:4173; the deployed
 //                          sandbox is https://synergon.mightwork.ai)
+//          --workspace <id> the workspace to work in: its id, or the link of its page (https://.../workspaces/<id>). Default
+//                          on a local server: the Playground (the server finds it by name). A remote server has no default:
+//                          the owner gives the link. $RIG_WORKSPACE sets it for a session.
 //          --viewer <code> the browser a view command is for (its code is in the viewer's More menu)
 //          --group <id>    names the request a change belongs to, so `history.undo {"group": ...}` undoes it whole
 //          --expected-version <n>  the scene version the change is based on (refused as stale if a joint it
@@ -29,7 +32,7 @@ export const DEFAULT_SERVER = "http://127.0.0.1:4173";
 /** One random id per run (or per importing script): the server labels this caller "Claude Code · <id>". */
 const CLIENT_ID = randomBytes(16).toString("hex");
 
-export interface CallOptions { server?: string; viewer?: string; group?: string; expectedVersion?: number; client?: "agent" | "script" }
+export interface CallOptions { server?: string; workspace?: string; viewer?: string; group?: string; expectedVersion?: number; client?: "agent" | "script" }
 export interface Reply { server: string; ok: boolean; version?: number; result?: any; error?: { code: string; message: string; hint: string; schema?: unknown }; commands?: any[] }
 
 export const serverUrl = (s?: string) => (s ?? process.env.RIG_URL ?? DEFAULT_SERVER).replace(/\/+$/, "");
@@ -42,6 +45,25 @@ export function markGroups(v: any, own?: string): any {
   for (const [k, x] of Object.entries(v)) { if (k === "group" && typeof x === "string" && x !== own) out.untrusted_group = x; else out[k] = markGroups(x, own); }
   return out;
 }
+/** The workspace named by an id, or by the link of its page or its agent address; null when it names none. A local server also takes the word
+ *  `playground` (and that is its default): the oldest workspace named Playground. */
+export function workspaceId(given: string | undefined, base: string): string | null {
+  const v = (given ?? process.env.RIG_WORKSPACE ?? "").trim();
+  if (!v) return isLocal(base) ? "playground" : null;
+  const m = /([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/.exec(v.toLowerCase());
+  if (m) return m[1];
+  return v.toLowerCase() === "playground" && isLocal(base) ? "playground" : null;
+}
+/** The id of the oldest workspace named exactly "Playground" on a server (GET api/workspaces): what the acceptance tools use when no
+ *  workspace is named. null when there is none or the server does not answer. */
+export async function playgroundId(base: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${base}/api/workspaces?search=Playground&limit=100`, { signal: AbortSignal.timeout(15000) });
+    const list = r.ok ? ((await r.json()) as { workspaces?: { id: string; name: string }[] }).workspaces ?? [] : [];
+    return list.filter((w) => w.name === "Playground").at(-1)?.id ?? null;       // newest first, so the last is the oldest
+  } catch { return null; }
+}
+const noWorkspace = (base: string, given?: string): Reply => ({ server: base, ok: false, error: { code: "no_workspace", message: given ? `${JSON.stringify(given)} is not a workspace id or the link of one` : "this server has no default workspace", hint: "name the workspace with --workspace <id or link>: the id is the last part of its address, https://<site>/workspaces/<id>" } });
 const headers = (client: string) => ({ "x-synergon": "1", "content-type": "application/json", "x-synergon-client": client, "x-synergon-client-id": CLIENT_ID });
 
 async function request(base: string, path: string, init: RequestInit): Promise<Reply> {
@@ -67,8 +89,10 @@ export async function call(id: string, args: unknown = {}, o: CallOptions = {}):
     const hit = bannedIn(o.group, join(import.meta.dir, ".."));
     if (hit.length) return { server: base, ok: false, error: { code: "banned_name", message: "the group name contains a name that must not be published", hint: "choose a neutral group name, e.g. lower-monitor" } };
   }
+  const ws = workspaceId(o.workspace, base);
+  if (!ws) return noWorkspace(base, o.workspace);
   const body = { id, args, ...(o.group ? { group: o.group } : {}), ...(o.viewer ? { session: o.viewer.toUpperCase() } : {}), ...(o.expectedVersion !== undefined ? { expectedVersion: o.expectedVersion } : {}) };
-  const r = await request(base, "command", { method: "POST", headers: headers(o.client ?? "script"), body: JSON.stringify(body) });
+  const r = await request(base, `workspaces/${ws}/command`, { method: "POST", headers: headers(o.client ?? "script"), body: JSON.stringify(body) });
   return isLocal(base) ? r : markGroups(r, o.group);
 }
 
@@ -93,10 +117,10 @@ if (import.meta.main) {
     else console.log(JSON.stringify(r, null, 2));
     process.exit(code);
   };
-  const unknownFlag = Object.keys(flags).find((f) => !["server", "viewer", "group", "expected-version", "text", "out"].includes(f));
+  const unknownFlag = Object.keys(flags).find((f) => !["server", "workspace", "viewer", "group", "expected-version", "text", "out"].includes(f));
   const [cmd, json] = pos;
   if (!cmd || cmd === "help" || unknownFlag) {
-    console.log(`usage: bun run rig list | bun run rig <command> ['<json args>'] [--server <url>] [--viewer <code>] [--group <id>] [--expected-version <n>] [--text] [--out <file>]${unknownFlag ? `\nunknown option --${unknownFlag}` : ""}`);
+    console.log(`usage: bun run rig list | bun run rig <command> ['<json args>'] [--server <url>] [--workspace <id or link>] [--viewer <code>] [--group <id>] [--expected-version <n>] [--text] [--out <file>]${unknownFlag ? `\nunknown option --${unknownFlag}` : ""}`);
     process.exit(cmd && !unknownFlag ? 0 : 2);
   }
   if (cmd === "list") {
@@ -110,6 +134,6 @@ if (import.meta.main) {
   }
   const ev = flags["expected-version"];
   if (ev !== undefined && !/^\d+$/.test(ev)) out({ server: serverUrl(flags.server), ok: false, error: { code: "bad_args", message: `--expected-version takes a whole number, not ${JSON.stringify(ev)}`, hint: "the version from scene.summary" } }, 2);
-  const r = await call(cmd, args, { server: flags.server, viewer: flags.viewer, group: flags.group, client: "agent", ...(ev !== undefined ? { expectedVersion: Number(ev) } : {}) });
+  const r = await call(cmd, args, { server: flags.server, workspace: flags.workspace, viewer: flags.viewer, group: flags.group, client: "agent", ...(ev !== undefined ? { expectedVersion: Number(ev) } : {}) });
   out(r, r.ok ? 0 : r.error?.code === "unreachable" || r.error?.code === "not_synergon" ? 2 : 1);
 }

@@ -27,8 +27,8 @@ const RT = section("runtime"), GROUND = section("ground"), LOOK = section("look"
 let lookOn = true;
 /** The default person: the dressed operator package (MP, assets/manikin/), served under the asset folder; version.json names it
  *  when the release carries it (tools/serve.ts, tools/dist.ts). */
-export const DEFAULT_PACKAGE = "asset/manikin/operator-m/operator-m.avatar.json";
-const TRANSCODER = "libs/basis/";
+export const DEFAULT_PACKAGE = "/asset/manikin/operator-m/operator-m.avatar.json";
+const TRANSCODER = "/libs/basis/";
 
 let av: Avatar | null = null, shown = false, live = true, idleOn = true, lastUpdate = 0, lastIdle = 0, loadMs = 0, loadError: string | null = null, bindMs = 0;
 let updateMs = 0, status: HTMLElement | null = null, readyResolve: (ok: boolean) => void = () => {};
@@ -328,12 +328,13 @@ async function bench(n = 60, opts: { idle?: boolean } = {}) {
 /** The default person's manifest, as the server's version.json names it (only when the package is in the release), and the release's
  *  revision for the person's file URLs (avatar.ts withRevision; a build from uncommitted changes adds its build time). */
 async function releaseInfo(): Promise<{ pkg: string | null; rev: string | null }> {
-  try { const v = await (await fetch("version.json", { cache: "no-store" })).json();
+  try { const v = await (await fetch("/version.json", { cache: "no-store" })).json();
     const rev = typeof v?.revision === "string" ? v.revision + (v.dirty && v.built ? "-" + String(v.built).replace(/\D/g, "") : "") : null;
     return { pkg: typeof v?.person?.package === "string" ? v.person.package : null, rev }; } catch { return { pkg: null, rev: null }; }
 }
 export async function initPerson() {
-  const q = Q.get("person"), hidden = q === "off", rel = await releaseInfo(), url = q && q !== "off" && q !== "1" ? q : rel.pkg;
+  const q = Q.get("person"), hidden = q === "off", rel = await releaseInfo(), chosen = q && q !== "off" && q !== "1" ? q : rel.pkg;
+  const url = chosen && (/^([a-z][a-z0-9+.-]*:|\/)/i.test(chosen) ? chosen : "/" + chosen);   // counted from the site root: the page lives at /workspaces/<id>
   if (!url) return;                                                  // no person in this release (version.json names none)
   setAssetRevision(rel.rev);
   idleOn = Q.get("person_idle") !== "0"; lookOn = Q.get("person_look") !== "0"; suppressed = hidden;

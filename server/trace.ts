@@ -1,6 +1,6 @@
 // The trace of the shared scene: one record per request (an agent's MCP tool call, a command from the command line or
 // a script, a page's own save), sent to every open page as the live-channel event "trace" and kept in memory (the last
-// 100; GET api/trace). It is what the viewer's activity line and its trace list show: who asked for what, in the
+// 100; GET api/workspaces/<id>/trace; one trace per workspace). It is what the viewer's activity line and its trace list show: who asked for what, in the
 // server's own words, how it ended, how long the server took, and how long the caller took since its previous request
 // (for an agent: its own thinking between two tool calls).
 //
@@ -15,7 +15,7 @@ export interface TraceRecord {
   /** when the request arrived (ISO) */
   at: string;
   by: string; kind: Actor["kind"]; actor: string;
-  /** "mcp": a tool call over MCP; "http": POST api/command (the command line, scripts, the page) */
+  /** "mcp": a tool call over MCP; "http": POST api/workspaces/<id>/command (the command line, scripts, the page) */
   via: "mcp" | "http";
   command: string;
   ok: boolean; code?: string;

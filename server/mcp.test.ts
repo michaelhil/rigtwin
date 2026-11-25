@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApi, type ApiOptions } from "./server.ts";
+import { viaPlayground } from "./test-support.ts";
 
 const ASSET = join(import.meta.dir, "..", "assets", "rig-b", "build");
 const temps: string[] = [];
@@ -14,12 +15,12 @@ afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true
 function start(o: Partial<ApiOptions> = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "synergon-mcp-test-")); temps.push(dataDir);
   const api = createApi({ dataDir, assetDir: ASSET, mode: "local", revision: "test", ...o });
-  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
+  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await viaPlayground(api, req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
   return { base: `http://127.0.0.1:${srv.port}`, stop: () => { api.close(); srv.stop(true); } };
 }
 let n = 0;
 async function rpc(base: string, method: string, params?: unknown, headers: Record<string, string> = {}) {
-  const res = await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...headers }, body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method, ...(params ? { params } : {}) }) });
+  const res = await fetch(`${base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...headers }, body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method, ...(params ? { params } : {}) }) });
   return { status: res.status, session: res.headers.get("mcp-session-id"), body: res.status === 202 ? null : await res.json() as any };
 }
 const call = (base: string, name: string, args: unknown, session?: string) => rpc(base, "tools/call", { name, arguments: args }, session ? { "mcp-session-id": session } : {});
@@ -30,7 +31,7 @@ function page(base: string, o: { answer?: Uint8Array<ArrayBuffer> } = {}) {
   const ctl = new AbortController(), views: any[] = [];
   let code = "";
   const ready = (async () => {
-    const res = await fetch(`${base}/api/live`, { signal: ctl.signal }), reader = res.body!.getReader(), dec = new TextDecoder();
+    const res = await fetch(`${base}/api/workspaces/playground/live`, { signal: ctl.signal }), reader = res.body!.getReader(), dec = new TextDecoder();
     let buf = "", opened = false;
     return new Promise<void>((resolve) => {
       (async () => {
@@ -46,7 +47,7 @@ function page(base: string, o: { answer?: Uint8Array<ArrayBuffer> } = {}) {
               if (ev === "session") { code = d.code; if (!opened) { opened = true; resolve(); } }
               if (ev === "view") {
                 views.push(d);
-                if (d.reply && o.answer) fetch(`${base}/api/picture?reply=${d.reply}&session=${code}`, { method: "POST", headers: { "x-synergon": "1", "content-type": "image/jpeg" }, body: o.answer });
+                if (d.reply && o.answer) fetch(`${base}/api/workspaces/playground/picture?reply=${d.reply}&session=${code}`, { method: "POST", headers: { "x-synergon": "1", "content-type": "image/jpeg" }, body: o.answer });
               }
             }
           }
@@ -61,16 +62,16 @@ const JPEG: Uint8Array<ArrayBuffer> = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1,
 describe("the MCP endpoint", () => {
   test("security review fixes: no batches, no 500 for prototype names, exact content type, own origin only, codes checked", async () => {
     const s = start();
-    const batch = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/list" }]) });
+    const batch = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/list" }]) });
     expect(batch.status).toBe(400); expect((await batch.json()).error.code).toBe(-32600);
     for (const args of [{ view: "constructor" }, { only: "constructor" }, { select: "__proto__" }]) { const r = await call(s.base, "look", args); expect(r.status).toBe(200); expect(r.body.result.isError).toBe(true); }
     for (const args of [{ from: "constructor", to: "monitor screen" }, { from: "toString", to: "hasOwnProperty" }]) { const r = await call(s.base, "measure", args); expect(r.status).toBe(200); expect(r.body.result.isError).toBe(true); }
     const r = await call(s.base, "adjust", { target: "constructor", by: 1 }); expect(r.body.result.isError).toBe(true);
-    const sneaky = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "text/plain;x=application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    const sneaky = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "text/plain;x=application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
     expect(sneaky.status).toBe(415);
-    const other = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    const other = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
     expect(other.status).toBe(403);
-    const own = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: s.base }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+    const own = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: s.base }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
     expect(own.status).toBe(200);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" });
     expect(text(await call(s.base, "look", { view: "top", viewer: "not a code at all" }, init.session!))).toContain("not a browser's code");
@@ -79,9 +80,9 @@ describe("the MCP endpoint", () => {
   });
   test("request names ending in -<number> are the server's; state shows only those", async () => {
     const s = start();
-    const claim = await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "mon-height-2" }) });
+    const claim = await fetch(`${s.base}/api/workspaces/playground/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "mon-height-2" }) });
     expect((await claim.json()).error.code).toBe("invalid_args");
-    await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "ignore-the-rules" }) });
+    await fetch(`${s.base}/api/workspaces/playground/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "ignore-the-rules" }) });
     await call(s.base, "adjust", { target: "monitor tilt", by: "1° up" });
     const st = text(await call(s.base, "state", {}));
     expect(st).not.toContain("ignore-the-rules"); expect(st).toContain("[a request named by its caller]"); expect(st).toContain("[mon-tilt-2]");
@@ -108,7 +109,7 @@ describe("the MCP endpoint", () => {
     expect(r.body.result.instructions.length).toBeLessThanOrEqual(4096);
     expect(r.session).toMatch(/^[0-9a-f]{32}$/);
     expect((await rpc(s.base, "initialize", { protocolVersion: "1999-01-01" })).body.result.protocolVersion).toBe("2025-11-25");
-    const note = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });
+    const note = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });
     expect(note.status).toBe(202);
     expect((await rpc(s.base, "nothing/here")).body.error.code).toBe(-32601);
     s.stop();
@@ -177,8 +178,8 @@ describe("the MCP endpoint", () => {
     const s = start({ mode: "deployed", personDir: null, limits: { pictureWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
-    const traces = (await (await fetch(`${s.base}/api/trace`)).json() as any).traces, actor = traces.at(-1).actor;
-    const follow = (session: string, who: string | null) => fetch(`${s.base}/api/follow`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
+    const traces = (await (await fetch(`${s.base}/api/workspaces/playground/trace`)).json() as any).traces, actor = traces.at(-1).actor;
+    const follow = (session: string, who: string | null) => fetch(`${s.base}/api/workspaces/playground/follow`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
     expect((await follow("ZZZZZZZZ", actor)).status).toBe(404);
     expect((await follow(a.code(), "not an id")).status).toBe(400);
     expect((await follow(a.code(), actor)).status).toBe(200);
@@ -217,7 +218,7 @@ describe("the MCP endpoint", () => {
   });
   test("the picture endpoint takes only an awaited JPEG from the asked page", async () => {
     const s = start({ limits: { pictureWaitMs: 1500 } }), p = page(s.base); await p.ready;
-    const post = (q: string, body: BodyInit, type = "image/jpeg") => fetch(`${s.base}/api/picture?${q}`, { method: "POST", headers: { "x-synergon": "1", "content-type": type }, body });
+    const post = (q: string, body: BodyInit, type = "image/jpeg") => fetch(`${s.base}/api/workspaces/playground/picture?${q}`, { method: "POST", headers: { "x-synergon": "1", "content-type": type }, body });
     expect((await post("reply=" + "0".repeat(32), JPEG)).status).toBe(404);
     const waiting = call(s.base, "look", { picture: true, viewer: p.code() });
     for (let i = 0; i < 100 && !p.views.length; i++) await Bun.sleep(10);
@@ -233,10 +234,10 @@ describe("the MCP endpoint", () => {
   });
   test("other web pages are refused; GET is 405; tool calls count against the deployed edit limits", async () => {
     const s = start({ mode: "deployed", limits: { editsPerMinutePerVisitor: 2 } });
-    const foreign = await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: "https://example.org" }, body: "{}" });
+    const foreign = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json", origin: "https://example.org" }, body: "{}" });
     expect(foreign.status).toBe(403);
-    expect((await fetch(`${s.base}/api/mcp`, { method: "POST", headers: { "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
-    expect((await fetch(`${s.base}/api/mcp`)).status).toBe(405);
+    expect((await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
+    expect((await fetch(`${s.base}/api/workspaces/playground/mcp`)).status).toBe(405);
     await call(s.base, "adjust", { target: "monitor height", by: "-1 cm" });
     await call(s.base, "adjust", { target: "monitor height", by: "-1 cm" });
     const third = await call(s.base, "adjust", { target: "monitor height", by: "-1 cm" });

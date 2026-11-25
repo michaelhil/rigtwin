@@ -17,7 +17,7 @@ bun install                  # the only install step
 bun run build                # parameters + sources -> assets/rig-b/build/rig-b.glb + manifest
 bun run check                # every check; must pass before a commit or a deploy
 bun run render --set sheet   # contact sheet (also: ortho, ids, groups, matched, focus, wiki)
-bun run serve                # viewer at http://127.0.0.1:4173/
+bun run serve                # workspaces and viewer at http://127.0.0.1:4173/
 bun run wiki index|lint|build
 bun run deploy --dry-run     # then `bun run deploy` (see wiki/50-implementation/deployment.md)
 ```

@@ -2,13 +2,12 @@
   "mcpServers": {
     "synergon": {
       "type": "http",
-      "url": "http://127.0.0.1:4173/api/mcp",
+      "url": "http://127.0.0.1:4173/api/workspaces/playground/mcp",
       "alwaysLoad": true
     },
     "synergon-public": {
       "type": "http",
-      "url": "https://synergon.mightwork.ai/api/mcp",
-      "alwaysLoad": true
+      "url": "${SYNERGON_WORKSPACE_MCP:-https://synergon.mightwork.ai/api/workspaces/set-SYNERGON_WORKSPACE_MCP/mcp}"
     }
   }
 }

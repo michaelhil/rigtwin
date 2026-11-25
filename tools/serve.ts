@@ -1,11 +1,13 @@
 // bun run serve [--port 4173] [--build <name>] [--viewer <dir>] [--data <dir> | --no-api]
 // Static server for the viewer, laid out exactly like the deployed dist/, with the synergon server
-// (server/server.ts, local mode) mounted on the same port under /api/: the shared Playground is kept in
-// <data>/playground/doc.json, by default ../synergon-projects/ next to the repository. `bun run rig` talks
+// (server/server.ts, local mode) mounted on the same port under /api/: the shared scenes (workspaces) are kept in
+// <data>/workspaces/<id>/doc.json, by default ../synergon-projects/ next to the repository. `bun run rig` talks
 // to it. render and ui-accept start it with an empty temporary data folder (data: "temp"), so no pose of
 // the Playground reaches a published picture. The served files:
-//   /            the bundled viewer (index.html, viewer.css, viewer.js), rebuilt in memory whenever
-//                a file under viewer/ or shared/ has changed; no manual bundling step
+//   /            the bundled page (index.html, viewer.css, app.js and its chunks), rebuilt in memory whenever
+//                a file under viewer/ or shared/ has changed; no manual bundling step. The same page answers
+//                /workspaces/* (the landing at /, the viewer at /workspaces/<id>, Manage at /workspaces/manage),
+//                as Caddy does (deploy/synergon.caddy)
 //   /asset/      assets/rig-b/build/   (or work/<build folder>/build/); /asset/manikin/ is assets/manikin/ (the person's packages)
 //   /libs/basis/ three's KTX2 transcoder (basis_transcoder.js, .wasm) from node_modules
 //   /wiki/       dist/wiki/ if `bun run wiki build` has been run (so the viewer's Documentation link works locally)
@@ -20,7 +22,7 @@ import { join, normalize, extname, resolve } from "node:path";
 import { existsSync, statSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { ROOT } from "./timeline.ts";
-import { bundleViewer, viewerSourceTime, type ViewerBundle } from "./bundle.ts";
+import { bundleViewer, viewerSourceTime, viewerDir, type ViewerBundle } from "./bundle.ts";
 import { currentVersion, sourceRevision } from "./version.ts";
 import { createApi, LOCAL_HOSTS } from "../server/server.ts";
 import { LIMITS } from "../server/limits.ts";
@@ -55,7 +57,7 @@ export function maskedCameras(dir: string): { json: any; used: string[]; skipped
   return { json: { ...src, cameras }, used, skipped };
 }
 
-const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream", ".webp": "image/webp" };
 
 /** The person's package, relative to the page, for version.json: the default dressed operator when its manifest is in `dir`
  *  (assets/manikin/ here, dist/asset/manikin/ in a release). The viewer loads a person only when version.json names one. */
@@ -66,7 +68,7 @@ export function personEntry(dir: string): { person?: { package: string } } {
 
 export function buildDir(buildFolder?: string, asset = "rig-b") { return buildFolder ? join(ROOT, "work", buildFolder, "build") : join(ROOT, "assets", asset, "build"); }
 
-/** Where the Playground of `bun run serve` lives: <data>/playground/doc.json. */
+/** Where the workspaces of `bun run serve` live: <data>/workspaces/<id>/doc.json. */
 export const DEFAULT_DATA = join(ROOT, "..", "synergon-projects");
 
 /** The viewer and (unless `data` is false) the synergon server on one port. `data: "temp"` gives the server an empty
@@ -80,6 +82,7 @@ export async function startServer(opts: { port?: number; buildFolder?: string; a
     ["/libs/basis/", join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis")],   // three's KTX2 transcoder, as dist/libs/basis/
     ["/asset/", buildDir(opts.buildFolder, opts.asset)],
     ...(opts.photos ? [["/_photos/", opts.photos] as [string, string]] : [["/private/", join(ROOT, "private")] as [string, string]]),
+    ["/landing-rig.webp", join(viewerDir(), "landing-rig.webp")],   // the landing's picture (bun run render --set landing)
     ["/work/", join(ROOT, "work")],
     ["/wiki/", join(ROOT, "dist", "wiki")],
     ["/_tools/", join(ROOT, "tools", "pages")],
@@ -97,6 +100,7 @@ export async function startServer(opts: { port?: number; buildFolder?: string; a
       if (answer) return answer;
       let path = decodeURIComponent(new URL(req.url).pathname);
       opts.requests?.push(path);
+      if (path === "/workspaces" || path.startsWith("/workspaces/")) path = "/index.html";   // a workspace's address is a page of the viewer
       if (path.endsWith("/")) path += "index.html";
       // the viewer looks for the live channel only when version.json says there is a server (no failed request otherwise)
       if (path === "/version.json") return Response.json({ ...currentVersion({ buildDir: buildDir(opts.buildFolder, opts.asset), asset: opts.asset, label: "working copy" }), ...(api ? { server: { format: SCENE_FORMAT } } : {}), ...personEntry(join(ROOT, "assets", "manikin")) }, { headers: { "cache-control": "no-store" } });
@@ -134,5 +138,5 @@ if (import.meta.main) {
   const data = args.includes("--no-api") ? false : opt("--data") ? resolve(opt("--data")!) : DEFAULT_DATA;
   const server = await startServer({ port: Number(opt("--port") ?? 4173), buildFolder: opt("--build") ?? process.env.SYNERGON_BUILD_DIR, data });
   console.log(`viewer: http://127.0.0.1:${server.port}/   (asset from ${buildDir(opt("--build") ?? process.env.SYNERGON_BUILD_DIR)})`);
-  console.log(data === false ? "no shared scene (--no-api)" : `shared scene: ${join(data, "playground", "doc.json")}; bun run rig talks to it`);
+  console.log(data === false ? "no shared scene (--no-api)" : `workspaces: ${join(data, "workspaces")}/<id>/doc.json (index ${join(data, "workspaces.sqlite")}); bun run rig talks to them`);
 }

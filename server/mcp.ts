@@ -1,12 +1,13 @@
-// The MCP endpoint of the synergon server (agent interface v2): POST /api/mcp, Model Context Protocol over Streamable HTTP,
-// tools only. The same five tools on the laptop (http://127.0.0.1:4173/api/mcp) and on the host
-// (https://synergon.mightwork.ai/api/mcp): adjust, look, measure, undo, state (shared/commands/intent.ts). Their schemas and
+// The MCP endpoint of a workspace of the synergon server (agent interface v2): POST /api/workspaces/<id>/mcp, Model Context
+// Protocol over Streamable HTTP, tools only. One endpoint (and one createMcp) per workspace: the address names the scene the tools
+// work in. The same tools on the laptop (http://127.0.0.1:4173/api/workspaces/playground/mcp) and on the host
+// (https://synergon.mightwork.ai/api/workspaces/<id>/mcp): adjust, look, measure, undo, state, person (shared/commands/intent.ts). Their schemas and
 // descriptions come from the command registry, the server's instructions (shown to the model at session start, at most
 // 4,096 characters in Claude Code) from the catalogue of adjustments, so nothing about them is written by hand.
 //
 // Kept small on purpose: JSON-RPC requests answered with one JSON body (no server-initiated stream: GET is 405), the
 // methods initialize, ping, tools/list and tools/call; notifications are accepted with 202. A tool call goes through the
-// same path as POST /api/command (guards, refusals, history, live channel). The caller is "Claude Code · <id>", with the id
+// same path as POST /api/workspaces/<id>/command (guards, refusals, history, live channel). The caller is "Claude Code · <id>", with the id
 // made from the MCP session (Mcp-Session-Id, made here at initialize) the same way as for any other client: a keyed hash.
 // The session also remembers the last viewer code `look` was given, so an agent names a browser once.
 //
@@ -24,7 +25,7 @@ const SESSION_RE = /^[0-9a-f]{32}$/;
 
 export interface ToolReply { ok: boolean; result?: any; error?: { code: string; message: string; hint: string } }
 export interface McpOptions {
-  /** run one command the way POST /api/command does (guards included) */
+  /** run one command the way POST /api/workspaces/<id>/command does (guards included) */
   exec(you: Actor, wire: { id: string; args: unknown; session?: string }, visitor: string): Promise<ToolReply>;
   secret: Buffer;
   instructions(): string;
@@ -97,7 +98,7 @@ export function createMcp(o: McpOptions) {
     }
   }
 
-  /** One POST /api/mcp, its body already read and parsed: one JSON-RPC message. Batches (dropped from MCP in 2025-06-18) are
+  /** One POST .../mcp, its body already read and parsed: one JSON-RPC message. Batches (dropped from MCP in 2025-06-18) are
    *  refused, so that one request is one rate-limited unit of work (security review of agent interface v2, finding 1). */
   async function handle(req: Request, body: unknown, visitor: string): Promise<Response> {
     const given = req.headers.get("mcp-session-id");

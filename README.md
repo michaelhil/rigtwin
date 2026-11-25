@@ -48,7 +48,7 @@ model reader; Chromium (from Playwright's cache or a local Chrome) for headless 
 bun install
 bun run build                # 0.2 s: parameters + sources -> assets/rig-b/build/rig-b.glb + manifest
 bun run check                # every check (about 5 s)
-bun run serve                # viewer at http://127.0.0.1:4173/
+bun run serve                # workspaces and viewer at http://127.0.0.1:4173/
 bun run render --set sheet   # contact sheet in work/renders/sheet/
 bun run wiki build           # static wiki site
 bun run deploy --dry-run     # see wiki/50-implementation/deployment.md

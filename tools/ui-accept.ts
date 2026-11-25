@@ -6,6 +6,7 @@
 //   --origin    test an already running server instead of starting one
 //   --baseline  a second running server with the previous viewer: machine-interface pictures are compared with it
 //   --shots     where the screenshots go (default work/renders/ui-accept)
+//   --ws-shots  where the workspace pages' screenshots go (default: <shots>/workspaces)
 // Exit code 1 when a test fails. Results are printed as a table and written as JSON.
 import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -16,6 +17,7 @@ import { Browser, Page } from "./render.ts";
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
 if (opt("--viewer")) process.env.SYNERGON_VIEWER_DIR = opt("--viewer");
 const SHOTS = opt("--shots") ? join(ROOT, opt("--shots")!) : join(ROOT, "work", "renders", "ui-accept");
+const WS_SHOTS = opt("--ws-shots") ?? join(SHOTS, "workspaces");
 const ONLY = opt("--only")?.split(",");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SIZES: [number, number][] = [[1440, 900], [1024, 768], [390, 800]];
@@ -59,6 +61,17 @@ class Session {
     const code = key.length === 1 ? `Key${key.toUpperCase()}` : key, vk = key === "Escape" ? 27 : key.toUpperCase().charCodeAt(0);
     await this.page.call("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode: vk });
     await this.page.call("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk });
+    this.actions++; await sleep(140);
+  }
+  /** scroll an element (a JS expression) to the middle of the window, as a person would before clicking it */
+  async reveal(js: string) { await this.ev(`(${js}).scrollIntoView({ block: 'center' })`); await sleep(120); }
+  /** text typed into the focused field (it replaces a selection, like typing does) */
+  async type(text: string) { await this.page.call("Input.insertText", { text }); this.actions++; await sleep(60); }
+  /** a key without a letter on it: Enter, Tab, the arrows */
+  async press(key: "Enter" | "Tab" | "ArrowDown" | "ArrowUp" | "Escape") {
+    const vk = { Enter: 13, Tab: 9, ArrowDown: 40, ArrowUp: 38, Escape: 27 }[key];
+    await this.page.call("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: vk, ...(key === "Enter" ? { text: "\r" } : {}) });
+    await this.page.call("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: vk });
     this.actions++; await sleep(140);
   }
   /** rectangle of a DOM element given by a JS expression, or null when it is absent or not displayed */
@@ -122,19 +135,32 @@ const results: Result[] = [];
 /** `warn`: passed, but the figure cannot be trusted (a loaded machine); printed as "warn" and kept in the JSON */
 const record = (id: string, name: string, pass: boolean, value: unknown, limit = "", warn = false) => { results.push({ id, name, pass, value: String(value), limit, ...(warn ? { warn } : {}) }); console.log(`${warn ? "warn" : pass ? "ok  " : "FAIL"} ${id} ${name}: ${value}${limit ? `   (limit: ${limit})` : ""}`); };
 
-let server: { stop: (force?: boolean) => void; port: number; reset: () => void } | null = null, ORIGIN = opt("--origin") ?? "";
-// the shared scene lives in an empty temporary folder, emptied again before every page (each test starts from a fresh Playground)
+let server: { stop: (force?: boolean) => void; port: number } | null = null, ORIGIN = opt("--origin") ?? "";
+// the workspaces live in an empty temporary folder; every test opens a workspace of its own, made just before (each test starts from a fresh scene)
 if (!ORIGIN) { const { startServer } = await import("./serve.ts"); server = await startServer({ port: 0, data: "temp" }); ORIGIN = `http://127.0.0.1:${server!.port}`; }
 const BASELINE = opt("--baseline");
 mkdirSync(SHOTS, { recursive: true });
 const browser = await Browser.launch();
 const allErrors: string[] = [];
+const WRITE = { "x-synergon": "1", "content-type": "application/json" };
+/** A new workspace on the server under test, as the landing's "Create workspace" makes it. */
+async function makeWorkspace(name?: string): Promise<{ id: string; name: string; created: string }> {
+  const r = await fetch(`${ORIGIN}/api/workspaces`, { method: "POST", headers: WRITE, body: JSON.stringify(name ? { name } : {}) });
+  if (r.status !== 201) throw new Error(`no workspace was made: HTTP ${r.status} ${await r.text()}`);
+  return r.json();
+}
+/** The address of a workspace made just now. */
+const freshAddress = async () => `${ORIGIN}/workspaces/${(await makeWorkspace("Trial")).id}`;     // one word: the default view's word count (T02) includes the workspace's name
 async function open(w: number, h: number, query = "", origin = ORIGIN): Promise<Session> {
-  if (origin === ORIGIN) server?.reset();
+  // the baseline server (--baseline) is a viewer from before workspaces: its page is the root
+  return openAt(origin === ORIGIN ? `${await freshAddress()}${query}` : `${origin}/${query}`, w, h);
+}
+/** The viewer at a full address, with the rig drawn and the person in the seat. */
+async function openAt(url: string, w: number, h: number): Promise<Session> {
   const page = await browser.page("about:blank");
   await page.viewport(w, h);
   await page.call("Page.setDownloadBehavior", { behavior: "deny" }).catch(() => {});
-  await page.call("Page.navigate", { url: `${origin}/${query}` });
+  await page.call("Page.navigate", { url });
   await page.waitFor("window.viewerReady || window.viewerError", "the viewer");
   const err = await page.evaluate("window.viewerError || null"); if (err) throw new Error(`viewer error: ${err}`);
   await sleep(350);
@@ -196,7 +222,7 @@ await test("T10", "load", async () => {
   const s = await open(1440, 900);
   // the scripts the page loads before it is ready (the person chunk comes after, on its own budget: T10b)
   const m = await s.ev(`(() => { const n = performance.getEntriesByType('navigation')[0], r = performance.getEntriesByType('resource'), at = window.viewerReadyAt ?? Infinity, js = (e) => e.initiatorType === 'script' || /\\.m?js(\\?|$)/.test(e.name), before = r.filter((e) => e.startTime <= at); return { bytes: n.transferSize + before.reduce((a, e) => a + e.transferSize, 0), body: n.decodedBodySize + before.reduce((a, e) => a + e.decodedBodySize, 0), requests: before.length + 1, js: before.filter(js).reduce((a, e) => a + e.decodedBodySize, 0), scripts: before.filter(js).length }; })()`);
-  const t = performance.now(); const p = await browser.page("about:blank"); await p.viewport(1440, 900); await p.call("Page.navigate", { url: `${ORIGIN}/` }); await p.waitFor("window.viewerReady", "viewer"); const ready = performance.now() - t; await p.close();
+  const address = await freshAddress(), t = performance.now(); const p = await browser.page("about:blank"); await p.viewport(1440, 900); await p.call("Page.navigate", { url: address }); await p.waitFor("window.viewerReady", "viewer"); const ready = performance.now() - t; await p.close();
   // Every script the default page loads before it is ready counts, against 800 kB in all (step-1 checkpoint review): the live client is a
   // default feature the owner asked for, so splitting it out would only move bytes the visitor loads anyway. Only modules that load after
   // the page is ready (the person, T10b) are split, each with its own budget. "Ready in at most 1 s" stays.
@@ -204,7 +230,7 @@ await test("T10", "load", async () => {
   await close(s);
 });
 await test("T10b", "the person arrives after the rig, with a loading line", async () => {
-  const t = performance.now(); const p = await browser.page("about:blank"); await p.viewport(1440, 900); await p.call("Page.navigate", { url: `${ORIGIN}/` });
+  const address = await freshAddress(), t = performance.now(); const p = await browser.page("about:blank"); await p.viewport(1440, 900); await p.call("Page.navigate", { url: address });
   await p.waitFor("window.viewerReady", "viewer"); const ready = performance.now() - t;
   const line = await p.waitFor("(() => { const e = document.querySelector('.person-status'); return e && !e.hidden ? e.textContent : null; })()", "the loading line", 5000).catch(() => "");
   const ok = await p.waitFor("viewer.person ? viewer.person.ready.then((ok) => ok ? 'yes' : 'no') : null", "the person", 30000).catch(() => "timeout"); const shown = performance.now() - t;
@@ -908,6 +934,314 @@ await test("T49", "URL interface: same pictures and state as the previous viewer
   writeFileSync(join(SHOTS, "machine-interface-comparison.txt"), rows.join("\n") + "\n");
   record("T49", "URL interface: same pictures and state as the previous viewer", worst < 0.002 && stateDiffs === 0, `${cases.length - 1} parameter sets at 1200×900 with ui=0: at most ${(worst * 100).toFixed(3)} % of pixels differ by more than 8/255; viewer.state() equal in ${cases.length - 1 - stateDiffs} of ${cases.length - 1}; ${operatorNote} (details in machine-interface-comparison.txt)`, "with look=previous (the earlier lighting): pictures equal up to antialiasing noise; state equal apart from the added keys");
 });
+// ---- workspaces: the landing, the switcher in the viewer, Manage --------------------------------------
+// The landing, Manage and the notices are plain pages; the viewer's tests above already run on /workspaces/<id>. The browser keeps one
+// storage for the whole run, so each test below starts from the storage it wants (plain()), and the server holds only the workspaces it
+// made (purge(), seed()). Pictures go to WS_SHOTS.
+mkdirSync(WS_SHOTS, { recursive: true });
+const wsShot = async (s: Session, name: string) => { await sleep(250); await s.page.screenshot(join(WS_SHOTS, `${name}.png`)); };
+interface Ws { id: string; name: string; created: string }
+const listAll = async (): Promise<Ws[]> => (await (await fetch(`${ORIGIN}/api/workspaces?limit=100`)).json()).workspaces;
+async function purge() { for (let w = await listAll(); w.length; w = await listAll()) for (const x of w) await fetch(`${ORIGIN}/api/workspaces/${x.id}`, { method: "DELETE", headers: WRITE }); }
+/** n workspaces named "<prefix> 1" … "<prefix> n", created in that order (so the newest is the last) */
+async function seed(n: number, prefix = "Space"): Promise<Ws[]> { const out: Ws[] = []; for (let i = 1; i <= n; i++) { out.push(await makeWorkspace(`${prefix} ${i}`)); await sleep(8); } return out; }
+const exists = async (id: string) => (await fetch(`${ORIGIN}/api/workspaces/${id}`)).status === 200;
+const RECENT = "synergon.recentWorkspaces", VIEWS = "synergon.agentViews";
+const uuid = () => crypto.randomUUID();
+/** A page of this server that starts with exactly the browser storage given (`{}`: none), then opens `path` and waits for `ready` (a JS expression); `ms` is the time that took. */
+async function plain(path: string, w: number, h: number, storage: Record<string, string>, ready = "document.querySelector('main.pg h1')"): Promise<Session & { ms: number }> {
+  const page = await browser.page("about:blank");
+  await page.viewport(w, h);
+  await page.call("Page.navigate", { url: `${ORIGIN}/api/health` });
+  await page.waitFor("document.readyState === 'complete'", "the server's health page");
+  await page.evaluate(`localStorage.clear(); ${Object.entries(storage).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)})`).join("; ")}; true`);
+  const t = performance.now();
+  await page.call("Page.navigate", { url: `${ORIGIN}${path}` });
+  await page.waitFor(ready, `the page ${path}`);
+  const s = new Session(page, w, h) as Session & { ms: number }; s.ms = performance.now() - t; s.x = w / 2; s.y = h / 2;
+  return s;
+}
+/** Closes a page; a page error the test provoked on purpose (a 404) is not counted. */
+const closeExpecting = async (s: Session, expected: RegExp) => { allErrors.push(...s.page.errors.filter((e) => !expected.test(e))); await s.close(); };
+const text = (s: Session) => s.ev<string>("document.body.innerText.replace(/\\s+/g, ' ').trim()");
+const rows = (s: Session, sel = ".wl-list .wrow-name") => s.ev<string[]>(`[...document.querySelectorAll(${JSON.stringify(sel)})].map((e) => e.textContent)`);
+const stored = (s: Session, key: string) => s.ev<any>(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}) ?? 'null')`);
+const onViewer = (s: Session) => s.page.waitFor("window.viewerReady || window.viewerError", "the viewer");
+const dlg = (what: string) => `[...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent.trim() === ${JSON.stringify(what)})`;
+const menuItem = (s: Session, what: string) => s.byText(what, "document.getElementById('ws-menu')");
+const openMenu = (s: Session) => s.clickEl("document.querySelector('.ws-name')", "the workspace name");
+
+await test("W01", "the landing: a small page, ready at once, no three.js, no model; its words when there is no workspace yet", async () => {
+  await purge();
+  const s = await plain("/", 1280, 900, {}, "document.querySelector('.wl-status')?.textContent");
+  const m = await s.ev<any>(`(() => { const r = performance.getEntriesByType('resource'), js = r.filter((e) => /\\.m?js(\\?|$)/.test(e.name));
+    return { js: js.reduce((a, e) => a + e.decodedBodySize, 0), scripts: js.length, heavy: r.map((e) => e.name).filter((n) => /\\.(glb|ktx2|wasm)|manifest|avatar|basis/.test(n)).map((n) => n.split('/').pop()), canvas: !!document.querySelector('canvas'), viewer: typeof window.viewer !== 'undefined' }; })()`);
+  const t = await text(s);
+  await wsShot(s, "01-landing-empty");
+  const lede = /shared copy of the rig and the person/.test(t) && /Anyone with its link can see it and change it/.test(t), empty = /There are no workspaces yet/.test(t), noContinue = !/Continue in/.test(t);
+  record("W01", "the landing: a small page, ready at once, no three.js, no model; its words when there is no workspace yet", m.js <= 40e3 && !m.canvas && !m.viewer && m.heavy.length === 0 && s.ms <= 1000 && lede && empty && noContinue,
+    `${(m.js / 1e3).toFixed(1)} kB of script in ${m.scripts} file(s); ready ${s.ms.toFixed(0)} ms; ${m.heavy.length ? "heavy files: " + m.heavy.join(", ") : "no model, person or transcoder file"}; canvas: ${m.canvas}; says what a workspace is: ${lede}; empty line: ${empty}; no Continue: ${noContinue}`,
+    "≤ 40 kB of script, no glb, wasm or person file, no canvas, ready ≤ 1 s");
+  await closeExpecting(s, /404/);
+});
+await test("W02", "create a workspace with a name from the landing, then Continue brings it back", async () => {
+  await purge();
+  const s = await plain("/", 1280, 900, {});
+  await s.clickEl("document.getElementById('new-name')", "the name field"); await s.type("Pump hall");
+  await s.clickEl(s.byText("Create workspace"), "Create workspace");
+  await s.page.waitFor("location.pathname.startsWith('/workspaces/') && (window.viewerReady || window.viewerError)", "the new workspace's viewer");
+  const bar = await s.ev<string>("document.querySelector('.ws-title')?.textContent ?? ''"), made = (await listAll()).map((w) => w.name), recents = await stored(s, RECENT);
+  const id = (await s.ev<string>("location.pathname")).split("/").pop()!;
+  await s.page.call("Page.navigate", { url: `${ORIGIN}/` });
+  await s.page.waitFor("document.querySelector('.hero-primary a')", "Continue");
+  const cont = await s.ev<{ text: string; href: string }>("(() => { const a = document.querySelector('.hero-primary a'); return { text: a.textContent, href: new URL(a.href).pathname }; })()");
+  record("W02", "create a workspace with a name from the landing, then Continue brings it back", bar === "Pump hall" && made.length === 1 && made[0] === "Pump hall" && recents?.[0]?.id === id && cont.text === "Continue in Pump hall" && cont.href === `/workspaces/${id}`,
+    `the top bar says "${bar}"; the server holds ${JSON.stringify(made)}; Recent holds it: ${recents?.[0]?.id === id}; the landing offers "${cont.text}" → ${cont.href}`);
+  await closeExpecting(s, /404/);
+});
+await test("W03", "Recent in this browser: five at most, newest first, Continue is the newest; one that is gone is dropped; no cookie", async () => {
+  await purge();
+  const w = await seed(6), now = Date.now();
+  const s = await plain("/", 1280, 900, { [RECENT]: JSON.stringify(w.map((x, i) => ({ id: x.id, name: x.name, opened: now - (i + 1) * 60_000 }))) }, "document.querySelector('.pg-list li')");
+  const shown = await rows(s, ".pg-list .wrow-name"), cont = await s.ev<string>("document.querySelector('.hero-primary a')?.textContent ?? ''"), cookie = await s.ev<string>("document.cookie");
+  await closeExpecting(s, /404/);
+  // the newest entry is a workspace that the server does not know: it is dropped, and Continue moves to the next
+  const ghost = uuid(), g = await plain("/", 1280, 900, { [RECENT]: JSON.stringify([{ id: ghost, name: "Gone away", opened: now }, { id: w[0].id, name: w[0].name, opened: now - 60_000 }]) }, "document.querySelector('.pg-list li')");
+  await g.page.waitFor("!document.body.innerText.includes('Gone away')", "the unknown workspace to leave the list");
+  const kept = (await stored(g, RECENT)) as { id: string }[], cont2 = await g.ev<string>("document.querySelector('.hero-primary a')?.textContent ?? ''");
+  await closeExpecting(g, /404/);
+  record("W03", "Recent in this browser: five at most, newest first, Continue is the newest; one that is gone is dropped; no cookie",
+    shown.length === 5 && shown[0] === w[0].name && shown[4] === w[4].name && cont === `Continue in ${w[0].name}` && kept.length === 1 && kept[0].id === w[0].id && cont2 === `Continue in ${w[0].name}` && cookie === "",
+    `six stored, ${shown.length} shown, first ${shown[0]}; "${cont}"; an unknown id is dropped from the list and from storage (${kept.length} left), Continue moves on to "${cont2}"; cookies: ${cookie === "" ? "none" : cookie}`);
+  // the picture of the landing with three workspaces, two of them in Recent
+  await purge(); const three = await seed(3, "Cell");
+  const t = await plain("/", 1280, 900, { [RECENT]: JSON.stringify(three.slice(0, 2).map((x, i) => ({ id: x.id, name: x.name, opened: now - i * 3_600_000 - 5 * 60_000 }))) }, "document.querySelector('.wl-list li')");
+  await wsShot(t, "02-landing-with-3"); await closeExpecting(t, /404/);
+});
+await test("W04", "Browse workspaces: newest first, a search box from 7, Show more, open one", async () => {
+  await purge();
+  const six = await seed(6), few = await plain("/", 1280, 900, {}, "document.querySelector('.wl-list li')"), noBox = await few.ev<boolean>("!document.querySelector('.wl-search')?.getClientRects().length"); await closeExpecting(few, /404/);
+  const rest = await seed(6, "Bay"), all = [...six, ...rest];
+  const s = await plain("/", 1280, 900, {}, "document.querySelector('.wl-more button')");
+  const first = await rows(s), box = await s.rect("document.querySelector('.wl-search input')");
+  await wsShot(s, "03-landing-with-12");
+  await s.reveal(s.byText("Show more")); await s.clickEl(s.byText("Show more"), "Show more");
+  await s.page.waitFor("document.querySelectorAll('.wl-list li').length >= 12", "all twelve");
+  const everyone = await rows(s), newestFirst = everyone[0] === all[11].name && everyone[11] === all[0].name;
+  await s.clickEl("document.querySelector('.wl-search input')", "the search box"); await s.type("Bay 3");
+  await s.page.waitFor("document.querySelectorAll('.wl-list li').length === 1", "the search result");
+  const found = await rows(s);
+  await s.press("Escape");                                     // Escape clears the search
+  await s.page.waitFor("document.querySelectorAll('.wl-list li').length >= 10", "the list again");
+  await s.type("nothing like this"); await s.page.waitFor("document.querySelector('.wl-status')?.textContent.includes('No workspace')", "the words for a search that finds nothing");
+  const none = await s.ev<string>("document.querySelector('.wl-status').textContent");
+  await s.press("Escape"); await s.page.waitFor("document.querySelectorAll('.wl-list li').length >= 10", "the list again");
+  await s.clickEl("document.querySelector('.wl-list a')", "the newest workspace");
+  await s.page.waitFor("location.pathname.startsWith('/workspaces/') && (window.viewerReady || window.viewerError)", "the viewer");
+  const where = await s.ev<string>("location.pathname"), title = await s.ev<string>("document.querySelector('.ws-title')?.textContent");
+  record("W04", "Browse workspaces: newest first, a search box from 7, Show more, open one",
+    noBox && !!box && first.length === 10 && newestFirst && found.length === 1 && found[0] === "Bay 3" && /No workspace has/.test(none) && where === `/workspaces/${all[11].id}` && title === all[11].name,
+    `with 6 workspaces no search box: ${noBox}; with 12 the box is there: ${!!box}; first page ${first.length} rows, then all ${everyone.length}, newest first: ${newestFirst}; "Bay 3" finds ${JSON.stringify(found)}; no match says "${none}"; the first row opens "${title}" (${where === `/workspaces/${all[11].id}`})`);
+  await closeExpecting(s, /404/);
+});
+await test("W05", "rename: the new name shows at once in a second page and in Recent; an empty name is refused", async () => {
+  await purge();
+  const [ws] = await seed(1, "Before"), address = `${ORIGIN}/workspaces/${ws.id}?person=0`;
+  const a = await openAt(address, 1280, 900), b = await openAt(address, 1280, 900);
+  await openMenu(a); await a.clickEl(menuItem(a, "Rename…"), "Rename");
+  const prefilled = await a.ev<string>("document.querySelector('dialog[open] input')?.value ?? ''");
+  await wsShot(a, "05-rename");
+  await a.ev("document.querySelector('dialog[open] input').value = ''"); await a.press("Enter");
+  const refused = await a.ev<string>("document.querySelector('dialog[open] .dlg-err')?.textContent ?? ''");
+  await a.ev("document.querySelector('dialog[open] input').select()"); await a.type("Renamed by A"); await a.press("Enter");
+  await a.page.waitFor("!document.querySelector('dialog[open]')", "the dialog to close");
+  const nameA = await a.ev<string>("document.querySelector('.ws-title').textContent"), t0 = performance.now();
+  const nameB = await b.page.waitFor("document.querySelector('.ws-title').textContent === 'Renamed by A' ? 'Renamed by A' : null", "the second page to show the new name", 5000).catch(() => "not seen");
+  const seenIn = performance.now() - t0, titleB = await b.ev<string>("document.title"), server = (await listAll()).map((w) => w.name), recents = await stored(a, RECENT);
+  record("W05", "rename: the new name shows at once in a second page and in Recent; an empty name is refused",
+    prefilled === "Before 1" && /name/i.test(refused) && nameA === "Renamed by A" && nameB === "Renamed by A" && /Renamed by A/.test(titleB) && server[0] === "Renamed by A" && !!recents?.some((r: any) => r.id === ws.id && r.name === "Renamed by A"),
+    `the dialog starts with "${prefilled}"; an empty name is refused ("${refused}"); page A shows "${nameA}"; page B shows "${nameB}" ${seenIn.toFixed(0)} ms after the save, its tab title "${titleB}"; the server holds ${JSON.stringify(server)}; Recent holds the new name`);
+  await closeExpecting(a, /404/); await closeExpecting(b, /404/);
+});
+await test("W06", "delete: one confirmation that names the workspace; Escape cancels; the other page shows a plain notice", async () => {
+  await purge();
+  const [ws] = await seed(1, "Doomed"), address = `${ORIGIN}/workspaces/${ws.id}?person=0`;
+  const a = await openAt(address, 1280, 900), b = await openAt(address, 1280, 900);
+  await openMenu(a); await a.clickEl(menuItem(a, "Delete workspace…"), "Delete workspace");
+  const asked = await a.ev<{ title: string; body: string }>("({ title: document.querySelector('dialog[open] h2').textContent, body: document.querySelector('dialog[open] .dlg-body').textContent })");
+  await wsShot(a, "06-delete-confirmation");
+  await a.press("Escape");
+  const closed = await a.ev<boolean>("!document.querySelector('dialog[open]')"), still = await exists(ws.id);
+  await openMenu(a); await a.clickEl(menuItem(a, "Delete workspace…"), "Delete workspace");
+  await a.clickEl(dlg("Delete workspace"), "Delete workspace (confirm)");
+  await a.page.waitFor("location.pathname === '/' && document.querySelector('main.pg')", "the landing after the delete");
+  const notice = await b.page.waitFor("document.querySelector('.gone') ? document.querySelector('.gone').innerText : null", "the notice in the second page", 6000).catch(() => "");
+  await wsShot(b, "07-deleted-notice");
+  const focus = await b.ev<string>("document.activeElement?.textContent ?? ''"), inert = await b.ev<boolean>("document.getElementById('stage').hasAttribute('inert')"), href = await b.ev<string>("new URL(document.querySelector('.gone a').href).pathname");
+  const gone = !(await exists(ws.id)), recents = (await stored(a, RECENT)) ?? [];
+  record("W06", "delete: one confirmation that names the workspace; Escape cancels; the other page shows a plain notice",
+    asked.title === "Delete “Doomed 1”?" && /gone for everyone/.test(asked.body) && closed && still && gone && /deleted/.test(notice) && focus === "Back to workspaces" && href === "/" && inert && !recents.some((r: any) => r.id === ws.id),
+    `the question: "${asked.title}" ${JSON.stringify(asked.body)}; Escape closed it and kept the workspace: ${closed && still}; then deleted, gone on the server: ${gone}; the other page: "${notice.replace(/\n+/g, " ")}" with focus on "${focus}" leading to ${href}; the page behind is inert: ${inert}; dropped from Recent: ${!recents.some((r: any) => r.id === ws.id)}`);
+  await closeExpecting(a, /404/); await closeExpecting(b, /404/);
+});
+await test("W07", "Manage: tick boxes, select all, one confirmation with the count, bulk delete", async () => {
+  await purge();
+  const w = await seed(5, "Old");
+  const s = await plain("/workspaces/manage", 1280, 900, {}, "document.querySelectorAll('.wl-list li').length === 5");
+  const disabled0 = await s.ev<boolean>("document.querySelector('.mg-bar .danger').disabled");
+  await s.clickEl("document.getElementById('select-all')", "Select all shown");
+  const all5 = await s.ev<{ n: number; label: string }>("({ n: document.querySelectorAll('.wl-list input:checked').length, label: document.querySelector('.mg-bar .danger').textContent })");
+  await s.clickEl("document.querySelector('.wl-list li:nth-child(2) input')", "one row's box");
+  const four = await s.ev<{ n: number; label: string; summary: string }>("({ n: document.querySelectorAll('.wl-list input:checked').length, label: document.querySelector('.mg-bar .danger').textContent, summary: document.querySelector('.mg-bar .muted').textContent })");
+  await wsShot(s, "08-manage");
+  await s.clickEl("document.querySelector('.mg-bar .danger')", "Delete 4 workspaces");
+  const asked = await s.ev<{ title: string; body: string }>("({ title: document.querySelector('dialog[open] h2').textContent, body: document.querySelector('dialog[open] .dlg-body').textContent })");
+  await s.press("Escape"); const escClosed = await s.ev<boolean>("!document.querySelector('dialog[open]')"), kept = (await listAll()).length;
+  await s.clickEl("document.querySelector('.mg-bar .danger')", "Delete 4 workspaces"); await s.clickEl(dlg("Delete 4 workspaces"), "Delete 4 workspaces (confirm)");
+  await s.page.waitFor("document.querySelectorAll('.wl-list li').length === 1", "one row left");
+  const left = await listAll(), result = await s.ev<string>("document.querySelector('.result').textContent");
+  record("W07", "Manage: tick boxes, select all, one confirmation with the count, bulk delete",
+    disabled0 && all5.n === 5 && all5.label === "Delete 5 workspaces" && four.n === 4 && four.label === "Delete 4 workspaces" && /4 selected/.test(four.summary) && asked.title === "Delete 4 workspaces?" && /gone for everyone/.test(asked.body) && escClosed && kept === 5 && left.length === 1 && left[0].id === w[3].id && /4 workspaces deleted/.test(result),
+    `nothing ticked: delete disabled ${disabled0}; select all ticks ${all5.n} ("${all5.label}"); one unticked: ${four.n} ("${four.summary}"); the question "${asked.title}" ${JSON.stringify(asked.body)}; after Escape all ${kept} are still there; after the confirmation one is left (${left.map((x) => x.name).join(", ")}) and the page says "${result}"`);
+  await closeExpecting(s, /404/);
+});
+await test("W08", "an unknown workspace address: a plain notice with a way back; nothing of the viewer is loaded; dropped from Recent", async () => {
+  await purge();
+  const ghost = uuid(), s = await plain(`/workspaces/${ghost}`, 1280, 900, { [RECENT]: JSON.stringify([{ id: ghost, name: "Ghost", opened: Date.now() }]) });
+  const t = await text(s), link = await s.ev<string>("new URL(document.querySelector('main a.btn').href).pathname"), recents = (await stored(s, RECENT)) ?? [];
+  const heavy = await s.ev<string[]>("performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /\\.(glb|ktx2|wasm)|manifest|avatar|basis/.test(n))");
+  await wsShot(s, "11-unknown-workspace");
+  await s.page.call("Page.navigate", { url: `${ORIGIN}/workspaces/not-an-id` });
+  const t2 = await s.page.waitFor("document.querySelector('main.pg h1')?.textContent", "the notice for a wrong address");
+  record("W08", "an unknown workspace address: a plain notice with a way back; nothing of the viewer is loaded; dropped from Recent",
+    /This workspace is not here/.test(t) && /gone for everyone/.test(t) && link === "/" && recents.length === 0 && heavy.length === 0 && /not here/.test(t2),
+    `"${t.slice(0, 160)}"; the button leads to ${link}; Recent is empty: ${recents.length === 0}; viewer files requested: ${heavy.length}; an address that is no id says "${t2}"`);
+  await closeExpecting(s, /404/);
+});
+await test("W09", "phone width (375 px): the landing, Manage and the viewer's top bar fit and read well", async () => {
+  await purge();
+  const w = await seed(12, "Station");
+  const s = await plain("/", 375, 800, { [RECENT]: JSON.stringify(w.slice(-3).map((x, i) => ({ id: x.id, name: x.name, opened: Date.now() - i * 7_200_000 }))) }, "document.querySelector('.wl-more button')");
+  const fit = `(() => { const W = document.documentElement.clientWidth, bad = []; for (const e of document.querySelectorAll('main *')) { const r = e.getBoundingClientRect(); if (r.width && !e.classList.contains('sr') && (r.right > W + 0.5 || r.left < -0.5)) bad.push((e.className || e.tagName) + ' ' + Math.round(r.right)); }
+    return { scroll: document.documentElement.scrollWidth, bad, small: [...document.querySelectorAll('main button, main a.btn, main input[type=text], main input[type=search]')].filter((e) => e.getClientRects().length && e.getBoundingClientRect().height < 32).map((e) => (e.textContent || e.type) + ' ' + Math.round(e.getBoundingClientRect().height)),
+      boxes: [...document.querySelectorAll('.mg-row input[type=checkbox]')].filter((e) => e.getBoundingClientRect().width < 22).length }; })()`;
+  const land = await s.ev<any>(fit);
+  await wsShot(s, "09-landing-375");
+  await s.page.call("Page.navigate", { url: `${ORIGIN}/workspaces/manage` }); await s.page.waitFor("document.querySelectorAll('.wl-list li').length >= 10", "Manage");
+  const mg = await s.ev<any>(fit);
+  await wsShot(s, "09b-manage-375");
+  await closeExpecting(s, /404/);
+  const v = await openAt(`${ORIGIN}/workspaces/${w[11].id}?person=0`, 375, 800);
+  const boxes = await v.ev<any>(`(() => { const r = (s) => { const e = document.querySelector(s); const b = e && e.getClientRects().length ? e.getBoundingClientRect() : null; return b && { x: b.left, y: b.top, r: b.right, b: b.bottom }; }; return { bar: r('#ws-bar'), tool: r('#toolbar'), scroll: document.documentElement.scrollWidth }; })()`);
+  await openMenu(v); await sleep(200);
+  const menu = await v.ev<any>("(() => { const b = document.getElementById('ws-menu').getBoundingClientRect(); return { x: b.left, r: b.right, b: b.bottom, W: innerWidth, H: innerHeight }; })()");
+  await wsShot(v, "10-viewer-375-menu");
+  const apart = !!boxes.bar && !!boxes.tool && boxes.bar.b <= boxes.tool.y + 0.5, inside = menu.x >= 0 && menu.r <= menu.W && menu.b <= menu.H;
+  record("W09", "phone width (375 px): the landing, Manage and the viewer's top bar fit and read well",
+    land.scroll <= 375 && land.bad.length === 0 && land.small.length === 0 && mg.scroll <= 375 && mg.bad.length === 0 && mg.small.length === 0 && mg.boxes === 0 && apart && inside && boxes.scroll <= 375,
+    `landing: scroll width ${land.scroll}, ${land.bad.length} element(s) past the edge, ${land.small.length} control(s) under 32 px; Manage: ${mg.scroll}, ${mg.bad.length}, ${mg.small.length}, tick boxes under 22 px: ${mg.boxes}; viewer: the workspace bar sits above the toolbar (${apart}), the menu is inside the window (${inside}), scroll width ${boxes.scroll}`);
+  await closeExpecting(v, /404/);
+});
+await test("W10", "the top bar's menu: every entry, keyboard only (arrows, Escape), the recent ones, All workspaces, New workspace", async () => {
+  await purge();
+  const w = await seed(3, "Hall"), now = Date.now();
+  const s = await plain(`/`, 1280, 900, { [RECENT]: JSON.stringify(w.map((x, i) => ({ id: x.id, name: x.name, opened: now - i * 1000 }))) });
+  await s.page.call("Page.navigate", { url: `${ORIGIN}/workspaces/${w[0].id}?person=0` }); await s.page.waitFor("location.pathname.startsWith('/workspaces/') && (window.viewerReady || window.viewerError)", "the viewer"); await sleep(300);
+  // keyboard only: focus the name, open with Enter, move with the arrows, close with Escape and land back on the name
+  await s.ev("document.querySelector('.ws-name').focus()");
+  await s.press("Enter");
+  const open1 = await s.ev<{ expanded: string; focus: string; items: string[] }>("({ expanded: document.querySelector('.ws-name').getAttribute('aria-expanded'), focus: document.activeElement.textContent, items: [...document.querySelectorAll('#ws-menu .mi')].map((e) => e.textContent) })");
+  await s.press("ArrowDown"); const second = await s.ev<string>("document.activeElement.textContent");
+  const ring = await s.ev<string>("(() => { const e = document.activeElement; return e.matches(':focus-visible') ? getComputedStyle(e).backgroundColor : 'no focus-visible'; })()");
+  await wsShot(s, "04-viewer-menu-open");
+  await s.press("Escape");
+  const after = await s.ev<{ expanded: string; focus: string; shut: boolean; ring: string }>("({ expanded: document.querySelector('.ws-name').getAttribute('aria-expanded'), focus: document.activeElement.className, shut: document.getElementById('ws-menu').hidden, ring: getComputedStyle(document.activeElement).outlineStyle })");
+  // a click elsewhere closes it too
+  await s.press("Enter"); const [ex, ey] = await s.empty(); await s.click(ex, ey, "empty space"); const shut2 = await s.ev<boolean>("document.getElementById('ws-menu').hidden");
+  // the menu's links: the other recent ones and All workspaces
+  await s.ev("document.querySelector('.ws-name').click()");
+  const links = await s.ev<{ t: string; h: string }[]>("[...document.querySelectorAll('#ws-menu a')].map((a) => ({ t: a.textContent, h: new URL(a.href).pathname }))");
+  // New workspace from the menu: a dialog with an optional name; creating it opens the new one
+  await s.clickEl(menuItem(s, "New workspace…"), "New workspace"); await s.type("Made from the menu"); await s.press("Enter");
+  await s.page.waitFor(`location.pathname !== '/workspaces/${w[0].id}' && (window.viewerReady || window.viewerError)`, "the new workspace");
+  const nowIn = await s.ev<string>("document.querySelector('.ws-title').textContent");
+  record("W10", "the top bar's menu: every entry, keyboard only (arrows, Escape), the recent ones, All workspaces, New workspace",
+    JSON.stringify(open1.items.slice(0, 3)) === JSON.stringify(["Copy workspace link", "Rename…", "New workspace…"]) && open1.items.includes("All workspaces") && open1.items.at(-1) === "Delete workspace…" && open1.expanded === "true" && open1.focus === "Copy workspace link" && second === "Rename…" && ring !== "no focus-visible" &&
+    after.expanded === "false" && after.shut && /ws-name/.test(after.focus) && after.ring === "solid" && shut2 && links.some((l) => l.t === "Hall 2" && l.h === `/workspaces/${w[1].id}`) && !links.some((l) => l.t === "Hall 1") && links.some((l) => l.t === "All workspaces" && l.h === "/") && nowIn === "Made from the menu",
+    `entries: ${open1.items.join(" | ")}; Enter opens it with focus on "${open1.focus}", the arrow goes to "${second}"; Escape closes it and the name shows a focus ring (${after.ring}); a click elsewhere closes it: ${shut2}; links ${links.map((l) => `${l.t} → ${l.h}`).join(", ")}; New workspace… made "${nowIn}"`);
+  await closeExpecting(s, /404/);
+});
+await test("W11", "agent views: the stored choice belongs to one workspace; an older one-word setting is not read", async () => {
+  await purge();
+  const [x, y] = await seed(2, "Choice");
+  const a = await openAt(`${ORIGIN}/workspaces/${x.id}?person=0`, 1280, 900);
+  await a.ev("localStorage.setItem('synergon.agentViews', 'always')");                          // what an older page stored for every workspace
+  const at = async (id: string) => { await a.page.call("Page.navigate", { url: `${ORIGIN}/workspaces/${id}?person=0` }); await a.page.waitFor("document.querySelector('.live-views select')", "the views setting", 20000); return a.ev<string>("document.querySelector('.live-views select').value"); };
+  const old = await at(x.id);
+  await a.ev(`(() => { const s = document.querySelector('.live-views select'); s.value = 'always'; s.dispatchEvent(new Event('change')); })()`);
+  const map = await stored(a, VIEWS), other = await at(y.id), back = await at(x.id);
+  record("W11", "agent views: the stored choice belongs to one workspace; an older one-word setting is not read",
+    old === "ask" && map && map[x.id] === "always" && Object.keys(map).length === 1 && other === "ask" && back === "always",
+    `an old plain "always" is read as "${old}"; after choosing always here the store is ${JSON.stringify(map)}; the other workspace shows "${other}", this one again "${back}"`);
+  await closeExpecting(a, /404/);
+});
+await test("W12", "Connect an agent: this workspace's own agent address, with Copy", async () => {
+  await purge();
+  const [ws] = await seed(1, "Agent");
+  const s = await openAt(`${ORIGIN}/workspaces/${ws.id}?person=0`, 1280, 900);
+  await s.clickEl(s.byText("More"), "More");
+  const r = await s.ev<{ head: string; value: string; copy: boolean }>("({ head: [...document.querySelectorAll('#more h3')].map((h) => h.textContent).find((t) => /Connect/.test(t)) ?? '', value: document.querySelector('.connect input')?.value ?? '', copy: [...document.querySelectorAll('.connect button')].some((b) => b.textContent === 'Copy address') })");
+  record("W12", "Connect an agent: this workspace's own agent address, with Copy", r.head === "Connect an agent" && r.value === `${ORIGIN}/api/workspaces/${ws.id}/mcp` && r.copy, `heading "${r.head}"; address ${r.value}; Copy address button: ${r.copy}`);
+  await closeExpecting(s, /404/);
+});
+await test("W14", "the landing's first screen: name, one sentence, one primary action, the picture; Continue is primary when there is a recent workspace", async () => {
+  await purge();
+  const w = await seed(4, "Cell");
+  const none = await plain("/", 1280, 900, {}, "document.querySelector('.hero-pic')");
+  await none.page.waitFor("document.querySelector('.hero-pic').complete && document.querySelector('.hero-pic').naturalWidth > 0", "the picture");
+  const a = await none.ev<any>(`(() => { const i = document.querySelector('.hero-pic'), r = performance.getEntriesByType('resource').find((e) => e.name.endsWith('landing-rig.webp')), c = document.querySelector('.pg-new button'), t = document.querySelector('.hero-text').getBoundingClientRect(), p = i.getBoundingClientRect();
+    return { w: i.getAttribute('width'), h: i.getAttribute('height'), bytes: r?.encodedBodySize ?? 0, alt: i.alt, create: c.className, cont: !!document.querySelector('.hero-primary a'), cy: c.getBoundingClientRect().top, beside: p.left >= t.right - 1, h1: document.querySelector('h1').textContent, lede: document.querySelector('.lede').textContent, note: document.querySelector('.pg-note').textContent, heavy: performance.getEntriesByType('resource').some((e) => /\.(glb|wasm)|manifest/.test(e.name)), canvas: !!document.querySelector('canvas') }; })()`);
+  await wsShot(none, "01-landing-empty"); await closeExpecting(none, /404/);
+  const some = await plain("/", 1280, 900, { [RECENT]: JSON.stringify([{ id: w[3].id, name: w[3].name, opened: Date.now() }]) }, "document.querySelector('.hero-primary a')");
+  const b = await some.ev<any>(`(() => { const p = document.querySelector('.hero-primary a').getBoundingClientRect(), c = document.querySelector('.pg-new button'); return { cls: document.querySelector('.hero-primary a').className, create: c.className, py: p.top, cy: c.getBoundingClientRect().top, bg: getComputedStyle(c).backgroundColor }; })()`);
+  await wsShot(some, "02a-landing-with-recent"); await closeExpecting(some, /404/);
+  const ph = await plain("/", 375, 800, {}, "document.querySelector('.hero-pic')");
+  const c = await ph.ev<any>("(() => { const i = document.querySelector('.hero-pic').getBoundingClientRect(), t = document.querySelector('.hero-text').getBoundingClientRect(); return { below: i.top >= t.bottom - 1, scroll: document.documentElement.scrollWidth, w: Math.round(i.width), h: Math.round(i.height) }; })()");
+  await closeExpecting(ph, /404/);
+  record("W14", "the landing's first screen: name, one sentence, one primary action, the picture; Continue is primary when there is a recent workspace",
+    a.w === "960" && a.h === "720" && a.bytes > 0 && a.bytes <= 60_000 && a.alt.length > 20 && /primary/.test(a.create) && !a.cont && a.beside && a.h1 === "Synergon" && /remote operator/.test(a.lede) && /Anyone with its link can see it and change it/.test(a.note) && !a.heavy && !a.canvas &&
+    /primary/.test(b.cls) && !/primary/.test(b.create) && b.py < b.cy && c.below && c.scroll <= 375 && Math.abs(c.w / c.h - 4 / 3) < 0.02,
+    `picture ${a.w}×${a.h} attributes, ${a.bytes} bytes, beside the text on a wide screen: ${a.beside}, below it at 375 px: ${c.below} (${c.w}×${c.h}); with no recent workspace Create is primary (${a.create}); with one, Continue is primary (${b.cls}) and above Create (${b.create}); no three.js or model: ${!a.heavy && !a.canvas}`);
+});
+await test("W15", "touch screens: the hint on the 3D view fits on one line at 375 px and speaks of touch", async () => {
+  const w = await makeWorkspace("Touch"), page = await browser.page("about:blank");
+  await page.viewport(375, 800); await page.call("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  await page.call("Page.navigate", { url: `${ORIGIN}/workspaces/${w.id}?person=0` }); await page.waitFor("window.viewerReady || window.viewerError", "the viewer"); await sleep(300);
+  const r = await page.evaluate("(() => { const h = document.getElementById('hint'), b = h.getBoundingClientRect(), s = getComputedStyle(h); return { text: h.textContent, lines: (() => { const g = document.createRange(); g.selectNodeContents(h); return new Set([...g.getClientRects()].map((q) => Math.round(q.top))).size; })(), w: b.width, coarse: matchMedia('(pointer: coarse)').matches }; })()");
+  allErrors.push(...page.errors); await page.close();
+  record("W15", "touch screens: the hint on the 3D view fits on one line at 375 px and speaks of touch", r.coarse ? (/pinch/.test(r.text) && /tap/.test(r.text) && r.lines <= 1 && r.w <= 375 - 16) : false, `"${r.text}" is ${r.lines} line(s), ${Math.round(r.w)} px wide (touch emulated: ${r.coarse})`);
+});
+await test("W16", "pictures: the landing with the Playground and three others; a workspace with the person shown", async () => {
+  await purge();
+  const [pg] = [await makeWorkspace("Playground")]; await sleep(8); await seed(3, "Cell");
+  const l = await plain("/", 1280, 900, { [RECENT]: JSON.stringify([{ id: pg.id, name: pg.name, opened: Date.now() - 20 * 60_000 }]) }, "document.querySelector('.hero-primary a')");
+  await l.page.waitFor("document.querySelector('.hero-pic').complete", "the picture"); await wsShot(l, "02-landing-playground-plus-3"); await closeExpecting(l, /404/);
+  const v = await openAt(`${ORIGIN}/workspaces/${pg.id}`, 1280, 900), ok = await v.ev<boolean>("!!viewer.person && viewer.person.state().shown");
+  await wsShot(v, "12-viewer-with-person"); await closeExpecting(v, /404/);
+  record("W16", "pictures: the landing with the Playground and three others; a workspace with the person shown", ok, `person shown: ${ok}`);
+});
+await test("W13", "a server without workspaces (a static preview, --no-api): / opens the viewer as before", async () => {
+  if (opt("--origin")) { record("W13", "a server without workspaces: / opens the viewer as before", true, "skipped (--origin given)"); return; }
+  const { startServer } = await import("./serve.ts"), plainServer = await startServer({ port: 0, data: false }), url = `http://127.0.0.1:${plainServer.port}`;
+  try {
+    const page = await browser.page("about:blank"); await page.viewport(1280, 900);
+    await page.call("Page.navigate", { url: `${url}/` }); await page.waitFor("window.viewerReady || window.viewerError", "the viewer without a server");
+    const r = await page.evaluate("({ err: window.viewerError || null, drawn: viewer.state().render.triangles, bar: !!document.getElementById('ws-bar'), app: !!document.getElementById('app'), parts: !!document.getElementById('parts') })");
+    allErrors.push(...page.errors); await page.close();
+    record("W13", "a server without workspaces: / opens the viewer as before", !r.err && r.drawn > 0 && !r.bar && !r.app && r.parts, `rig drawn (${r.drawn} triangles), no workspace bar: ${!r.bar}, no landing left behind: ${!r.app}, parts list there: ${r.parts}`);
+  } finally { plainServer.stop(true); }
+});
+
 await test("T50", "page errors and warnings during the whole run", async () => {
   const errs = [...new Set(allErrors)];
   record("T50", "page errors and warnings during the whole run", errs.length === 0, errs.length ? errs.join(" | ") : 0, "0");

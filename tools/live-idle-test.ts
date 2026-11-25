@@ -1,21 +1,22 @@
-// bun tools/live-idle-test.ts --url <base> [--minutes 10] [--joint J_mon_tilt]
+// bun tools/live-idle-test.ts --url <base> [--workspace <id or link>] [--minutes 10] [--joint J_mon_tilt]
 //
 // Does the live channel survive a long quiet spell on a real route (the laptop, or https://synergon.mightwork.ai
-// through Caddy)? Opens <base>/api/live, keeps it open for the given minutes while counting the heartbeat comments,
+// through Caddy)? Opens <base>/api/workspaces/<id>/live (the Playground unless --workspace names one), keeps it open for the given minutes while counting the heartbeat comments,
 // then makes one small, harmless change (pose.set of one joint by 1 degree or 5 mm, in its own group) and undoes it
 // (history.undo of that group), and checks that both arrive on the same, still open stream. Exits 0 when all of that
 // holds; otherwise non-zero with the reason. Prints the elapsed time and the number of heartbeats as it goes.
 // It talks only to <base> (commands through tools/rig.ts call()). The scene is left as it was found: the change is
 // undone at once; if the undo is refused, the script says how to undo it by hand.
 import { randomBytes } from "node:crypto";
-import { call } from "./rig.ts";
+import { call, playgroundId, workspaceId } from "./rig.ts";
 import { LIMITS } from "../server/limits.ts";
 
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-const usage = (m?: string): never => { if (m) console.error(`live-idle-test: ${m}`); console.error("usage: bun tools/live-idle-test.ts --url <base, e.g. https://synergon.mightwork.ai or http://127.0.0.1:4173> [--minutes 10] [--joint J_mon_tilt]"); process.exit(2); };
-for (let i = 0; i < args.length; i += 2) if (!["--url", "--minutes", "--joint"].includes(args[i]) || args[i + 1] === undefined) usage(`unknown or incomplete option ${args[i]}`);
+const usage = (m?: string): never => { if (m) console.error(`live-idle-test: ${m}`); console.error("usage: bun tools/live-idle-test.ts --url <base, e.g. https://synergon.mightwork.ai or http://127.0.0.1:4173> [--workspace <id or link>] [--minutes 10] [--joint J_mon_tilt]"); process.exit(2); };
+for (let i = 0; i < args.length; i += 2) if (!["--url", "--workspace", "--minutes", "--joint"].includes(args[i]) || args[i + 1] === undefined) usage(`unknown or incomplete option ${args[i]}`);
 const base = (opt("--url") ?? usage("--url is required")).replace(/\/+$/, "");
 if (!/^https?:\/\/[^/]+/.test(base)) usage("--url must start with http:// or https://");
+const wsGiven = opt("--workspace");
 const minutes = Number(opt("--minutes") ?? 10), joint = opt("--joint") ?? "J_mon_tilt";
 if (!(minutes > 0)) usage("--minutes must be a positive number");
 
@@ -69,8 +70,12 @@ function waitFor(test: (e: Event) => boolean, ms: number, what: string): Promise
 const health = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(15000) }).then(async (r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).catch((e) => fail(`${base}/api/health: ${e.message}`));
 if (!health?.ok) fail(`${base}/api/health did not answer ok: true`);
 say(`${base}: synergon server ${health.revision} (${health.mode}, ${health.format}), up ${health.uptime_s} s`);
-const live = await fetch(`${base}/api/live`, { headers: { accept: "text/event-stream" } }).catch((e) => fail(`${base}/api/live: ${e.message}`));
-if (!live.ok || !(live.headers.get("content-type") ?? "").includes("text/event-stream")) fail(`${base}/api/live answered HTTP ${live.status} (${live.headers.get("content-type") ?? "no content-type"}), not an event stream`);
+const ws = wsGiven ? workspaceId(wsGiven, base) : await playgroundId(base);
+if (!ws) fail(`no workspace to use on ${base}: name one with --workspace <id or link> (without it the oldest workspace named Playground is used)`);
+const wsBase = `${base}/api/workspaces/${ws}`;
+say(`workspace ${ws}`);
+const live = await fetch(`${wsBase}/live`, { headers: { accept: "text/event-stream" } }).catch((e) => fail(`${wsBase}/live: ${e.message}`));
+if (!live.ok || !(live.headers.get("content-type") ?? "").includes("text/event-stream")) fail(`${wsBase}/live answered HTTP ${live.status} (${live.headers.get("content-type") ?? "no content-type"}), not an event stream`);
 const reading = readStream(live);
 const snapshot = await waitFor((e) => e.name === "snapshot", 15000, "the first snapshot").catch((e) => fail(e.message));
 const session = events.find((e) => e.name === "session")?.data?.code ?? "?";
@@ -89,7 +94,7 @@ if (beats.length < expected) fail(`only ${beats.length} heartbeats in ${clock(id
 if (largestGap > 2 * heartbeatMs) fail(`the stream was silent for ${(largestGap / 1000).toFixed(1)} s at one point; heartbeats should come every ${heartbeatMs / 1000} s`);
 
 // ------------------------------------------------------------------------------------------------ 3. one change and its undo
-const group = `idle-test-${randomBytes(3).toString("hex")}`, server = { server: base };
+const group = `idle-test-${randomBytes(3).toString("hex")}`, server = { server: base, workspace: ws };
 const found = await call("scene.find", { text: joint, kind: "joint" }, server);
 const j = found.ok ? found.result.matches.find((m: any) => m.id === joint)?.joint : null;
 if (!j) fail(`no joint ${joint} on this server (${found.error?.message ?? "scene.find found no exact match"}); name one with --joint`);
@@ -109,7 +114,7 @@ for (let attempt = 1; attempt <= 3; attempt++) {
 }
 if (!set.ok) fail(`pose.set ${joint} ${target} ${j.unit} was refused: ${set.error?.code}: ${set.error?.message}`);
 const tSet = Date.now();
-const undoHint = `bun run rig history.undo '{"group": "${group}"}' --server ${base}`;
+const undoHint = `bun run rig history.undo '{"group": "${group}"}' --server ${base} --workspace ${ws}`;
 const setSeen = await waitFor((e) => e.name === "applied" && e.data?.version === set.version, 10000, `the change (version ${set.version})`).catch((e) => { console.error(`(the change stays until undone: ${undoHint})`); return fail(e.message); });
 say(`pose.set ${joint} ${now} → ${target} ${j.unit} (version ${set.version}, group ${group}) arrived on the stream after ${((setSeen.at - tSet) / 1000).toFixed(2)} s`);
 const undo = await call("history.undo", { group }, server);

@@ -2,7 +2,7 @@
 title: Summary
 tldr: From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is live on mightwork.ai.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [overview, summary, results]
 ---
 
@@ -106,7 +106,7 @@ All figures come from one Apple M2 machine and one run of the project on 2026-11
 
 ## Current status
 
-As of 2026-11-24 (the model's rows unchanged since 2026-11-23, about 22:00 local time):
+As of 2026-11-25 (the model's rows unchanged since 2026-11-23, about 22:00 local time):
 
 | Item | Status |
 |---|---|
@@ -119,5 +119,6 @@ As of 2026-11-24 (the model's rows unchanged since 2026-11-23, about 22:00 local
 | Public site | <https://synergon.mightwork.ai/>, from the first Synergon release (no date yet); every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
 | Public wiki | <https://synergon.mightwork.ai/wiki/>, from the same release |
 | Platform step 1 (agent control) | live on the public site since 2026-11-24 (commit `ff90f30`): the server's health check reports the deployed revision, the checks on the host after the release passed, and the two-browser check on the live site passed and left the public scene as it found it. Open: the result of the ten-minute idle test, the owner's own trial, the re-forecast of the later steps ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
-| Agent interface v2 | live on the public server and in every local `bun run serve` since 2026-11-24: now six MCP tools (adjust, look, measure, undo, state, person); the agent endpoint per workspace is being built (phase 2), `.mcp.json` in the repository, pictures from the browser; the benchmark against the step-1 interface waits for a signed-in Claude Code command line ([agent interface](../80-reference/agent-interface.md)) |
-| Manikin | built in a parallel session on its own branch; not on the public site until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)) |
+| Agent interface v2 | live on the public server and in every local `bun run serve` since 2026-11-24 with five MCP tools (adjust, look, measure, undo, state); the branch `synergon` adds a sixth (person) and gives each workspace its own agent address; `.mcp.json` in the repository, pictures from the browser; the benchmark against the step-1 interface waits for a signed-in Claude Code command line ([agent interface](../80-reference/agent-interface.md)) |
+| Workspaces | built and tested on this machine on the branch `synergon` (2026-11-25): a landing page, a random link per workspace, rename, delete and a Manage page; the shared scene becomes the workspace "Playground"; not yet on the public site ([D-57](../20-decisions/decision-log.md#d-57), [workspaces on the server](../50-implementation/workspaces.md)) |
+| Manikin | in the viewer on the branch `synergon` (the dressed operator by default, the clay figure one click away), passed by the designer for the owner's local preview; not on the public site until the owner's yes ([D-44](../20-decisions/decision-log.md#d-44), [the person in the viewer](../50-implementation/person-in-viewer.md)) |

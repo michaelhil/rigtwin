@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApi, type ApiOptions } from "./server.ts";
+import { viaPlayground } from "./test-support.ts";
 import { mask, summarize } from "./trace.ts";
 
 const ASSET = join(import.meta.dir, "..", "assets", "rig-b", "build");
@@ -14,16 +15,16 @@ afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true
 function start(o: Partial<ApiOptions> = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "synergon-trace-test-")); temps.push(dataDir);
   const api = createApi({ dataDir, assetDir: ASSET, mode: "local", revision: "test", ...o });
-  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
+  const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await viaPlayground(api, req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
   return { base: `http://127.0.0.1:${srv.port}`, stop: () => { api.close(); srv.stop(true); } };
 }
 let id = 0;
 async function mcp(base: string, method: string, params: unknown, sid?: string) {
-  const r = await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", ...(sid ? { "mcp-session-id": sid } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) });
+  const r = await fetch(`${base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json", ...(sid ? { "mcp-session-id": sid } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) });
   return { sid: r.headers.get("mcp-session-id")!, body: await r.json() as any };
 }
-const command = (base: string, body: unknown) => fetch(`${base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
-const traces = async (base: string) => ((await (await fetch(`${base}/api/trace`)).json()) as any).traces as any[];
+const command = (base: string, body: unknown) => fetch(`${base}/api/workspaces/playground/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+const traces = async (base: string) => ((await (await fetch(`${base}/api/workspaces/playground/trace`)).json()) as any).traces as any[];
 
 describe("the trace", () => {
   test("every request: who, how, what in the server's words, how it ended, how long; the caller's own time between two", async () => {
@@ -45,12 +46,12 @@ describe("the trace", () => {
     expect(refused.detail.args).toEqual({ target: "armrest", by: "1 cm" });
     expect(refused.detail.reply).toContain("Left armrest pad");
     expect(http).toMatchObject({ via: "http", kind: "script", request: "lower-monitor", summary: "Monitor: height 2 cm lower" });
-    expect((await (await fetch(`${s.base}/api/trace?after=3`)).json() as any).traces.map((r: any) => r.n)).toEqual([4]);
+    expect((await (await fetch(`${s.base}/api/workspaces/playground/trace?after=3`)).json() as any).traces.map((r: any) => r.n)).toEqual([4]);
     s.stop();
   });
   test("the live channel carries each record as the event trace", async () => {
     const s = start(), ctl = new AbortController(), got: any[] = [];
-    const res = await fetch(`${s.base}/api/live`, { signal: ctl.signal }), reader = res.body!.getReader(), dec = new TextDecoder();
+    const res = await fetch(`${s.base}/api/workspaces/playground/live`, { signal: ctl.signal }), reader = res.body!.getReader(), dec = new TextDecoder();
     (async () => { let buf = ""; try { for (;;) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); for (let i = buf.indexOf("\n\n"); i >= 0; i = buf.indexOf("\n\n")) { const b = buf.slice(0, i); buf = buf.slice(i + 2); if (/^event: trace$/m.test(b)) got.push(JSON.parse(b.match(/^data: (.*)$/m)![1])); } } } catch { /* closed */ } })();
     await Bun.sleep(50);
     await command(s.base, { id: "adjust", args: { target: "monitor height", by: "-1 cm" } });

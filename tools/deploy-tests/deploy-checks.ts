@@ -17,9 +17,18 @@ const wikiPages = ["README.html"];
 let pass = 0, fail = 0;
 const expect = (what: string, cond: boolean, detail = "") => { cond ? pass++ : fail++; console.log(`  ${cond ? "ok  " : "FAIL"} ${what}${!cond && detail ? `: ${detail}` : ""}`); };
 
-/** A stand-in Synergon server: answers /api/health with `status` and `revision()`. */
-function fakeApi(status: () => number, revision: () => string) {
-  return Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (req) => new URL(req.url).pathname === "/api/health" ? Response.json({ ok: true, revision: revision(), format: "synergon-scene/1", mode: "deployed" }, { status: status() }) : new Response("no", { status: 404 }) });
+/** A stand-in Synergon server: answers /api/health with `status` and `revision()`, lists one workspace and streams its snapshot
+ *  (what the checks of the live site ask besides the health). `workspaces` false: no list (404), as the server of a release before them. */
+const WS = "6f1c2a3e-5b7d-4c9a-8e0f-1a2b3c4d5e6f";
+function fakeApi(status: () => number, revision: () => string, workspaces = true) {
+  return Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
+    const p = new URL(req.url).pathname;
+    if (p === "/api/health") return Response.json({ ok: true, revision: revision(), format: "synergon-scene/1", mode: "deployed" }, { status: status() });
+    if (!workspaces) return new Response("not found", { status: 404 });
+    if (p === "/api/workspaces") return Response.json({ workspaces: [{ id: WS, name: "Playground", created: "2026-11-25T00:00:00.000Z", changed: "2026-11-25T00:00:00.000Z" }], next: null, total: 1 });
+    if (p === `/api/workspaces/${WS}/live`) return new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); c.enqueue(e.encode(`retry: 2000\n\nevent: session\ndata: {"code":"ABCDEFGH"}\n\nid: 0\nevent: snapshot\ndata: {"doc":{}}\n\n`)); } }), { headers: { "content-type": "text/event-stream" } });
+    return new Response("not found", { status: 404 });
+  } });
 }
 async function run(name: string, site: { origin: string }, v: any) {
   const cfg = { host: "unused", remoteRoot: "/srv/synergon", publicUrl: `${site.origin}/`, keepReleases: 5 };
@@ -104,6 +113,25 @@ writeFileSync(join(oldDist, "version.json"), JSON.stringify(noServer, null, 1) +
   expect("server.js check fails and is required", c?.ok === false && c.required, c?.detail);
   expect("it is the only failure", r.failed.length === 1, r.failed.map((x) => x.what).join("; "));
   files.stop(true);
+}
+// 7. a server that answers its health but has no workspaces (a release before them): the deploy must not call it good
+{
+  const api = fakeApi(() => 200, () => version.revision, false);
+  const s = serveFolder(dist, "/", { api: `http://127.0.0.1:${api.port}` });
+  const r = await run("7. a server without the workspaces' API", s, version);
+  const w = r.get("server: api/workspaces");
+  expect("the list of workspaces fails and is required", w?.ok === false && w.required && /HTTP 404/.test(w.detail), w?.detail);
+  expect("health itself is fine", r.get("server: api/health")?.ok === true);
+  s.server.stop(true); api.stop(true);
+}
+// 8. the workspace check in a good server: the list and one stream, and the removed addresses are not asked
+{
+  const asked: string[] = [], inner = fakeApi(() => 200, () => version.revision), api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) { asked.push(new URL(req.url).pathname); return inner.fetch(req); } });
+  const s = serveFolder(dist, "/", { api: `http://127.0.0.1:${api.port}` });
+  const r = await run("8. what the checks ask of the server", s, version);
+  expect("the list and the stream are checked and ok", r.get("server: api/workspaces")?.ok === true && r.get("server: a workspace's live stream")?.ok === true, r.checks.map((c) => `${c.what}: ${c.detail}`).join("; "));
+  expect("the single-scene addresses are not asked", !asked.some((p) => ["/api/live", "/api/command", "/api/mcp"].includes(p)), asked.join(", "));
+  s.server.stop(true); api.stop(true); inner.stop(true);
 }
 rmSync(oldDist, { recursive: true, force: true });
 console.log(`\ndeploy checks test: ${pass} passed, ${fail} failed`);

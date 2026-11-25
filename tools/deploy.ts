@@ -173,7 +173,11 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
     }
     return true;
   });
-  if (expect.version.server) out.push(await serverHealth(u, expect.version.revision));
+  if (expect.version.server) {
+    const health = await serverHealth(u, expect.version.revision);
+    out.push(health);
+    if (health.ok) out.push(...(await workspaceChecks(u)));        // a server that does not answer its health has nothing to list
+  }
   // server behaviour the site relies on; reported, but not a reason to roll back
   const base = u.replace(/\/$/, "");
   if (new URL(u).pathname !== "/") {   // a site under a sub-path: the sub-path without its slash leads to the one with it
@@ -227,6 +231,40 @@ async function serverHealth(u: string, revision: string): Promise<Check> {
     await sleep(1000);
   }
 }
+/** The workspaces of the live server: GET <publicUrl>api/workspaces lists at least one workspace, and the live stream of the newest one opens and
+ *  sends its first snapshot within 10 s (the stream is read once and closed: it holds a place in the stream limits only that long). Both are
+ *  required: a server that lists no workspace, or whose scenes do not stream, is not working. The old single-scene addresses are not asked. */
+async function workspaceChecks(u: string): Promise<Check[]> {
+  const listUrl = u + "api/workspaces?limit=1", opts = { headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" } };
+  const what = "server: api/workspaces lists the workspaces", fail = (url: string, detail: string, w = what): Check[] => [{ what: w, url, ok: false, detail, required: true }];
+  let id = "", total = 0;
+  try {
+    const r = await fetch(listUrl, { ...opts, signal: AbortSignal.timeout(10000) }), body: any = r.status === 200 ? await r.json().catch(() => null) : null;
+    if (r.status !== 200) return fail(listUrl, `HTTP ${r.status}`);
+    if (!Array.isArray(body?.workspaces) || typeof body?.total !== "number") return fail(listUrl, "HTTP 200 but not a list of workspaces");
+    if (!body.workspaces.length || typeof body.workspaces[0]?.id !== "string") return fail(listUrl, "the server lists no workspace (it makes the Playground at its first start)");
+    id = body.workspaces[0].id; total = body.total;
+  } catch (e: any) { return fail(listUrl, e?.message ?? String(e)); }
+  const out: Check[] = [{ what, url: listUrl, ok: true, detail: `${total} workspace${total === 1 ? "" : "s"}`, required: true }];
+  const liveUrl = `${u}api/workspaces/${id}/live`, w2 = "server: a workspace's live stream sends its snapshot";
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(liveUrl, { ...opts, headers: { ...opts.headers, accept: "text/event-stream" }, signal: ctl.signal }), type = r.headers.get("content-type") ?? "";
+    if (r.status !== 200 || !type.includes("text/event-stream")) { await r.body?.cancel().catch(() => {}); out.push(...fail(liveUrl, `HTTP ${r.status}${type ? `, ${type}` : ""}, expected an event stream`, w2)); return out; }
+    const reader = r.body!.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      if (buf.includes("\n\n", Math.max(0, buf.indexOf("event: snapshot")) + 1) && /event: snapshot\n/.test(buf)) break;
+    }
+    ctl.abort();
+    out.push(/event: session\n/.test(buf) && /event: snapshot\n/.test(buf) ? { what: w2, url: liveUrl, ok: true, detail: "ok", required: true } : { what: w2, url: liveUrl, ok: false, detail: "the stream ended without a session and a snapshot event", required: true });
+  } catch (e: any) { out.push(...fail(liveUrl, ctl.signal.aborted ? "no snapshot within 10 s" : e?.message ?? String(e), w2)); }
+  finally { clearTimeout(timer); ctl.abort(); }
+  return out;
+}
 /** What the receipt records about the server, from the checks of one release. */
 function serverStatus(checks: Check[], version: any): string {
   const c = checks.find((x) => x.what.startsWith("server: api/health"));
@@ -239,6 +277,7 @@ const failedRequired = (checks: Check[]) => checks.filter((c) => !c.ok && c.requ
 function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json", server: { revision: string } | null | "if it has one" = null) {
   const u = cfg.publicUrl;
   for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"], ["anything but 200 (also without the file name)", u + "server/"], ["anything but 200 (also without the slash)", u + "server"]]) say(`  would check: GET ${url}  → ${what}`);
+  if (server) say(`  would check: GET ${u}api/workspaces?limit=1  → at least one workspace, then GET ${u}api/workspaces/<its id>/live  → an event stream that sends session and snapshot within 10 s (both required)`);
   if (server) say(`  would check: GET ${u}api/health  → ${server === "if it has one" ? "for a release with a server: its revision" : `revision ${server.revision}`} within 20 s, asked every second (404 at once, or 502 or another revision after 20 s: a failure)`);
   else say(`  (no api/health check: ${source} has no server entry)`);
   for (const [what, url] of [...(new URL(u).pathname !== "/" ? [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")]] : []), ["the viewer page, 200 HTML (warning only)", u + "workspaces/deploy-check"], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);

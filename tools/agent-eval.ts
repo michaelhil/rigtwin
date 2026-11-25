@@ -46,7 +46,9 @@ const server = await startServer({ port: 0, data });
 const browser = await Browser.launch();
 const page: Page = await browser.page("about:blank");
 await page.viewport(1280, 800);
-await page.call("Page.navigate", { url: `${server.url}/` });
+const WS = server.api!.playground()!.id;           // the Playground of the empty data folder; its page is /workspaces/<id>
+process.env.RIG_WORKSPACE = WS;
+await page.call("Page.navigate", { url: `${server.url}/workspaces/${WS}` });
 await page.waitFor("window.viewerReady || window.viewerError", "the viewer");
 for (let i = 0; i < 100 && !(await page.evaluate("!!(viewer.live && viewer.live() && viewer.live().connected)").catch(() => false)); i++) await Bun.sleep(50);
 const code = (await page.evaluate("viewer.live().code")) as string;
@@ -56,7 +58,7 @@ const joints = new Map<string, any>(manifest.joints.map((j: any) => [j.id, j]));
 const units = (id: string, v: number) => (joints.get(id).type === "prismatic" ? v : v / DEG);
 
 const mcpConfig = join(data, "mcp.json");
-writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { synergon: { type: "http", url: `${server.url}/api/mcp` } } }));
+writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { synergon: { type: "http", url: `${server.url}/api/workspaces/${WS}/mcp` } } }));
 const emptyMcp = join(data, "mcp-empty.json");
 writeFileSync(emptyMcp, JSON.stringify({ mcpServers: {} }));
 
@@ -71,7 +73,7 @@ async function runCase(c: Case, variant: string) {
     ? [...common, "--strict-mcp-config", "--mcp-config", mcpConfig, "--tools", "", "--allowedTools", "mcp__synergon__*"]
     : [...common, "--strict-mcp-config", "--mcp-config", emptyMcp, "--allowedTools", "Bash(bun run rig:*)", "Bash(bun tools/rig.ts:*)", "Read", "Grep", "Glob", "Skill"];
   const t0 = performance.now();
-  const p = spawn([CLAUDE, ...argv], { cwd: variant === "v2" ? ROOT : baselineDir, env: { ...process.env, RIG_URL: server.url }, stdout: "pipe", stderr: "pipe" });
+  const p = spawn([CLAUDE, ...argv], { cwd: variant === "v2" ? ROOT : baselineDir, env: { ...process.env, RIG_URL: server.url, RIG_WORKSPACE: WS }, stdout: "pipe", stderr: "pipe" });
   const killer = setTimeout(() => p.kill(), 240_000);
   const out = await new Response(p.stdout).text();
   await p.exited; clearTimeout(killer);

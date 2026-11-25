@@ -18,7 +18,8 @@ tags: [deployment, server, host, security, platform]
 
 The server holds the shared scenes of the public workspaces (a scene is the rig's pose, the person and its last
 200 changes; [the platform plan](../30-plan/platform-plan.md)) and answers the commands and the live channel the viewer
-and `bun run rig` use. The same code runs on the laptop (`bun run serve`); how the viewer uses it is on the
+and `bun run rig` use. Each workspace has its own addresses under `/api/workspaces/<id>/`; how they are stored, listed,
+limited and deleted is on the [workspaces page](workspaces.md). The same code runs on the laptop (`bun run serve`); how the viewer uses it is on the
 [viewer page](viewer.md). The commands go over plain HTTP POST and the changes come back as server-sent events, not a
 WebSocket ([D-39](../20-decisions/decision-log.md#d-39)).
 
@@ -119,16 +120,17 @@ Built in deployed mode only; a local server has none. The numbers are in `server
 | Edits | 60 a minute per visitor, 10 a second per network block, 50 a second in all (view commands count as edits) |
 | Queries | 600 a minute per visitor (every other request under `api/`) |
 | Session codes | eight characters; after five unknown codes a minute a visitor's view commands are refused |
-| Disk | writes refused when the data disk has less than 5 % or 200 MB free |
-| MCP (since agent interface v2) | `POST api/mcp`: tool calls go through the same guards as commands (edits count as edits, queries as queries); every MCP request counts as a query; one JSON-RPC message per request (batches refused); a content type of exactly `application/json`; an `Origin` other than the server's own (`https://mightwork.ai`, locally `http://<Host>`) refused; a viewer code kept for the session only when it is one; at most 500 MCP sessions remembered ([D-50](../20-decisions/decision-log.md#d-50)) |
-| Pictures (since agent interface v2) | `POST api/picture`: only for a picture being waited for (a random 128-bit id sent only with the view event), only from the page that was asked, once, a JPEG of at most 60 kB (within Caddy's 64 KiB); `look` waits at most 8 s; at most 20 pictures waited for at once, 2 per visitor and 1 per browser ([D-51](../20-decisions/decision-log.md#d-51)) |
+| Disk | writes refused when the data disk has less than 5 % or 200 MB free; a new workspace too |
+| Workspaces (since 2026-11-25) | new ones: 10 an hour per visitor, 30 an hour per network block, 200 a day in all, 5,000 in all; at most 200 in memory, dropped after 10 idle minutes; a rename or delete is an edit; a request for anything but a random UUID is a 404 before the disk is touched; the reasons are on the [workspaces page](workspaces.md) |
+| MCP (since agent interface v2) | `POST api/workspaces/<id>/mcp` (one endpoint per workspace): tool calls go through the same guards as commands (edits count as edits, queries as queries); every MCP request counts as a query; one JSON-RPC message per request (batches refused); a content type of exactly `application/json`; an `Origin` other than the server's own (`https://mightwork.ai`, locally `http://<Host>`) refused; a viewer code kept for the session only when it is one; at most 500 MCP sessions remembered ([D-50](../20-decisions/decision-log.md#d-50)) |
+| Pictures (since agent interface v2) | `POST api/workspaces/<id>/picture`: only for a picture being waited for (a random 128-bit id sent only with the view event), only from the page that was asked, once, a JPEG of at most 60 kB (within Caddy's 64 KiB); `look` waits at most 8 s; at most 20 pictures waited for at once, 2 per visitor and 1 per browser ([D-51](../20-decisions/decision-log.md#d-51)) |
 | Consent (since agent interface v2) | a view for no named browser, from an agent no browser follows, is put to every open page as a question: at most 4 a minute per agent, in the server's words; a picture with it waits up to 25 s for the answer ([D-55](../20-decisions/decision-log.md#d-55)) |
-| Follow (since agent interface v2) | `POST api/follow`: a page follows one caller's views; counts as an edit; at most 10 pages per caller; a picture answered by a following page is marked unverified ([D-54](../20-decisions/decision-log.md#d-54)) |
-| Trace (since agent interface v2) | one record per request, in memory only (the last 100, `GET api/trace`, the live event `trace`); at most 8 sent a second; no text a caller wrote: arguments as ids, numbers and the model's own words, the rest as ‹text›, refusals by code and hint ([D-53](../20-decisions/decision-log.md#d-53)) |
+| Follow (since agent interface v2) | `POST api/workspaces/<id>/follow`: a page follows one caller's views; counts as an edit; at most 10 pages per caller; a picture answered by a following page is marked unverified ([D-54](../20-decisions/decision-log.md#d-54)) |
+| Trace (since agent interface v2) | one record per request and workspace, in memory only (the last 100, `GET api/workspaces/<id>/trace`, the live event `trace`); at most 8 sent a second; no text a caller wrote: arguments as ids, numbers and the model's own words, the rest as ‹text›, refusals by code and hint ([D-53](../20-decisions/decision-log.md#d-53)) |
 | Request names | a name ending in `-<number>` is made by the server (intent commands) and refused from callers; `state` shows only those, so a name a stranger chose never reaches an agent's context as text |
 | Visitor | the address from `X-Forwarded-For`, believed only from loopback (IPv6 by its /64 block) |
 | Errors | `development: false`: no error page with code (a check in `bun run check` keeps it so) |
-| What is stored | the Playground's pose and its last 200 changes, each with a random author id made by the server; the only text written by a client is a request's group name ([D-41](../20-decisions/decision-log.md#d-41)). The page says so under More → "About this sandbox" |
+| What is stored | each workspace's pose and its last 200 changes (in `workspaces/<id>/doc.json`; the list of workspaces and their names in `workspaces.sqlite`), each with a random author id made by the server; the only text written by a client is a request's group name ([D-41](../20-decisions/decision-log.md#d-41)). The page says so under More → "About this sandbox" |
 
 ## Order of the first rollout
 
@@ -142,11 +144,11 @@ outside the repository):
    then the service, which retries every 2 s until a release with `server/` is live.
 3. `setup-server.sh --probe` (H7) and the load test H14.
 4. The first release: `bun run deploy` from the laptop (its route probe, upload, switch and live checks). The service
-   starts from the release and `api/health` must report the new revision within 20 s. The stored scene of the earlier
+   starts from the release and `api/health` must report the new revision within 20 s; the live checks then list the workspaces (`api/workspaces`) and open one workspace's live stream, which must send its first snapshot within 10 s. The stored scene of the earlier
    address is copied into `/var/lib/synergon` and migrated once, by a one-off script outside the repository.
 5. `setup-server.sh --check` again (H8, H12); on the laptop `bun tools/live-idle-test.ts --url
    https://synergon.mightwork.ai` (ten minutes idle through Caddy, then one change and its undo in the public
-   Playground workspace); then the two-browser test, `bun tools/live-site-check.ts https://synergon.mightwork.ai`.
+   Playground workspace, found by name unless `--workspace <id or link>` names another); then the two-browser test, `bun tools/live-site-check.ts https://synergon.mightwork.ai`.
 6. `setup-server.sh --retire-apex`: `mightwork.ai` answers 404 for every address. Then the earlier address's service,
    account, gate and folders are removed (after an archive of the old data is copied to the owner's laptop), the
    repository is renamed on GitHub and the GitHub secret is moved to `SYNERGON_DEPLOY_SSH_KEY`.

@@ -1,4 +1,5 @@
-// Rig viewer (TypeScript, bundled by tools/bundle.ts into one static module). Reads <asset>/<name>.glb
+// Rig viewer (TypeScript, bundled by tools/bundle.ts). The page's entry is app.ts, which loads this module only on a workspace
+// address (or on a page without a server); app.ts calls startViewer() once it knows which workspace this is. Reads <asset>/<name>.glb
 // and <name>.manifest.json. Joint posing uses the shared definition in shared/pose.ts, the same code
 // the generator uses when it writes the GLB.
 //
@@ -7,6 +8,7 @@
 //   ui.ts        parts list, card for the selected part, notices, More, keys, link and picture
 //   words.ts     plain-language names of parts and adjustments
 //   live.ts      the shared scene: the server's live channel, commits of local changes, view commands
+//   workspace-bar.ts  the workspace's name in the top bar, its menu (rename, new, recent, delete), the notice when it is deleted
 //   person/      the person (manikin): a separate chunk loaded after the page is ready (person/index.ts)
 //   person-panel.ts  the person's panel, its row in the parts list, its credits; loaded with the person
 //
@@ -20,19 +22,21 @@
 //   pose=J_x:val,...                       degrees for revolute, metres for prismatic, roll/pitch/yaw degrees for ball (J_b:0/25/0)
 //   mode=normal|ids|class   wire=1   frames=1   legend=1   hud=1   caption=text   ui=0
 //   sel=<id>                               selected row, unit or part (the page shows its card)
-//   asset=<dir>  name=<asset name>         where the GLB and manifest are (default asset/rig-b)
+//   asset=<dir>  name=<asset name>         where the GLB and manifest are (default /asset/rig-b; a relative dir counts from the site root)
 // Wireframe, orthographic projection, reference frames and the id legend have no control on the page;
 // they stay available here for scripts and agents. The page keeps the address in step with what is on
 // screen (camera, hidden parts, selection, adjustments), so a copied link reproduces the view.
 import { Q, apply, load, layout, status, stageEl, viewerApi, invalidate } from './engine.ts';
 import { initUi } from './ui.ts';
 import { initLive } from './live.ts';
+import { initWorkspaceBar } from './workspace-bar.ts';
 
 declare global { interface Window { viewer: typeof viewerApi; viewerReady?: boolean; viewerReadyAt?: number; viewerError?: string } }
 
-(async () => {
+export async function startViewer() {
   try {
     await load();
+    initWorkspaceBar();
     initUi();
     new ResizeObserver(() => layout()).observe(stageEl);
     // a window dragged to a screen with another pixel density keeps the right sharpness
@@ -51,4 +55,4 @@ declare global { interface Window { viewer: typeof viewerApi; viewerReady?: bool
     status(msg, true);
     window.viewerError = msg;
   }
-})();
+}

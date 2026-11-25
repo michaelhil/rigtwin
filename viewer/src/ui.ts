@@ -364,8 +364,8 @@ function buildMore() {
   more.append(el('h3', null, 'Mouse and keys'), help);
   // the documentation, and which build this is (version.json is written by `bun run dist`; the dev server answers for the working copy)
   const about = el('p', 'about'), doc = el('a', null, 'Documentation') as HTMLAnchorElement, version = el('span', 'version');
-  doc.href = './wiki/'; about.append(doc, version); more.append(about);
-  fetch('version.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => { if (v?.short) version.textContent = `Version ${v.short}`; }).catch(() => { /* the version line is optional */ });
+  doc.href = '/wiki/'; about.append(doc, version); more.append(about);
+  fetch('/version.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => { if (v?.short) version.textContent = `Version ${v.short}`; }).catch(() => { /* the version line is optional */ });
 }
 function setMore(open: boolean) { $('more').hidden = !open; $('more-btn').setAttribute('aria-expanded', String(open)); $('more-btn').classList.toggle('on', open); }
 function refreshViews() {
@@ -479,7 +479,7 @@ export function initUi() {
   $('title').textContent = S.manifest.title;
   buildTree(); buildNotices(); buildMore();
   const hint = $('hint');
-  hint.textContent = window.matchMedia('(pointer: coarse)').matches ? 'Drag to rotate · pinch to zoom · two fingers to move · tap a part' : 'Drag to rotate · scroll to zoom · right-drag to move · click a part';
+  hint.textContent = window.matchMedia('(pointer: coarse)').matches ? 'Drag to rotate · pinch to zoom · tap a part' : 'Drag to rotate · scroll to zoom · right-drag to move · click a part';
   const firstUse = () => { if (!hint.classList.contains('gone')) { hint.classList.add('gone'); window.setTimeout(() => { hint.hidden = true; }, 700); } };
   initPointer({ onFirstUse: firstUse, freeWidth });
 
@@ -494,7 +494,8 @@ export function initUi() {
 
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null, typing = !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable || (t.tagName === 'INPUT' && !['range', 'radio', 'checkbox', 'button'].includes((t as HTMLInputElement).type)));
-    if (typing || e.altKey || e.ctrlKey || e.metaKey || document.body.classList.contains('no-ui')) return;
+    // a question of the workspace menu (a <dialog>) owns the keys while it is open: Escape must reach it, and letters must not hide parts
+    if (typing || e.altKey || e.ctrlKey || e.metaKey || document.body.classList.contains('no-ui') || document.querySelector('dialog[open]')) return;
     const k = e.key.toLowerCase(), sel = S.selected;
     if (k === 'escape') { if (!$('more').hidden) setMore(false); else if (document.body.classList.contains('parts-open')) setDrawer(false); else select(null); }
     else if (k === 'a') showAll();
