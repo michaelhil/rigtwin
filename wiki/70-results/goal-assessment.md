@@ -11,7 +11,7 @@ tags: [results, assessment, requirements]
 ## TL;DR
 
 - **Requirements R-01 to R-69: 55 met, 11 partly, 0 not met, 3 not yet.** The three "not yet" are the GitHub project and its private push, and the wiki on the production server; they come after this page. The deployment pipeline exists but has not yet published.
-- **R-70 and R-71 (2026-11-25), the new name and workspaces:** 2 partly; see [their rows](#n-the-new-name-and-workspaces).
+- **R-70 and R-71 (2026-11-25), the new name and workspaces:** both met; see [their rows](#n-the-new-name-and-workspaces).
 - **Achieved, on the evidence:** a model of Rig B that two independent reviewer agents judged credible ("no longer a toy in any view"), modular (46 parts, any of them hideable), parametric (305 numbers with source and range, re-measurable without code changes), articulated (20 joints, collision-free at their limits), built from eleven casual photos by AI agents, viewable in a browser, by a method that is written down.
 - **Not achieved, or not shown:** that the sizes are right (nothing taped; the owner's three figures conflict with the photos); that the Skill works for another object; what the planned human controls (gates, hold-out clicks, a locked acceptance specification, a tested reviewer) would have found.
 - The partly met requirements cluster around **later use** (assessment, simulator, reach against seat position) and **reuse** (the Skill), not around the model itself.
@@ -171,8 +171,8 @@ decision (`D-`). How each piece is known is said where it matters: *tested* (run
 
 | ID | Verdict | Evidence |
 |---|---|---|
-| [R-70](../10-request/requirements.md#r-70) | partly | Every current file renamed, and `bun run check` scans for the first name so it cannot come back ([D-56](../20-decisions/decision-log.md#d-56)); the move on the server and the repository's new name are pending |
-| [R-71](../10-request/requirements.md#r-71) | partly | Built and tested on this machine ([D-57](../20-decisions/decision-log.md#d-57), [workspaces on the server](../50-implementation/workspaces.md), [the viewer's pages](../50-implementation/viewer.md#workspaces-on-the-page)); not yet on the public site |
+| [R-70](../10-request/requirements.md#r-70) | met | Every current file renamed, and `bun run check` scans for the first name so it cannot come back ([D-56](../20-decisions/decision-log.md#d-56)); live at synergon.mightwork.ai since 2026-11-25; the earlier address answers 404 and its service, account and folders are removed from the host (archived on the owner's machine first); the repository is `michaelhil/synergon`. Left: the local folder names on the owner's machine, renamed after the session that made the move |
+| [R-71](../10-request/requirements.md#r-71) | met | Live since 2026-11-25 ([D-57](../20-decisions/decision-log.md#d-57), [workspaces on the server](../50-implementation/workspaces.md), [the viewer's pages](../50-implementation/viewer.md#workspaces-on-the-page)) |
 
 ### Tally
 
@@ -191,8 +191,8 @@ decision (`D-`). How each piece is known is said where it matters: *tested* (run
 | K. Wiki (R-57–R-61) | 4 | 1 | 0 | 0 |
 | L. GitHub and deployment (R-62–R-65) | 1 | 1 | 0 | 2 |
 | M. Later requests (R-66–R-69) | 4 | 0 | 0 | 0 |
-| N. The new name and workspaces (R-70–R-71) | 0 | 2 | 0 | 0 |
-| **All 71** | **55** | **13** | **0** | **3** |
+| N. The new name and workspaces (R-70–R-71) | 2 | 0 | 0 | 0 |
+| **All 71** | **57** | **11** | **0** | **3** |
 
 ## System features
 

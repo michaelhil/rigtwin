@@ -24,7 +24,7 @@ component, and move the seat, monitor, armrests, joysticks and pedals.*
 | Build a new asset | the Agent Skill in [.claude/skills/modeling-3d-assets-from-references](.claude/skills/modeling-3d-assets-from-references/SKILL.md) and [wiki/40-method/pipeline.md](wiki/40-method/pipeline.md) |
 | Run the tools | [wiki/80-reference/tools.md](wiki/80-reference/tools.md) |
 
-Public site (from the first Synergon release): the viewer at <https://synergon.mightwork.ai/> and this wiki at <https://synergon.mightwork.ai/wiki/>.
+Public site: the workspaces and the viewer at <https://synergon.mightwork.ai/>, this wiki at <https://synergon.mightwork.ai/wiki/>.
 
 ## In one paragraph
 

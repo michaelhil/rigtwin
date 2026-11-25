@@ -7,7 +7,7 @@
     },
     "synergon-public": {
       "type": "http",
-      "url": "${SYNERGON_WORKSPACE_MCP:-https://synergon.mightwork.ai/api/workspaces/set-SYNERGON_WORKSPACE_MCP/mcp}"
+      "url": "${SYNERGON_WORKSPACE_MCP:-https://synergon.mightwork.ai/api/workspaces/a850cb15-6246-4ce4-b8e5-7055d4650ab2/mcp}"
     }
   }
 }

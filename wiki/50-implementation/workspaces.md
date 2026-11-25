@@ -1,6 +1,6 @@
 ---
 title: Workspaces on the server
-tldr: The server keeps many shared scenes, called workspaces, instead of one. Each has a random link, its own history and undo, its own live view, activity line and agent address. Anyone with a link can use, rename or delete it; making new ones is rate-limited; nothing is ever deleted for good by the server. Built and tested locally on 2026-11-25; not on the public site until the cutover.
+tldr: The server keeps many shared scenes, called workspaces, instead of one. Each has a random link, its own history and undo, its own live view, activity line and agent address. Anyone with a link can use, rename or delete it; making new ones is rate-limited; nothing is ever deleted for good by the server. Live on the public site since 2026-11-25.
 status: living
 updated: 2026-11-25
 tags: [server, workspaces, api, storage, limits, implementation]
@@ -15,7 +15,7 @@ tags: [server, workspaces, api, storage, limits, implementation]
 - **The old Playground becomes one workspace**, named "Playground". On a data folder with no workspace the server makes it by itself, so the landing page is never empty.
 - **Making workspaces is limited**: 10 an hour per visitor, 30 an hour per network block, 200 a day in all, 5,000 in all, and none when the disk is nearly full.
 - **Delete moves, it does not erase.** The folder goes to `deleted/` on the server and nothing reads it or removes it. The owner can bring it back by hand ([how](#bringing-a-deleted-workspace-back)).
-- **Status:** built and tested on the laptop. Nothing of this is live on the public site until the cutover ([the address page](deployment.md)).
+- **Status:** live on the public site since 2026-11-25; the earlier shared scene is the workspace "Playground" ([deployment](deployment.md)).
 
 The page that shows the workspaces (the landing, the list, the viewer under `/workspaces/<id>`) is described on the [viewer page](viewer.md). This page is the server's side. The server as a whole, its host and its guards are on the [server page](server-and-host-setup.md). The agent side is the [agent interface](../80-reference/agent-interface.md).
 

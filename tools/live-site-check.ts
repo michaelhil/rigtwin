@@ -59,7 +59,7 @@ try {
 
   // 5a. the "Shared scene" block under More: this page's code and the statement about the sandbox
   const block = await A.evaluate("(() => { const b = document.getElementById('live-more'); return { inMore: !!b && !b.hidden && !!b.closest('#more'), code: document.getElementById('live-code').textContent, about: b ? [...b.querySelectorAll('.live-about')].map((e) => e.textContent).join(' ').replace(/\\s+/g, ' ').trim() : '' }; })()") as { inMore: boolean; code: string; about: string };
-  check(block.inMore && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code) && /the last 200 changes/.test(block.about) && /no names of people/.test(block.about), "More shows \"Shared scene\" with this page's code and the sandbox statement", `code ${block.code}; "${block.about.slice(0, 90)}…"`);
+  check(block.inMore && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code) && /the last 200 changes/.test(block.about) && /no names of people/i.test(block.about), "More shows \"Shared scene\" with this page's code and the sandbox statement", `code ${block.code}; "${block.about.slice(0, 90)}…"`);
 
   // 1. the command line turns the monitor by 1° (the other way if that would pass the joint's limit)
   const pan1 = +(pan0 + (pan0 + 1 <= limits[1] / DEG - 0.5 ? 1 : -1)).toFixed(6);

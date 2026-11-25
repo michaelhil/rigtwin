@@ -439,8 +439,8 @@ project's working files.
 <a id="d-56"></a>
 ### D-56 — The project is named Synergon (2026-11-25)
 
-- **Decided by / status:** owner (2026-11-25); in force.
-- **What:** the project is named Synergon. The viewer, its API and the agent endpoint are to be served at `https://synergon.mightwork.ai/`, and the wiki at `https://synergon.mightwork.ai/wiki/`, from the first Synergon release (no date yet). The project has its own subdomain and no longer lives in a sub-folder of another address. The agent endpoint is planned per workspace, at `https://synergon.mightwork.ai/api/workspaces/<id>/mcp`; the shared workspaces are being built.
+- **Decided by / status:** owner (2026-11-25); in force, live since 2026-11-25.
+- **What:** the project is named Synergon. The viewer, its API and the agent endpoint are served at `https://synergon.mightwork.ai/`, and the wiki at `https://synergon.mightwork.ai/wiki/`, since 2026-11-25. The project has its own subdomain and no longer lives in a sub-folder of another address. The agent endpoint is per workspace, at `https://synergon.mightwork.ai/api/workspaces/<id>/mcp` ([D-57](#d-57)).
 - **Reason:** the owner wanted a new name, a subdomain of its own, and the wiki at `/wiki` on that subdomain. Every current file, address, format identifier and setting uses the new name, so nothing in the repository refers to an earlier one.
 - **Alternatives:** none recorded.
 - **Consequences:** git history keeps its older commits unchanged (rewriting history is destructive); the check scans every current file for the earlier name so it cannot come back. In the code, the old tool meaning of "workspace" (a modelling output folder) is now called a build folder (`--build`, `SYNERGON_BUILD_DIR`); "workspace" now means the shared, public workspaces.
@@ -448,7 +448,7 @@ project's working files.
 <a id="d-57"></a>
 ### D-57 — Public workspaces, modelled on Leitbild's (2026-11-25)
 
-- **Decided by / status:** owner ("In the deploy, I also want a simple workspace functionality like in Leitbild", 2026-11-25; then the plan's options "Workspaces landing" and "Public like Leitbild"); built on the branch `synergon`, not yet on the public site.
+- **Decided by / status:** owner ("In the deploy, I also want a simple workspace functionality like in Leitbild", 2026-11-25; then the plan's options "Workspaces landing" and "Public like Leitbild"); in force, live since 2026-11-25.
 - **What:** the site has many shared scenes, called workspaces, instead of one. Each is what the single shared scene was: the rig's adjustments, the person, history and undo, the activity line, Follow and consent, pictures and an agent (MCP) address of its own (`/api/workspaces/<id>/mcp`). The address `/` is a landing page: continue in the last workspace, make a new one, the five opened most recently in this browser, and all workspaces newest first with a search box from seven. Each workspace has an unguessable random link, `/workspaces/<id>`, and a menu in the viewer's top bar to copy its link, rename it, make a new one, switch, or delete it with one confirmation. A Manage page deletes several at once. The shared scene that existed before becomes the workspace "Playground".
 - **Reason:** several people or groups can work on their own copy of the rig without changing each other's, the way Leitbild's workspaces work, without accounts.
 - **Alternatives:** accounts and private workspaces (rejected by the owner's choice: no accounts, like Leitbild); a fixed set of named workspaces (rejected: nobody could make their own); workspaces deleted after a time without use (rejected: the owner chose "nothing deleted automatically").
