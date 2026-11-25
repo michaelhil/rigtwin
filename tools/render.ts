@@ -131,16 +131,19 @@ export class Browser {
 }
 
 /** One viewer session: server + browser + page with the viewer loaded and its UI hidden. */
-export async function openViewer(opts: { workspace?: string; photos?: string; requests?: string[] } = {}) {
+/** The viewer in headless Chromium on a throwaway server. The rig's pictures are of the rig alone: the person is left out
+ *  (person=0) unless `person` is given (then the page loads the default person and waits for it). */
+export async function openViewer(opts: { workspace?: string; photos?: string; requests?: string[]; person?: boolean } = {}) {
   // an empty temporary Playground: no pose of the shared scene reaches a picture
   const server = await startServer({ port: 0, workspace: opts.workspace, photos: opts.photos, requests: opts.requests, data: "temp" });
   const origin = `http://127.0.0.1:${server.port}`;
   const browser = await Browser.launch();
-  const page = await browser.page(`${origin}/?ui=0`);
+  const page = await browser.page(`${origin}/?ui=0${opts.person ? "" : "&person=0"}`);
   await page.viewport(1200, 900);
   await page.waitFor("window.viewerReady || window.viewerError", "the viewer to load");
   const err = await page.evaluate("window.viewerError || null");
   if (err) { await browser.close(); server.stop(true); throw new Error("viewer failed to load: " + err); }
+  if (opts.person) { const ok = await page.waitFor("viewer.person ? viewer.person.ready.then((x) => x ? 'ok' : 'failed') : null", "the person", 60000).catch(() => "timeout"); if (ok !== "ok") { await browser.close(); server.stop(true); throw new Error("the person did not load: " + ok); } }
   const shot = async (o: Record<string, unknown>, file: string, w = 1200, h = 900) => {
     await page.viewport(w, h);
     const st = await page.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", ...o })})`);

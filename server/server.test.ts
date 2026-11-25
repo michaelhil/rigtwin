@@ -3,7 +3,8 @@
 // with a reason; undo by group; a dropped stream resumes with Last-Event-ID; a server restart (a real
 // process, killed) with two clients reconnecting and catching up from doc.json; a view command reaches
 // only the addressed session; the deployed-mode guards (body size, streams, edit rate, disk) and none
-// locally; the release watch, in process and with the bundled server in the deploy's folder layout.
+// locally; the release watch, in process and with the bundled server in the deploy's folder layout; the person in the
+// seat (rigtwin-scene/2): a stored /1 document migrated at start with its history, person changes on the live channel.
 import { test, expect, describe, afterAll } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync, readdirSync, mkdirSync, symlinkSync, renameSync, cpSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -86,7 +87,7 @@ describe("two clients on one server", () => {
   test("health, catalogue and the first events", async () => {
     const s = start();
     const h = await (await fetch(`${s.base}/api/health`)).json();
-    expect(h).toMatchObject({ ok: true, revision: "test", format: "rigtwin-scene/1", mode: "local", asset: { name: "rig-b" } });
+    expect(h).toMatchObject({ ok: true, revision: "test", format: "rigtwin-scene/2", mode: "local", asset: { name: "rig-b" } });
     expect(typeof h.uptime_s).toBe("number");
     const c = await (await fetch(`${s.base}/api/commands`)).json();
     expect(c.commands.map((x: any) => x.id)).toContain("pose.set");
@@ -95,7 +96,7 @@ describe("two clients on one server", () => {
     expect(a.events[0].event).toBe("session");
     expect(a.code).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
     expect(a.events[1]).toMatchObject({ event: "snapshot", id: "0" });
-    expect(a.events[1].data.doc.schema).toBe("rigtwin-scene/1");
+    expect(a.events[1].data.doc.schema).toBe("rigtwin-scene/2");
     expect((await fetch(`${s.base}/api/nothing`)).status).toBe(404);
     expect(await s.api.fetch(new Request(`${s.base}/index.html`), "127.0.0.1")).toBeUndefined();
     a.close(); s.stop();
@@ -196,6 +197,45 @@ describe("two clients on one server", () => {
     await a.ready;
     await a.waitFor((e) => e.event === "comment" && e.data === "hb", 1000);
     a.close(); s.stop();
+  });
+});
+
+describe("the person in the seat (rigtwin-scene/2)", () => {
+  test("a stored rigtwin-scene/1 document is migrated at start: pose, version and history kept, the default person added", async () => {
+    const dataDir = tempDir(), at = new Date().toISOString(), who = { kind: "agent", id: "a1a1a1a1a1a1", label: "Claude Code · a1a1" };
+    const v1 = { schema: "rigtwin-scene/1", version: 2, asset: { name: "rig-b", sha256: JSON.parse(readFileSync(join(ASSET, "rig-b.manifest.json"), "utf8")).glb.sha256 }, pose: { J_mon_height: -0.05, J_mon_tilt: 0.07 },
+      history: [{ version: 1, actor: who, group: "lower-monitor", command: "pose.set", changes: [{ joint: "J_mon_height", before: 0, after: -0.05 }], at }, { version: 2, actor: who, command: "pose.set", changes: [{ joint: "J_mon_tilt", before: 0.0611, after: 0.07 }], at }] };
+    mkdirSync(join(dataDir, "playground"), { recursive: true });
+    writeFileSync(join(dataDir, "playground", "doc.json"), JSON.stringify(v1));
+    const s = start({ dataDir }), a = new Live(s.base); await a.ready;
+    const snap = (await a.waitFor((e) => e.event === "snapshot")).data.doc;
+    expect(snap).toMatchObject({ schema: "rigtwin-scene/2", version: 2, pose: { J_mon_height: -0.05, J_mon_tilt: 0.07 }, person: { preset: "P50 man", posture: "operating" } });
+    expect(snap.history).toEqual(v1.history);
+    expect(JSON.parse(readFileSync(join(dataDir, "playground", "doc.json"), "utf8")).schema).toBe("rigtwin-scene/2");      // written back as /2 at once
+    // the old request can still be undone, as a whole
+    const u = await (await post(s.base, { id: "history.undo", args: { group: "lower-monitor" } })).json();
+    expect(u.ok).toBe(true); expect((await a.waitFor(applied(3))).data.changes[0]).toMatchObject({ joint: "J_mon_height", after: 0 });
+    a.close(); s.stop();
+    // and after a restart the person is still there, once (no second migration)
+    const s2 = start({ dataDir }), b = new Live(s2.base); await b.ready;
+    expect((await b.waitFor((e) => e.event === "snapshot")).data.doc).toMatchObject({ version: 3, person: { preset: "P50 man" } });
+    b.close(); s2.stop();
+  });
+  test("person.set reaches the other stream as one entry with the person before and after; the report needs no page; undo by group", async () => {
+    const s = start(), a = new Live(s.base), b = new Live(s.base); await Promise.all([a.ready, b.ready]);
+    const r = await (await post(s.base, { id: "person.set", args: { preset: "P5 woman" }, group: "small" })).json();
+    expect(r).toMatchObject({ ok: true, recorded: 1 });
+    const e = (await b.waitFor(applied(1))).data;
+    expect(e).toMatchObject({ command: "person.set", group: "small", changes: [], person: { before: { preset: "P50 man" }, after: { preset: "P5 woman", sex: "female" } } });
+    const rep = await (await post(s.base, { id: "person.report", args: { what: "eye" } })).json();
+    expect(rep.ok).toBe(true); expect(rep.result.eye.survey_sitting_eye_height_m).toBeCloseTo(0.72, 2);
+    expect((await (await post(s.base, { id: "history.undo", args: { group: "small" } })).json()).ok).toBe(true);
+    expect((await a.waitFor(applied(2))).data.person.after.preset).toBe("P50 man");
+    const none = start({ personDir: null }), n = await (await post(none.base, { id: "person.set", args: { preset: "P5 woman" } })).json();
+    expect(n.error.code).toBe("no_person");
+    const ln = new Live(none.base); await ln.ready;
+    expect((await ln.waitFor((x) => x.event === "snapshot")).data.doc.person).toBeNull();
+    ln.close(); none.stop(); a.close(); b.close(); s.stop();
   });
 });
 

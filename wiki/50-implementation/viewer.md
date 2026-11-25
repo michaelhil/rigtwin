@@ -296,6 +296,14 @@ The redesign kept this interface: 14 sets of URL parameters gave pixel-identical
 state with the previous viewer (with `look=previous`). One change was deliberate: `view=operator`
 now puts the camera exactly on the median eye point, 6.8 cm further forward than before.
 
+## The person (manikin v1)
+
+Since 2026-11-25, on the branch `manikin-v1` only: the viewer seats a person in the rig, the dressed operator by default. Its code is a
+separate script loaded after the page is ready, so the page's own load is unchanged (ready in 0.25 s, 748 kB of scripts); every shader
+change is confined to the person's materials, and with the person loaded but hidden the rig's pictures are identical to before. Detail,
+measurements and the URL parameters (`person=0`, `person=off`, `person_style=clay`, …): [the person in the viewer](person-in-viewer.md).
+Its controls are [the person panel](person-panel.md): a click on the person or on its row at the end of the parts list opens it. It holds presets, sex, body measures, the style, tone and wearing, with Undo. A credits line for the CC BY clothing stays on the view while the dressed operator is shown.
+
 ## Known rough edges
 
 | Rough edge | Status |

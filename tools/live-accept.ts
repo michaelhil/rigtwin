@@ -11,7 +11,10 @@
 //      backoff, the server comes back, a change made meanwhile arrives, exactly one resync per page; the browser
 //      coming back online (or the tab becoming visible) tries at once instead of waiting for the backoff
 //   9. without a server the page works as before: no request under api/, nothing logged
-// Exit code 1 when a step fails. Takes about 25 s.
+//  10. the person in the seat (manikin v1): person.set from the command line reaches every page's viewer.person; the eye the
+//      server solves (person.report, no browser involved) and the eye the page draws in a still view agree within 3 mm for
+//      the three presets; look's operator view puts the camera on that eye; person.clear hides the person, undo shows it again
+// Exit code 1 when a step fails. Takes about 35 s.
 import { join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -137,6 +140,31 @@ try {
   await A.evaluate("window.dispatchEvent(new Event('online'))");
   const quick = await until<boolean>(A, "viewer.live().connected", 3000);
   check(!!quick && Date.now() - t1 < 2500, "the browser coming back online reconnects at once", `connected ${Date.now() - t1} ms after 'online' (the backoff would have waited 4 s or more)`);
+
+  // 10. the person in the seat
+  if (await until<boolean>(A, "viewer.person ? viewer.person.ready : false", 30000)) {
+    await A.evaluate("viewer.person.still(true)");                   // a still view: the pose the server solves (no idle motion)
+    const rows: string[] = []; let worst = 0, all = true;
+    for (const preset of ["P5 woman", "P50 man", "P95 man"]) {
+      const set = await rig(origin, "person.set", JSON.stringify({ preset })), rep = await rig(origin, "person.report", '{"what":"eye"}');
+      const want: number[] = rep.result?.eye?.midpoint_m, stature = rep.result?.body?.stature;
+      const shown = await until<boolean>(A, `(() => { const p = viewer.live().person; return !!p && p.preset === ${JSON.stringify(preset)} && viewer.person.state().shown; })()`, 20000);
+      await sleep(400);                                               // a frame or two for the new solve
+      const got = await A.evaluate("viewer.person.anchor('eye_midpoint')") as number[] | null;
+      const d = got && want ? Math.hypot(got[0] - want[0], got[1] - want[1], got[2] - want[2]) * 1000 : Infinity;
+      worst = Math.max(worst, d); all &&= !!set.ok && !!shown && d <= 3;
+      rows.push(`${preset} (${stature} mm): ${d.toFixed(1)} mm`);
+    }
+    check(all, "the server's solved eye agrees with the eye the page draws, for the three presets", `${rows.join("; ")}; worst ${worst.toFixed(1)} mm (limit 3)`);
+    const codeA2 = (await live(A))!.code, lk = await rig(origin, "look", '{"view":"operator"}', "--viewer", codeA2);
+    const eyeNow = (await rig(origin, "person.report", '{"what":"eye"}')).result.eye.midpoint_m as number[];
+    const camAt = await until<number[]>(A, "viewer.state().view === 'operator' && viewer.state().camera.position");
+    const dc = camAt ? Math.hypot(camAt[0] - eyeNow[0], camAt[1] - eyeNow[1], camAt[2] - eyeNow[2]) * 1000 : Infinity;
+    check(lk.ok && dc < 1, "look's operator view sits on the eye of the person in the seat", `${dc.toFixed(2)} mm from the server's eye point (${lk.result?.text ?? lk.error?.message})`);
+    const cl = await rig(origin, "person.clear", "{}"), hidden = await until<boolean>(B, "viewer.person && viewer.person.state().shown === false", 10000);
+    const un = await rig(origin, "history.undo", JSON.stringify({ version: cl.recorded })), back = await until<boolean>(B, "viewer.person.state().shown === true", 10000);
+    check(cl.ok && !!hidden && un.ok && !!back, "person.clear hides the person on the other page, and its undo shows it again", `hidden: ${!!hidden}, shown again: ${!!back}`);
+  } else check(false, "the person in the seat", "viewer.person did not become ready in page A");
 } catch (e: any) { check(false, "live acceptance", e.message); }
 for (const p of pages) await p.close();
 server.stop(); rmSync(dataDir, { recursive: true, force: true });

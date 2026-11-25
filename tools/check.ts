@@ -251,7 +251,7 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
       // Binary files (images, the model, fonts) are scanned for the never-allowed words only: short
       // device-maker words such as a three-letter one turn up by chance in compressed bytes (a false
       // positive found on two wiki images on 2026-11-23). Text files get the full scan.
-      const binary = /\.(jpe?g|png|webp|gif|glb|bin|woff2?|ico|pdf)$/i.test(f);
+      const binary = /\.(jpe?g|png|webp|gif|glb|bin|ktx2|woff2?|ico|pdf)$/i.test(f);
       const scan = (text: string, where: string, isBinary = false) => {
         const low = text.toLowerCase().split(allowed).join("");
         for (const w of [...anywhere, ...extra]) if (low.includes(w)) hits.push(`${where}: contains banned word #${[...anywhere, ...extra].indexOf(w) + 1}`);
@@ -267,6 +267,23 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
   walk(ROOT);
   report(!hits.length, "banned words", hits.length ? `${hits.length} hit(s)` : `${files} files outside private/ and work/ scanned, none found`, hits);
 }
+
+// ---- 13b. the person's run-time numbers: every record of assets/manikin/params/runtime*.toml complete -----------------------
+{
+  const { validateRuntime, countRuntime } = await import("../shared/runtime-params.ts");
+  const dir = join(ROOT, "assets", "manikin", "params"), files = existsSync(dir) ? readdirSync(dir).filter((f) => /^runtime.*\.toml$/.test(f)).sort() : [];
+  const problems: string[] = [], counts: string[] = [];
+  for (const f of files) {
+    let doc: any; try { doc = Bun.TOML.parse(readFileSync(join(dir, f), "utf8")); } catch (e: any) { problems.push(`${f}: TOML syntax error: ${e.message}`); continue; }
+    problems.push(...validateRuntime(doc, f)); counts.push(`${f} ${countRuntime(doc)}`);
+  }
+  report(files.length ? !problems.length : "warn", "run-time parameters", files.length ? (problems.length ? `${problems.length} incomplete record(s)` : `${counts.join(", ")} records, each with value, unit, range, class, tier and evidence`) : "no assets/manikin/params/runtime*.toml", problems);
+}
+
+// ---- 13c. the manikin packages (tools/manikin-check.ts): committed binaries, so checksums instead of a second build;
+// packaging records, files against PROVENANCE.json, budgets, glTF validator, licences and credits, banned names in
+// every file (binaries included), no symbolic links
+for (const r of await (await import("./manikin-check.ts")).manikinChecks(ROOT)) report(r.ok, r.name, r.summary, r.details);
 
 // ---- 14. numbers in source (advisory) ----------------------------------------------------------------
 {
@@ -301,6 +318,20 @@ if (!fast) {
     if (errs.length) report(false, "viewer console", `${errs.length} error(s) or warning(s)`, errs);
     await v.close();
   } catch (e: any) { report(false, "browser checks", String(e.message)); }
+  // the person in the default view (the rig's budgets above are the rig's alone): it loads, and the frame rate while it idles
+  if (existsSync(join(ROOT, "assets", "manikin", "operator-m", "operator-m.avatar.json"))) try {
+    const { openViewer } = await import("./render.ts");
+    const v = await openViewer({ workspace, person: true });
+    await v.page.viewport(1600, 1000);
+    await v.page.evaluate("viewer.apply({ ui: '0', view: 'three_quarter' })");
+    const st = await v.page.evaluate("viewer.person.state()"), ci = Boolean(process.env.CI);
+    const idle = await v.page.evaluate(`viewer.person.still(false), viewer.person.bench(${ci ? 2 : 60}, { idle: true })`);
+    const ok = st.loaded && st.shown && st.seated;
+    report(ok ? (ci || 1000 / idle.median_ms >= BUDGET.fps ? true : "warn") : false, "person", ok ? `${st.package} shown and seated (${st.style}, ${st.tone} tone, person ${st.person ?? "not a baked person"}); ${ci ? "frame time not measured on the CI runner" : `${idle.median_ms} ms a frame while it idles at 1600 × 1000 (pose ${idle.person_update_ms} ms, shadow map redrawn each frame), ${idle.calls} draw calls`}` : `not shown: ${st.error ?? "unknown"}`);
+    const errs = [...new Set(v.page.errors)];
+    if (errs.length) report(false, "person console", `${errs.length} error(s) or warning(s)`, errs);
+    await v.close();
+  } catch (e: any) { report(false, "person", String(e.message)); }
   // the deploy's live-site checks and its rollback, against local stand-ins of the site (need dist/; about 90 s)
   if (existsSync(join(ROOT, "dist", "version.json"))) for (const [name, cmd, summary] of [
     ["deploy checks", ["bun", join(ROOT, "tools", "deploy-tests", "deploy-checks.ts")], /deploy checks test: .*/],

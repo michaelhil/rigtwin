@@ -7,6 +7,8 @@
 //   ui.ts        parts list, card for the selected part, notices, More, keys, link and picture
 //   words.ts     plain-language names of parts and adjustments
 //   live.ts      the shared scene: the server's live channel, commits of local changes, view commands
+//   person/      the person (manikin): a separate chunk loaded after the page is ready (person/index.ts)
+//   person-panel.ts  the person's panel, its row in the parts list, its credits; loaded with the person
 //
 // URL parameters (all optional; lists are comma-separated; ids may be component ids, group names, or
 // the units joystick_L, joystick_R, touchscreen):
@@ -26,7 +28,7 @@ import { Q, apply, load, layout, status, stageEl, viewerApi, invalidate } from '
 import { initUi } from './ui.ts';
 import { initLive } from './live.ts';
 
-declare global { interface Window { viewer: typeof viewerApi; viewerReady?: boolean; viewerError?: string } }
+declare global { interface Window { viewer: typeof viewerApi; viewerReady?: boolean; viewerReadyAt?: number; viewerError?: string } }
 
 (async () => {
   try {
@@ -39,8 +41,10 @@ declare global { interface Window { viewer: typeof viewerApi; viewerReady?: bool
     document.addEventListener('visibilitychange', () => { if (!document.hidden) invalidate(); });
     await apply(Object.fromEntries(Q));
     status(null);
-    window.viewer = viewerApi; window.viewerReady = true;
+    window.viewer = viewerApi; window.viewerReady = true; window.viewerReadyAt = performance.now();
     initLive();                     // the shared scene, when this page's server has one (otherwise nothing happens)
+    // the person and its panel: their own chunk, fetched only now that the rig is ready (person-panel.ts starts person/index.ts); person=0 leaves it out entirely
+    if (Q.get('person') !== '0') void import('./person-panel.ts').then((m) => m.initPersonPanel()).catch((e) => console.error(e));
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);

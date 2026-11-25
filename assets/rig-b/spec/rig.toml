@@ -101,6 +101,11 @@ parent = "C_seat_base"
 label = "Seat reference, live (centre line, where the modelled cushion top meets the modelled backrest surface; estimated, not a standardised seat index point)"
 pos = ["seat.backrest_surface_x_at_cushion - seat.pos_x", "0", "seat.cushion_top_z_rear - seat.pedestal_height - seat.carrier_height"]
 
+[nodes.D_seat_front]
+parent = "C_seat_base"
+label = "Seat front edge (foremost point of the cushion's front roll on the centre line; the cushion top rises toward it and rolls down round it with radius seat.cushion_lip_radius)"
+pos = ["seat.cushion_front_lip_x - seat.pos_x", "0", "seat.cushion_top_z_front - seat.cushion_lip_radius - seat.pedestal_height - seat.carrier_height"]
+
 [nodes.D_eye_provisional]
 parent = "C_seat_base"
 label = "Eye point, median adult (alias of D_eye_median, kept for older references)"
@@ -158,6 +163,13 @@ group = "seat"
 label = "Seat back cushion"
 tags = ["body_contact"]
 
+# Backrest reference: the point of D_seat_ref_live carried by the back, so it turns with the recline. In the back
+# frame (origin on the hub axis, upright): x is the backrest surface normal toward the operator, z runs up the back.
+[nodes.D_backrest_ref]
+parent = "C_seat_back"
+label = "Backrest reference (centre of the backrest's contact surface at cushion-top height, carried by the back as it reclines; x is the surface normal toward the operator, z runs up the backrest)"
+pos = ["(seat.backrest_surface_x_at_cushion - seat.hub_centre_xz[0]) * cos(seat.recline_neutral) + (seat.cushion_top_z_rear - seat.hub_centre_xz[1]) * sin(seat.recline_neutral)", "0", "(seat.cushion_top_z_rear - seat.hub_centre_xz[1]) * cos(seat.recline_neutral) - (seat.backrest_surface_x_at_cushion - seat.hub_centre_xz[0]) * sin(seat.recline_neutral)"]
+
 [nodes.C_seat_headrest]
 parent = "C_seat_back"
 group = "seat"
@@ -194,6 +206,10 @@ label = "Left armrest pad"
 joints = ["J_pod_armrest_L"]
 tags = ["body_contact", "adjustable"]
 
+[nodes.D_armrest_L]
+parent = "C_pod_armrest_L"
+label = "Left armrest pad top (centre of the pad's top surface, where the forearm rests; x runs forward along the pad, z is its top normal)"
+
 [nodes.C_joy_base_L]
 parent = "C_pod_L"
 group = "pods"
@@ -211,6 +227,13 @@ tags = ["control", "hand"]
 parent = "C_joy_lever_L"
 label = "Left grip reference point (palm centre, on the grip surface)"
 pos = ["pods.grip_palm[0]", "pods.grip_palm[1]", "pods.grip_palm[2] - pods.joy_pivot_height"]
+
+[nodes.D_grip_axis_L]
+parent = "C_joy_lever_L"
+label = "Left grip handle axis (centre of the handle section a closed hand wraps, z along the handle's centre line there; moves with the lever)"
+pos = ["pods.grip_centre[0]", "pods.grip_centre[1]", "pods.grip_centre[2] - pods.joy_pivot_height"]
+rpy = ["pods.grip_axis_rp[0]", "pods.grip_axis_rp[1]", "0"]
+profile = { of = "C_joy_lever_L", span = "pods.grip_profile_span", step = "pods.grip_profile_step", hold = "pods.grip_hold_span" }
 
 [nodes.C_pod_keyswitch_L]
 parent = "C_pod_L"
@@ -272,6 +295,10 @@ label = "Right armrest pad"
 joints = ["J_pod_armrest_R"]
 tags = ["body_contact", "adjustable"]
 
+[nodes.D_armrest_R]
+parent = "C_pod_armrest_R"
+label = "Right armrest pad top (centre of the pad's top surface, where the forearm rests; x runs forward along the pad, z is its top normal)"
+
 [nodes.C_joy_base_R]
 parent = "C_pod_R"
 group = "pods"
@@ -289,6 +316,13 @@ tags = ["control", "hand"]
 parent = "C_joy_lever_R"
 label = "Right grip reference point (palm centre, on the grip surface)"
 pos = ["pods.grip_palm[0]", "-pods.grip_palm[1]", "pods.grip_palm[2] - pods.joy_pivot_height"]
+
+[nodes.D_grip_axis_R]
+parent = "C_joy_lever_R"
+label = "Right grip handle axis (centre of the handle section a closed hand wraps, z along the handle's centre line there; moves with the lever)"
+pos = ["pods.grip_centre[0]", "-pods.grip_centre[1]", "pods.grip_centre[2] - pods.joy_pivot_height"]
+rpy = ["-pods.grip_axis_rp[0]", "pods.grip_axis_rp[1]", "0"]
+profile = { of = "C_joy_lever_R", span = "pods.grip_profile_span", step = "pods.grip_profile_step", hold = "pods.grip_hold_span" }
 
 [nodes.C_pod_estop_R]
 parent = "C_pod_R"
@@ -428,6 +462,11 @@ joints = ["J_pedal_tray"]
 parent = "C_pedals"
 group = "pedals"
 label = "Pedal base (heel plate and frame)"
+
+[nodes.D_heel_rest]
+parent = "C_pedals"
+label = "Heel rest (top of the pedal unit's heel plate at its operator-side lip, centre line: the last point of pedals.heel_profile; the plate rises away from the operator)"
+pos = ["0", "0", "pedals.tray[3] + pedals.heel_profile[9][1]"]
 
 [nodes.C_pedal_arm_1]
 parent = "C_pedals"
@@ -698,23 +737,23 @@ signal = "pedal_3"
 
 # ================================================================================================ expected motion
 [motion]
-J_seat_swivel   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
-J_seat_height   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
-J_seat_slide    = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
-J_seat_tilt     = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen"]
-J_seat_recline  = ["C_seat_back", "C_seat_back_shell", "C_seat_back_cushion", "C_seat_headrest"]
-J_pod_armrest_L = ["C_pod_armrest_L"]
-J_pod_armrest_R = ["C_pod_armrest_R"]
-J_joy_L_roll    = ["C_joy_lever_L", "D_grip_L"]
-J_joy_L_pitch   = ["C_joy_lever_L", "D_grip_L"]
-J_joy_R_roll    = ["C_joy_lever_R", "D_grip_R"]
-J_joy_R_pitch   = ["C_joy_lever_R", "D_grip_R"]
+J_seat_swivel   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
+J_seat_height   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
+J_seat_slide    = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
+J_seat_tilt     = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
+J_seat_recline  = ["C_seat_back", "C_seat_back_shell", "C_seat_back_cushion", "C_seat_headrest", "D_backrest_ref"]
+J_pod_armrest_L = ["C_pod_armrest_L", "D_armrest_L"]
+J_pod_armrest_R = ["C_pod_armrest_R", "D_armrest_R"]
+J_joy_L_roll    = ["C_joy_lever_L", "D_grip_L", "D_grip_axis_L"]
+J_joy_L_pitch   = ["C_joy_lever_L", "D_grip_L", "D_grip_axis_L"]
+J_joy_R_roll    = ["C_joy_lever_R", "D_grip_R", "D_grip_axis_R"]
+J_joy_R_pitch   = ["C_joy_lever_R", "D_grip_R", "D_grip_axis_R"]
 J_ts_arm        = ["C_ts_arm", "C_ts_screen", "S_ts_screen"]
 J_ts_screen     = ["C_ts_screen", "S_ts_screen"]
 J_mon_height    = ["C_stand_monarm_links", "C_stand_monitor", "S_mon_screen"]
 J_mon_tilt      = ["C_stand_monitor", "S_mon_screen"]
 J_mon_pan       = ["C_stand_monitor", "S_mon_screen"]
-J_pedal_tray    = ["C_pedals", "C_pedal_base", "C_pedal_arm_*", "D_pedal_face_*"]
+J_pedal_tray    = ["C_pedals", "C_pedal_base", "C_pedal_arm_*", "D_pedal_face_*", "D_heel_rest"]
 J_pedal_1       = ["C_pedal_arm_1", "D_pedal_face_1"]
 J_pedal_2       = ["C_pedal_arm_2", "D_pedal_face_2"]
 J_pedal_3       = ["C_pedal_arm_3", "D_pedal_face_3"]

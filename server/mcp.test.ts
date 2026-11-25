@@ -1,5 +1,5 @@
 // bun test server — the MCP endpoint (agent interface v2) over real HTTP: initialize with instructions and a session id,
-// the five tools with plain JSON Schemas, a tool call that changes the scene and appears on the live channel, refusals as
+// the six tools with plain JSON Schemas (person since manikin v1), a tool call that changes the scene and appears on the live channel, refusals as
 // tool errors, look to every local page or to the one whose code it was given (remembered for the session), a picture
 // sent back by a page, the picture endpoint's checks, foreign origins refused, and the deployed guards for tool calls.
 import { test, expect, describe, afterAll } from "bun:test";
@@ -113,9 +113,9 @@ describe("the MCP endpoint", () => {
     expect((await rpc(s.base, "nothing/here")).body.error.code).toBe(-32601);
     s.stop();
   });
-  test("tools/list: five tools, always loaded, plain JSON Schema", async () => {
+  test("tools/list: six tools, always loaded, plain JSON Schema", async () => {
     const s = start(), tools = (await rpc(s.base, "tools/list")).body.result.tools;
-    expect(tools.map((t: any) => t.name).sort()).toEqual(["adjust", "look", "measure", "state", "undo"]);
+    expect(tools.map((t: any) => t.name).sort()).toEqual(["adjust", "look", "measure", "person", "state", "undo"]);
     for (const t of tools) { expect(t._meta["anthropic/alwaysLoad"]).toBe(true); expect(t.inputSchema.type).toBe("object"); expect(JSON.stringify(t.inputSchema)).not.toContain('"unit"'); }
     expect(tools.find((t: any) => t.name === "look").inputSchema.properties.viewer).toBeDefined();
     s.stop();
@@ -155,8 +155,26 @@ describe("the MCP endpoint", () => {
     expect(b.views.filter((v) => !v.ask).length).toBe(0);
     a.close(); b.close(); s.stop();
   });
+  test("person: one tool call seats a person and reaches the pages; measure {person} and look's eye need no browser", async () => {
+    const s = start(), p = page(s.base); await p.ready;
+    const sid = (await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" })).session!;
+    const r = await call(s.base, "person", { preset: "P95 man" }, sid);
+    expect(r.body.result.isError).toBeUndefined();
+    expect(text(r)).toContain("→ P95 man"); expect(text(r)).toMatch(/request person-p95-man-1/); expect(text(r)).toContain("Hips to the armrest pods");
+    const m = await call(s.base, "measure", { person: "sight" }, sid);
+    expect(text(m)).toContain("Main monitor:"); expect(text(m)).toContain("gaze cone");
+    const lk = await call(s.base, "look", { view: "operator" }, sid);
+    expect(text(lk)).toContain("from the eye of the person in the seat");
+    await Bun.sleep(30);
+    expect(p.views.at(-1).args.eye_point).toHaveLength(3);
+    const bad = await call(s.base, "person", { cap: false }, sid);
+    expect(bad.body.result.isError).toBe(true); expect(text(bad)).toContain("not_optional");
+    expect(text(await call(s.base, "undo", {}, sid))).toContain("Person: P95 man");
+    p.close(); s.stop();
+  });
   test("follow: a page that follows an agent gets its views and may answer its pictures; stop ends it", async () => {
-    const s = start({ mode: "deployed", limits: { pictureWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
+    // personDir null: nobody in the seat, so a stature gives the eye by the assumed ratio (the fallback; the person's eye is tested below)
+    const s = start({ mode: "deployed", personDir: null, limits: { pictureWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
     const traces = (await (await fetch(`${s.base}/api/trace`)).json() as any).traces, actor = traces.at(-1).actor;
@@ -176,7 +194,7 @@ describe("the MCP endpoint", () => {
     a.close(); b.close(); s.stop();
   });
   test("consent: with no code and no follower every page gets the question, in the server's words; a few a minute per agent", async () => {
-    const s = start({ mode: "deployed", limits: { asksPerMinutePerCaller: 2, pictureAskWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } });
+    const s = start({ mode: "deployed", personDir: null, limits: { asksPerMinutePerCaller: 2, pictureAskWaitMs: 1500, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } });
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("needs_viewer");               // no page open: nobody to ask
     const a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);

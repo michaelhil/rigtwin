@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {
   S, $, canvas, frameEl, stageEl, controls, currentCamera, frameSize, scene, persp,
   pickAt, partOf, firstPick, kindOf, members, nameOf, select, setHover, jointsFor, poseJoint, setAdjustment, adjustmentRange, adjustmentValue,
-  zoomTo, goHome, lookZoom, stopGlide, type JointState,
+  zoomTo, goHome, lookZoom, stopGlide, hooks as engineHooks, type JointState,
 } from './engine.ts';
 import { adjWords } from '../../shared/words.ts';
 
@@ -175,6 +175,7 @@ export function initPointer(hooks: { onFirstUse: () => void; freeWidth: () => nu
     down = null; setCursor('grab');
     if (e.type !== 'pointerup' || !still || wasDrag || e.button !== 0) return;
     const h = pickAt(x, y);
+    if (engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity))) return;   // the person took it (person-panel.ts)
     if (!h) { select(null); return; }
     const part = partOf(h.id), whole = firstPick(part), now = performance.now();
     const second = now - lastClick.t < 400 && lastClick.whole === whole;      // second click of a double-click: stay, the double-click zooms

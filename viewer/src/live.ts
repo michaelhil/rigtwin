@@ -24,7 +24,9 @@ import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type
 import type { JointValue } from '../../shared/pose.ts';
 
 type Change = { joint: string; after: JointValue | null };
-type Entry = { version: number; actor: { id: string; label: string }; command: string; changes: Change[]; undoes?: number[] };
+/** the person in the seat (rigtwin-scene/2; shared/commands/doc.ts PersonState), null: nobody */
+type Person = { style: string; sex: string; tone: string; glasses: boolean; headset: boolean; body: Record<string, number>; posture: string } | null;
+type Entry = { version: number; actor: { id: string; label: string }; command: string; changes: Change[]; person?: { after: Person }; undoes?: number[] };
 type Note = { box: HTMLElement; text: HTMLElement; buttons: HTMLButtonElement[] };
 
 const random = (n: number) => [...crypto.getRandomValues(new Uint8Array(n))];
@@ -60,7 +62,7 @@ function said(c: Change): string {
   const j = S.joints.get(c.joint);
   return j && c.after !== null ? sayJoint(j.def, c.after) : 'a part no longer in the model';
 }
-const say = (e: Entry) => `${e.actor.label}${e.undoes ? ' undid a change' : ''} — ${[...new Set(e.changes.map(said))].join('; ')}`;
+const say = (e: Entry) => `${e.actor.label}${e.undoes ? ' undid a change' : ''} — ${[...new Set(e.changes.map(said)), ...(e.person ? [e.person.after ? 'the person in the seat' : 'nobody in the seat'] : [])].join('; ')}`;
 function note(buttons: [string, () => void][]): Note {
   const box = el('div', 'note live'), text = el('span');
   const bs = buttons.map(([t, f]) => { const b = el('button', null, t) as HTMLButtonElement; b.type = 'button'; b.addEventListener('click', f); return b; });
@@ -133,8 +135,38 @@ async function undo() {
   if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`);
 }
 
+// ---------------------------------------------------------------------------------------------- the person
+// The shared scene's person goes to viewer.person (person/index.ts, loaded after the page is ready), changed fields only. After
+// a change of package (sex or style) the package first, then every field, with that package's control defaults and garments
+// (viewer.person.definition()). The page's own changes come back the same way (idempotent). person=off: never shown.
+let wantPerson: Person | undefined, shownPerson: Person | undefined, personBusy = false;
+async function showPerson() {
+  const api = viewerApi.person as any;
+  if (wantPerson === undefined || personBusy || Q.get('person') === 'off') return;
+  if (!api) { window.setTimeout(showPerson, 500); return; }
+  personBusy = true;
+  try {
+    if (!(await api.ready)) return;
+    while (wantPerson !== undefined && JSON.stringify(wantPerson) !== JSON.stringify(shownPerson)) {
+      const p = wantPerson, o = shownPerson && (shownPerson.sex === p?.sex && shownPerson.style === p?.style) ? shownPerson : null;
+      if (p) {
+        if (!o) await api.set({ sex: p.sex, style: p.style });
+        const d = api.definition(), set: Record<string, unknown> = {}, slot = (id: string) => d?.slots?.find((x: any) => x.id === id)?.default ?? null;
+        if (p.style === 'dressed' && (!o || o.tone !== p.tone)) set.tone = p.tone;
+        if (p.style === 'dressed' && (!o || o.glasses !== p.glasses || o.headset !== p.headset)) set.wear = { glasses: p.glasses ? slot('glasses') : null, headset: p.headset ? slot('headset') : null };
+        if (!o || JSON.stringify(o.body) !== JSON.stringify(p.body)) set.shape = Object.fromEntries((d?.controls ?? []).map((c: any) => [c.id, p.body[c.id] ?? c.default ?? 0]));   // a control left out is at its default
+        if (!o || o.posture !== p.posture) set.pose = p.posture === 'operating' ? null : p.posture;
+        await api.set(set);
+      }
+      await api.show(!!p);
+      shownPerson = p;
+    }
+  } catch (e) { console.warn('person:', e); } finally { personBusy = false; }
+}
+
 // ---------------------------------------------------------------------------------------------- the live channel
-function snapshot(doc: { version: number; pose: Record<string, JointValue>; history: Entry[] }) {
+function snapshot(doc: { version: number; pose: Record<string, JointValue>; person?: Person; history: Entry[] }) {
+  if (doc.person !== undefined) { wantPerson = doc.person; void showPerson(); }
   const old = pose;
   pose = doc.pose; version = doc.version; seen = doc.history.slice(-50); awaiting = 0;
   if (base !== null && base > version) base = version;          // the scene was reset
@@ -147,6 +179,7 @@ function applied(e: Entry) {
   if (e.version > version + 1) { conn.disconnect(); conn.connect(); return; }   // missed one: catch up from the version we have
   const old = { ...pose };
   for (const c of e.changes) { if (c.after === null) delete pose[c.joint]; else pose[c.joint] = c.after; }
+  if (e.person) { wantPerson = e.person.after; void showPerson(); }
   version = e.version; seen.push(e); if (seen.length > 50) seen.shift();
   const own = mine.has(e.version);
   // this page's own saves are on screen already; everything else (others' changes, this page's Undo) is put in
@@ -200,7 +233,7 @@ function applyView(d: ViewEvent) {
     if (d.id === 'look') {
       if (a.all) showAll(); if (a.only) showOnly(a.only); if (a.hide) setVisible(a.hide, false);
       if (Array.isArray(a.camera)) setExplicitCamera(a.camera.map(Number));
-      else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null });
+      else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null, eyePoint: Array.isArray(a.eye_point) ? a.eye_point.map(Number) : null });
       if (a.select) select(a.select);
     }
   } catch { /* an id this model does not have */ }
@@ -237,7 +270,7 @@ export async function initLive() {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     if (!v?.server) return;
     const h = await fetch('api/health', { cache: 'no-store' });
-    if (!h.ok || (await h.json()).format !== 'rigtwin-scene/1') return;
+    if (!h.ok || !/^rigtwin-scene\/[12]$/.test((await h.json()).format)) return;
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';
@@ -273,6 +306,7 @@ export async function initLive() {
     if (version < 0) { linked = !!o.pose; return; }
     if (o.pose) { if (local().length) setPreview(true); } else showShared();
   });
-  viewerApi.live = () => ({ code, version, preview, unsaved: local(), activity: activity.box.hidden ? null : activity.text.textContent, resyncs, ...conn.state() });
+  viewerApi.live = () => ({ code, version, preview, unsaved: local(), activity: activity.box.hidden ? null : activity.text.textContent, resyncs, person: shownPerson ?? null, ...conn.state() });
+  viewerApi.command = send;             // the person panel's commands go out as this page's own (person-panel.ts)
   conn.connect();
 }

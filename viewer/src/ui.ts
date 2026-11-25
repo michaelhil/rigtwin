@@ -449,6 +449,8 @@ async function pictureJpeg(maxBytes: number): Promise<Blob | null> {
   }
   return null;
 }
+/** Lines a picture must carry while what they credit is in it (the dressed person's clothing, person-panel.ts). */
+export const pictureCredits: (() => string | null)[] = [];
 function pictureCanvas(): HTMLCanvasElement {
   const w = canvas.width, h = canvas.height, note = assumedSentence(), band = note ? Math.round(34 * (w / canvas.clientWidth)) : 0;
   const c = document.createElement('canvas'); c.width = w; c.height = h + band;
@@ -457,6 +459,8 @@ function pictureCanvas(): HTMLCanvasElement {
   const grad = g.createRadialGradient(0, 0, 0, 0, 0, 1); grad.addColorStop(0, '#d3d7dd'); grad.addColorStop(0.48, '#b4b9c1'); grad.addColorStop(1, '#8e949d');
   g.fillStyle = grad; g.fillRect(-2, -2, 4, 4); g.restore();
   g.drawImage(canvas, 0, 0);
+  const credit = pictureCredits.map((f) => f()).filter(Boolean).join(' '), k = w / canvas.clientWidth;
+  if (credit) { g.font = `${Math.round(11 * k)}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(27,30,35,.72)'; g.fillText(credit, Math.round(8 * k), h - Math.round(6 * k), w - 16 * k); }
   if (band) {
     g.fillStyle = '#fff3d6'; g.fillRect(0, h, w, band);
     g.fillStyle = '#6b4a00'; g.font = `600 ${Math.round(band * 0.42)}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`; g.textBaseline = 'middle';

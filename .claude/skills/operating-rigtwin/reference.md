@@ -166,15 +166,11 @@ The scene in a few lines: what is moved from as photographed and the last change
 
 ### measure
 
-The distance between two points named in plain words or ids ("median eye" to "monitor screen"), at the current pose: a point estimate between frame origins, at the sizes estimated from photographs; no range yet. Examples: {"from":"median eye","to":"monitor screen"}: viewing distance of a median adult
+The distance between two points named in plain words or ids ("median eye" to "monitor screen"), at the current pose: a point estimate between frame origins, at the sizes estimated from photographs; no range yet. With person instead: what the person in the seat sees and reaches, from its solved pose (eye, sight lines with the gaze cone, reach to the grips, clearances), every number with its unit and source. Examples: {"from":"median eye","to":"monitor screen"}: viewing distance of a median adult; {"person":"sight"}: the screens from the eye of the person in the seat
 
 ```
 {
   "type": "object",
-  "required": [
-    "from",
-    "to"
-  ],
   "properties": {
     "from": {
       "type": "string",
@@ -185,6 +181,17 @@ The distance between two points named in plain words or ids ("median eye" to "mo
       "type": "string",
       "maxLength": 80,
       "description": "e.g. \"monitor screen\", \"touchscreen\", \"S_mon_screen\""
+    },
+    "person": {
+      "type": "string",
+      "enum": [
+        "eye",
+        "sight",
+        "reach",
+        "clearance",
+        "all"
+      ],
+      "description": "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), all"
     }
   }
 }
@@ -192,7 +199,7 @@ The distance between two points named in plain words or ids ("median eye" to "mo
 
 ### look
 
-One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene. Examples: {"view":"operator","picture":true}: the operator's view, and a picture of it; {"eye":{"stature_cm":180},"picture":true}: the operator's view at the eye height of a person 180 cm tall; {"camera":{"at":{"point":"seat","offset":[-1.2,0.4,1]},"look_at":"monitor screen"}}: a camera 1.2 m behind, 0.4 m left of and 1 m above the seat, looking at the screen; {"only":["stand","seat"]}: only the monitor stand and the seat
+One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye; with a person in the seat, the operator's view and a stature use its solved eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene. Examples: {"view":"operator","picture":true}: the operator's view, and a picture of it; {"eye":{"stature_cm":180},"picture":true}: the operator's view at the eye height of a person 180 cm tall; {"camera":{"at":{"point":"seat","offset":[-1.2,0.4,1]},"look_at":"monitor screen"}}: a camera 1.2 m behind, 0.4 m left of and 1 m above the seat, looking at the screen; {"only":["stand","seat"]}: only the monitor stand and the seat
 
 ```
 {
@@ -210,7 +217,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
           "type": "number",
           "minimum": 100,
           "maximum": 230,
-          "description": "standing height of the person in the seat (cm)"
+          "description": "standing height of the person in the seat; with a person shown, that person's body at this stature and its solved eye, otherwise an assumed share of stature (cm)"
         },
         "sitting_eye_height_cm": {
           "type": "number",
@@ -382,6 +389,79 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
       "type": "string",
       "pattern": "^[A-Za-z2-9]{8}$",
       "description": "the browser's code (More → Shared scene); remembered for later calls. Locally it may be left out: then every open page."
+    }
+  }
+}
+```
+
+### person
+
+The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), or clear: true for nobody. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"clear":true}: nobody in the seat
+
+```
+{
+  "type": "object",
+  "properties": {
+    "preset": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "\"P5 woman\", \"P50 man\" or \"P95 man\" (the package's stature-percentile presets with the survey's build; sets the sex too), or a preset of the package by its exact name, e.g. \"Tall woman (stature P95)\", or the lab's tall heavy test body \"M95H\" (1869 mm, 115 kg)"
+    },
+    "sex": {
+      "type": "string",
+      "enum": [
+        "female",
+        "male"
+      ],
+      "description": "female or male; changed alone, the body becomes that sex's median"
+    },
+    "style": {
+      "type": "string",
+      "enum": [
+        "dressed",
+        "clay"
+      ],
+      "description": "dressed (the operator in work clothes) or clay (the bare figure)"
+    },
+    "tone": {
+      "type": "string",
+      "enum": [
+        "light",
+        "medium",
+        "dark"
+      ],
+      "description": "skin tone of the dressed person"
+    },
+    "glasses": {
+      "type": "boolean",
+      "description": "safety glasses on or off"
+    },
+    "headset": {
+      "type": "boolean",
+      "description": "headset on or off"
+    },
+    "cap": {
+      "type": "boolean",
+      "description": "the cap is always worn: false is refused"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "propertyNames": {
+        "pattern": "^[a-z_]{1,40}$"
+      },
+      "description": "body controls by id: stature (mm), mass (kg), the survey's r_* controls (SD, e.g. r_sittingheight, r_buttockkneelength); the others keep their values"
+    },
+    "posture": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "operating (seated, hands on the grips, feet on the pedals), relaxed stand, or a pose of the package's library by id or name (\"E37\", \"E37 seated_slump\")"
+    },
+    "clear": {
+      "type": "boolean",
+      "description": "true: nobody in the seat"
     }
   }
 }

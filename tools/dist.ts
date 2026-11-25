@@ -1,10 +1,14 @@
 // bun run dist [--out dist] [--no-verify] [--strict-wiki]
 // Assembles the self-contained deployable folder:
-//   dist/index.html, viewer.css, viewer.js     the bundled viewer (three.js included)
+//   dist/index.html, viewer.css, viewer.js     the bundled viewer (three.js included), split into chunks: viewer.js and the chunk it
+//                                              imports load before the page is ready; the person chunk only after (tools/bundle.ts)
 //   dist/asset/rig-b.glb, rig-b.manifest.json  the asset
+//   dist/asset/manikin/                        the person's packages (assets/manikin/, copied whole); version.json names the default
+//   dist/libs/basis/                           three's KTX2 transcoder (basis_transcoder.js, .wasm), loaded by the person chunk
 //   dist/wiki/                                 the wiki as a static site (built here, from wiki/*.md and wiki/img/)
 //   dist/server/server.js                      the rigtwin server bundled into one file for Bun (from server/server.ts;
-//                                              only code from server/ and shared/, no npm package). Never served:
+//                                              only code from server/ and shared/, and the person's solver, rig binding and
+//                                              body fit from viewer/src/person/ with their numbers; no npm package). Never served:
 //                                              Caddy answers 404 for /rigtwin/server/* (deploy/mightwork-apex.caddy)
 //   dist/version.json                          build time, source revision, model hash and triangle count; with the
 //                                              server, also server: {format} (the scene format it stores)
@@ -15,7 +19,7 @@
 // throwaway server answers /rigtwin/api/* from the built server (started on a free port with an empty
 // temporary data folder, the prefix /rigtwin removed, answers streamed so the live channel works) and
 // refuses /rigtwin/server/*.
-import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, copyFileSync, cpSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -25,8 +29,9 @@ import { ROOT, timeline } from "./timeline.ts";
 import { bundleViewer } from "./bundle.ts";
 import { buildWiki, lintWiki } from "./wiki.ts";
 import { currentVersion } from "./version.ts";
+import { personEntry } from "./serve.ts";
 
-const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp" };
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
 
 /** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/mightwork-apex.caddy): index.html for a folder, a
  *  redirect when the folder's slash is missing, 404 otherwise; 404 for the server's folder `server/`; and, given `api` (the origin of a running rigtwin
@@ -75,7 +80,10 @@ export function buildServer(out: string, entry = "server/server.ts"): { file: st
     const r = spawnSync(process.execPath, ["build", entry, "--target=bun", `--outfile=${file}`, `--metafile=${meta}`], { cwd: ROOT, encoding: "utf8" });
     if (r.status !== 0) throw new Error(`bun build ${entry} failed:\n${(r.stderr || r.stdout).trim()}`);
     const inputs: Record<string, { imports: { path: string; original?: string; external?: boolean }[] }> = JSON.parse(readFileSync(meta, "utf8")).inputs;
-    const foreign = Object.keys(inputs).filter((p) => !/^(server|shared)\//.test(p));
+    // besides server/ and shared/: the person's solver, rig binding and body fit with their numbers (plain TypeScript, TOML and
+    // JSON, no three.js at run time), which the person's commands run on the server (shared/person-model.ts)
+    const allowed = [/^(server|shared)\//, /^viewer\/src\/person\/((operator|rig-binding|params|body-fit)\.ts|body-capsules\.json)$/, /^assets\/manikin\/params\/runtime[a-z-]*\.toml$/];
+    const foreign = Object.keys(inputs).filter((p) => !allowed.some((r) => r.test(p)));
     const builtin = new Set(builtinModules);
     const externals = [...new Set(Object.values(inputs).flatMap((i) => i.imports.filter((x) => x.external).map((x) => x.original ?? x.path)))];
     const strange = externals.filter((p) => !(p === "bun" || p.startsWith("bun:") || p.startsWith("node:") || builtin.has(p)));
@@ -145,7 +153,7 @@ if (import.meta.main) {
   // the server goes into the release once its source exists (server/server.ts); until then the release has no server/ and version.json no server entry
   const hasServer = existsSync(join(ROOT, "server", "server.ts"));
   const sceneFormat: string | null = hasServer ? (await import("../shared/commands/doc.ts")).SCENE_FORMAT : null;
-  const version = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
+  const version: ReturnType<typeof currentVersion> & { server?: { format: string }; person?: { package: string } } = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, "asset"), { recursive: true });
   for (const [name, f] of Object.entries(bundle.files)) writeFileSync(join(out, name), f.body);
@@ -155,6 +163,12 @@ if (import.meta.main) {
     console.log(`server: bundled server/server.ts into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
   } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /rigtwin/api/)");
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
+  // the person: MP's packages (assets/manikin/, whole) and three's KTX2 transcoder, which the person chunk loads after the page is ready
+  const manikin = join(ROOT, "assets", "manikin"), basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
+  if (existsSync(manikin)) cpSync(manikin, join(out, "asset", "manikin"), { recursive: true, dereference: true });
+  mkdirSync(join(out, "libs", "basis"), { recursive: true });
+  for (const f of ["basis_transcoder.js", "basis_transcoder.wasm"]) copyFileSync(join(basis, f), join(out, "libs", "basis", f));
+  Object.assign(version, personEntry(join(out, "asset", "manikin")));
   writeFileSync(join(out, "version.json"), JSON.stringify(version, null, 1) + "\n");
   const wiki = buildWiki({ out: join(out, "wiki"), version });
 
@@ -224,6 +238,10 @@ if (import.meta.main) {
       await page.waitFor("window.viewerReady || window.viewerError", "the deployed viewer");
       const err = await page.evaluate("window.viewerError || null"), st = await page.evaluate("window.viewerReady ? viewer.state() : null");
       if (err) errors.push("viewer: " + err);
+      if (version.person) {   // the person chunk, its package and the transcoder load after the page is ready: wait for them, so their requests are checked too
+        const ps = await page.waitFor("viewer.person ? viewer.person.ready.then((ok) => viewer.person.state()) : null", "the person", 60000).catch((e: any) => ({ error: e.message }));
+        if (!ps?.loaded || !ps?.shown) errors.push(`person: not shown (${ps?.error ?? "unknown"})`);
+      }
       if (!(st?.render.triangles > 0)) errors.push("viewer: nothing drawn");
       await page.evaluate("document.getElementById('more-btn').click()");
       const shown = await page.waitFor("(() => { const v = document.querySelector('#more .about .version'); return v && v.textContent ? v.textContent : null; })()", "the version line in the More menu", 5000).catch(() => null);

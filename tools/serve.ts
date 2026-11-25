@@ -6,7 +6,8 @@
 // the Playground reaches a published picture. The served files:
 //   /            the bundled viewer (index.html, viewer.css, viewer.js), rebuilt in memory whenever
 //                a file under viewer/ or shared/ has changed; no manual bundling step
-//   /asset/      assets/rig-b/build/   (or work/<workspace>/build/)
+//   /asset/      assets/rig-b/build/   (or work/<workspace>/build/); /asset/manikin/ is assets/manikin/ (the person's packages)
+//   /libs/basis/ three's KTX2 transcoder (basis_transcoder.js, .wasm) from node_modules
 //   /wiki/       dist/wiki/ if `bun run wiki build` has been run (so the viewer's Documentation link works locally)
 //   /version.json  what dist/version.json would say for the working copy
 // plus, for local work only (never deployed): /private/ (photo cameras, photos) and /work/ (renders).
@@ -54,7 +55,14 @@ export function maskedCameras(dir: string): { json: any; used: string[]; skipped
   return { json: { ...src, cameras }, used, skipped };
 }
 
-const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml" };
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
+
+/** The person's package, relative to the page, for version.json: the default dressed operator when its manifest is in `dir`
+ *  (assets/manikin/ here, dist/asset/manikin/ in a release). The viewer loads a person only when version.json names one. */
+export const PERSON_PACKAGE = "operator-m/operator-m.avatar.json";
+export function personEntry(dir: string): { person?: { package: string } } {
+  return existsSync(join(dir, PERSON_PACKAGE)) ? { person: { package: `asset/manikin/${PERSON_PACKAGE}` } } : {};
+}
 
 export function buildDir(workspace?: string, asset = "rig-b") { return workspace ? join(ROOT, "work", workspace, "build") : join(ROOT, "assets", asset, "build"); }
 
@@ -68,6 +76,8 @@ export async function startServer(opts: { port?: number; workspace?: string; ass
   const temp = opts.data === "temp" ? mkdtempSync(join(tmpdir(), "rigtwin-scene-")) : null;
   const api = opts.data === false ? null : createApi({ dataDir: temp ?? opts.data ?? DEFAULT_DATA, assetDir: buildDir(opts.workspace, opts.asset), mode: "local", revision: sourceRevision().revision });
   const mounts: [string, string][] = [
+    ["/asset/manikin/", join(ROOT, "assets", "manikin")],          // the person's packages (MP), as dist/asset/manikin/
+    ["/libs/basis/", join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis")],   // three's KTX2 transcoder, as dist/libs/basis/
     ["/asset/", buildDir(opts.workspace, opts.asset)],
     ...(opts.photos ? [["/_photos/", opts.photos] as [string, string]] : [["/private/", join(ROOT, "private")] as [string, string]]),
     ["/work/", join(ROOT, "work")],
@@ -89,7 +99,7 @@ export async function startServer(opts: { port?: number; workspace?: string; ass
       opts.requests?.push(path);
       if (path.endsWith("/")) path += "index.html";
       // the viewer looks for the live channel only when version.json says there is a server (no failed request otherwise)
-      if (path === "/version.json") return Response.json({ ...currentVersion({ buildDir: buildDir(opts.workspace, opts.asset), asset: opts.asset, label: "working copy" }), ...(api ? { server: { format: SCENE_FORMAT } } : {}) }, { headers: { "cache-control": "no-store" } });
+      if (path === "/version.json") return Response.json({ ...currentVersion({ buildDir: buildDir(opts.workspace, opts.asset), asset: opts.asset, label: "working copy" }), ...(api ? { server: { format: SCENE_FORMAT } } : {}), ...personEntry(join(ROOT, "assets", "manikin")) }, { headers: { "cache-control": "no-store" } });
       if (opts.photos && path === CAMERAS) return masked ? new Response(masked, { headers: { "content-type": "application/json", "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
       // On a machine without the private camera file (a CI runner, a fresh clone) answer with an empty set
       // instead of a 404, which the viewer would log as a console error and the check would count.

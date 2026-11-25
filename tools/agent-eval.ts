@@ -25,7 +25,7 @@ const variants = (opt("--variant") ?? "both") === "both" ? ["baseline", "v2"] : 
 const model = opt("--model") ?? "sonnet", runs = Number(opt("--runs") ?? 1);
 const baselineDir = opt("--baseline-dir") ?? join(tmpdir(), "rigtwin-baseline");
 const only = opt("--cases")?.split(",");
-type Case = { id: string; prompt: string; preset?: Record<string, number>; expect: { pose?: Record<string, number>; view?: string; asks?: boolean; says?: string[] } };
+type Case = { id: string; prompt: string; preset?: Record<string, number>; expect: { pose?: Record<string, number>; view?: string; asks?: boolean; says?: string[]; person?: Record<string, unknown> | null } };
 const cases: Case[] = JSON.parse(readFileSync(join(ROOT, "tools", "agent-eval", "cases.json"), "utf8")).cases.filter((c: Case) => !only || only.includes(c.id));
 
 function claudeBin(): string {
@@ -90,6 +90,10 @@ async function runCase(c: Case, variant: string) {
     if (Math.abs(got - want) > tol) problems.push(`${id} is ${got}, expected ${want}`);
   }
   if (c.expect.view) { const v = await page.evaluate("viewer.state().view"); if (v !== c.expect.view) problems.push(`view is ${v}, expected ${c.expect.view}`); }
+  if (c.expect.person !== undefined) {                       // the person in the seat afterwards (scene.summary person): these fields, or nobody
+    const p = after.person ?? null, want = c.expect.person;
+    if (want === null ? p !== null : !p || Object.entries(want).some(([k, v]) => JSON.stringify(p[k]) !== JSON.stringify(v))) problems.push(`person is ${p ? JSON.stringify({ preset: p.preset, sex: p.sex, style: p.style, posture: p.posture, glasses: p.glasses }) : "nobody"}, expected ${JSON.stringify(want)}`);
+  }
   if (c.expect.asks && !/\?/.test(answer)) problems.push("did not ask");
   for (const s of c.expect.says ?? []) if (!new RegExp(s, "i").test(answer)) problems.push(`answer lacks /${s}/`);
   return {

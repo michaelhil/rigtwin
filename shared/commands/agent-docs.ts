@@ -21,6 +21,7 @@ const RULES = [
   "- Refusals: ambiguous lists candidates (ask which one); out_of_range gives the travel (ask before using the end); stale means someone changed it meanwhile (tell the owner).",
   "- undo {} undoes the last change; undo {\"what\": \"<request>\"} a whole request.",
   "- look moves the camera: {\"eye\": {\"stature_cm\": 180}} is the operator's view of a person that tall; {\"camera\": {\"at\": ..., \"look_at\": ...}} puts it anywhere (points or model-frame metres). picture: true checks it.",
+  "- person {\"preset\": \"P5 woman\"} seats a person (also style, body, posture, clear: true); measure {\"person\": \"all\"} gives its eye, sight, reach and clearances.",
 ];
 
 /** The MCP server's instructions: the rules, then every adjustment in one line. */
@@ -59,7 +60,7 @@ export function wikiPage(asset: AssetInfo, updated: string): string {
   return [
     "---",
     "title: Agent interface",
-    "tldr: How an agent drives the shared scene - five MCP tools (adjust, look, measure, undo, state) served by the rigtwin server itself, the same locally and on mightwork.ai, with every adjustment's meaning in one generated catalogue. This page is generated from the code (bun tools/agent-docs.ts); bun run check fails when it is out of date.",
+    "tldr: How an agent drives the shared scene - six MCP tools (adjust, look, measure, undo, state, person) served by the rigtwin server itself, the same locally and on mightwork.ai, with every adjustment's meaning in one generated catalogue. This page is generated from the code (bun tools/agent-docs.ts); bun run check fails when it is out of date.",
     "status: living",
     `updated: ${updated}`,
     "tags: [reference, agents, mcp, commands, generated]",
@@ -69,9 +70,10 @@ export function wikiPage(asset: AssetInfo, updated: string): string {
     "",
     "## TL;DR",
     "",
-    "- **Five tools**, offered over MCP at `api/mcp` by the server: `http://127.0.0.1:4173/api/mcp` (`bun run serve`) and `https://mightwork.ai/rigtwin/api/mcp`. Claude Code finds them through `.mcp.json` (`rigtwin` and `rigtwin-public`), loaded from the first turn.",
+    "- **Six tools**, offered over MCP at `api/mcp` by the server: `http://127.0.0.1:4173/api/mcp` (`bun run serve`) and `https://mightwork.ai/rigtwin/api/mcp`. Claude Code finds them through `.mcp.json` (`rigtwin` and `rigtwin-public`), loaded from the first turn.",
     "- **Plain words in, a checked reply out.** `adjust {\"target\": \"backrest\", \"to\": \"upright\"}` resolves the adjustment, works out relative changes on the server, records one request with a server-made name and replies with before → after, the undo handle and what else is moved.",
     "- **Generated, not written.** The tool schemas and descriptions come from the command registry, the catalogue below from `shared/words.ts` and the model's description file; the same text is the MCP server's instructions and the Skill's reference.",
+    "- **The person in the seat** (manikin v1): `person {\"preset\": \"P5 woman\"}` seats the 5th percentile woman; `measure {\"person\": \"all\"}` gives her eye, sight lines to both screens, reach to the grips and clearances, computed by the server from the same solver the page draws with. With a person shown, `look`'s operator view and `eye {stature_cm}` use that person's solved eye.",
     "- The low-level commands of step 1 stay for scripts and tests: `bun run rig <command> '<json>'`.",
     "",
     "## The adjustments",
@@ -89,7 +91,7 @@ export function wikiPage(asset: AssetInfo, updated: string): string {
     "",
     fence(instructions(asset, "deployed")),
     "",
-    "## Low-level commands (step 1)",
+    "## Low-level commands (step 1 and the person's)",
     "",
     "| Command | Kind | What it does |",
     "|---|---|---|",

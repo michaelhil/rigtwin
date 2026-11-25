@@ -14,14 +14,16 @@
 // command is for), `group` (the request a change belongs to) and `expectedVersion` (the version a change
 // is based on). Names of parts and adjustments come from shared/words.ts, as on the page.
 //
-// person.* commands and view.picture come in step 2.
+// The person's commands (person.set, person.pose, person.clear, person.report and the intent tool `person`) are in
+// person.ts (manikin v1).
 import { register, get, validate, type AssetInfo, type CommandSpec } from "./registry.ts";
-import { apply, planUndo, GROUP_PATTERN, HISTORY_CAP, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
+import { apply, planUndo, GROUP_PATTERN, HISTORY_CAP, PERSON_KEY, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
 import { Refusal, type CommandError, type Schema } from "./schema.ts";
 import { nodesFromGlb, worldFrames } from "../kinematics.ts";
 import { limitViolation, type JointValue } from "../pose.ts";
 import type { Manifest, ManifestJoint } from "../manifest.ts";
 import { adjWords, jointName, partName, sayJoint } from "../words.ts";
+import { sayPerson } from "./person-words.ts";
 
 const DEG = Math.PI / 180;
 /** Session codes of browser viewers: eight characters without look-alikes (no I, L, O, 0, 1). */
@@ -81,6 +83,7 @@ export function showChange(asset: AssetInfo, c: JointChange) {
 export const showEntry = (asset: AssetInfo, e: Entry) => ({
   version: e.version, by: e.actor.label, actor_kind: e.actor.kind, ...(e.group ? { group: e.group } : {}), command: e.command, at: e.at,
   ...(e.undoes ? { undoes: e.undoes } : {}), changes: e.changes.map((c) => showChange(asset, c)),
+  ...(e.person ? { person: { before: e.person.before ? sayPerson(e.person.before) : "nobody", after: e.person.after ? sayPerson(e.person.after) : "nobody" } } : {}),
 });
 
 // ------------------------------------------------------------------------------------------- scene.find
@@ -158,6 +161,7 @@ const commands: CommandSpec[] = [
           units: "lengths in metres; angles in degrees (a three-angle mount is [roll, pitch, yaw]); the same units pose.set takes",
           frame: asset.manifest.conventions.frame,
           moved, note: moved.length ? undefined : "every joint is as photographed (neutral)",
+          person: doc.person ? { ...doc.person, said: sayPerson(doc.person) } : null,
           recent: doc.history.slice(-RECENT).reverse().map((e) => showEntry(asset, e)),
           history: { kept: doc.history.length, cap: HISTORY_CAP, from_version: doc.history[0]?.version ?? null },
         },
@@ -222,7 +226,10 @@ const commands: CommandSpec[] = [
         if (!j || c.after === null) throw new Refusal("unknown_joint", `${c.joint} is no longer a joint of ${asset.name} (the asset was rebuilt), so this change cannot be put back`, "set the remaining joints with pose.set");
         if (limitViolation(j, c.after)) throw new Refusal("out_of_range", `the earlier value of ${c.joint} is outside its travel in the rebuilt asset`, "set a value inside the travel with pose.set");
       }
-      return { result: { undid: plan.undoes, changes: plan.changes.map((c) => showChange(asset, c)) }, changes: plan.changes, undoes: plan.undoes };
+      return {
+        result: { undid: plan.undoes, changes: plan.changes.map((c) => showChange(asset, c)), ...(plan.person ? { person: { before: plan.person.before ? sayPerson(plan.person.before) : "nobody", after: plan.person.after ? sayPerson(plan.person.after) : "nobody" } } : {}) },
+        changes: plan.changes, person: plan.person, joints: [...plan.changes.map((c) => c.joint), ...(plan.person ? [PERSON_KEY] : [])], undoes: plan.undoes,
+      };
     },
   },
   {
@@ -304,7 +311,7 @@ export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Ac
     // a request name ending in -<number> is made by the server (intent commands), so nobody can claim one in advance
     if (typeof wire.group === "string" && /-\d+$/.test(wire.group)) return refuse({ code: "invalid_args", message: `group ${JSON.stringify(wire.group)}: names ending in -<number> are made by the server`, hint: "choose a name without a number at the end, e.g. lower-monitor" });
     const group = (wire.group as string | undefined) ?? (spec.autoGroup ? autoName(spec.autoGroup(checked.args, out), doc.version + 1) : undefined);
-    const entry = apply(doc, { actor, command: spec.id, group, joints: out.joints ?? changes.map((c) => c.joint), changes, expectedVersion: wire.expectedVersion as number | undefined, undoes: out.undoes });
+    const entry = apply(doc, { actor, command: spec.id, group, joints: out.joints ?? [...changes.map((c) => c.joint), ...(out.person ? [PERSON_KEY] : [])], changes, person: out.person, expectedVersion: wire.expectedVersion as number | undefined, undoes: out.undoes });
     let result = isObject(out.result) ? { ...out.result, ...(entry ? {} : { note: "no value changed; nothing recorded" }) } : out.result;
     if (spec.finish) result = spec.finish(result, { recorded: entry?.version ?? null, group: entry ? group : undefined });
     return { ok: true, version: doc.version, result, ...(entry ? { entry } : {}) };

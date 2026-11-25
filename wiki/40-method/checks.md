@@ -90,6 +90,44 @@ sent back, the picture endpoint's checks, foreign origins, the deployed edit lim
 |---|---|---|---|---|
 | C-84 | agent docs | `bun tools/agent-docs.ts --check`: the Skill's `reference.md` and the wiki page [agent interface](../80-reference/agent-interface.md) equal what the registry and the catalogue generate | documentation for agents that no longer says what the server does | ok |
 
+### Checks added for the person (manikin v1, 2026-11-25)
+
+The person in the viewer ([the person in the viewer](../50-implementation/person-in-viewer.md)) added two checks to the same run and
+changed three. The browser checks of the rig (C-17 to C-20) now open the page with `person=0`, so the rig's budgets stay the rig's.
+
+| Id | Name as printed | Verifies, and how | The failure it exists to catch | Result |
+|---|---|---|---|---|
+| C-85 | run-time parameters | Every record of `assets/manikin/params/runtime*.toml` has value, unit, range, class, tier and evidence (and a basis for "assumed"); `shared/runtime-params.ts`. The viewer's bundle refuses an incomplete record too | a number in the person code without a source, or a typo that reads nothing | ok, 445 + 10 records |
+| C-86 | person | The default person loads, is shown and seated; frame time at 1600 × 1000 while it idles (shadow map redrawn every frame); warns above 1000/55 ms | a person that fails to load, or one that makes the page too slow | ok, 15.4 ms (0.4 ms of it the pose), 153 draw calls |
+
+In `ui-accept`: T10 counts only the scripts loaded before the page is ready (748 kB); **T10b** (new) checks the loading line, the person
+shown within 6 s of the rig (0.63 s) and its scripts ≤ 400 kB (308 kB); T44 runs with `person=off`; **T44b** (new) checks that the person
+idles at most 30 frames a second in a live view (30.0) and that a still view draws nothing and repeats its picture exactly. 55 of 55 pass.
+Phase 4 added **T60 to T67** for [the person panel](../50-implementation/person-panel.md#checks):
+- a click on the person, and the rig picked as before
+- clay figure and back
+- a preset, a slider drag and Undo
+- the credits
+- keyboard and screen-reader names
+- the phone-width sheet
+- a package that fails to load
+
+Every page now waits for the person before its test starts. `find` avoids pixels where the person is in front of a part. T46 measures the rig's frame rate with `person=off`; **T46p** measures it at 1600 × 1000 with the person shown, next to the load average (a warning, not a failure, below 55 fps on a loaded machine; 61 and 60 fps at load 4.4 on 8 cores). 65 of 65 passed when T46p was added.
+
+The manikin packages (committed binaries built on a Mac, [asset contract](asset-contract.md#14-character-assets-the-manikin) section 14)
+add seven checks, all in `tools/manikin-check.ts`, called by the same run. They are exempt from C-03 (determinism): instead of a second
+build, every file is compared with the SHA-256 its package's `PROVENANCE.json` records.
+
+| Id | Name as printed | Verifies, and how | The failure it exists to catch | Result |
+|---|---|---|---|---|
+| C-87 | manikin packaging | `assets/manikin/params/packaging.toml`: complete records (the rig's loader, section 4 of the contract) | a compression setting or budget without a source | ok, 27 records |
+| C-88 | manikin symlinks | No symbolic link under `assets/manikin/` or `tools/manikin-build/` | the lab's `body-clay/body-clay` link loop coming along | ok |
+| C-89 | manikin names | The never-allowed names in every byte of every file and file name there, binaries included; device makers in text files | a banned name inside a texture, a GLB or the copied lab code | ok, 160 files, 39.7 MB |
+| C-90 | manikin files | Every file listed in `PROVENANCE.json` exists with its bytes and SHA-256; nothing unlisted; every file a manifest names exists; `shared/` used by a package | a hand-edited or half-copied package | ok, 4 packages and the clips |
+| C-91 | manikin budgets | Download as sent, tone, clips, triangles, draw calls, GPU texture memory against `packaging.toml` | a package that outgrows the owner's 10 MB or the designer's 120,000 triangles, 12 draw calls, 128 MB | ok: 9.33, 9.66, 5.19, 5.20 MB |
+| C-92 | manikin glTF | Khronos validator on each GLB: nothing beyond the issues `PROVENANCE.json` accepts as inherited from the lab; only meshopt and KTX2 required | a broken GLB, or an extension the viewer cannot load | ok |
+| C-93 | manikin licences | A licence on every package and source; every CC-BY author and title in `assets/manikin/CREDITS.md`; the CMU terms there | a garment shown without its required credit | ok |
+
 Two older checks changed with step 1: `bun run render` and `ui-accept` start the server with an **empty
 temporary scene**, so no pose of the shared Playground can reach a published picture, and `ui-accept` empties it
 again before every page.

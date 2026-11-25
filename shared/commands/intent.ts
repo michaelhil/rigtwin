@@ -7,6 +7,7 @@
 //   measure  the distance between two points named in plain words
 //   undo     "that" (the last change not yet undone), "mine", a request name or a version
 //   state    what is moved and the last changes, in a few lines; detail "catalogue" gives every adjustment
+//   person   the person in the seat (person.ts, manikin v1): preset, style, body, posture, clear; measure {person} measures it
 //
 // They are a layer over the commands of step 1 (core.ts): the same document, history, refusals, guards and undo. Each
 // reply carries `text`, a few lines for the reader (the MCP tools return only that), and the same facts as data. An edit
@@ -25,6 +26,8 @@ import type { ManifestJoint } from "../manifest.ts";
 import { worldFrames } from "../kinematics.ts";
 import type { JointValue } from "../pose.ts";
 import { adjWords, jointName, rowName, sayJoint, sayOffset, UNITS, type AdjWord } from "../words.ts";
+import { personCommands, personEye, personChangeLine, sayPersonOrNobody } from "./person.ts";
+import { PRESETS, POSTURE_WORDS, STYLES, SEXES, TONES } from "./person-words.ts";
 
 const DEG = Math.PI / 180;
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -150,6 +153,13 @@ export function vocabulary(asset: AssetInfo): Set<string> {
   for (const w of [...NEUTRAL, ...MAX, ...MIN, ...Object.keys(VIEW_WORDS), ...Object.keys(GROUP_WORDS), ...UNITS.map((u) => u.name), ...VIEW_NAMES]) add(w);
   for (const c of [...asset.manifest.components, ...asset.manifest.surfaces]) add(labelOf(asset, c.id));
   for (const d of asset.manifest.datums) add(d.label);
+  // the person's words (person.ts): presets, styles, sexes, tones, postures, the report's parts, the packages' preset and pose names
+  for (const w of [...Object.keys(PRESETS), ...Object.keys(POSTURE_WORDS), ...STYLES, ...SEXES, ...TONES, "person", "woman", "man", "glasses", "headset", "cap", "eye", "sight", "reach", "clearance", "all", "clear", "body", "stature", "mass"]) add(w);
+  for (const pkg of Object.values(asset.people?.packages ?? {})) {
+    for (const pr of pkg.manifest.shape?.presets ?? []) add(pr.name);
+    for (const po of pkg.manifest.poses ?? []) add(`${po.id ?? ""} ${po.name ?? ""}`.replace(/_/g, " "));
+    for (const c of pkg.manifest.shape?.controls ?? []) add(c.id.replace(/_/g, " "));
+  }
   vocabCache.set(asset, v);
   return v;
 }
@@ -199,6 +209,7 @@ function changeLines(asset: AssetInfo, changes: JointChange[]): string[] {
 const ago = (at: string) => { const s = Math.max(0, (Date.now() - Date.parse(at)) / 1000); return s < 90 ? `${Math.round(s)} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
 function entryWords(asset: AssetInfo, e: Entry): string {
   const parts = e.changes.map((c) => { const j = asset.joints.get(c.joint); return j && c.after !== null ? sayJoint(j, c.after as number) : c.joint; });
+  if (e.person) parts.push(`person: ${sayPersonOrNobody(e.person.after)}`);
   // only request names the server made are shown: a name a caller chose is text from a stranger on the public sandbox
   const named = e.group && /-\d+$/.test(e.group) ? ` [${e.group}]` : e.group ? " [a request named by its caller]" : "";
   return `v${e.version} ${e.actor.label}${e.undoes ? ` undid v${e.undoes.join(", v")}` : ""}${named} — ${[...new Set(parts)].join("; ")}`;
@@ -341,8 +352,9 @@ const intent: CommandSpec[] = [
         if (!j || c.after === null) throw new Refusal("unknown_joint", `${c.joint} is no longer a joint of ${asset.name} (the asset was rebuilt), so this change cannot be put back`, "set the remaining adjustments with adjust");
       }
       const pose = { ...doc.pose }; for (const c of plan.changes) pose[c.joint] = c.after as JointValue;
-      const lines = changeLines(asset, plan.changes);
-      return { result: { text: [`Undid ${about}:`, ...lines].join("\n"), undid: plan.undoes, lines, also_moved: movedLines(asset, pose, new Set(plan.changes.map((c) => c.joint))) }, changes: plan.changes, undoes: plan.undoes };
+      const pl = plan.person ? personChangeLine(plan.person.before, plan.person.after) : null;
+      const lines = [...changeLines(asset, plan.changes), ...(pl ? [pl] : [])];
+      return { result: { text: [`Undid ${about}:`, ...lines].join("\n"), undid: plan.undoes, lines, also_moved: movedLines(asset, pose, new Set(plan.changes.map((c) => c.joint))) }, changes: plan.changes, person: plan.person, joints: [...plan.changes.map((c) => c.joint), ...(plan.person ? ["person"] : [])], undoes: plan.undoes };
     },
     finish(r: any, done) {
       return { ...r, text: `${r.text}\n${done.recorded === null ? "Nothing changed." : `Version ${done.recorded}.`}\n${r.also_moved.length ? `Still moved: ${r.also_moved.join("; ")}.` : "Everything is as photographed now."}`, version: done.recorded };
@@ -361,19 +373,26 @@ const intent: CommandSpec[] = [
           text: [
             `${asset.manifest.title ?? asset.name}, scene version ${doc.version}.`,
             moved.length ? `Moved from as photographed: ${moved.join("; ")}.` : "Everything is as photographed.",
+            ...(asset.people ? [`In the seat: ${sayPersonOrNobody(doc.person)}.`] : []),
             recent.length ? `Last changes:\n${recent.map((e) => `  ${entryWords(asset, e)} (${ago(e.at)})`).join("\n")}` : "No changes yet.",
           ].join("\n"),
-          version: doc.version, moved, recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group && /-\d+$/.test(e.group) ? { request: e.group } : {}), at: e.at })),
+          version: doc.version, moved, ...(asset.people ? { person: doc.person } : {}), recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group && /-\d+$/.test(e.group) ? { request: e.group } : {}), at: e.at })),
         },
       };
     },
   },
   {
     id: "measure", kind: "query", tool: "measure",
-    summary: "The distance between two points named in plain words or ids (\"median eye\" to \"monitor screen\"), at the current pose: a point estimate between frame origins, at the sizes estimated from photographs; no range yet.",
-    args: { type: "object", required: ["from", "to"], properties: { from: { type: "string", maxLength: 80, description: "a reference point, screen or part: \"median eye\", \"small eye\", \"right grip\", \"D_eye_median\"" }, to: { type: "string", maxLength: 80, description: "e.g. \"monitor screen\", \"touchscreen\", \"S_mon_screen\"" } } },
-    examples: [{ args: { from: "median eye", to: "monitor screen" }, note: "viewing distance of a median adult" }],
-    run(ctx, a: { from: string; to: string }) {
+    summary: "The distance between two points named in plain words or ids (\"median eye\" to \"monitor screen\"), at the current pose: a point estimate between frame origins, at the sizes estimated from photographs; no range yet. With person instead: what the person in the seat sees and reaches, from its solved pose (eye, sight lines with the gaze cone, reach to the grips, clearances), every number with its unit and source.",
+    args: { type: "object", properties: { from: { type: "string", maxLength: 80, description: "a reference point, screen or part: \"median eye\", \"small eye\", \"right grip\", \"D_eye_median\"" }, to: { type: "string", maxLength: 80, description: "e.g. \"monitor screen\", \"touchscreen\", \"S_mon_screen\"" },
+      person: { type: "string", enum: ["eye", "sight", "reach", "clearance", "all"], description: "measure the person in the seat instead: eye (both eyes), sight (both screens: distance, angle below the eye, off the screen normal, gaze cone), reach (each grip, share of the arm's length), clearance (thighs to the grip mounts, knee crease to the seat front, hips to the pods, head to the frame, feet to the pedals), all" } } },
+    examples: [{ args: { from: "median eye", to: "monitor screen" }, note: "viewing distance of a median adult" }, { args: { person: "sight" }, note: "the screens from the eye of the person in the seat" }],
+    run(ctx, a: { from?: string; to?: string; person?: string }) {
+      if (a.person !== undefined) {
+        if (a.from !== undefined || a.to !== undefined) throw new Refusal("invalid_args", "measure: give from and to, or person, not both", "e.g. {\"person\": \"sight\"} or {\"from\": \"median eye\", \"to\": \"monitor screen\"}");
+        return get("person.report")!.run!(ctx, { what: a.person });
+      }
+      if (a.from === undefined || a.to === undefined) throw new Refusal("invalid_args", "measure: give from and to (or person)", "e.g. {\"from\": \"median eye\", \"to\": \"monitor screen\"} or {\"person\": \"all\"}");
       const from = resolvePoint(ctx.asset, a.from), to = resolvePoint(ctx.asset, a.to);
       const r: any = get("measure.distance")!.run!(ctx, { from, to }).result;
       const short = (l: string) => l.replace(/\s*\([^)]*\)/g, "");
@@ -382,9 +401,9 @@ const intent: CommandSpec[] = [
   },
   {
     id: "look", kind: "view", tool: "look", sessionOptional: true,
-    summary: "One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene.",
+    summary: "One browser's view in one call: a named view (operator's eye, overview, front, back, left, right, top, front corner); the operator's view from the eye of a person of a given stature or sitting eye height (eye; with a person in the seat, the operator's view and a stature use its solved eye); the camera anywhere (camera: at and look_at as model-frame metres, or point names with an offset); what it shows (only, hide, all); what is selected; and with picture: true an image of the result. Locally without a viewer code it goes to every open page; on the public sandbox to the browser whose code it names, or to browsers that follow this agent. Changes nothing in the scene.",
     args: { type: "object", properties: { view: { type: "string", maxLength: 40, description: "operator (the operator's eye), overview, front, back, left, right, top, front corner" },
-      eye: { type: "object", properties: { stature_cm: { type: "number", unit: "cm", minimum: 100, maximum: 230, description: "standing height of the person in the seat" }, sitting_eye_height_cm: { type: "number", unit: "cm", minimum: 50, maximum: 110, description: "eye height above the seat surface" }, person: { type: "string", enum: ["small", "median", "large"], description: "the model's three eye points: a small woman (5th percentile), a median adult, a tall man (95th percentile)" } }, description: "the operator's view from the eye of this person (one of the three); it moves with the seat" },
+      eye: { type: "object", properties: { stature_cm: { type: "number", unit: "cm", minimum: 100, maximum: 230, description: "standing height of the person in the seat; with a person shown, that person's body at this stature and its solved eye, otherwise an assumed share of stature" }, sitting_eye_height_cm: { type: "number", unit: "cm", minimum: 50, maximum: 110, description: "eye height above the seat surface" }, person: { type: "string", enum: ["small", "median", "large"], description: "the model's three eye points: a small woman (5th percentile), a median adult, a tall man (95th percentile)" } }, description: "the operator's view from the eye of this person (one of the three); it moves with the seat" },
       camera: { type: "object", required: ["at"], properties: { at: where, look_at: where, fov: { type: "number", unit: "deg", minimum: 10, maximum: 120, description: "vertical field of view, default 50" } }, description: "the camera anywhere: where it is and what it looks at (default: the middle of the rig)" }, only: { ...words, description: "show only these groups or parts: \"stand\", \"seat\", \"monitor\", \"left joystick\"" }, hide: { ...words, description: "hide these groups or parts" }, all: { type: "boolean", description: "show everything again" }, select: { type: "string", maxLength: 80, description: "select a part or group, as a click would (its card opens)" }, picture: { type: "boolean", description: "return a picture of the browser's view after the change" } } },
     examples: [
       { args: { view: "operator", picture: true }, note: "the operator's view, and a picture of it" },
@@ -397,7 +416,10 @@ const intent: CommandSpec[] = [
       if (a.view !== undefined && a.eye === undefined && a.camera === undefined) {
         const w = norm(a.view).replace(/^the /, ""), v = VIEW_NAMES.includes(a.view) ? a.view : Object.hasOwn(VIEW_WORDS, w) ? VIEW_WORDS[w] : undefined;
         if (!v) throw new Refusal("invalid_args", `look: ${JSON.stringify(a.view)} is not a view`, `one of: operator, overview, front, back, left, right, top, front corner`);
-        out.view = v; said.push(v === "operator" ? "the operator's eye view" : `the ${v.replace("_", " ")} view`);
+        out.view = v;
+        const pe = v === "operator" ? personEye(asset, doc) : null;          // a person in the seat (operating): its own eye
+        if (pe) { out.eye_point = pe.point; said.push(`the operator's eye view from the eye of ${pe.who}`); }
+        else said.push(v === "operator" ? `the operator's eye view${doc.person && asset.people ? " (from the rig's median eye point: the person in the seat is not in the operating posture)" : ""}` : `the ${v.replace("_", " ")} view`);
       }
       if (a.eye !== undefined && a.camera !== undefined) throw new Refusal("invalid_args", "look: give eye or camera, not both", "eye puts the camera at a person's eye in the seat; camera puts it anywhere");
       if (a.eye !== undefined) {
@@ -408,9 +430,17 @@ const intent: CommandSpec[] = [
         if (e.person !== undefined) { h = val(`seat.eye_height_${e.person}`)!; who = { small: "a small woman (5th percentile)", median: "a median adult", large: "a tall man (95th percentile)" }[e.person]!; }
         else if (e.sitting_eye_height_cm !== undefined) { h = e.sitting_eye_height_cm / 100; who = `a person with a sitting eye height of ${r1(e.sitting_eye_height_cm)} cm`; }
         else { const ratio = val("seat.eye_height_per_stature")!; h = (e.stature_cm! / 100) * ratio; who = `a person ${r1(e.stature_cm!)} cm tall (sitting eye height about ${r1(h * 100)} cm: ${ratio} of stature, an assumed ratio)`; }
-        const d = r1((h - hm) * 100);
-        out.view = "operator"; out.eye = Math.round(h * 1e4) / 1e4;
-        said.push(`the operator's view from the eye of ${who}, ${d === 0 ? "at" : `${Math.abs(d)} cm ${d > 0 ? "above" : "below"}`} the median eye point along the torso line; it moves with the seat`);
+        // with a person in the seat (operating), a stature means that person's body at that stature, its eye from the solve
+        const pe = e.stature_cm !== undefined ? personEye(asset, doc, { stature_mm: e.stature_cm * 10 }) : null;
+        out.view = "operator";
+        if (pe) {
+          out.eye_point = pe.point; out.eye = Math.round(pe.above_cushion_m * 1e4) / 1e4;
+          said.push(`the operator's view from the eye of ${pe.who} (its solved pose: ${r1(pe.above_cushion_m * 100)} cm above the cushion, from the person's shape space, not a ratio); it moves with the seat`);
+        } else {
+          const d = r1((h - hm) * 100);
+          out.eye = Math.round(h * 1e4) / 1e4;
+          said.push(`the operator's view from the eye of ${who}, ${d === 0 ? "at" : `${Math.abs(d)} cm ${d > 0 ? "above" : "below"}`} the median eye point along the torso line; it moves with the seat`);
+        }
       }
       if (a.camera !== undefined) {
         const w = worldFrames(asset.nodes, doc.pose), rest = worldFrames(asset.nodes, {}), round = (v: number[]) => v.map((x) => Math.round(x * 1e4) / 1e4);
@@ -453,3 +483,4 @@ const intent: CommandSpec[] = [
   },
 ];
 for (const c of intent) register(c);
+for (const c of personCommands) register(c);

@@ -35,7 +35,13 @@ export interface ManifestJoint extends JointKinematics {
   rest: { t: number[]; q: number[] };
   origin: number[];
 }
-export interface ManifestDatum { id: string; parent: string; label: string; origin: number[]; x_axis: number[]; z_axis: number[] }
+export interface ManifestDatum {
+  id: string; parent: string; label: string; origin: number[]; x_axis: number[]; z_axis: number[];
+  /** a component's radius about this datum's z axis: [t, radius] pairs, t along z from the origin (spec `profile`), metres */
+  profile?: number[][];
+  /** a parameter list [from, to] along z copied beside the profile (spec `profile.hold`), metres */
+  hold?: number[];
+}
 
 export interface Manifest {
   schema: string; asset: string; title: string;

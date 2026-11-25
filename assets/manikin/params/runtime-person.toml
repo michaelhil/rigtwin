@@ -581,3 +581,13 @@ knee = { value = 0.008, unit = "m", range = 0.003, class = "assumed", basis = "l
 radius_fallback = { value = 0.08, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab main.ts capsulesNow: radius of a capsule whose measure the shape does not read back." }
 flatten = { value = 0.3, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2f: a limb resting against another capsule gives way by this share of their overlap." }
 flatten_max = { value = 0.04, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2f: at most this much overlap is counted." }
+
+[operator.handle]
+# the hand on a real handle (MV-core, 2026-11-25, the coordinator's method change: the lab's grip was made for a 40 mm cylinder)
+sample_step = { value = 0.005, unit = "m", range = 0.002, class = "invented", tier = "layout", evidence = "MV-core: the handle's radius profile is searched in steps of this along the axis for the widest section under the palm." }
+knuckle_pad = { value = 0.012, unit = "m", range = 0.004, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core: skin beyond the index knuckle joint along the handle (half a knuckle's thickness), kept below the top of the hold section so the button head stays clear of the palm." }
+wrap_passes = { value = 4, unit = "count", range = 1, class = "invented", tier = "layout", evidence = "MV-core: passes over a finger's three joints when its flexion is solved against a handle profile." }
+wrap_step = { value = [2, 0.25], unit = "deg", range = 1, class = "invented", tier = "layout", evidence = "MV-core: coarse and fine search steps of each joint angle in that solve." }
+inside_weight = { value = 100, unit = "1", range = 50, class = "invented", tier = "layout", evidence = "MV-core: skin inside the handle costs this many times a gap of the same size: the finger lies on the handle, never in it." }
+thumb_margin = { value = 0.002, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core: the thumb's joint centres clear the handle by their segment's skin radius plus this (the fingertips keep wrap.tip_clear)." }
+head_rise = { value = 0.003, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core: the button head begins where the handle's radius first exceeds its radius at the middle of the hold section by this; the palm's skin (index knuckle plus knuckle_pad) stays below it (a P95 hand's index web sank 3.8 mm into the head's flare when only the hold section's top was kept clear)." }

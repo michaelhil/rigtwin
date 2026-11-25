@@ -3,7 +3,8 @@ name: operating-rigtwin
 description: >-
   Operates the rigtwin shared scene: moves the rig's adjustments (monitor height and tilt, backrest, seat,
   armrests, joysticks, touchscreen, pedals), shows a view in a browser and returns a picture of it, measures
-  distances, and undoes changes, locally or on the public sandbox. Use whenever the owner asks to change, show,
+  distances, seats a person (the manikin) and measures what it sees and reaches, and undoes changes, locally or on
+  the public sandbox. Use whenever the owner asks to change, show,
   measure or undo something in the rigtwin viewer or the shared Playground, even in everyday words ("make the
   backrest straight", "lower the monitor 3 cm and show me the operator's view", "how far is the eye from the
   screen", "undo that"). Not for building or changing the 3D asset itself (that is modeling-3d-assets-from-references).
@@ -13,7 +14,7 @@ description: >-
 
 ## Use the MCP tools, one call per request
 
-The rigtwin server offers five tools over MCP (`.mcp.json`; loaded from the first turn):
+The rigtwin server offers six tools over MCP (`.mcp.json`; loaded from the first turn):
 `mcp__rigtwin__*` for the owner's local scene (`bun run serve`) and `mcp__rigtwin-public__*` for the
 public sandbox on mightwork.ai. The tool name says which scene you act on: use the one the owner means.
 If the owner doesn't say and the local server is not running, it is the public sandbox.
@@ -25,6 +26,7 @@ If the owner doesn't say and the local server is not running, it is the public s
 | `measure` | "how far is the eye from the screen" → `{"from": "median eye", "to": "monitor screen"}` |
 | `undo` | "undo that" → `{}`; a whole request → `{"what": "<request name from the adjust reply>"}` |
 | `state` | what is moved and the last changes; `{"detail": "catalogue"}` for every adjustment |
+| `person` | "put the small woman in the seat" → `{"preset": "P5 woman"}` (also `P50 man`, `P95 man`); "the clay figure, no glasses" → `{"style": "clay", "glasses": false}`; `body` (stature mm, mass kg), `posture` ("operating", "relaxed stand"), `{"clear": true}`. Its reply has the key numbers; `measure {"person": "sight"}` (or eye, reach, clearance, all) gives every number with its source |
 
 Every adjustment, its travel, what 0 means and its directions are in the server's instructions
 (already in your context) and in [reference.md](reference.md). You don't need to look anything up

@@ -118,6 +118,8 @@ rpy = ["0", "stand.shelf_tilt", "0"]
 joints = ["J_a", "J_b"]                  # joint frames between parent and node, outermost first
 assembly = true                          # the node has no mesh of its own
 tags = ["structure"]
+# on a D_ node only: the radius of a component about the datum's z axis, written into the description file
+profile = { of = "C_joy_lever_L", span = "pods.grip_profile_span", step = "pods.grip_profile_step", hold = "pods.grip_hold_span" }
 
 [joints.J_mon_tilt]
 type = "revolute"                        # revolute | prismatic | ball
@@ -252,7 +254,7 @@ the model frame at the neutral pose.
 | `components` | object[] | every `C_` node, assemblies and root included (53 as of round 2); see below |
 | `surfaces` | object[] | every `S_` node, same record shape with `kind: "surface"` (2) |
 | `joints` | object[] | every joint (20); see below |
-| `datums` | object[] | every `D_` node (14): `id`, `parent`, `label`, `origin`, `x_axis`, `z_axis` |
+| `datums` | object[] | every `D_` node (21 since 2026-11-25): `id`, `parent`, `label`, `origin`, `x_axis`, `z_axis`; where the spec gives a `profile`, also `profile` ([t, radius] pairs: the named component's mesh cut across the datum's z axis, t from its origin; the grip handles') and `hold` (a parameter list copied beside it) |
 | `motion` | object | the spec's expected-motion table, unchanged |
 | `omitted` | `{ id, reason }[]` | components left out on purpose (empty as of round 2) |
 | `missing` | string[] | nodes with neither mesh nor reason; must be empty |

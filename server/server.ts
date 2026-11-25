@@ -14,7 +14,7 @@
 //                       the last event of a stream the server ends by its byte budget (the page reconnects at once).
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
 //   POST /api/mcp       the same commands for agents over MCP (Streamable HTTP, tools only: adjust, look, measure,
-//                       undo, state; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
+//                       undo, state, person; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
 //   POST /api/follow    {session, actor}: this page follows that caller's views (a look without a code reaches it); actor
 //                       null stops; one caller per page
 //   GET  /api/trace     ?after=<n>: the last 100 trace records (one per request: who, what, how it ended, how long; server/trace.ts),
@@ -49,7 +49,9 @@ import { assetFromFiles, runCommand, SESSION_ALPHABET, SESSION_PATTERN } from ".
 import { get, list, type AssetInfo } from "../shared/commands/registry.ts";
 import { entriesAfter, newDoc, parseDoc, reconcile, SCENE_FORMAT, type Actor, type SceneDoc } from "../shared/commands/doc.ts";
 import type { CommandError } from "../shared/commands/schema.ts";
-import { ownWords } from "../shared/commands/intent.ts";     // also registers adjust, look, measure, undo, state
+import { ownWords } from "../shared/commands/intent.ts";     // also registers adjust, look, measure, undo, state and the person's commands
+import { defaultPerson } from "../shared/commands/person.ts";
+import { readPackage, type People, type PersonPackage } from "../shared/person-model.ts";
 import { instructions as agentInstructions } from "../shared/commands/agent-docs.ts";
 import { createMcp } from "./mcp.ts";
 import { createTrace, summarize } from "./trace.ts";
@@ -58,6 +60,9 @@ export interface ApiOptions {
   dataDir: string; assetDir: string; mode: "local" | "deployed"; revision: string;
   /** deployed: the release folder as started (`/srv/rigtwin/current`, a link); watched for a new release */
   releaseDir?: string;
+  /** the person's packages (assets/manikin/ locally, <release>/asset/manikin/ deployed); default: the first of those two next to
+   *  the asset folder that exists. null: no person. */
+  personDir?: string | null;
   /** other limits (tests) */
   limits?: Partial<Limits>;
   /** called when `releaseDir` no longer points at the release we started from (default: exit, systemd starts the new one) */
@@ -144,6 +149,27 @@ const sse = (name: string, data: unknown, id?: number) => `${id !== undefined ? 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 export const LOCAL_HOSTS = /^(127\.0\.0\.1|localhost|\[::1\]|[a-z0-9.-]+\.localhost)(:\d+)?$/i;
 
+/** The person's packages in a folder (operator-m, operator-f, clay-m, clay-f, whichever are there), read once per process and
+ *  folder while their manifests stay the same (tests start many servers). null when none can be read. */
+const peopleRead = new Map<string, { stamp: string; people: People | null }>();
+export function loadPeople(dir: string): People | null {
+  const ids = ["operator-m", "operator-f", "clay-m", "clay-f"], file = (id: string) => join(dir, id, `${id}.avatar.json`);
+  const stamp = ids.map((id) => { try { const st = statSync(file(id)); return `${st.mtimeMs}:${st.size}`; } catch { return "-"; } }).join();
+  const had = peopleRead.get(dir);
+  if (had?.stamp === stamp) return had.people;
+  const packages: Record<string, PersonPackage> = {};
+  for (const id of ids) {
+    if (!existsSync(file(id))) continue;
+    try {
+      const d = join(dir, id), m = JSON.parse(readFileSync(file(id), "utf8")), poses = m.posesFile && existsSync(join(d, m.posesFile)) ? JSON.parse(readFileSync(join(d, m.posesFile), "utf8")) : undefined;
+      packages[id] = readPackage(id, m, new Uint8Array(readFileSync(join(d, m.glb))), poses);
+    } catch (e: any) { console.error(`person package ${id} not read: ${e.message}`); }
+  }
+  const dp = defaultPerson(packages), people = dp ? { packages, defaultPerson: dp } : null;
+  peopleRead.set(dir, { stamp, people });
+  return people;
+}
+
 export function createApi(opts: ApiOptions) {
   const L: Limits = { ...LIMITS, ...opts.limits }, deployed = opts.mode === "deployed", started = Date.now(), enc = new TextEncoder();
   const docFile = join(opts.dataDir, "playground", "doc.json");
@@ -154,6 +180,11 @@ export function createApi(opts: ApiOptions) {
   const secret = Buffer.from(readFileSync(secretFile, "utf8").trim(), "hex");
   if (secret.length < 32) throw new Error(`${secretFile} is not a 32-byte secret`);
 
+  // ---- the person's packages: their manifests and the skeletons in their GLBs' JSON chunks (read once; the meshes and
+  // textures are the page's). Without them the person's commands answer no_person and the document has nobody in the seat.
+  const personDir = opts.personDir !== undefined ? opts.personDir : [join(opts.assetDir, "manikin"), resolve(opts.assetDir, "..", "..", "manikin")].find((d) => existsSync(join(d, "operator-m")) || existsSync(join(d, "operator-f"))) ?? null;
+  const people = personDir ? loadPeople(personDir) : null;
+
   // ---- the asset (re-read when its description file changes; locally a rebuild may happen while we run)
   let asset: AssetInfo, assetStamp = "";
   function loadAsset(): boolean {
@@ -163,16 +194,18 @@ export function createApi(opts: ApiOptions) {
     if (stamp === assetStamp) return false;
     const manifest = JSON.parse(readFileSync(file, "utf8")), glb = new Uint8Array(readFileSync(join(opts.assetDir, manifest.glb.file)));
     if (createHash("sha256").update(glb).digest("hex") !== manifest.glb.sha256) throw new Error("the GLB does not match its description file (a build is being written?)");
-    asset = assetFromFiles(manifest, glb);
+    asset = { ...assetFromFiles(manifest, glb), people };
     assetStamp = stamp;
     return true;
   }
   loadAsset();
 
   // ---- the document
-  let doc: SceneDoc = newDoc(asset!);
+  // a new Playground has the default person in the seat (when the person's packages are here); a rigtwin-scene/1 document
+  // (before manikin v1) is read with its pose and history as they were and the default person added, without a history entry
+  let doc: SceneDoc = newDoc(asset!, people?.defaultPerson ?? null);
   if (existsSync(docFile)) {
-    try { doc = parseDoc(JSON.parse(readFileSync(docFile, "utf8"))); }
+    try { doc = parseDoc(JSON.parse(readFileSync(docFile, "utf8")), { person: people?.defaultPerson ?? null }); }
     catch (e: any) { const aside = `${docFile}.unreadable-${Date.now()}`; renameSync(docFile, aside); console.error(`doc.json could not be read (${e.message}); kept as ${aside}, starting an empty Playground`); }
   }
   /** doc.json, written atomically: a temporary file, flushed to disk, renamed over the old one. */
@@ -445,7 +478,7 @@ export function createApi(opts: ApiOptions) {
   const heartbeat = setInterval(() => broadcast(":hb\n\n"), L.heartbeatMs);
   /** An empty Playground again, sent to every open stream as a snapshot (tools only: not reachable over HTTP). */
   function reset() {
-    doc = newDoc(asset);
+    doc = newDoc(asset, people?.defaultPerson ?? null);
     write(); snap = null;
     broadcast(snapshotBytes());
   }

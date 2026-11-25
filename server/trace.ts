@@ -34,7 +34,9 @@ export interface TraceRecord {
 }
 
 const ID = /^[CDSJ]_[A-Za-z0-9_]{1,60}(:[0-2])?$/, SERVER_NAME = /^[a-z0-9][a-z0-9-]{0,39}-\d+$/;
-const WORDS = new Set(["three_quarter", "front", "rear", "left", "right", "top", "front_quarter", "operator", "stand", "seat", "pods", "pedals", "platform", "catalogue", "history", "last", "mine"]);
+const WORDS = new Set(["three_quarter", "front", "rear", "left", "right", "top", "front_quarter", "operator", "stand", "seat", "pods", "pedals", "platform", "catalogue", "history", "last", "mine",
+  // the person's (shared/commands/person.ts): presets, styles, sexes, tones, postures, what measure {person} measures
+  "P5 woman", "P50 man", "P95 man", "dressed", "clay", "female", "male", "light", "medium", "dark", "operating", "relaxed stand", "RELAXED_STAND", "eye", "sight", "reach", "clearance", "all"]);
 /** Arguments without any text a caller wrote: ids, numbers, booleans, view and group names and server-made request names stay. */
 export function mask(v: unknown, allow: (s: string) => boolean = () => false, depth = 0): unknown {
   if (depth > 6) return "…";
@@ -56,7 +58,7 @@ export function summarize(command: string, ok: boolean, result: any, error: { co
     case "adjust": return (r.changes ?? []).map((c: any) => `${c.adjustment} ${c.before} → ${c.after}`).join("; ") || "nothing changed";
     case "undo": return (r.lines ?? []).join("; ") || `v${(r.undid ?? []).join(", v")}`;
     case "state": return "read the scene";
-    case "measure": return typeof r.text === "string" ? r.text.split(". ")[0] : "measured";
+    case "measure": return typeof r.text === "string" ? (r.computed_by ? "measured the person" : r.text.split(". ")[0]) : "measured";
     case "look": return typeof r.text === "string" ? r.text.split("\n")[0].replace(/^Showing /, "showing ").replace(/\.$/, "") : "look";
     case "pose.set": case "history.undo": return [...new Set((r.changes ?? []).map((c: any) => c.said ?? c.label))].join("; ") || "nothing changed";
     case "scene.summary": return "read the scene";
@@ -65,6 +67,9 @@ export function summarize(command: string, ok: boolean, result: any, error: { co
     case "view.set": return `view ${r.view}`;
     case "view.show": return "chose what is shown";
     case "view.select": return `selected ${r.selected}`;
+    case "person": return typeof r.before === "string" ? `person: ${r.before} → ${r.after}` : "person";
+    case "person.set": case "person.pose": case "person.clear": return typeof r.said === "string" ? `person: ${r.before} → ${r.said}` : command;
+    case "person.report": return "measured the person";
     case "connect": return "connected over MCP";
     default: return command;
   }

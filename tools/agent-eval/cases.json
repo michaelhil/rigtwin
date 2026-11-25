@@ -1,5 +1,5 @@
 {
-  "$comment": "Owner requests for the agent benchmark (tools/agent-eval.ts). preset: joints set before the case (pose.set units: metres and degrees, by a script). expect.pose: joints after the case (same units, tolerance 0.002 m / 0.6°); every joint not listed must be where the preset left it. expect.view: the browser's view afterwards. expect.asks: the agent must ask instead of changing anything. expect.says: patterns its final answer must contain (case-insensitive).",
+  "$comment": "Owner requests for the agent benchmark (tools/agent-eval.ts). preset: joints set before the case (pose.set units: metres and degrees, by a script). expect.pose: joints after the case (same units, tolerance 0.002 m / 0.6°); every joint not listed must be where the preset left it. expect.view: the browser's view afterwards. expect.asks: the agent must ask instead of changing anything. expect.says: patterns its final answer must contain (case-insensitive). expect.person: fields the person in the seat must have afterwards (scene.summary person), or null for nobody.",
   "cases": [
     { "id": "backrest-straight", "prompt": "Make the backrest straight.", "preset": { "J_seat_recline": 25 }, "expect": { "pose": { "J_seat_recline": 0 }, "says": ["assumed"] } },
     { "id": "lower-monitor", "prompt": "Lower the monitor 3 cm.", "expect": { "pose": { "J_mon_height": -0.03 } } },
@@ -10,6 +10,12 @@
     { "id": "armrest-which", "prompt": "Move the armrest forward 2 cm.", "expect": { "asks": true, "says": ["left|right"] } },
     { "id": "eye-distance", "prompt": "How far is a median adult's eye from the main monitor screen?", "expect": { "says": ["8\\d|9\\d", "estimate"] } },
     { "id": "operator-view", "prompt": "Show me the operator's view in my browser (its code is {code}).", "expect": { "view": "operator" } },
-    { "id": "undo-that", "prompt": "Undo that last change.", "preset": { "J_mon_height": -0.05 }, "expect": { "pose": { "J_mon_height": 0 } } }
+    { "id": "undo-that", "prompt": "Undo that last change.", "preset": { "J_mon_height": -0.05 }, "expect": { "pose": { "J_mon_height": 0 } } },
+    { "id": "person-small-woman", "prompt": "Put the small woman in the seat. Can she reach the pedals?", "expect": { "person": { "preset": "P5 woman", "sex": "female" }, "says": ["(short|not reach|cannot reach|do not reach|doesn't reach|don't reach)", "estimate"] } },
+    { "id": "person-sight", "prompt": "How far are the person's eyes from the main monitor, and is the screen in a comfortable gaze range?", "expect": { "person": { "preset": "P50 man" }, "says": ["cm", "(cone|gaze)"] } },
+    { "id": "person-clay-no-glasses", "prompt": "Show the clay figure instead, and take the glasses off.", "expect": { "person": { "style": "clay", "glasses": false } } },
+    { "id": "person-cap", "prompt": "Take the person's cap off.", "expect": { "person": { "preset": "P50 man", "style": "dressed" }, "says": ["cap"] } },
+    { "id": "person-tall-view", "prompt": "Seat the tall man and show me the view from his eyes in the browser {code}.", "expect": { "person": { "preset": "P95 man" }, "view": "operator" } },
+    { "id": "person-away", "prompt": "Take the person out of the seat.", "expect": { "person": null } }
   ]
 }

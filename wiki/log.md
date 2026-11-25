@@ -350,3 +350,120 @@ holds the stored choice. Tried against a local server in public mode: the questi
 view and left the view alone; Allow showed it and the agent's next view came straight in; with Always allow a third
 agent's camera view and its picture came in without a question. 36 server tests, 53 of 53 viewer checks.
 
+
+## 2026-11-25
+
+**03:50** — Wiki: new page on the manikin approaches, written from the avatar team's research and reviews of
+2026-11-24 and 2026-11-25: the problem, every library weighed (commercial ones, MetaHuman included, referenced and
+linked only; open ones with licence, contents, fit for ergonomics and for a web viewer; SMPL, SMPL-X and MANO
+excluded by licence), what was chosen and why, recommendations, and the current state (the abstract style passed
+the designer at level 3, the Unreal-mannequin class, not MetaHuman quality; the dressed style vetoed). One picture
+of the raw open base mesh, rendered by the project; pictures of the manikin itself are placeholders until the owner
+approves showing it. The avatar work of those two days has no log entries of its own yet.
+[Manikin approaches](40-method/manikin-approaches.md).
+
+**07:40** — Manikin: the dressed operator style passed the designer's review (after four vetoes; level 4 minus at
+1.5–4 m, level 3 for the head at 1.2 m, one level under MetaHuman at working distance), joining the abstract clay
+figure, which passed earlier. Final frame rate on the project laptop at a load average of 17–18 (macOS indexing,
+nothing of the project's running), ruled by the owner to be the machine's quiet state: median 66 and 63 frames per
+second for the dressed man and woman, 90 for the clay figure, slowest runs 53, 54 and 64. The owner closed the shoe
+work as detailed enough. The manikin stays in the lab viewer and off the public site until the owner approves it.
+[Manikin approaches](40-method/manikin-approaches.md).
+
+**08:50** — Manikin v1, rig binding (MV-rig): Rig B gained seven empty reference points the seated person needs
+(`D_seat_front`, `D_backrest_ref`, `D_armrest_L/R`, `D_grip_axis_L/R`, `D_heel_rest`) and three grip records derived
+from its own grip shape (`pods.grip_centre`, `grip_axis_rp`, `grip_radius`); the rebuilt GLB's geometry is byte-identical,
+and every check passes. `viewer/src/person/rig-binding.ts` turns the rig's points, as posed, into the seated operator's
+targets, the seat and backrest contact surfaces and a report; its own numbers are in
+`assets/manikin/params/runtime-rig.toml`. Seven tests (no browser) show the targets following every adjustment, no
+NaN at any joint's limit, and the seated eye survey-true to under 1 mm. Findings for three people at the photographed
+pose: the 0.47 m seat reaches beyond the short woman's knee crease and her feet fall 117 mm short of the pedals; the
+tall heavy man's hips meet the armrest pods; all grips within reach; the monitor's top edge 96 to 235 mm above the eyes.
+[Three people in Rig B](70-results/people-in-rig-b.md).
+
+**Time not recorded (2026-11-25, forenoon)** — Manikin v1, phase 2 core (MV-core, branch `manikin-v1`): the lab's manikin code ported
+into `viewer/src/person/` (loader, shape bake, drivers, dual-quaternion skinning, eyes, cloth pose, seat contact on the real cushion's
+profile, styles, wardrobe, tones, the seated-operator solver), loaded as its own script after the rig is ready; every shader change
+confined to the person's materials (the rig's 16 standard pictures identical to `main`'s, 0 px); idle motion only in a live view at 30
+frames a second; 445 run-time numbers in `assets/manikin/params/runtime-person.toml`; new checks C-85, C-86, T10b, T44b.
+[The person in the viewer](50-implementation/person-in-viewer.md).
+
+**10:40** — Manikin v1, packing (MP): the designer-passed packages brought from the lab into `assets/manikin/`, compressed:
+the dressed operator per sex with its three skin tones as texture sets on one geometry (`operator-m`, `operator-f`), the
+clay figure per sex (`clay-m`, `clay-f`), the motion clips once per sex (`clips/`), the fabric weave maps once
+(`shared/`); 37 MB in 116 files against about 360 MB of lab packages. The first person (dressed man, light tone)
+downloads 9.33 MB as the server sends it, shape data included (the lab's: 33 MB); the dressed woman 9.66 MB, the clay
+figures 5.2 MB, another tone 0.7 MB; GPU textures 42 and 44 MB per outfit (lab 106 and 113). Meshopt geometry with the
+lab's data types kept, KTX2 textures, shape files re-quantised (0.02 mm body, 0.04 mm garments) and meshopt-encoded.
+The designer's key shots C1, B1, F1, F5 rendered by the lab's own packet renderer from the lab packages and from the
+packed copy: mean difference 0.1 to 0.7 of 255 for the dressed operator (PSNR 43 to 55 dB; 99.9 % of pixels within
+18 of 255), 0.003 to 0.03 for the clay figure; nothing visible side by side at 1:1 (two renders of the lab package
+are byte-identical, so every difference is the compression's). One first choice was visibly wrong and was changed:
+ETC1S on the props' occlusion-roughness-metal maps turned the headset's rails bright (now UASTC). The lab's copy of the clay style inside the dressed packages is left out: the clay figure is its own package.
+Provenance per package (`PROVENANCE.json`), `assets/manikin/CREDITS.md` (the CC-BY shirt and trousers, CMU terms),
+the README's licence section, the lab's build code in `tools/manikin-build/` (Mac only), the asset contract's new
+section 14, and `tools/manikin-check.ts` in `bun run check` (checksums instead of a rebuild, budgets, validator,
+licences, banned names in every file, no symlinks). Tools: glTF-Transform 4.5.1, meshoptimizer 1.1.1 (in
+`tools/manikin-build/`'s own `package.json`, not the root's, so the deploy never installs them), KTX-Software 4.4.2 toktx
+unpacked into `work/tools/ktx/` without installing.
+[Asset contract](40-method/asset-contract.md#14-character-assets-the-manikin).
+
+**Time not recorded (2026-11-25, later)** — Person module adapted to MP's final packages (tones with their glTF factors, per-sex fold maps,
+renumbered vertices) and extended for the panel, the commands and the review renderer: sex swap keeping tone, wardrobe and pose; clips on
+demand (relaxed stand, walk); place, anchor, pick, definition and a change event. [The person in the viewer](50-implementation/person-in-viewer.md).
+
+
+**Time not recorded (2026-11-25, later)** — Manikin v1, phase 3: the person's commands (MC).
+- **Commands.** `person.set` (preset P5 woman, P50 man, P95 man, or a package preset; sex, style, tone, glasses, headset, body controls by id; the cap is always worn), `person.pose` (operating, relaxed stand, the pose library) and `person.clear`. They have the pose commands' conventions: validation, the stale check with the person as one key, undo by version and by request, the server-made author, the live channel.
+- **Agents.** One MCP tool, `person`, and `measure {"person": ...}`. The MCP instructions got one rule line: 4,079 of 4,096 characters on the public sandbox.
+- **Queries.** `person.report` gives eye (both eyes), sight lines with a gaze cone (`assets/manikin/params/runtime-queries.toml`), reach and clearances. The server computes them without a browser: it reads the packages' manifests and the GLBs' skeletons and runs the person's own solver and the rig binding. For the three presets the numbers agree with [Three people in Rig B](70-results/people-in-rig-b.md).
+- **Format.** The scene format is now `rigtwin-scene/2`, with the person; a stored `/1` document is migrated with its history.
+- **look's eye.** With a person seated, the operator's view and a stature use the person's solved eye (`eye_point`, carried in `D_eye_median`'s frame on the page). The stature ratio is the fallback.
+- **Tests.** New tests in `shared/commands/person.test.ts`, `server/server.test.ts` and `server/mcp.test.ts`. `tools/live-accept.ts` step 10 compares the server's eye with the page's drawn eye (3 mm). Six person cases were added to the agent benchmark.
+
+[The person's commands](50-implementation/person-commands.md).
+
+**Time not recorded (2026-11-25, later)** — Manikin v1, phase 5 (MPK): `tools/person-packet.ts` renders the designer's shot list in
+the product viewer with the real rig and the product's light (one frozen viewer build per run, no shared scene), the same ids, persons,
+azimuths, distances and lenses; seated shots on the rig binding, standing shots beside the rig with the figure turned; line-ups as
+series; product views (default, operator's eye, front, left); passes dressed, clay and tones; `manifest.json`, `metrics.json`
+(penetration from a CPU read-back of the person's vertices against the rig's triangles, hands on the real levers, shoes on the pedals,
+eye against the survey, the binding's findings, frame time per set) and a `--self-test`. First quick packet (50 images, 13 sheets):
+the operator's eye view puts the camera inside the person's head; the hand skin lies 8 to 11 mm inside the real levers for every
+person; the short woman's legs end 117 mm short of the pedals at the rig's neutral seat; the tall heavy man's left thigh is 7 mm
+into the left pod; a standing person's eyes keep the seated gaze point; a still could depend on the shot before through the seat
+contact's sink map. Packets in the main checkout's `work/manikin-v1-packets/` (not committed).
+[The person in the viewer](50-implementation/person-in-viewer.md#the-designers-packet-in-the-product-phase-5).
+- **Later the same day.**
+  - The percentile presets are now the package's own (Small woman (stature P5), Median man, Tall man (stature P95)) with their exact values, and the default person is the Median man. The lab's tall heavy test body stays reachable as `M95H`.
+  - The page fills a control that a body leaves out with the package's default.
+  - With `person=off` the page leaves the person alone.
+  - An undo stack works: a change and its undo cancel in the stale check.
+
+**About 1 h 45 min (2026-11-25, later)** — Manikin v1, phase 4: the person panel (MU).
+- **Panel.** A click on the person, or on its new row at the end of the parts list, opens it in the part card's place, in the same style. It holds three presets (Short woman P5, Median man P50, Tall man P95), sex, stature and weight, the 36 survey measures under "More measurements" (in SD, with the size that results), Dressed operator or Clay figure, skin tone, glasses and headset. It has Undo and "Back to <preset>".
+- **Shared.** Each change is shown at once and recorded as `person.set` through live.ts's sender. A slider drag is one change, and Undo is `history.undo` of the page's group. Without a server the page keeps its own undo list.
+- **Selection.** The person gets the faint selection line, through the engine's new `outlineExtra`. `interact.ts` asks `hooks.click` before picking the rig. While the pointer rests on the person, the tip names it.
+- **Credits.** While the dressed operator is shown, a line for the CC BY shirt and trousers stays at the bottom left of the view and goes into saved pictures. More, Credits shows `assets/manikin/CREDITS.md`.
+- **Keyboard and screens.** Keyboard and screen-reader names work, and on a phone the panel is a bottom sheet.
+- **Cost.** 26 kB in the person's script, which loads after the page is ready. The scripts before ready are 764 of 800 kB (T10).
+- **Checks.** T60 to T67 and T46p in `tools/ui-accept.ts`. Every page now waits for the person before its test, and `find` avoids pixels behind the person. T46 runs with `person=off`. T46p gives the frame rate with the person shown, at 1600 × 1000, next to the load average: 61 and 60 fps at load 4.4. 65 of 65 passed then.
+- **Undo.** Since MC's change, a change and its undo cancel each other in the scene, so Undo after Undo is plain `history.undo`.
+- **Presets.** Agreed through the coordinator: they are the package's own, with exact values, in the panel and in the commands.
+
+[The person panel](50-implementation/person-panel.md).
+
+**12:50** — Manikin v1, rig binding (MV-rig): clearances for every body. A preset or slider body that is not a baked
+person had no collision capsules; `tools/person-capsules.ts` now fits the lab's own capsule measurement on the clay
+bodies linearly in the shape weights, and `viewer/src/person/body-fit.ts` gives trunk, thigh, shin and forearm capsules
+for any body (against the ten baked fits: thighs within 4.8 mm, arms 3.1, heel 0.1; trunk sections half within 3.7 mm,
+up to 18 mm where later helper joints hold the skin). The P95 man preset (1.870 m, 96.6 kg) meets the pod shells by
+16–17 mm. The hands get the real lever's radius along its axis (`grip.profile`, from the rig's own lever geometry, within
+1 mm of the mesh). [Three people in Rig B](70-results/people-in-rig-b.md).
+  - Clearances for every body: the server passes the package manifest and the shape weights to the binding, which derives capsules for bodies that are not baked persons. (The rig's generator code is not in the server bundle: the binding reads the pods' shapes from the rig's description file.)
+
+**13:40** — Manikin v1, rig binding (MV-rig): the grip centre moved from the slim neck (where the solver had closed the
+fist, 8–20 mm into the real lever) to the middle of the handle section a hand wraps (`pods.grip_centre`, `grip_axis_rp`,
+`grip_radius`, new `grip_hold_span`, all derived from the grip's shape records). The lever's radius along the handle axis
+is now written by the rig's build into the description file (a datum's `profile` in the spec, on `D_grip_axis_L/R`), so
+the viewer and the server read it as data; the binding no longer imports generator code. Geometry byte-identical.

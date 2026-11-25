@@ -1,0 +1,17 @@
+# Run-time numbers of the person's queries (shared/person-model.ts, shared/commands/person.ts): the numbers an ergonomist's
+# question is answered with, beyond what the rig binding reports (viewer/src/person/rig-binding.ts, runtime-rig.toml) and
+# the person's solver (runtime-person.toml). Same record shape (value, unit, range, class, basis for "assumed", tier,
+# evidence; units are not converted; validated by shared/runtime-params.ts in `bun run check`).
+# Owner: MC (commands). The gaze cone is a convention for reporting, not an assessment: the replies say "inside the gaze
+# cone of runtime-queries.toml", never "compliant" or "ergonomic".
+
+[queries.sight]
+normal_line_down = { value = 15, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "critical", evidence = "The normal line of sight of a seated person at rest: about 15 degrees below the horizontal through the eye (the relaxed eyes and head look down by about this much). From memory of the ergonomics literature (Grandjean, Fitting the task to the man; Pheasant and Haslegrave, Bodyspace; the OSHA computer workstation guidance puts the screen centre 15 to 20 degrees below horizontal eye level); not looked up for this build. The axis of the gaze cone." }
+cone_vertical_half = { value = 15, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "critical", evidence = "Half the vertical opening of the gaze cone about the normal line of sight: the eyes alone move comfortably about 15 degrees up or down from it, so the cone runs from the horizontal to 30 degrees below it. Same sources as normal_line_down (quoted from memory, not looked up; ISO 9241-5 is remembered to accept a wider zone, down to about 40 degrees)." }
+cone_horizontal_half = { value = 15, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "critical", evidence = "Half the horizontal opening of the gaze cone: comfortable eye rotation without turning the head, about 15 degrees each side of straight ahead (the eyes reach about 35 degrees with effort; with the head turned, more). Pheasant and Haslegrave, Bodyspace, and the usual visual-field figures; quoted from memory, not looked up. A screen wider than the cone is reported as partly outside it, with the angle of each edge." }
+
+[queries.head]
+radius_share_of_length = { value = 0.5, unit = "ratio", range = 0.05, class = "assumed", basis = "convention", tier = "layout", evidence = "The head as a sphere for its clearance to the rig's parts: radius = this share of the person's survey head length (shape measure headlength, glabella to the back of the head), about the centre the person module uses (runtime-person.toml anchors.head_centre, 85 mm behind the eye midpoint). The longest of the head's semi-axes, so a clearance is not overstated sideways or upward (there the real head is narrower); the cap, its brim, the headset and the glasses are not counted." }
+
+[queries.solve]
+cache_entries = { value = 16, unit = "count", range = 8, class = "invented", tier = "cosmetic", evidence = "Seated solves kept in memory on the server (one per person, body and rig pose): a solve takes a few to some tens of milliseconds; a device of the method." }

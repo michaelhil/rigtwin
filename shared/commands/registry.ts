@@ -7,15 +7,22 @@
 import type { Manifest, ManifestJoint } from "../manifest.ts";
 import type { KNode } from "../kinematics.ts";
 import { check, type Schema, type CommandError } from "./schema.ts";
-import type { Actor, JointChange, SceneDoc } from "./doc.ts";
+import type { Actor, JointChange, PersonChange, SceneDoc } from "./doc.ts";
+import type { People } from "../person-model.ts";
 
 /** The open asset as the commands see it: its description file and its node tree (from the GLB). */
-export interface AssetInfo { name: string; sha256: string; manifest: Manifest; nodes: KNode[]; joints: Map<string, ManifestJoint> }
+export interface AssetInfo {
+  name: string; sha256: string; manifest: Manifest; nodes: KNode[]; joints: Map<string, ManifestJoint>;
+  /** the person's packages (shared/person-model.ts), when the server has them: person.* commands and the person's eye in look */
+  people?: People | null;
+}
 
 export interface RunOutput<R> {
   result: R;
   /** edits: the changes to record (`before` = current value) */
   changes?: JointChange[];
+  /** edits: a change of the person (`before` = doc.person); name PERSON_KEY in `joints` */
+  person?: PersonChange;
   /** edits: every joint the command names (for the stale check); defaults to the joints of `changes` */
   joints?: string[];
   /** edits: the versions this edit reverts */

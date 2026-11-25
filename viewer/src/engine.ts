@@ -29,6 +29,12 @@ const ASSET_DIR = Q.get('asset') ?? 'asset', ASSET = Q.get('name') ?? 'rig-b';
 export const hooks = {
   beforeApply: [] as ((o: Opts) => void)[],
   onApply: [] as ((o: Opts) => void)[],
+  /** runs at the start of every drawn frame (the person module advances its pose here, person/index.ts) */
+  beforeRender: [] as (() => void)[],
+  /** a click on the 3D view, asked before the rig is picked (`rig`: distance to the rig there, or Infinity): true takes it (person-panel.ts) */
+  click: [] as ((x: number, y: number, rig: number) => boolean)[],
+  /** the operator's eye when a person sits in the seat (person/index.ts): model frame, or null for the rig's own eye point */
+  operatorEye: [] as (() => number[] | null)[],
 };
 const CAMERAS_URL = 'private/evidence/cameras.json';
 export const DEG = Math.PI / 180;
@@ -101,6 +107,8 @@ key.shadow.mapSize.set(2048, 2048);
 Object.assign(key.shadow.camera, { left: -1.9, right: 1.9, top: 1.9, bottom: -1.9, near: 0.5, far: 9 });
 key.shadow.bias = -0.0003; key.shadow.normalBias = 0.012; key.shadow.radius = 4;
 scene.add(key, key.target);
+/** the key light (its shadow camera sizes the person's own soft-shadow filter, person/shaders.ts) */
+export const keyLight = key;
 const fill = new THREE.DirectionalLight(0xdfe8ff, LOOK.fill);
 fill.position.copy(m2w([2.5, 2.0, 1.6]));
 scene.add(fill);
@@ -140,6 +148,9 @@ export const S = {
   shadowDirty: true, outlineDirty: false, helperList: null as THREE.Object3D[] | null,
   /** the operator's view at another sitting eye height (metres above the seat), or null for the median eye point */
   eyeHeight: null as number | null,
+  /** the operator's view from a given eye point (look with a person in the seat: the server's solved eye), kept in the median
+   *  eye point's own frame so that it rides with the seat as the eye points do; null: eyeHeight or the median eye point */
+  eyeLocal: null as number[] | null,
   /** the person has moved the camera since the last named view was set */
   userMoved: false,
   /** what the current named view was framed on (fit=), if anything */
@@ -366,7 +377,11 @@ function eyeAndScreenNow(): { e: number[]; t: number[] } {
   // another sitting eye height: the eye points of the three sizes lie on one line (the torso line), so a height between
   // or beyond them is found along it, from the description file's eye heights (seat.eye_height_median, _large)
   const hm = S.manifest.parameters['seat.eye_height_median']?.value, hl = S.manifest.parameters['seat.eye_height_large']?.value, large = at('D_eye_large');
-  if (S.eyeHeight !== null && typeof hm === 'number' && typeof hl === 'number' && hl !== hm && large) {
+  const median = S.objects.get('D_eye_median');
+  const personEye = hooks.operatorEye.map((f) => f()).find((x) => x) ?? null;
+  if (S.eyeLocal && median) e = w2m(median.localToWorld(new THREE.Vector3().fromArray(S.eyeLocal)));     // a given eye point (look with a person)
+  else if (personEye) e = personEye;                                                                       // the eye of the person in the seat, as this page draws it
+  else if (S.eyeHeight !== null && typeof hm === 'number' && typeof hl === 'number' && hl !== hm && large) {
     const k = (S.eyeHeight - hm) / (hl - hm); e = e.map((x, i) => x + k * (large[i] - x));
   }
   const t = at('S_mon_screen') ?? S.manifest.surfaces.find((s) => s.id === 'S_mon_screen')?.origin ?? [e[0] + 1, 0, e[2]];
@@ -375,6 +390,8 @@ function eyeAndScreenNow(): { e: number[]; t: number[] } {
 /** where the operator's-view camera last put the eye (three world), so that it can ride with it */
 let lastEye: THREE.Vector3 | null = null;
 /** In the operator's view the camera rides with the eye point: a seat change moves it, and the line of sight stays. */
+/** The operator's view rides with the eye point (exported for the person module: the eye moves when a person is seated or reshaped). */
+export function refollowEye() { followEye(); invalidate(); }
 function followEye() {
   if (S.view !== 'operator' || !lastEye || camera !== persp || S.photo) return;
   const now = m2w(eyeAndScreenNow().e), d = now.clone().sub(lastEye);
@@ -460,7 +477,7 @@ function leaveLook() {
 }
 /** In look-around mode: narrow or widen the field of view (the eye stays where it is). */
 export function lookZoom(factor: number) { persp.fov = THREE.MathUtils.clamp(persp.fov * factor, 20, 95); persp.updateProjectionMatrix(); invalidate(); emit('camera'); }
-export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null; eye?: number | null } = {}) {
+export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | null; eye?: number | null; eyePoint?: number[] | null } = {}) {
   const v = VIEWS[name];
   if (!v) throw new Error(`unknown view '${name}' (${Object.keys(VIEWS).join(', ')})`);
   leavePhoto(); leaveLook(); anim = null; gesture = 0;
@@ -468,7 +485,9 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
   const wantOrtho = opts.ortho ?? (camera === ortho);
   const { w, h } = frameSize();
   if (v.special) { // operator's eye, where the eye point and the screen are now (they move with the seat and the monitor)
-    S.eyeHeight = opts.eye ?? null;
+    S.eyeHeight = opts.eye ?? null; S.eyeLocal = null;
+    const median = S.objects.get('D_eye_median');
+    if (opts.eyePoint?.length === 3 && median) { S.root.updateMatrixWorld(true); S.eyeLocal = median.worldToLocal(m2w(opts.eyePoint)).toArray(); }
     const { e, t } = eyeAndScreenNow();
     lastEye = m2w(e);
     // the camera sits exactly on the eye point; the orbit point lies ahead of it on the line of sight, beyond the orbit control's minimum distance (which would otherwise push the camera back)
@@ -622,12 +641,13 @@ function renderIds(cam: THREE.Camera, w: number, h: number) {
   }
   const g = ground.visible; ground.visible = false;
   const helperVis = (S.helperList ?? []).map((x) => x.visible); for (const x of S.helperList ?? []) x.visible = false;
+  const others = scene.children.filter((o) => o.userData.notInIds && o.visible); for (const o of others) o.visible = false;   // the person (person/index.ts) has no id colour
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam);
   const px = new Uint8Array(w * h * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, w, h, px);
   renderer.setRenderTarget(null); rt.dispose();
   S.meshes.forEach((m, k) => { m.material = saved[k]; });
-  ground.visible = g; (S.helperList ?? []).forEach((x, k) => { x.visible = helperVis[k]; });
+  ground.visible = g; (S.helperList ?? []).forEach((x, k) => { x.visible = helperVis[k]; }); for (const o of others) o.visible = true;
   return { px, ids: [...index.keys()] };
 }
 function drawOutlines() {
@@ -692,7 +712,8 @@ const maskRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true, samples: 4
 const maskMat = (r: number, g: number, b: number, depthTest: boolean) => { const m = new THREE.MeshBasicMaterial({ toneMapped: false, depthTest, depthWrite: false, blending: THREE.AdditiveBlending, transparent: true }); m.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace); return m; };
 const MASK_SEL = maskMat(1, 0, 0, false), MASK_SEL_SEEN = maskMat(0, 0, 1, true), MASK_HOV = maskMat(0, 1, 0, false);
 const MASK_DEPTH = new THREE.MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 });
-const L_SEL = 1, L_HOV = 2, L_SHOWN = 3;
+const L_SEL = 1, L_HOV = 2, L_SHOWN = 3, L_EXTRA = 4;
+let extra: THREE.Object3D | null = null;            // another object outlined, faintly, as selected (outlineExtra)
 const edgeMat = new THREE.ShaderMaterial({
   uniforms: { mask: { value: maskRT.texture }, px: { value: new THREE.Vector2(1, 1) } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -718,8 +739,11 @@ function updateMask() {
     put(m, L_SEL, a); put(m, L_HOV, b); put(m, L_SHOWN, vis);
     any ||= a || b;
   }
+  extra?.traverse((m) => { if ((m as THREE.Mesh).isMesh && m.visible) { m.layers.enable(L_EXTRA); any = true; } });
   S.maskOn = any;
 }
+/** Outline another object as selected, with the faint line (the person, person-panel.ts), or none. */
+export function outlineExtra(o: THREE.Object3D | null) { extra?.traverse((m) => m.layers.disable(L_EXTRA)); extra = o; updateMask(); invalidate(); }
 const bufSize = new THREE.Vector2();
 function drawHighlight() {
   if (!S.maskOn) return;
@@ -730,6 +754,7 @@ function drawHighlight() {
   renderer.setRenderTarget(maskRT); renderer.setClearColor(0x000000, 0); renderer.clear();
   renderer.autoClear = false;
   if (S.selected) { pass(L_SHOWN, MASK_DEPTH); pass(L_SEL, MASK_SEL_SEEN); pass(L_SEL, MASK_SEL); }
+  if (extra) pass(L_EXTRA, MASK_SEL);
   pass(L_HOV, MASK_HOV);
   scene.overrideMaterial = null; camera.layers.mask = layers;
   renderer.setRenderTarget(null);
@@ -784,6 +809,7 @@ function drawHud() {
 export function invalidate() { needsRender = true; if (!scheduled) { scheduled = true; requestAnimationFrame(tick); } }
 let shadowDrawn = false;
 function render() {
+  for (const f of hooks.beforeRender) f();
   shadowDrawn = S.shadowDirty;
   if (S.shadowDirty) { renderer.shadowMap.needsUpdate = true; S.shadowDirty = false; }
   scene.updateMatrixWorld();
@@ -896,4 +922,8 @@ export const viewerApi = {
   pictureJpeg: (async (_maxBytes: number) => null) as (maxBytes: number) => Promise<Blob | null>,
   /** filled in by live.ts: the state of the shared scene on this page (null when the page is local only) */
   live: (): Record<string, unknown> | null => null,
+  /** filled in by person/index.ts once the person module has loaded (after the page is ready) */
+  person: null as Record<string, any> | null,
+  /** filled in by live.ts: send a command as this page (its client id; the reply's version counts as the page's own) */
+  command: null as ((body: object) => Promise<any>) | null,
 };

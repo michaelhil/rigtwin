@@ -17,7 +17,10 @@ import type { OutNode } from "./glb.ts";
 // The side marker _L / _R may sit before a trailing index or word (C_pod_button_L_1, J_joy_L_roll).
 export const NAME_PATTERN = /^(C|J|D|S)_[a-z0-9]+(_([a-z0-9]+|[LR]))*$/;
 
-export interface NodeSpec { parent?: string; group?: string; label?: string; pos?: (string | number)[]; rpy?: (string | number)[]; joints?: string[]; assembly?: boolean; tags?: string[] }
+export interface NodeSpec { parent?: string; group?: string; label?: string; pos?: (string | number)[]; rpy?: (string | number)[]; joints?: string[]; assembly?: boolean; tags?: string[]; profile?: ProfileSpec }
+/** On a D_ node: the radius of component `of` about the datum's z axis, sampled along it (t from the datum's origin) over the
+ *  parameter list `span` [from, to] every `step` metres; `hold` names a parameter list [from, to] copied beside it. */
+export interface ProfileSpec { of: string; span: string; step: string; hold?: string }
 export interface JointSpec {
   type: "revolute" | "prismatic" | "ball"; axis?: number[]; pos?: (string | number)[]; rpy?: (string | number)[];
   lower: string | number; upper: string | number; neutral: string | number | (string | number)[];
@@ -60,6 +63,7 @@ export function loadSpec(dir: string): Spec {
       usedJoints.set(j, id);
     }
     for (let p = n.parent, i = 0; p; p = spec.nodes[p]?.parent) if (++i > 100) { errs.push(`node '${id}': parent chain loops`); break; }
+    if (n.profile && (!id.startsWith("D_") || !spec.nodes[n.profile.of]?.group || !n.profile.span || !n.profile.step)) errs.push(`node '${id}': a profile belongs on a D_ node and needs 'of' (a component), 'span' and 'step'`);
   }
   for (const [id, j] of Object.entries(spec.joints)) {
     if (!NAME_PATTERN.test(id) || !id.startsWith("J_")) errs.push(`joint '${id}': name must start with J_ and match ${NAME_PATTERN}`);
@@ -202,6 +206,34 @@ export async function assemble(spec: Spec, params: ParamTable, opts: { srcDir: s
         class: null, class_counts: {}, params: [], triangles: tris, primitives: parts.length, materials: parts.map((p) => p.material), bbox, origin: originOf(W),
       };
       (isSurface ? surfaces : components).push(rec);
+    } catch (e: any) { errors.push(`${id}: ${e.message}`); }
+  }
+
+  // radial profiles (after all nodes, so every component's mesh is there): the component's mesh in the datum's frame, cut by
+  // planes across the datum's z axis; the profile is the largest distance from the axis on each cut, metres
+  for (const [id, n] of Object.entries(spec.nodes)) {
+    if (!n.profile) continue;
+    try {
+      const pr = n.profile, rec = datums.find((d) => d.id === id)!, comp = out.get(pr.of), Wd = world.get(id)!, Wc = world.get(pr.of)!;
+      if (!comp?.parts?.length) { if (built.includes(spec.nodes[pr.of].group!)) throw new Error(`profile: '${pr.of}' has no mesh`); continue; }
+      const span = params.arr(pr.span, id) as number[], step = params.num(pr.step, id);
+      if (!(span.length === 2 && span[0] < span[1] && step > 0)) throw new Error(`profile: ${pr.span} must be [from, to] with from < to and ${pr.step} > 0`);
+      // datum frame <- component frame: rigid, so the inverse is the transpose of the rotation
+      const R = [Wd[0], Wd[1], Wd[2], Wd[4], Wd[5], Wd[6], Wd[8], Wd[9], Wd[10]], T = [Wd[3], Wd[7], Wd[11]];
+      const toD = (p: Vec3): Vec3 => { const w = xformPoint(Wc, p), d = [w[0] - T[0], w[1] - T[1], w[2] - T[2]]; return [R[0] * d[0] + R[3] * d[1] + R[6] * d[2], R[1] * d[0] + R[4] * d[1] + R[7] * d[2], R[2] * d[0] + R[5] * d[1] + R[8] * d[2]]; };
+      const tris: Vec3[][] = [];
+      for (const part of comp.parts) { const P = part.mesh.positions, I = part.mesh.indices; for (let i = 0; i < I.length; i += 3) tris.push([0, 1, 2].map((k) => toD([P[I[i + k] * 3], P[I[i + k] * 3 + 1], P[I[i + k] * 3 + 2]]))); }
+      const profile: number[][] = [];
+      for (let k = 0, t = span[0]; t <= span[1] + 1e-9; k++, t = span[0] + k * step) {
+        let r = 0;
+        for (const tr of tris) for (let e = 0; e < 3; e++) {
+          const a = tr[e], b = tr[(e + 1) % 3]; if ((a[2] - t) * (b[2] - t) > 0 || a[2] === b[2]) continue;
+          const f = (t - a[2]) / (b[2] - a[2]); r = Math.max(r, Math.hypot(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f));
+        }
+        profile.push([r6(t), r6(r)]);
+      }
+      rec.profile = profile;
+      if (pr.hold) rec.hold = (params.arr(pr.hold, id) as number[]).map(r6);
     } catch (e: any) { errors.push(`${id}: ${e.message}`); }
   }
 
