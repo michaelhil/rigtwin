@@ -14,6 +14,8 @@ Give your agent the Synergon homepage and describe what you want to do. The home
 
 Once the workspace is clear, send `{"id":"discover","args":{}}` to inspect its asset, available tools and connection counts. Send `{"id":"state","args":{}}` for the current scene. Both leave the scene version unchanged. Narrow discovery to the part or operation the user asks about. The command examples below apply to the origin of the homepage you started from.
 
+The asset supplies the component shapes, joints, adjustment limits and named reference points. The workspace stores the rig settings and person, including body properties and posture. A viewer has its own camera and selected component. Person aim commands currently target rig parts and reference points. Check what object a match belongs to before using its ID. See the [data model](../50-implementation/remote-command-design.md#data-model-and-evolution) and [seated targets](../50-implementation/person-commands.md#seated-targets).
+
 ## Connect to the workspace
 
 Agents with an HTTP client can use the command endpoint directly. For an MCP client, **Settings → Agent access** shows the workspace's MCP URL. A browser code on the same card pairs a view request with that tab and allows it to return requested JPEGs. A workspace ID identifies the scene and its history. It does not identify a particular browser.

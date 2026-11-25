@@ -87,7 +87,7 @@ export const showEntry = (asset: AssetInfo, e: Entry) => ({
 });
 
 // ------------------------------------------------------------------------------------------- scene.find
-type Candidate = TargetRef & { main: Set<string>; extra: Set<string> };
+type Candidate = TargetRef & { main: Set<string>; extra: Set<string>; tags?: Set<string> };
 export const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
 export const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => (Object.hasOwn(WORDS, x) ? WORDS[x] : x)).join(" "));
 const STOP = new Set(["the", "a", "an", "of", "to", "and", "in", "on", "at", "for", "with", "by", "from", "me", "my", "its", "it", "show", "set", "move", "make", "please", "cm", "mm", "deg", "degrees", "s"]);
@@ -95,7 +95,7 @@ const STOP = new Set(["the", "a", "an", "of", "to", "and", "in", "on", "at", "fo
 const ALSO: Record<string, string[]> = {
   lower: ["height"], raise: ["height"], higher: ["height"], up: ["height"], down: ["height"], turn: ["pan", "swivel"], rotate: ["pan", "swivel"],
   forward: ["slide", "tray"], backward: ["slide", "tray"], lean: ["recline", "tilt"], display: ["monitor", "screen"], screen: ["display", "monitor"],
-  operator: ["eye"], view: ["eye"], stick: ["joystick"], chair: ["seat"], foot: ["pedal"], backrest: ["back", "recline"],
+  operator: ["eye"], view: ["eye"], stick: ["joystick"], chair: ["seat"], backrest: ["back", "recline"],
 };
 const indexes = new WeakMap<AssetInfo, Candidate[]>();
 function index(asset: AssetInfo): Candidate[] {
@@ -104,7 +104,7 @@ function index(asset: AssetInfo): Candidate[] {
   const m = asset.manifest, motion: Record<string, string> = { prismatic: "slide move", revolute: "turn angle", ball: "mount angle tilt turn lean" };
   ix = [
     ...m.joints.map((j) => ({ id: j.id, kind: "joint" as const, label: jointName(j), main: new Set([...idTokens(j.id), ...adjWords(j).flatMap((w) => tokens(`${w.section} ${w.label}`))]), extra: new Set([...tokens(labelOf(asset, j.child)), ...tokens(motion[j.type])]) })),
-    ...[...m.components, ...m.surfaces].map((c) => ({ id: c.id, kind: "part" as const, label: partName(c).full, main: new Set([...tokens(partName(c).full), ...tokens(c.label.replace(/\([^)]*\)/g, "")), ...idTokens(c.id)]), extra: new Set([...tokens(c.label), ...(c.group ? [c.group] : []), ...c.tags.flatMap(tokens)]) })),
+    ...[...m.components, ...m.surfaces].map((c) => ({ id: c.id, kind: "part" as const, label: partName(c).full, main: new Set([...tokens(partName(c).full), ...tokens(c.label.replace(/\([^)]*\)/g, "")), ...idTokens(c.id)]), extra: new Set([...tokens(c.label), ...(c.group ? [c.group] : [])]), tags: new Set(c.tags.flatMap(tokens)) })),
     ...m.datums.map((d) => ({ id: d.id, kind: "datum" as const, label: d.label, main: new Set([...tokens(d.label.replace(/\([^)]*\)/g, "")), ...idTokens(d.id)]), extra: new Set(tokens(d.label)) })),
   ];
   indexes.set(asset, ix);
@@ -118,7 +118,9 @@ export function rankTargets(asset: AssetInfo, text: string, kinds?: string[], re
     if (c.id.toLowerCase() === exact) return { c, score: 100 };
     let score = 0, all = q.length > 0;
     for (const w of q) {
-      const s = c.main.has(w) ? 3 : (Object.hasOwn(ALSO, w) ? ALSO[w] : []).some((x) => c.main.has(x)) ? 2 : [...c.main].some((t) => w.length >= 3 && (t.startsWith(w) || (t.length >= 4 && w.startsWith(t)))) ? 2 : c.extra.has(w) ? 1 : 0;
+      // Association tags help suggest nearby matches. A component tagged "foot" can be a pedal.
+      const related = c.extra.has(w) || (!requireAll && c.tags?.has(w));
+      const s = c.main.has(w) ? 3 : (Object.hasOwn(ALSO, w) ? ALSO[w] : []).some((x) => c.main.has(x)) ? 2 : [...c.main].some((t) => w.length >= 3 && (t.startsWith(w) || (t.length >= 4 && w.startsWith(t)))) ? 2 : related ? 1 : 0;
       score += s; if (!s) all = false;
     }
     if (requireAll && !all) return { c, score: 0 };

@@ -2,6 +2,12 @@
 
 Synergon is a shared 3D operator station. You can adjust components, pose the seated person, measure reach and sight lines, and show the result in a viewer. All paths below use the same origin as this page.
 
+## What lives in a scene
+
+A workspace stores the rig's joint settings, the person and the edit history. Each connected viewer has its own camera and selection. The asset defines parts (including surfaces), datums (named points), joints and their adjustments. Discovery returns the IDs and units for the loaded asset.
+
+The person has body properties and a posture. For a seated person's gaze, pointing or touch, eligible targets are rig parts and datums. Match the requested object as well as its name. If the requested target is unavailable, report that limitation before offering a different target.
+
 ## Find the user's workspace
 
 - If the user supplied a workspace URL, use its /workspaces/<id>. Otherwise GET /api/workspaces?limit=10. Add &search=<encoded name> to narrow the list. Each item in workspaces has an id and name. Pass next as cursor for another page.
@@ -19,4 +25,6 @@ POST /api/workspaces/<id>/command with Content-Type: application/json and X-Syne
 When the action and target are clear, call the action directly. Its receipt reports the result. Check ok in each reply and use the hint on a refusal. Rig adjustments, person poses and measurements work with the viewer closed. For a camera change or picture in a particular browser, see viewer routing in the command guide.
 
 - [Remote commands and examples](/wiki/80-reference/remote-commands.html)
+- [Workspace and asset data model](/wiki/50-implementation/remote-command-design.html#data-model-and-evolution)
+- [Person controls and seated targets](/wiki/50-implementation/person-commands.html#seated-targets)
 - [Workspace directory](/api/workspaces?limit=10)

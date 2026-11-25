@@ -48,6 +48,8 @@ Request-level `group` and `expectedVersion` work as for `pose.set`.
 
 ## Seated targets
 
+A target belongs to the rig. For example, “left pedal” is a valid part, while the avatar’s own left foot is an anatomical landmark the current command cannot target. A combined person edit is atomic. If one target is refused, the scene keeps its previous state. Independent requested changes to body or gaze can then be applied on their own.
+
 `person {"preset":"P5 woman","look_at":"little monitor","right_hand":{"point":"touchscreen"}}` sets the body, gaze and right hand in one undoable edit. The hands take `{"point":"soundbar"}`, `{"touch":"touchscreen"}`, `"grip"` or `"rest"`. The feet take `"pedal"`, `"floor"` (the deck where it is under the foot) or `{"on":"D_pedal_face_2"}` (sole contact under the ball of the foot). Aim-only updates preserve omitted fields. Use `look_at:null` to restore default gaze, `"grip"` for a named hand, and `"pedal"` for a named foot. Body or clothing edits carry the targets forward. Supply `posture:"operating"` to reset all aims and optionally set new ones in the same request.
 
 Targets can be parts or reference points. A part means the centre of its physical bounding box. For an assembly, the solver uses the bounds of its posed parts. A named `D_` or `S_` point uses its frame origin. “Little monitor” and “small screen” select the touchscreen's active centre. Ambiguous names list the candidates, and unknown names offer suggestions. Each target moves with the current rig adjustment.

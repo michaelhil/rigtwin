@@ -345,6 +345,16 @@ describe("seated aims", () => {
     expect(code(run(s, agent, { id: "person.pose", args: { posture: "relaxed stand", look_at: "soundbar" } }))).toBe("invalid_args");
   });
 
+  test("an anatomical foot does not resolve to a pedal", () => {
+    const s = fresh();
+    const args = { sex: "female", look_at: "small screen", right_hand: { point: "left foot" } };
+    expect(code(run(s, agent, { id: "person", args }))).toBe("unknown_target");
+    expect(s.doc.version).toBe(0);
+    expect(code(run(s, agent, { id: "measure", args: { from: "left foot", to: "touchscreen" } }))).toBe("unknown_target");
+    expect(ok(run(s, agent, { id: "discover", args: { kind: "part", query: "left foot" } })).result.matches).toEqual([]);
+    expect(ok(run(s, agent, { id: "person", args: { ...args, right_hand: { point: "left pedal" } } })).ok).toBe(true);
+  });
+
   test("reports contact for all three presets, the current eye, and a moving target", () => {
     for (const preset of ["P5 woman", "P50 man", "P95 man"]) {
       const s = fresh();
