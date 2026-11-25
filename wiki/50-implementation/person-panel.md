@@ -36,7 +36,7 @@ The heading line says where the body stands, for example "Median man (P50) · Dr
 ## How a change travels
 
 1. The panel shows the change here at once. All of its changes run through one queue in `viewer/src/person-panel.ts`, one after the other, because switching to another package (the other sex or the clay figure) takes a moment and nothing may overtake it.
-2. It then records the change in the shared scene: `person.set` in MC's arguments (`preset`, `sex`, `style`, `tone`, `glasses`, `headset`, `body`). The change carries its own request `group`, plus `expectedVersion`, the scene version the change started from. It goes out through live.ts's own sender (`viewer.command`), so the page knows it as its own and its activity line does not announce it as someone else's.
+2. It then records the change in the shared scene: `person.set` in MC's arguments (`preset`, `sex`, `style`, `tone`, `glasses`, `headset`, `body`). The change carries its own request `group`, plus `expectedVersion`, the scene version the change started from. It goes out through live.ts's own sender (`viewer.command`), so the page knows it as its own and its activity line does not announce it as someone else's. The page records one change at a time, and each is based on its own last recorded change as well. Its previous change may not have come back over the live channel yet, and the stale check would otherwise refuse the next change as if someone else had changed the person.
 3. A slider follows the pointer at once, with one update in flight at a time. The change is recorded once, when the slider is let go, or after a short pause for arrow keys. So one Undo takes back one drag.
 4. **Undo** is `history.undo {group}` of the page's latest change. In the scene a change and its own undo cancel each other, so Undo after Undo works newest first. A refusal then means someone else changed the person since, and the panel says so.
 5. A refusal (stale, out of range, a package that does not load) is said plainly in the panel. The person goes back to the shared state.
@@ -47,6 +47,7 @@ Without a server, or with one that does not know `person.set` (it answers `unkno
 ## Picking, the outline and the tip
 
 - `interact.ts` asks `hooks.click` before it picks the rig. A click on the person takes the click when the person is nearer than the rig at that pixel: the part card closes and the panel opens.
+- After any change to the person, its skeleton stands in the rest pose until the next drawn frame seats it again, for 20 to 40 ms. A pick in that gap would find a standing person, so the panel draws that frame before it picks (this caused the T62 failure of 2026-11-25).
 - The pick is MV-core's `viewer.person.pickAt`: three.js picking on the posed meshes, about 6 ms a pick and 20 to 25 ms for the first one after a change. *Measured on the M2 under heavy load.*
 - The selected person gets the faint line of the selection outline (the rig's parts get the strong one). The engine function `outlineExtra` draws it in its own mask layer. No material is touched.
 - When the pointer rests on the person, the tip says "Person · adjustable" instead of naming the rig part behind it. The pick is too slow for every pointer move, so it happens only after the pointer rests.

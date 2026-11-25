@@ -550,6 +550,7 @@ await test("T52", "phone-width window: model first, parts as a drawer, card as a
 async function personPixel(s: Session): Promise<[number, number]> {
   const p = await s.ev<[number, number] | null>(`(() => { const c = document.getElementById('gl').getBoundingClientRect(), gl = document.getElementById('gl');
     const ok = (x, y) => viewer.personPanel.covers(x, y) && document.elementFromPoint(c.left + x, c.top + y) === gl;
+    ok(0, 0);                                         // a pick brings the person's pose up to date after a change (person-panel.ts) before its anchors are read
     for (const a of ['head_centre', 'pelvis', 'hand_R']) { const m = viewer.person.anchor(a); if (!m) continue; const [x, y] = viewer.project(m); for (const [dx, dy] of [[0, 0], [0, -8], [8, 0], [-8, 0], [0, 8], [0, 16]]) if (ok(x + dx, y + dy)) return [c.left + x + dx, c.top + y + dy]; }
     for (let y = 40; y < c.height; y += 24) for (let x = 40; x < c.width; x += 24) if (ok(x, y)) return [c.left + x, c.top + y]; return null; })()`);
   if (!p) throw new Error("the person is not visible in the 3D view");

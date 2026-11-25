@@ -499,3 +499,9 @@ is the largest radius at each height, 10 mm more than the handle's front, so the
 handle within 1 mm. A person-only look: a soft key from the camera side, crease shading baked per vertex, 10 % less skin saturation,
 seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `work/manikin-v1-packets/full-03`.
 [The person in the viewer](50-implementation/person-in-viewer.md#fixes-from-the-designers-review-11-2026-11-25).
+
+**Time not recorded (2026-11-25, evening)** — Person panel: T62 failed at the branch head, for two reasons.
+- **Pick.** After `viewer.person.set` the person's skeleton stands in its rest pose until the next drawn frame, for 20 to 40 ms, and live.ts re-applies the shared person about 150 ms after the page is ready. A pick or `anchor` in that gap finds a standing person, so the test clicked above the seated head. The panel now draws that frame before it picks.
+- **Records.** Two quick changes in a row could have the second refused as stale, because the page's first change had not yet come back over the live channel. The panel now records its changes one at a time, each based on its own last recorded version too.
+
+[The person panel](50-implementation/person-panel.md).

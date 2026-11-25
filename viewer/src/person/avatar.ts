@@ -29,11 +29,19 @@ import { section } from "./params.ts";
 const STYLE = section("materials").style, ANCH = section("anchors"), GROUND = section("ground"), HANDS = section("operator").hand, LOOK = section("look");
 interface Dof { id: string; joint: string; axis: number[]; min: number; max: number; label?: string; group?: string }
 
+/** Every file of a person package, and the KTX2 transcoder, is fetched with the release's revision appended (`?v=`): the live site
+ *  sends no-cache on pages and data only, so a browser that kept one release's textures or shape files would otherwise pair them
+ *  with the next release's GLB. Set from version.json before the first load (index.ts); data: and blob: URLs are left alone. */
+let assetRevision = "";
+export function setAssetRevision(v: string | null | undefined) { assetRevision = v ? String(v) : ""; }
+export const withRevision = (url: string) => (!assetRevision || /^(data|blob):/i.test(url) || /[?&]v=/.test(url) ? url : url + (url.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(assetRevision));
+const manager = new THREE.LoadingManager(); manager.setURLModifier(withRevision);
+
 let ktx2: KTX2Loader | null = null;
 /** The loaders, made once per page: three's own decoders (the KTX2 transcoder is served at `transcoder`, the meshopt decoder is in this chunk). */
 export function makeLoaders(renderer: THREE.WebGLRenderer, transcoder: string) {
-  ktx2 ??= new KTX2Loader().setTranscoderPath(transcoder).detectSupport(renderer);
-  const gltf = new GLTFLoader(); gltf.setMeshoptDecoder(MeshoptDecoder); gltf.setKTX2Loader(ktx2);
+  ktx2 ??= new KTX2Loader(manager).setTranscoderPath(transcoder).detectSupport(renderer);
+  const gltf = new GLTFLoader(manager); gltf.setMeshoptDecoder(MeshoptDecoder); gltf.setKTX2Loader(ktx2);
   return { gltf, ktx2 };
 }
 
@@ -105,12 +113,12 @@ export class Avatar {
   load = (path: string): Promise<THREE.Texture> => {
     const url = new URL(path, new URL(this.base, location.href)).href;
     let p = this.texCache.get(url);
-    if (!p) { p = /\.ktx2(\?|$)/i.test(url) ? makeLoaders(this.renderer, this.transcoder).ktx2.loadAsync(url) : new THREE.TextureLoader().loadAsync(url); this.texCache.set(url, p); }
+    if (!p) { p = /\.ktx2(\?|$)/i.test(url) ? makeLoaders(this.renderer, this.transcoder).ktx2.loadAsync(url) : new THREE.TextureLoader(manager).loadAsync(url); this.texCache.set(url, p); }
     return p;
   };
   async loadPackage(url: string) {
     this.base = url.slice(0, url.lastIndexOf("/") + 1);
-    const r = await fetch(url); if (!r.ok) throw new Error(`the person's package answered ${r.status} (${url})`);
+    const r = await fetch(withRevision(url)); if (!r.ok) throw new Error(`the person's package answered ${r.status} (${url})`);
     this.manifest = await r.json();
     const m = this.manifest;
     this.gltfLoader = makeLoaders(this.renderer, this.transcoder).gltf;
@@ -142,7 +150,7 @@ export class Avatar {
     for (const d of this.dofs) { this.dofById.set(d.id, d); this.dofValues[d.id] = 0; if (!this.dofsByJoint.has(d.joint)) this.dofsByJoint.set(d.joint, []); this.dofsByJoint.get(d.joint)!.push(d); }
     const unknown = [...new Set((m.drivers ?? []).map((d: any) => d.type).filter((t: string) => !["twist", "morph", "morphPose"].includes(t)))];
     if (unknown.length) { this.unknownDrivers = unknown as string[]; console.warn(`package ${m.name}: driver type(s) not implemented and ignored: ${unknown.join(", ")}`); }
-    if (m.posesFile && !m.poses) { const pr = await fetch(this.base + m.posesFile); if (pr.ok) m.poses = await pr.json(); }
+    if (m.posesFile && !m.poses) { const pr = await fetch(withRevision(this.base + m.posesFile)); if (pr.ok) m.poses = await pr.json(); }
     m.poses ??= [{ name: "Rest", dofs: {} }];
     this.applyShape();
     // styles and wardrobe; a package without them still gets "dressed" and "clay"
@@ -197,7 +205,7 @@ export class Avatar {
   meshNamed(n: string) { return this.meshes.filter((me) => me.name === n || me.name.replace(/_\d+$/, "") === n); }
   async loadBakes() {
     for (const b of [this.manifest.shape.bake ?? []].flat()) {
-      const r = await fetch(this.base + b.file); if (!r.ok) throw new Error(`shape file ${b.file} answered ${r.status}`);
+      const r = await fetch(withRevision(this.base + b.file)); if (!r.ok) throw new Error(`shape file ${b.file} answered ${r.status}`);
       const buf = await r.arrayBuffer(), N = b.vertices, K = b.targets.length;
       let base: Float32Array, deltas: Int16Array;
       if (b.encoding === "meshopt") {

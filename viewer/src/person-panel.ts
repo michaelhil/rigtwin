@@ -17,7 +17,7 @@
 //   picking     a click on the person selects it (outlined like a selected part) and opens the panel; a click on the rig works
 //               as before (interact.ts asks hooks.click first).
 import * as THREE from 'three';
-import { S, $, el, on, hooks, scene, canvas, currentCamera, frameSize, layout, rescaleView, stageEl, select, setHover, outlineExtra, pickAt, viewerApi } from './engine.ts';
+import { S, $, el, on, hooks, scene, canvas, currentCamera, frameSize, layout, rescaleView, stageEl, select, setHover, outlineExtra, pickAt, drawNow, viewerApi } from './engine.ts';
 import { pictureCredits } from './ui.ts';
 import { initPerson } from './person/index.ts';
 import CREDITS from '../../assets/manikin/CREDITS.md' with { type: 'text' };
@@ -157,13 +157,22 @@ async function post(body: object): Promise<any> {
   if (typeof send === 'function') return send(body);
   try { return await (await fetch('api/command', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json', 'x-rigtwin-client': 'person', 'x-rigtwin-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { return null; }
 }
-/** Record a change in the shared scene. {ok} when it is recorded or when the page has no shared person (then it is this page's only). */
+/** Record a change in the shared scene. {ok} when it is recorded or when the page has no shared person (then it is this page's only).
+ *  One at a time, and based on the page's own last change as well as on the version it started from: the page's previous change may
+ *  not have come back over the live channel yet, and the stale check would otherwise refuse the next one as if someone else had
+ *  changed the person. A change by someone else after the version the change started from is still refused. */
+let sending: Promise<unknown> = Promise.resolve(), ownVersion = -1;
 async function record(args: SetArgs, group: string, expected?: number): Promise<{ ok: boolean; error?: string }> {
   if (shared === false || !viewerApi.live()) return { ok: true };
-  const r = await post({ id: 'person.set', args, group, ...(expected !== undefined && expected >= 0 ? { expectedVersion: expected } : {}) });
-  if (r?.ok) { shared = true; return { ok: true }; }
-  if (!r || r.error?.code === 'unknown_command') { shared = false; return { ok: true }; }
-  return { ok: false, error: r.error?.code === 'stale' ? 'someone else changed the person first' : r.error?.message ?? 'the server did not answer' };
+  let release = () => {}; const prev = sending; sending = new Promise<void>((r) => { release = r; });
+  await prev;
+  try {
+    const base = Math.max(expected ?? -1, ownVersion);
+    const r = await post({ id: 'person.set', args, group, ...(base >= 0 ? { expectedVersion: base } : {}) });
+    if (r?.ok) { shared = true; if (typeof r.version === 'number') ownVersion = Math.max(ownVersion, r.version); return { ok: true }; }
+    if (!r || r.error?.code === 'unknown_command') { shared = false; return { ok: true }; }
+    return { ok: false, error: r.error?.code === 'stale' ? 'someone else changed the person first' : r.error?.message ?? 'the server did not answer' };
+  } finally { release(); }
 }
 interface Done { group: string; before: Spec; shared: boolean }
 const undoList: Done[] = [];
@@ -187,7 +196,9 @@ async function undo() {
   if (d.shared) {
     // a change and its own undo cancel in the scene (shared/commands/doc.ts), so Undo after Undo works newest first; a refusal now means
     // someone else changed the person since
+    await sending;
     const r = await post({ id: 'history.undo', args: { group: d.group } });
+    if (r?.ok && typeof r.version === 'number') ownVersion = Math.max(ownVersion, r.version);
     if (!r?.ok) { undoList.push(d); say(`Not undone: ${r?.error?.code === 'stale' ? 'someone else changed the person since' : r?.error?.message ?? 'the server did not answer'}.`, true); refresh(); return; }
   }
   try { await queue(() => applyFull(d.before)); } catch (e) { say(`Not undone: ${e instanceof Error ? e.message : e}`, true); }
@@ -411,10 +422,13 @@ function fitSheet() {
   const h0 = frameSize().h; sheet = h; stageEl.style.setProperty('--sheet', `${h}px`); layout(); rescaleView(frameSize().h / h0);
 }
 /** Distance from the camera to the person under a pixel of the 3D view (Infinity when there is none), on the posed meshes. */
-let pickMs = 0;
+let pickMs = 0, stale = false;
 function personAt(x: number, y: number): number {
   const g = holder(); if (!g || !stateNow()?.shown) return Infinity;
   const t0 = performance.now();
+  // After a change (viewer.person.set) the skeleton stays in its rest pose, standing, until the next drawn frame solves the seated
+  // pose again (20 to 40 ms); a pick in that gap finds a standing person. Draw that frame first.
+  if (stale) drawNow();
   const hit = person().pickAt?.(x, y) ?? null;
   pickMs = performance.now() - t0;
   return hit ? hit.distance : Infinity;
@@ -518,10 +532,11 @@ export async function initPersonPanel() {
   viewCredit = credit('ui person-credit'); viewCredit.id = 'person-credit'; viewCredit.hidden = true; $('frame').append(viewCredit);
   buildRow(); buildPanel(); addCreditsToMore(); refresh();
   hooks.click.push(onClick);
+  hooks.beforeRender.push(() => { stale = false; });            // after the person module's own hook, which poses the person
   canvas.addEventListener('pointermove', onPoint); canvas.addEventListener('pointerleave', () => clearTimeout(rest)); canvas.addEventListener('pointerdown', () => clearTimeout(rest));
   pictureCredits.push(() => (viewCredit.hidden ? null : CLOTHING.join('')));
   on((c) => { if (c === 'selection' && S.selected) closePanel(); });
-  addEventListener('rigtwin:person', () => { if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
+  addEventListener('rigtwin:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
   addEventListener('resize', fitSheet);
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey) return;

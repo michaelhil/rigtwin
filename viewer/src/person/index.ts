@@ -17,7 +17,7 @@
 import * as THREE from "three";
 import { S, Q, scene, renderer, invalidate, on, hooks, keyLight, w2m, m2w, viewerApi, $, el, drawNow, DEG, frameSize, currentCamera, refollowEye, type Opts } from "../engine.ts";
 import { SCRIPTS } from "./operator.ts";
-import { Avatar } from "./avatar.ts";
+import { Avatar, setAssetRevision } from "./avatar.ts";
 import { section } from "./params.ts";
 import { rigBinding } from "./rig-binding.ts";
 import type { RigView, RigBinding } from "./types.ts";
@@ -325,13 +325,17 @@ async function bench(n = 60, opts: { idle?: boolean } = {}) {
   return { frames: n, median_ms: +times[Math.floor(n / 2)].toFixed(2), person_update_ms: +cpu[Math.floor(n / 2)].toFixed(2), p90_ms: +times[Math.floor(n * 0.9)].toFixed(2), triangles: renderer.info.render.triangles, calls: renderer.info.render.calls, person_shown: shown };
 }
 
-/** The default person's manifest, as the server's version.json names it (only when the package is in the release). */
-async function defaultPackage(): Promise<string | null> {
-  try { const v = await (await fetch("version.json", { cache: "no-store" })).json(); return typeof v?.person?.package === "string" ? v.person.package : null; } catch { return null; }
+/** The default person's manifest, as the server's version.json names it (only when the package is in the release), and the release's
+ *  revision for the person's file URLs (avatar.ts withRevision; a build from uncommitted changes adds its build time). */
+async function releaseInfo(): Promise<{ pkg: string | null; rev: string | null }> {
+  try { const v = await (await fetch("version.json", { cache: "no-store" })).json();
+    const rev = typeof v?.revision === "string" ? v.revision + (v.dirty && v.built ? "-" + String(v.built).replace(/\D/g, "") : "") : null;
+    return { pkg: typeof v?.person?.package === "string" ? v.person.package : null, rev }; } catch { return { pkg: null, rev: null }; }
 }
 export async function initPerson() {
-  const q = Q.get("person"), hidden = q === "off", url = q && q !== "off" && q !== "1" ? q : await defaultPackage();
+  const q = Q.get("person"), hidden = q === "off", rel = await releaseInfo(), url = q && q !== "off" && q !== "1" ? q : rel.pkg;
   if (!url) return;                                                  // no person in this release (version.json names none)
+  setAssetRevision(rel.rev);
   idleOn = Q.get("person_idle") !== "0"; lookOn = Q.get("person_look") !== "0"; suppressed = hidden;
   viewerApi.person = { state, definition, show, set, place, anchor, pickAt, depthAt, shells, look: (on: boolean) => { lookOn = !!on; if (av) av.U.personLook.value = lookOn ? 1 : 0; dirty(); changedSignal(); return state(); }, object: () => av?.holder ?? null, bench, ready, avatar: () => av, still: (on: boolean) => { live = !on; restart++; dirty(); changedSignal(); return state(); } };
   hooks.beforeRender.push(beforeRender);
