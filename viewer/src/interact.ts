@@ -111,7 +111,7 @@ function follow(plan: DragPlan, dofs: Dof[], x: number, y: number) {
   dofs.forEach((d, k) => setAdjustment(d.id, d.comp, vals[k]));   // announces the change: card, notices, shadows, redraw
 }
 // --------------------------------------------------------------------------------------------- pointer wiring
-export function initPointer(hooks: { freeWidth: () => number }) {
+export function initPointer(hooks: { freeWidth: () => number; revealSelection: () => void }) {
   const tip = $('tip');
   let down: { x: number; y: number; id: number } | null = null, lastMove = 0;
   let lastClick: { t: number; x: number; y: number; target: string | null; person: boolean } | null = null;
@@ -175,7 +175,10 @@ export function initPointer(hooks: { freeWidth: () => number }) {
     const person = engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity));
     const target = !person && h ? wouldPick(partOf(h.id)) : null;
     lastClick = { t: now, x: e.clientX, y: e.clientY, target, person };
-    if (!person) select(target);
+    if (!person) {
+      if (target && target === S.selected) hooks.revealSelection();
+      else select(target);
+    }
   };
   canvas.addEventListener('pointerup', finish);
   canvas.addEventListener('pointercancel', finish);

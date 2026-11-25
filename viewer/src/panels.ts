@@ -1,15 +1,15 @@
-// Local viewer layout. The inspector owns one panel at a time and moves the existing controls between hosts.
-import { S, $, canvas, stageEl, frameSize, layout, rescaleView, hooks } from './engine.ts';
+// The workspace panel holds one set of component controls. Desktop users can move those controls over the view.
+import { S, $, canvas, stageEl, layout } from './engine.ts';
 import { icons } from './icons.ts';
 
 const narrow = matchMedia('(max-width: 899px)');
 const rail = $('parts'), split = $<HTMLButtonElement>('rail-resize'), reopen = $<HTMLButtonElement>('open-parts');
 const browser = $<HTMLDetailsElement>('components'), summary = $('components-toggle');
-const inspector = $('inspector'), dock = $('inspection');
+const dock = $('inspection');
 const body = document.body;
-const RAIL_MIN = 152, RAIL_MAX = 328, RAIL_SNAP = 105, RAIL_STEP = 16;
-let collapsed = false, drawer = false, expandedWidth = 184;
-let active: HTMLElement | null = null, floating = false, sheet = 0;
+const RAIL_MIN = 200, RAIL_MAX = 344, RAIL_SNAP = 105, RAIL_STEP = 16;
+let collapsed = false, drawer = false, expandedWidth = 244;
+let active: HTMLElement | null = null, floating = false;
 let resize: { id: number; start: number; width: number; value: number } | null = null;
 
 function setWidth(width: number) {
@@ -32,6 +32,7 @@ function refreshRail() {
   reopen.setAttribute('aria-expanded', String(open));
 }
 function setRail(open: boolean, moveFocus = false) {
+  const previousWidth = stageEl.clientWidth;
   if (narrow.matches) drawer = open;
   else collapsed = !open;
   if (!open) {
@@ -39,6 +40,7 @@ function setRail(open: boolean, moveFocus = false) {
     if (!settings.hidden) $('more-btn').click();
   }
   refreshRail();
+  if (stageEl.clientWidth !== previousWidth) layout();
   if (moveFocus) {
     if (!open) reopen.focus();
     else if (narrow.matches) (rail.querySelector<HTMLElement>('.ws-name') ?? $('copy-link')).focus();
@@ -47,17 +49,15 @@ function setRail(open: boolean, moveFocus = false) {
 }
 
 function syncInspector() {
-  const prevHeight = frameSize().h;
-  const { clientWidth: prevWidth, clientHeight: prevStageHeight } = stageEl;
-  const visible = browser.open || (!!active && !floating);
-  body.classList.toggle('inspector-open', visible);
-  const next = !body.classList.contains('no-ui') && narrow.matches && visible ? inspector.offsetHeight : 0;
-  const changed = next !== sheet;
-  if (changed) { sheet = next; body.style.setProperty('--sheet', `${sheet}px`); }
-  if (changed || stageEl.clientWidth !== prevWidth || stageEl.clientHeight !== prevStageHeight) {
-    layout();
-    if (changed && !S.applying && !body.classList.contains('no-ui')) rescaleView(frameSize().h / prevHeight);
-  }
+  dock.hidden = !active || floating || browser.open;
+}
+
+export function revealInspector() {
+  if (!active || floating) return;
+  closeComponentBrowser();
+  if (!rail.inert || S.applying || body.classList.contains('no-ui')) return;
+  setRail(true);
+  if (narrow.matches) active.querySelector<HTMLElement>('h2')?.focus();
 }
 
 function mount(panel: HTMLElement) {
@@ -79,6 +79,7 @@ export function dockButton() {
     if (!active || narrow.matches) return;
     floating = !floating;
     mount(active); syncInspector();
+    if (!floating) revealInspector();
     button.focus();
   });
   return button;
@@ -99,9 +100,10 @@ export function showInspector(panel: HTMLElement, open: boolean) {
     mount(panel);
   }
   syncInspector();
+  if (open) revealInspector();
 }
 export function inspectorCoverage() {
-  return floating && active && !body.classList.contains('no-ui') ? active.offsetWidth + 12 : 0;
+  return floating && active && !body.classList.contains('no-ui') ? active.offsetWidth + (collapsed ? 34 : 12) : 0;
 }
 export function closeWorkspaceDrawer() {
   if (narrow.matches && drawer) { setRail(false, true); return true; }
@@ -114,7 +116,7 @@ export function closeComponentBrowser() {
   return true;
 }
 export function dismissInspector() {
-  if (closeComponentBrowser()) { summary.focus(); return true; }
+  if (closeComponentBrowser()) { returnToViewer(true); return true; }
   const close = active?.querySelector<HTMLButtonElement>('.x');
   if (!close) return false;
   close.click();
@@ -171,10 +173,9 @@ export function initPanels() {
     refreshRail();
     syncInspector();
   });
-  new ResizeObserver(syncInspector).observe(inspector);
-  hooks.onApply.push(syncInspector);
 }
 
-export function returnToViewer() {
-  canvas.focus();
+export function returnToViewer(fromComponents = false) {
+  if (!rail.inert && (fromComponents || narrow.matches)) summary.focus();
+  else canvas.focus();
 }

@@ -17,7 +17,7 @@ tags: [server, workspaces, api, storage, limits, implementation]
 - **Delete moves, it does not erase.** The folder goes to `deleted/` on the server and nothing reads it or removes it. The owner can bring it back by hand ([how](#bringing-a-deleted-workspace-back)).
 - **Status:** live on the public site since 2026-11-25; the earlier shared scene is the workspace "Playground" ([deployment](deployment.md)).
 
-The workspace selector is at the top of the viewer’s left panel. Its **Copy workspace link** command shares the workspace address. **Copy view link** in the footer includes the current camera, selection and adjustments. Open **Settings → Agent access** to find this workspace’s agent address and the open viewer’s browser code. [The viewer](viewer.md#workspaces-on-the-page), [host setup](server-and-host-setup.md), [agent interface](../80-reference/agent-interface.md).
+The workspace selector sits above Components and the selected component controls in the viewer’s left panel. Its **Copy workspace link** command shares the workspace address. **Copy view link** in the footer includes the current camera, selection and adjustments. Open **Settings → Agent access** to find this workspace’s agent address and the open viewer’s browser code. [The viewer](viewer.md#workspaces-on-the-page), [host setup](server-and-host-setup.md), [agent interface](../80-reference/agent-interface.md).
 
 ## What is stored
 

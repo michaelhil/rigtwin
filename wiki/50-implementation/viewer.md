@@ -1,6 +1,6 @@
 ---
 title: The viewer
-tldr: The rig fills the viewer. Click a component or the seated person to edit it in the right inspector. The workspace selector sits in a resizable left panel, with settings in its footer and camera controls on the view. Live adjustments are shared and can be undone.
+tldr: The rig fills the viewer. Click a component or the seated person to edit it in the resizable left panel. The same panel holds the workspace selector, component list and Settings. Camera controls sit over the view. Live adjustments are shared and can be undone.
 status: living
 updated: 2026-11-25
 tags: [viewer, ux, implementation, typescript]
@@ -10,7 +10,7 @@ tags: [viewer, ux, implementation, typescript]
 
 ## TL;DR
 
-- Orbit, zoom and pan the rig directly. Click a component or the seated person to open the inspector on the right. Expand **Components** to browse or select parts by name.
+- Orbit, zoom and pan the rig directly. Click a component or the seated person to show its controls in the left panel. Expand **Components** there to browse or select parts by name.
 - The workspace selector sits at the top of the left panel. Its footer has **Copy view link**, **Save picture** and **Settings**. Drag its right edge toward the left to collapse it. The translucent handle reopens it.
 - Camera presets, **Operator’s eye** and **Reset all** sit in the lower-right corner of the view. On a narrow screen, open **Views** for the direction presets.
 - A live workspace saves rig and person changes for everyone with its link. Changes by other people and agents appear with an activity line and Undo. The viewer also works as a standalone page.
@@ -27,12 +27,13 @@ Requirements: [R-36](../10-request/requirements.md), [R-51](../10-request/requir
 
 | Task | Where to do it |
 |---|---|
-| Orbit, zoom or pan | Drag to orbit, scroll to zoom toward the pointer, right-drag to pan. Double-click a part to frame it. |
-| Pick or find a part | Click it on the rig, or open **Components** on the right and choose a part. The list starts closed. Its eye controls show or hide groups and individual parts. |
-| Adjust or isolate a part | The inspector brings together Hide, Show only, Zoom to and the part’s movements. Named sliders show current offsets. The joystick retains a two-axis pad, and finer motions are under **Fine adjustments**. **As photographed** resets that component’s adjustments. |
-| Move controls out of the dock | On desktop, use **Pop out controls** in the inspector header, then **Dock controls** to return them. Use × or Escape to close the controls. The inspector uses a bottom sheet on narrow screens. |
+| Orbit, zoom or pan | Drag to orbit, scroll to zoom toward the pointer, right-drag to pan. |
+| Pick or find a part | Click it on the rig, or open **Components** in the left panel and choose a part. The list starts closed. Selecting a part in the view reopens the panel if it is closed. |
+| Adjust a part | Named sliders show current offsets. The joystick uses a two-axis pad, and finer motions are under **Fine adjustments**. **As photographed** resets that component’s adjustments. |
+| Control visibility or frame a selected part | Use the eye controls in **Components** to show or hide groups and individual parts. Press **H** to hide the selected part, **I** to show it alone, **A** to show all parts, or **F** to frame the selected part. Double-clicking a part also frames it. |
+| Pop out controls | On desktop, use **Pop out controls** in the card heading to place it over the left side of the view. Use **Dock controls** to return it to the workspace panel or × to close it. |
 | Move a part in the view | Drag a selected adjustable component to move its primary joint. Other drags orbit the rig. |
-| Resize the workspace panel | Drag its divider, or focus the divider and use the arrow keys. Drag it toward the left edge to snap it shut, then use **Open workspace panel** to restore the previous width. On narrow screens the panel opens as a drawer. Layout choices apply to the open page. |
+| Resize or hide the workspace panel | The desktop panel starts at 244 px. Drag its divider or use the arrow keys while the divider has focus. Drag left to snap it shut and use **Open workspace panel** to restore the previous width. On narrow screens the same panel opens as a drawer. Closing the drawer keeps the current selection. |
 | Change or reset the view | Use the preset icons in the lower-right corner. **Operator’s eye** switches to the seated viewpoint. **Reset all** returns the rig’s adjustments, visibility and camera to their defaults. |
 | Share a view or picture | Use **Copy view link** or **Save picture** in the left footer. Saved pictures include an estimated-adjustments caption when those adjustments are in use. |
 | Recover adjustments or visibility | When joints have moved or parts are hidden, the left panel offers **Reset adjustments** and **Show all components** as applicable. It notes when adjustments include estimated ranges. |
@@ -284,7 +285,7 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 
 ## The person (manikin v1)
 
-The dressed operator is seated by default. The person’s separate script loads after the page is ready. Click the person in the view or choose **Person** under **Components** to open the shared inspector. It holds presets, body measures, appearance and Undo. The view credits the CC BY clothing while it is visible. [The person in the viewer](person-in-viewer.md), [person controls](person-panel.md).
+The dressed operator is seated by default. The person’s separate script loads after the page is ready. Click the person in the view or choose **Person** under **Components** to show its controls in the left panel. It holds presets, body measures, appearance and Undo. The view credits the CC BY clothing while it is visible. [The person in the viewer](person-in-viewer.md), [person controls](person-panel.md).
 
 ## Workspaces on the page
 
@@ -294,7 +295,7 @@ The site's root page is a landing, and the viewer lives at `/workspaces/<id>`. A
 - **The landing is small.** Its first screen is the name, one sentence on what Synergon is for, one primary action (Continue in ‹name› when this browser has opened a workspace, else Create workspace) and a still picture of the rig with the person seated (`viewer/landing-rig.webp`, about 28 kB, made by `bun run render --set landing` from the real viewer). About 14 kB of script, ready at once; it does not download three.js, the rig or the person. It shows a line saying what a workspace is, "Continue in ‹name›" for the one opened last in this browser, New workspace (the name is optional), Recent in this browser (five at most), Browse workspaces (newest first, ten at a time with "Show more", a search box once there are seven or more) and a link to Manage. The viewer code is loaded only on a workspace address, after the server has said that the workspace exists, so a deleted or mistyped link gets a plain notice and no 3D download.
 - **The picture's credit.** The picture shows the dressed person, whose shirt and trousers are CC BY 4.0, so the credit line the person panel shows is printed under it too; both take it from one place, `viewer/src/credits.ts`.
 - **Recent in this browser** is kept in `localStorage` under `synergon.recentWorkspaces` (id, name, time; never a cookie; every access in try/catch, so a private window just forgets). A workspace the server no longer knows is dropped from the list.
-- **In the viewer** the workspace selector is at the top of the left panel. Its menu offers Copy workspace link, Rename, New workspace, recent workspaces, All workspaces and Delete. Renames appear in other open pages. A deletion shows a notice with a link to the landing page. **Copy view link** in the footer copies the current camera, selection and adjustments along with the workspace address.
+- **In the viewer** the workspace selector is at the top of the left panel above Components and any selected component controls. Its menu offers Copy workspace link, Rename, New workspace, recent workspaces, All workspaces and Delete. Renames appear in other open pages. A deletion shows a notice with a link to the landing page. **Copy view link** in the footer copies the current camera, selection and adjustments along with the workspace address.
 - **Settings → Agent access** has the browser code, the workspace’s agent address with a Copy button and the command for Claude Code.
 - **Agent views.** The choice "always allow" or "never" for views an agent asks for is stored per workspace under `synergon.agentViews`; an older single word stored there is not read.
 - **Manage** lists every workspace with a tick box, Select all shown and one delete with one confirmation that gives the count.

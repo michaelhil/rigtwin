@@ -5,7 +5,7 @@
 //   the panel   Who (three survey presets and sex), Body (stature, weight, and the survey's other measures under "More
 //               measurements"), Look (dressed operator or clay figure, skin tone, glasses and headset), with Undo and "Back to
 //               <preset>". It opens from a click on the person in the 3D view or from its row at the end of the parts list; it
-//               and the part card take turns in the same place (a bottom sheet on a narrow window).
+//               and the part card share the workspace panel.
 //   changes     everything goes through one adapter (`commit`): the change is shown here at once (viewer.person.set), and when
 //               the page is connected to a server that knows the person commands it is recorded there as person.set, in the
 //               arguments MC fixed, so other browsers and agents see it; Undo is then history.undo of this page's group. Without
@@ -219,7 +219,7 @@ function slideDone() { if (gesture) { clearTimeout(gesture.timer); gesture.timer
 function endGesture() { const g = gesture; if (!g) return; gesture = null; clearTimeout(g.timer); void commit(g.args, g); }
 
 // --------------------------------------------------------------------------------------------- the panel
-let panel: HTMLElement, statusEl: HTMLElement, whereEl: HTMLElement, undoBtn: HTMLButtonElement, hideBtn: HTMLButtonElement, bodyBox: HTMLElement, lookBox: HTMLElement;
+let panel: HTMLElement, statusEl: HTMLElement, whereEl: HTMLElement, undoBtn: HTMLButtonElement, bodyBox: HTMLElement, lookBox: HTMLElement;
 let toneRow: HTMLElement, wearRow: HTMLElement, backBtn: HTMLButtonElement, opener: HTMLElement | null = null;
 const radios: Record<string, { set: (v: string | null) => void; node: HTMLElement }> = {};
 const checks: Record<string, HTMLInputElement> = {};
@@ -295,9 +295,8 @@ function buildPanel() {
   head.append(h, tools);
   whereEl = el('p', 'where'); statusEl = el('p', 'p-status'); statusEl.setAttribute('role', 'status'); statusEl.hidden = true;
   const acts = el('div', 'acts');
-  hideBtn = button(null, 'Hide', () => void toggleShown()); hideBtn.title = 'Hide or show the person (this browser only)';
   undoBtn = button(null, 'Undo', () => void undo()); undoBtn.title = 'Take back your last change to the person';
-  acts.append(hideBtn, undoBtn);
+  acts.append(undoBtn);
   const who = el('section', 'p-sec');
   who.append(el('h3', null, 'Who'), choices('preset', 'Preset', PRESETS.map((p) => [p.id, p.label, p.pct]), (v) => void commit({ preset: v }), true),
     choices('sex', 'Sex', SEXES, (v) => void commit({ sex: v as Sex })));
@@ -367,7 +366,6 @@ function refresh() {
   toneRow.hidden = s.style !== 'dressed' || !toneRow.childElementCount; wearRow.hidden = s.style !== 'dressed';
   if (checks.glasses) { checks.glasses.checked = s.glasses; checks.headset.checked = s.headset; }
   undoBtn.disabled = !undoList.length || busy > 0;
-  hideBtn.textContent = st.shown ? 'Hide' : 'Show';
   refreshBody();
 }
 
@@ -409,10 +407,7 @@ function closePanel(restoreFocus = false) {
   if (!panel || panel.hidden) return;
   if (gesture) endGesture();
   panel.hidden = true; showInspector(panel, false); outline(false); refresh();
-  if (restoreFocus) {
-    if (opener) $('components-toggle').focus();
-    else returnToViewer();
-  }
+  if (restoreFocus) returnToViewer(!!opener);
   opener = null;
 }
 const holder = (): THREE.Object3D | null => person()?.object?.() ?? scene.getObjectByName('person') ?? null;

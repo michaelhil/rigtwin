@@ -106,7 +106,7 @@ comma-separated. Wherever a part is named, it may be a component id (`C_stand_mo
 | `hud` | `1` | axis gizmo, and a 0.5 m scale bar in orthographic views |
 | `caption` | text | a caption on the image |
 | `ui` | `0` | hide every panel and button: the 3D view alone |
-| `sel` | a part | select it and open its inspector controls |
+| `sel` | a part | select it and show its controls in the workspace panel |
 | `asset`, `name` | folder, asset name | where the model is (default `asset/rig-b`) |
 | `look` | `now` (default), `previous`, or `exposure:0.9,env:0.5,key:2,fill:0.3` (also `tone`, `kx`, `ky`, `kz`) | lighting; `previous` restores the lighting before the exposure correction, for comparing old renders |
 

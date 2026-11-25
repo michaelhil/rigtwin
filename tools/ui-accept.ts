@@ -141,7 +141,16 @@ class Session {
 
 // ---------------------------------------------------------------------------------------------- run
 const INVENTORY = `(() => {
-  const vis = (e) => { if (!e.getClientRects().length) return false; const s = getComputedStyle(e); if (s.visibility === 'hidden' || +s.opacity === 0) return false; const r = e.getBoundingClientRect(); return r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && r.width > 0; };
+  const vis = (e) => {
+    if (!e.getClientRects().length) return false;
+    for (let parent = e.parentElement; parent; parent = parent.parentElement) {
+      if (parent.matches('details:not([open])') && !parent.querySelector(':scope > summary')?.contains(e)) return false;
+    }
+    const s = getComputedStyle(e);
+    if (s.visibility === 'hidden' || +s.opacity === 0) return false;
+    const r = e.getBoundingClientRect();
+    return r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && r.width > 0;
+  };
   const controls = [...document.querySelectorAll('button, input, select, summary, [role=button], [role=slider]')].filter(vis);
   const text = document.body.innerText.replace(/\\s+/g, ' ').trim();
   const titles = [...document.querySelectorAll('[title]')].filter(vis).map((e) => e.title);
@@ -281,19 +290,22 @@ await test("T10b", "the person arrives after the rig, with a loading line", asyn
 });
 
 // ---- show and hide ------------------------------------------------------------------------------------
-await test("T12", "hide the monitor: click it, Hide", async () => {
+await test("T12", "monitor controls omit scene actions; H still hides and A shows again", async () => {
   const s = await open(1440, 900);
   const [x, y] = await s.find("S_mon_screen"); await s.click(x, y, "monitor (its picture)");
   const sel = (await s.state()).selected;
   await s.shot("after-02-monitor-selected-1440");
-  await s.clickEl(s.byText("Hide", "document.getElementById('card')"), "Hide");
+  const actions = await s.ev<string[]>(`[...document.querySelectorAll('#card button')].filter((button) => button.getClientRects().length).map((button) => button.getAttribute('aria-label') ?? button.textContent.trim())`);
+  await s.key("h");
   const st = await s.state(), n = s.actions, gone = st.hidden.includes("C_stand_monitor") && st.hidden.includes("S_mon_screen");
   const left = await s.ev<number>(`(() => { const c = document.getElementById('gl'); let k = 0; for (let y = 4; y < c.clientHeight; y += 8) for (let x = 4; x < c.clientWidth; x += 8) { const h = viewer.pickAt(x, y); if (h && (h.id === 'C_stand_monitor' || h.id === 'S_mon_screen')) k++; } return k; })()`);
-  await s.clickEl(s.byText("Show", "document.getElementById('card')"), "Show");
+  await s.key("a");
   const back = (await s.state()).hidden.length === 0;
-  record("T12", "hide the monitor: click it, Hide", gone && left === 0 && n <= 2 && back && s.actions <= 3, `${n} actions to hide (selected '${sel}'; monitor pixels left: ${left}); ${s.actions} actions to hide and bring back`, "≤ 2 and ≤ 3, no scrolling; was 4 with a trap");
+  const removed = !actions.some((label) => /^(?:hide|show(?: only)?|zoom to)\b/i.test(label));
+  record("T12", "select the monitor, hide it with H, and restore it with A", sel === 'C_stand_monitor' && removed && gone && left === 0 && n === 2 && back && s.actions === 3,
+    `card actions: ${actions.join(', ')}; ${n} actions to hide (monitor pixels left: ${left}); ${s.actions} actions to hide and bring back`);
   await close(s);
-  const t = await open(1440, 900); const [tx, ty] = await t.find("S_ts_screen", 3); await t.click(tx, ty, "touchscreen"); await t.clickEl(t.byText("Hide", "document.getElementById('card')"), "Hide");
+  const t = await open(1440, 900); const [tx, ty] = await t.find("S_ts_screen", 3); await t.click(tx, ty, "touchscreen"); await t.key("h");
   const h2 = (await t.state()).hidden;
   record("T12b", "hide the touchscreen the same way", h2.includes("C_ts_screen") && h2.includes("S_ts_screen") && t.actions === 2, `${t.actions} actions; hidden: ${h2.join(", ")}`, "2 actions");
   await close(t);
@@ -320,15 +332,15 @@ await test("T15", "a click on a screen picks the monitor / touchscreen, never it
   record("T15", "a click on a screen picks the monitor / touchscreen, never its picture surface", !got.some((g) => /→ S_|active area/.test(g)), got.join("; "));
   await close(s);
 });
-await test("T16", "show only the seat: click it, Show only", async () => {
+await test("T16", "show only the seat: select it and press I", async () => {
   const s = await open(1440, 900);
   const [x, y] = await s.find("C_seat_back_shell"); await s.click(x, y, "seat back");
-  await s.clickEl(s.byText("Show only"), "Show only");
+  await s.key("i");
   const st = await s.state(), m = await s.ev<any>("viewer.manifest()");
   const all = [...m.components, ...m.surfaces].filter((c: any) => c.triangles > 0), shown = all.filter((c: any) => !st.hidden.includes(c.id));
   const seat = all.filter((c: any) => c.group === "seat");
   await s.shot("after-10-show-only-seat-1440");
-  record("T16", "show only the seat: click it, Show only", s.actions === 2 && shown.length === seat.length && shown.every((c: any) => c.group === "seat"), `${s.actions} actions; ${shown.length} of ${seat.length} seat parts shown, ${shown.filter((c: any) => c.group !== "seat").length} others`, "2 actions, all seat parts, nothing else; was 4–6 leaving one mesh");
+  record("T16", "show only the seat: select it and press I", s.actions === 2 && shown.length === seat.length && shown.every((c: any) => c.group === "seat"), `${s.actions} actions; ${shown.length} of ${seat.length} seat parts shown, ${shown.filter((c: any) => c.group !== "seat").length} others`, "2 actions, all seat parts, nothing else; was 4–6 leaving one mesh");
   await close(s);
 });
 
@@ -630,33 +642,41 @@ await test("T54", "drag or keyboard-resize the workspace panel, snap closed and 
   await s.shot("after-54-rail-collapsed");
   await s.ev(`(${opener}).focus()`); await s.press("Enter");
   const restored = (await s.rect(rail))!, canvasC = (await frame())!;
+  await s.ev(`(${handle}).focus()`); await s.press('Enter');
+  const collapsedByKey = await s.ev<boolean>(`(${rail}).inert`);
+  await s.click(...await s.find('S_mon_screen'), 'monitor with workspace panel collapsed');
+  const reopenedBySelection = await s.ev<boolean>(`!(${rail}).inert && !document.getElementById('card').hidden`);
   record("T54", "workspace panel resizes, snaps closed, and has a keyboard path back",
     b.w > a.w + 20 && canvasB.w < canvasA.w - 20 && keyed.w < b.w && collapsed.w > canvasA.w + 20 &&
-    !!onTop && keyboardAccess && translucent && unreachable && near(restored.w, keyed.w, 1) && canvasC.w < collapsed.w - 20,
-    `rail ${Math.round(a.w)} → ${Math.round(b.w)} px by pointer → ${Math.round(keyed.w)} px by arrow; canvas after snap ${Math.round(collapsed.w)} px; translucent opener: ${translucent}; collapsed panel inert: ${unreachable}; rail restored by keyboard to ${Math.round(restored.w)} px`);
+    !!onTop && keyboardAccess && translucent && unreachable && near(restored.w, keyed.w, 1) && canvasC.w < collapsed.w - 20 &&
+    collapsedByKey && reopenedBySelection && (await s.state()).selected === 'C_stand_monitor',
+    `rail ${Math.round(a.w)} → ${Math.round(b.w)} px by pointer → ${Math.round(keyed.w)} px by arrow; canvas after snap ${Math.round(collapsed.w)} px; translucent opener: ${translucent}; collapsed panel inert: ${unreachable}; rail restored by keyboard to ${Math.round(restored.w)} px; selecting the monitor reopens the panel: ${reopenedBySelection}`);
   await close(s);
 });
-await test("T55", "one inspector docks, floats, and closes without losing an adjustment", async () => {
+await test("T55", "one inspector stays in the workspace panel or floats over the canvas", async () => {
   const s = await open(1440, 900);
   const card = "document.getElementById('card')", size = async () => (await s.rect("document.getElementById('gl')"))!.w;
   const rest = await size();
   await s.click(...await s.find("S_mon_screen"), "monitor");
-  const dock = await s.ev<boolean>(`!!(${card}).closest('#inspection') && !document.getElementById('components').open`), dockWidth = await size();
+  const dock = await s.ev<boolean>(`!!(${card}).closest('#parts #inspection') && !document.getElementById('components').open`), dockWidth = await size();
   await s.slide(s.slider("Height"), -35, "monitor height before popping out");
   const height = (await s.state()).joints.J_mon_height;
   await s.ev(`window.acceptanceCard = ${card}; window.acceptanceRange = ${s.slider("Height")}`);
   await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Pop out controls"]')`, "Pop out controls");
   const floats = await s.ev<boolean>(`(${card}).parentElement.id === "stage"`), floatWidth = await size();
+  const stage = (await s.rect("document.getElementById('stage')"))!, overlay = (await s.rect(card))!;
+  const atLeft = overlay.x >= stage.x && overlay.x - stage.x <= 24;
   await s.shot("after-55-monitor-floating");
   await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Dock controls"]')`, "Dock controls");
-  const same = await s.ev<boolean>(`(${card}).closest('#inspection') && window.acceptanceCard === ${card} && window.acceptanceRange === ${s.slider("Height")}`);
+  const same = await s.ev<boolean>(`(${card}).closest('#parts #inspection') && window.acceptanceCard === ${card} && window.acceptanceRange === ${s.slider("Height")}`);
   const stillThere = (await s.state()).selected === "C_stand_monitor" && (await s.state()).joints.J_mon_height === height;
   await s.clickEl("document.querySelector('#card .dock-toggle')", "Pop out controls again");
   await s.clickEl(`document.querySelector('#card button[aria-label="Close controls"]')`, "Close floating controls");
-  record("T55", "inspector docks, pops out, re-docks, and closes with X",
-    dock && rest > dockWidth + 100 && floats && floatWidth > dockWidth + 100 && same && stillThere && near(height, -0.035, 0.005) &&
-    !(await s.rect(card)) && (await s.state()).selected === null,
-    `canvas ${Math.round(rest)} px empty, ${Math.round(dockWidth)} px docked and ${Math.round(floatWidth)} px floated; same controls after docking: ${same}; height ${height} m kept; selection cleared by X: ${(await s.state()).selected === null}`);
+  const after = await s.state();
+  record("T55", "inspector opens in the left panel, pops out on the left, returns, and closes with X",
+    dock && near(rest, dockWidth, 1) && floats && atLeft && near(floatWidth, dockWidth, 1) && near(stage.x + stage.w, s.w, 1) &&
+    same && stillThere && near(height, -0.035, 0.005) && !(await s.rect(card)) && after.selected === null && after.joints.J_mon_height === height,
+    `canvas ${Math.round(rest)} px empty, ${Math.round(dockWidth)} px docked and ${Math.round(floatWidth)} px floated; overlay at the canvas left: ${atLeft}; same controls after returning: ${same}; height ${after.joints.J_mon_height} m kept; selection cleared by X: ${after.selected === null}`);
   await close(s);
 });
 await test("T56", "keyboard opens Components and reaches an adjustment", async () => {
@@ -686,11 +706,12 @@ await test("T57", "workspace and camera actions sit at their respective bottom e
   const r = await s.ev(`(() => {
     const box = (id) => document.getElementById(id).getBoundingClientRect();
     const labelled = (id) => Boolean(document.getElementById(id).getAttribute('aria-label'));
-    const rail = box('parts'), workspace = box('ws-bar'), toolbar = box('toolbar'), settings = box('more-btn');
+    const rail = box('parts'), workspace = box('ws-bar'), components = box('components-toggle'), toolbar = box('toolbar'), settings = box('more-btn');
     const stage = box('stage'), view = box('view-controls'), reset = box('reset');
     const footerIcons = ['copy-link', 'save-picture', 'more-btn'].every((id) => labelled(id) && document.getElementById('toolbar').contains(document.getElementById(id)));
     return {
       workspaceFirst: workspace.top >= rail.top && workspace.top - rail.top <= 20 && !/Rig B/.test(document.getElementById('parts').innerText),
+      componentsBelow: components.top >= workspace.bottom && components.right <= rail.right && components.left >= rail.left,
       footerIcons, footerAtBottom: near(toolbar.bottom, rail.bottom, 2), settingsAtRight: near(settings.right, toolbar.right, 12),
       viewAtCorner: near(view.right, stage.right, 20) && view.bottom <= stage.bottom && stage.bottom - view.bottom <= 60,
       resetLast: labelled('reset') && near(reset.right, view.right, 6),
@@ -701,36 +722,48 @@ await test("T57", "workspace and camera actions sit at their respective bottom e
     Object.values(r).every(Boolean), Object.entries(r).map(([name, pass]) => `${name} ${pass}`).join(', '));
   await close(s);
 });
-await test("T52", "phone-width window: model first, one inspector sheet", async () => {
+await test("T52", "phone-width window: selecting from the model opens the left drawer", async () => {
   const s = await open(390, 800);
   const inv = await s.ev(INVENTORY);
-  const start = await s.ev<boolean>("!document.getElementById('components').open && document.getElementById('card').hidden");
-  await s.clickEl("document.getElementById('open-parts')", "Open workspace panel"); await s.settle(300);
+  const rail = "document.getElementById('parts')", opener = "document.getElementById('open-parts')";
+  const openRail = () => s.ev<boolean>(`!(${rail}).inert`);
+  const start = !(await openRail()) && await s.ev<boolean>("!document.getElementById('components').open && document.getElementById('card').hidden");
+  await s.clickEl(opener, "Open workspace panel"); await s.settle(300);
   const workspace = await s.rect("document.getElementById('ws-bar')"), footer = await s.rect("document.getElementById('toolbar')");
-  await s.shot("after-08b-narrow-workspace-drawer-390"); await s.key("Escape");
+  const openedFromHandle = await openRail();
+  await s.shot("after-08b-narrow-workspace-drawer-390"); await s.key("Escape"); await s.settle(250);
+  await s.click(...await s.find("S_mon_screen", 3), "monitor in the model"); await s.settle(350);
+  const selection = (await s.state()).selected;
+  const drawer = (await s.rect(rail))!, frame = (await s.rect("document.getElementById('gl')"))!;
+  const openedFromModel = await openRail();
+  const cardInRail = await s.ev<boolean>("!!document.querySelector('#parts #inspection #card:not([hidden])')");
   await s.browseComponents();
   await s.clickEl(`document.querySelector('#tree button[aria-label="Expand Monitor stand components"]')`, "Expand monitor stand");
   const monitor = "[...document.querySelectorAll('#tree .row.kid .name')].find((b) => b.querySelector('.label').textContent === 'Monitor')";
   await s.reveal(monitor);
   await s.clickEl(monitor, "Monitor");
   await s.settle(350);
-  const inspector = (await s.rect("document.getElementById('inspector')"))!, frame = (await s.rect("document.getElementById('gl')"))!;
-  const closed = await s.ev<boolean>("!document.getElementById('components').open && document.getElementById('card').closest('#inspection') !== null");
+  const treeClosed = await s.ev<boolean>("!document.getElementById('components').open && !!document.querySelector('#parts #inspection #card:not([hidden])')");
   const float = await s.rect("document.querySelector('#card .dock-toggle')");
   const overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
-  await s.slide(s.slider("Height"), -100, "Height");
-  await s.shot("after-08c-narrow-monitor-sheet-390");
-  const j = (await s.state()).joints.J_mon_height, camera = await s.rect("document.getElementById('view-controls')");
-  record("T52", "phone shows one sheet and leaves the camera controls usable",
-    start && !!workspace && !!footer && footer.x + footer.w <= 390.5 && closed && (await s.state()).selected === 'C_stand_monitor' &&
-    !float && frame.y + frame.h <= inspector.y + 2 &&
-    inspector.h <= 800 * 0.52 && inspector.y + inspector.h <= 801 && overflow <= 0 && near(j, -0.1, 0.01) &&
-    !!camera && camera.x + camera.w <= 390.5 && camera.y + camera.h <= inspector.y + 1,
-    `components initially collapsed: ${start}; workspace drawer reached: ${!!workspace}; one inspector sheet: ${closed}; sheet ${Math.round(inspector.h)} px tall; slider ${(j * 100).toFixed(1)} cm; camera controls above sheet: ${!!camera && camera.y + camera.h <= inspector.y + 1}; ${inv.controls} controls by default`);
+  await s.slide(s.slider("Height"), -70, "Height");
+  await s.shot("after-08c-narrow-monitor-drawer-390");
+  await s.clickEl(opener, "Close workspace panel"); await s.settle(250);
+  const drawerClosed = !(await openRail()), after = await s.state(), cameraMenu = "document.getElementById('view-menu')";
+  const [mx, my] = await s.find("S_mon_screen", 3);
+  await s.drag(mx, my, mx, my - 12, "selected monitor while the drawer is closed");
+  const adjustedInView = (await s.state()).joints.J_mon_height > after.joints.J_mon_height + 0.01 && !(await openRail());
+  await s.clickEl(cameraMenu, "Views after closing the drawer");
+  const cameraAccessible = await s.ev<boolean>(`(${cameraMenu}).getAttribute('aria-expanded') === 'true'`);
+  record("T52", "phone shows one left drawer with workspace, component browser and selected controls",
+    start && openedFromHandle && !!workspace && !!footer && footer.x + footer.w <= 390.5 && openedFromModel && cardInRail && selection === 'C_stand_monitor' &&
+    treeClosed && !float && near(drawer.x, 0, 1) && drawer.w <= 390 * 0.9 && near(frame.w, 390, 1) && near(frame.h, 800, 1) && overflow <= 0 &&
+    drawerClosed && near(after.joints.J_mon_height, -0.07, 0.01) && after.selected === selection && adjustedInView && cameraAccessible,
+    `drawer opens from the handle and model: ${openedFromHandle} / ${openedFromModel}; component list closes on selection: ${treeClosed}; model frame ${Math.round(frame.w)}×${Math.round(frame.h)} px with drawer open; monitor ${(after.joints.J_mon_height * 100).toFixed(1)} cm; direct adjustment and Views usable after closing: ${adjustedInView} / ${cameraAccessible}; ${inv.controls} controls by default`);
   await close(s);
   for (const [w, h, name] of [[1024, 768, "after-07b-seat-moved-1024"], [390, 800, "after-08d-narrow-scene-recovery-390"]] as [number, number, string][]) {
     const t = await open(w, h, "?pose=J_seat_slide:-0.06,J_seat_recline:22&sel=seat");
-    if (w < 900) {
+    if (w < 900 && await t.ev<boolean>("document.getElementById('parts').inert")) {
       await t.clickEl("document.getElementById('open-parts')", "Open workspace panel");
       await t.settle();
     }
@@ -778,6 +811,14 @@ await test("T60", "click the person: its panel opens; a click on the rig works a
   const sel2 = (await s.state()).selected, ps2 = await s.ev<any>("viewer.personPanel.state()"), card2 = await s.rect("document.getElementById('card')");
   const [ex, ey] = await s.empty(); await s.click(ex, ey, "empty space"); await s.settle(200); const sel3 = (await s.state()).selected;
   record("T61", "with the person's panel open, the rig picks as before", sel2 === "C_stand_monitor" && !ps2.open && !!card2 && sel3 === null, `click on the monitor: selected ${sel2}, part card ${card2 ? "open" : "closed"}, person panel ${ps2.open ? "open" : "closed"}; click on empty space: selection ${sel3 ?? "none"}`);
+  await s.browseComponents();
+  const eye = "document.querySelector('.person-row .eye')";
+  await s.clickEl(eye, "Hide the person from Components");
+  await untilPerson(s, "!st.shown", "the person hidden");
+  const hidden = await s.ev<boolean>(`(${eye}).getAttribute('aria-label') === 'Show the person'`);
+  await s.clickEl(eye, "Show the person from Components");
+  await untilPerson(s, "st.shown", "the person visible");
+  record("T68", "the Person row still controls visibility", hidden && await s.ev<boolean>(`(${eye}).getAttribute('aria-label') === 'Hide the person'`), `eye updates after hiding: ${hidden}; person shown again: ${(await s.ev<any>('viewer.person.state()')).shown}`);
   await close(s);
 });
 await test("T62", "change the style: clay figure and back; tone and glasses kept; the credits line follows", async () => {
@@ -839,25 +880,27 @@ await test("T65", "keyboard and screen reader: the Person row, labels, focus ord
   for (let i = 0; i < 9; i++) { await press("Tab", "Tab", 9); order.push(await s.ev<string>("(() => { const e = document.activeElement; if (!e) return '?'; if (!document.getElementById('person').contains(e)) return 'outside'; return e.labels?.[0]?.textContent?.trim() || e.getAttribute('aria-label') || e.textContent.trim().slice(0, 24) || e.tagName; })()")); }
   await press("Escape", "Escape", 27); await s.settle(200);
   const after = await s.ev<any>("({ open: viewer.personPanel.state().open, focus: document.activeElement?.closest('.person-row') ? 'Person row' : document.activeElement?.id })");
-  const headerActions = order.slice(0, 3), inside = !order.includes("outside");
-  record("T65", "keyboard: Enter on the Person row opens the panel; every control is named; Tab stays in order; Esc closes and returns", opened.open && opened.focus === "person-title" && opened.expanded === "true" && unnamed.length === 0 && ["Pop out controls", "Close controls", "Hide"].every((label) => headerActions.includes(label)) && inside && order.includes("Stature") && !after.open && after.focus === "components-toggle",
+  const headerActions = order.slice(0, 2), inside = !order.includes("outside");
+  record("T65", "keyboard: Enter on the Person row opens the panel; every control is named; Tab stays in order; Esc closes and returns", opened.open && opened.focus === "person-title" && opened.expanded === "true" && unnamed.length === 0 && ["Pop out controls", "Close controls"].every((label) => headerActions.includes(label)) && inside && order.includes("Stature") && !order.includes("Hide") && !after.open && after.focus === "components-toggle",
     `Enter on the row: panel ${opened.open ? "open" : "closed"}, focus on ${opened.focus}, aria-expanded ${opened.expanded}; unnamed controls: ${unnamed.length ? unnamed.join(" | ") : 0}; Tab order: ${order.join(" → ")}; Esc: panel ${after.open ? "open" : "closed"}, focus back on the ${after.focus}`);
   await close(s);
 });
-await test("T66", "phone-width window: the person's panel as a bottom sheet, the credits line above it", async () => {
+await test("T66", "phone-width window: the person's controls use the same left drawer", async () => {
   const s = await open(390, 800);
   const credit0 = await visibleIn(s, "person-credit");
-  await s.browseComponents();
-  await s.clickEl("document.querySelector('.person-row .name')", "Person"); await sleep(450);
-  const panel = (await s.rect("document.getElementById('inspector')"))!, drawer = await s.ev<boolean>("!document.getElementById('components').open");
-  const credit = await s.rect("document.getElementById('person-credit')"), creditSeen = await visibleIn(s, "person-credit"), overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
-  const frame = (await s.rect("document.getElementById('frame')"))!;
-  await s.shot("after-66-person-panel-narrow-390");
-  await s.ev(`${seg("Clay figure")}.scrollIntoView({ block: 'nearest' })`); await sleep(200);
+  await s.click(...await personPixel(s), "Person in the model"); await s.settle();
+  const drawer = (await s.rect("document.getElementById('parts')"))!;
+  const single = await s.ev<boolean>("!document.getElementById('parts').inert && !document.getElementById('components').open && !!document.querySelector('#parts #inspection #person:not([hidden])') && document.getElementById('card').hidden");
+  const float = await s.rect("document.querySelector('#person .dock-toggle')"), overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
+  await s.shot("after-66-person-drawer-narrow-390");
+  await s.reveal(seg("Clay figure"));
   await s.clickEl(seg("Clay figure"), "Style: Clay figure"); await untilPerson(s, "st.style === 'clay'", "the clay figure"); await s.settle(400);
-  await s.shot("after-66b-person-panel-narrow-clay-390");
-  record("T66", "phone width: the person's panel is a bottom sheet; the 3D view and the credits line end above it", !!panel && panel.y + panel.h <= 800.5 && panel.h <= 800 * 0.52 && drawer && credit0 && creditSeen && !!credit && credit.y + credit.h <= panel.y + 1 && frame.y + frame.h <= panel.y + 1 && overflow <= 0,
-    `sheet ${Math.round(panel.h)} px tall (${(panel.h / 8).toFixed(0)} % of the height), Components closed: ${drawer}; credits line before ${credit0}, with the sheet ${creditSeen} (ends ${credit ? Math.round(panel.y - credit.y - credit.h) : "?"} px above it); 3D view ends ${Math.round(panel.y - frame.y - frame.h)} px above the sheet; sideways overflow ${overflow} px`);
+  await s.clickEl("document.getElementById('open-parts')", "Close workspace panel"); await s.settle(250);
+  const credit1 = await visibleIn(s, "person-credit"), closed = await s.ev<boolean>("document.getElementById('parts').inert && document.getElementById('scrim').hidden");
+  await s.shot("after-66b-person-clay-narrow-390");
+  record("T66", "phone width: selecting the person opens the left drawer; controls are reachable",
+    single && near(drawer.x, 0, 1) && drawer.w <= 390 * 0.9 && !float && overflow <= 0 && credit0 && !credit1 && closed,
+    `one drawer with the Person controls: ${single}; ${Math.round(drawer.w)} px wide, sideways overflow ${overflow} px; credits visible with clothing: ${credit0}; credits after switching to clay: ${credit1}; drawer closed: ${closed}`);
   await close(s);
 });
 await test("T67", "the person's package fails: a plain error, the rig unaffected", async () => {

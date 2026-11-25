@@ -12,6 +12,13 @@
 <div id="viewer-shell">
   <aside id="parts" class="ui" aria-label="Workspace panel">
     <div id="workspace-top"></div>
+    <section id="inspector" aria-label="Component controls">
+      <details id="components">
+        <summary id="components-toggle"><span>Components</span></summary>
+        <div id="tree"></div>
+      </details>
+      <div id="inspection"><aside id="card" class="ui" hidden aria-label="Selected part"></aside></div>
+    </section>
     <div id="scene-recovery" hidden></div>
     <footer id="toolbar" aria-label="Workspace tools">
       <button id="copy-link" class="icon-button" type="button" aria-label="Copy view link" title="Copy view link"></button>
@@ -46,14 +53,6 @@
     </div>
     <div id="toast" class="ui" hidden role="status"></div>
   </div>
-
-  <aside id="inspector" class="ui" aria-label="Component inspector">
-    <details id="components">
-      <summary id="components-toggle"><span>Components</span></summary>
-      <div id="tree"></div>
-    </details>
-    <div id="inspection"><aside id="card" class="ui" hidden aria-label="Selected part"></aside></div>
-  </aside>
 
   <div id="live-more" hidden>
     <p class="live-code">Browser code <b id="live-code"></b><span>Give this code to an agent to send views to this browser.</span></p>

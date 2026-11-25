@@ -10,7 +10,7 @@ export const icons = {
   collapse: glyph('<path d="M4 4v12m8-10-4 4 4 4m-4-4h9"/>'),
   components: glyph('<path d="M3 5h3v3H3zM3 12h3v3H3zM9 6.5h8M9 13.5h8"/>'),
   popOut: glyph('<path d="M15 11v5H4V5h5m3-1h4v4m-6 2 6-6"/>'),
-  dock: glyph('<path d="M3 4h14v12H3zM12 4v12m-6-6h3m-1-2 2 2-2 2"/>'),
+  dock: glyph('<path d="M3 4h14v12H3zM8 4v12m6-6h-3m1-2-2 2 2 2"/>'),
   close: glyph('<path d="m5 5 10 10M15 5 5 15"/>'),
   viewMenu: glyph('<circle cx="10" cy="10" r="7"/><path d="m12.8 7.2-1.3 4.3-4.3 1.3 1.3-4.3z"/>'),
   reset: glyph('<path d="M3.5 9A6.5 6.5 0 1 1 5 14.5M3.5 4.5V9H8"/>'),

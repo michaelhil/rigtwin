@@ -9,7 +9,7 @@ import {
 import { initPointer } from './interact.ts';
 import { adjWords, partName, sayOffset, CLASS_ORDER, CLASS_WORDS, type AdjWord } from '../../shared/words.ts';
 import { icons } from './icons.ts';
-import { initPanels, showInspector, dockButton, dismissInspector, closeComponentBrowser, closeWorkspaceDrawer, inspectorCoverage, returnToViewer } from './panels.ts';
+import { initPanels, showInspector, dockButton, dismissInspector, closeComponentBrowser, closeWorkspaceDrawer, inspectorCoverage, returnToViewer, revealInspector } from './panels.ts';
 
 const svg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</g></svg>`;
 const EYE = svg('<path d="M1.8 10S4.8 4.6 10 4.6 18.2 10 18.2 10 15.2 15.4 10 15.4 1.8 10 1.8 10Z"/><circle cx="10" cy="10" r="2.5"/>');
@@ -185,10 +185,9 @@ function adjustBlock(sel: string, owner: string): HTMLElement | null {
   box.append(resetPart);
   return box;
 }
-let hideBtn: HTMLButtonElement | null = null;
 function renderCard() {
   const card = $('card'), sel = S.selected;
-  card.hidden = !sel; card.textContent = ''; cardCtls = []; cardJoints = []; hideBtn = null; resetPart = null;
+  card.hidden = !sel; card.textContent = ''; cardCtls = []; cardJoints = []; resetPart = null;
   if (!sel) { showInspector(card, false); fromComponents = false; return; }
   const kind = kindOf(sel), name = nameOf(sel), owner = ownerOf(sel);
   const head = el('header'), h = el('h2', null, name), tools = el('div', 'inspector-tools');
@@ -196,17 +195,12 @@ function renderCard() {
   const close = button('icon-button x', '', () => {
     const origin = fromComponents;
     select(null);
-    if (origin) $('components-toggle').focus(); else returnToViewer();
+    returnToViewer(origin);
   });
   close.innerHTML = icons.close;
   close.setAttribute('aria-label', 'Close controls'); close.title = 'Close controls (Esc)';
   tools.append(dockButton(), close); head.append(h, tools); card.append(head);
 
-  const acts = el('div', 'acts');
-  hideBtn = button(null, 'Hide', () => toggleVisible(sel)); hideBtn.title = 'Hide this component (H)';
-  const only = button(null, 'Show only', () => showOnly([sel])); only.title = 'Show only this component (I)';
-  const zoom = button(null, 'Zoom to', () => zoomTo([sel], freeWidth())); zoom.title = 'Zoom to this component (F)';
-  acts.append(hideBtn, only, zoom); card.append(acts);
   const adjust = adjustBlock(sel, name);
   if (adjust) card.append(adjust);
   else {
@@ -224,7 +218,6 @@ function renderCard() {
 function refreshCard() {
   if (!S.selected) return;
   for (const c of cardCtls) c.refresh();
-  if (hideBtn) hideBtn.textContent = visibilityOf(S.selected) === 'hidden' ? 'Show' : 'Hide';
   if (resetPart) resetPart.hidden = !movedJoints().some((id) => cardJoints.includes(id));
 }
 function freeWidth() {
@@ -461,7 +454,7 @@ function resetAll() {
 // --------------------------------------------------------------------------------------------- start
 export function initUi() {
   initPanels(); buildTree(); buildNotices(); buildViews(); buildMore();
-  initPointer({ freeWidth });
+  initPointer({ freeWidth, revealSelection: revealInspector });
 
   $('copy-link').innerHTML = icons.link;
   $('save-picture').innerHTML = icons.picture;
