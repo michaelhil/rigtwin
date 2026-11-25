@@ -46,7 +46,13 @@ const TG = section("operator").targets;
 /** A node's frame in the rig model frame: origin and unit axes (as posed now). */
 export type RigFrame = { origin: number[]; x: number[]; y: number[]; z: number[] };
 export interface Place { origin: V3; yawDeg: number }
-export type SeatContact = ContactPlane & { name: "seat" | "backrest"; pan?: PanSolid; profile?: number[][] };
+/** A contact surface in the package frame. "seat" carries the cushion as `pan` and its centre-line `profile` [z, y];
+ *  "backrest" is a plane; "pod_L" / "pod_R" are the armrest pods' inner sides as a `slab`: the face at `point` with its
+ *  `normal` toward the body, `forward` and `up` along it, and `profile` [along, height, up from, up to] (metres in that frame,
+ *  from the rig's build: D_pod_inner_* surface): at each place along the pod, how far the shell stands out toward the body
+ *  and over which height; `box` is the same as one block; `edge` the shell's edge radius. Hard plastic: compress_m 0. */
+export type SeatContact = ContactPlane & { name: string; pan?: PanSolid; profile?: number[][];
+  slab?: { forward: V3; up: V3; profile: number[][]; band: number[]; edge: number; box: { along: number[]; up: number[]; height: number } } };
 /** What rigBinding returns: types.ts's RigBinding with every optional part filled in. */
 export interface FullRigBinding extends RigBinding {
   place: Place;
@@ -271,6 +277,14 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
     { name: "seat", point: [under[0], under[1], under[2]], normal: n, compress_m: Math.max(0, sink), pan, profile: profile.map((p) => [p[2], p[1]]) },
     { name: "backrest", point: sub(seat, mul(nb, dot(sub(seat, B), nb))), normal: nb, compress_m: TG.back_press },
   ];
+  // the pods' inner sides, where a wide thigh or hip meets them (the clash numbers stay in the report)
+  for (const S of ["L", "R"] as const) {
+    const f = F(`D_pod_inner_${S}`), d = datum(`D_pod_inner_${S}`);
+    if (!d.surface?.length || !d.band) throw new Error(`rig binding: the description file has no surface on D_pod_inner_${S} (rebuild the rig: bun run build)`);
+    const pr = d.surface, along = [Math.min(...pr.map((q) => q[0])), Math.max(...pr.map((q) => q[0]))], up = [Math.min(...pr.map((q) => q[2])), Math.max(...pr.map((q) => q[3]))];
+    contactPlanes.push({ name: `pod_${S}`, point: pk(f.origin), normal: pkd(f.z), compress_m: 0,
+      slab: { forward: pkd(f.x), up: pkd(f.y), profile: pr, band: d.band, edge: d.edge ?? 0, box: { along, up, height: Math.max(...pr.map((q) => q[1])) } } });
+  }
 
   // ---- the seated body on the real rig: hands on the grips, head level ---------------------------------------------------------
   T.seat = seat; T.hipAbovePan = hipAbove;
@@ -336,7 +350,7 @@ export function rigBinding(person: BindingPerson, rig: RigView): FullRigBinding 
     const worst = Math.min(...[pod, stick, lever].map((x) => (x ? x.clearance_mm : Infinity)));
     mountClash[s] = Number.isFinite(worst) ? Math.max(0, -worst / 1000) : 0;
   }
-  clearance.method = "body capsules against the pod shells', joystick bases' and levers' bounding boxes (an upper bound of any overlap: the parts are tilted with the plate) and against the armrest pads as the boxes they are";
+  clearance.method = "body capsules against the pod shells', joystick bases' and levers' bounding boxes (an upper bound of any overlap: the parts are tilted with the plate) and against the armrest pads as the boxes they are. The joystick bases stand on the plates 12 mm outboard of the pods' inner edges: a thigh reaches a base's box only through the pod's inner side, so a negative joystick_base is the pod clash seen again (the round capsule's top-outer edge at the plate), not a contact of its own";
   clearance.capsules = fitSource === "baked" ? "the baked person's fit (thighs, lower trunk), derived shins and forearms" : fitSource === "derived" ? "derived from the body's shape weights (body-fit.ts): thighs, lower trunk, shins, forearms" : "none";
   if (!caps.length) { clearance.evaluated = false; notes.push("no capsules for this body (not a baked person, and no manifest and controls or weights given): clearances are not evaluated"); }
 

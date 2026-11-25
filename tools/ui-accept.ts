@@ -212,7 +212,7 @@ await test("T10b", "the person arrives after the rig, with a loading line", asyn
   const m = await p.evaluate(`(() => { const at = window.viewerReadyAt ?? 0, r = performance.getEntriesByType('resource').filter((e) => e.startTime > at), js = (e) => /\\.m?js(\\?|$)/.test(e.name); return { js: r.filter(js).reduce((a, e) => a + e.decodedBodySize, 0), bytes: r.reduce((a, e) => a + e.transferSize, 0), requests: r.length }; })()`);
   const gone = await p.evaluate("(() => { const e = document.querySelector('.person-status'); return !e || e.hidden; })()");
   await p.close();
-  record("T10b", "person after the rig: loading line, then shown", ok === "yes" && !!st?.shown && /Loading the person/.test(line) && gone && m.js <= 400e3 && shown - ready <= 6000, `rig ready ${ready.toFixed(0)} ms; "${line}"; person shown ${shown.toFixed(0)} ms after navigating (${(shown - ready).toFixed(0)} ms after ready); ${(m.js / 1e3).toFixed(0)} kB of scripts and ${(m.bytes / 1e6).toFixed(1)} MB in ${m.requests} requests after ready; line gone: ${gone}`, "a visible loading line; the person shown within 6 s of the rig on this machine; the person's scripts ≤ 400 kB");
+  record("T10b", "person after the rig: loading line, then shown", ok === "yes" && !!st?.shown && /Loading the person/.test(line) && gone && m.js <= 450e3 && shown - ready <= 6000, `rig ready ${ready.toFixed(0)} ms; "${line}"; person shown ${shown.toFixed(0)} ms after navigating (${(shown - ready).toFixed(0)} ms after ready); ${(m.js / 1e3).toFixed(0)} kB of scripts and ${(m.bytes / 1e6).toFixed(1)} MB in ${m.requests} requests after ready; line gone: ${gone}`, "a visible loading line; the person shown within 6 s of the rig on this machine; the person's scripts ≤ 450 kB (its chunk with the person panel since c85e5e8, 357 kB, and three's KTX2 transcoder, 58 kB; was 400 kB before the panel)");
 });
 
 // ---- show and hide ------------------------------------------------------------------------------------
@@ -738,17 +738,38 @@ await test("T10g", "a pick on the person lands on its skin as drawn (eight influ
   await close(s);
   record("T10g", "person: picks on the skin as drawn", r.n >= 50 && r.median * 1000 <= 2 && r.p90 * 1000 <= 10, `${r.n} pixels on the person: pick distance against the drawn depth, median ${(r.median * 1000).toFixed(2)} mm, 90th percentile ${(r.p90 * 1000).toFixed(2)} mm`, "median ≤ 2 mm, 90 % within 10 mm (silhouette pixels differ by nature); three's own four-influence pick was up to 190 mm off");
 });
-await test("T10h", "a standing person placed off the seat stands on its soles", async () => {
+await test("T10h", "a standing person placed off the seat stands on its soles, on the floor beside the rig and on the deck over it", async () => {
   const s = await open(1200, 900, "?ui=0"); await s.ev(PERSON_SETTLED);
-  const rows: string[] = []; let worst = 0;
-  for (const [pose, extra] of [["RELAXED_STAND", ""], ["", "clip: 'idle-stand', time: 2.0"]] as [string, string][]) {
-    await s.ev("viewer.person.place({ origin: [0.9, 0.9, 0], yawDeg: 180 })");
-    await s.ev(pose ? `viewer.person.set({ pose: '${pose}' })` : `viewer.person.set({ ${extra} })`); await s.ev("viewer.frame()");
-    const low = await s.ev<number>("(() => { const av = viewer.person.avatar(); let m = Infinity; for (const me of av.meshes.filter((x) => x.visible && /^shoe/.test(x.name))) { const P = av.skinnedPositions(me); for (let i = 1; i < P.length; i += 3) m = Math.min(m, P[i]); } return m; })()");
-    worst = Math.max(worst, Math.abs(low) * 1000); rows.push(`${pose || extra}: lowest shoe point ${(low * 1000).toFixed(1)} mm above the deck`);
+  // the lowest point of every visible mesh as the person's shader skins it (MPK's packet measure), against the floor it was placed on
+  const LOW = "(() => { const av = viewer.person.avatar(); let m = Infinity, at = ''; for (const me of av.meshes.filter((x) => x.visible)) { const P = av.skinnedPositions(me); for (let i = 1; i < P.length; i += 3) if (P[i] < m) { m = P[i]; at = me.name; } } return { m, at, placed: viewer.person.state().placed }; })()";
+  const floorZ = await s.ev<number>("viewer.manifest().datums.find((d) => d.id === 'D_floor').origin[2]");
+  const rows: string[] = []; let worst = 0, surfaces = true;
+  for (const style of ["dressed", "clay"]) {
+    await s.ev(`viewer.person.set({ style: '${style}' }).then(() => true)`);
+    const spots: [number[], string, number][] = [[[0.9, 0.9, 0], "floor", floorZ], [[0.55, -0.6, 0], "deck", 0]];
+    for (const [at, on, z] of spots) for (const pose of on === "deck" ? ["A_POSE"] : ["A_POSE", "RELAXED_STAND", "clip idle-stand"]) {
+      await s.ev(`viewer.person.place({ origin: ${JSON.stringify(at)}, yawDeg: 180 })`);
+      const set = pose === "A_POSE" ? "{ clip: null, pose: viewer.person.avatar().manifest.packet?.poses?.A_POSE?.dofs ?? 'A_POSE' }" : pose.startsWith("clip") ? "{ clip: 'idle-stand', time: 2.0 }" : `{ clip: null, pose: '${pose}' }`;
+      await s.ev(`viewer.person.set(${set}).then(() => true)`); await s.ev("viewer.frame()");
+      const r = await s.ev<any>(LOW), off = (r.m - z) * 1000;
+      surfaces &&= r.placed?.on === on && Math.abs(r.placed.origin[2] - z) < 1e-6;
+      worst = Math.max(worst, Math.abs(off)); rows.push(`${style} ${pose} on the ${r.placed?.on} (z ${(r.placed?.origin?.[2] * 1000).toFixed(0)} mm): lowest ${off.toFixed(1)} mm (${r.at})`);
+    }
   }
   await close(s);
-  record("T10h", "person: standing on its soles on the placed floor", worst <= 3, rows.join("; "), "within 3 mm of the floor (MPK: the shoes were 8 mm under it)");
+  record("T10h", "person: standing on its soles on the floor it stands on", worst <= 1 && surfaces, rows.join("; "), "the lowest point of every visible mesh within 1 mm of the floor under the spot: D_floor beside the platform, the deck top over it (MPK full-01: A_POSE 6 to 9 mm under, beside the rig at the deck's height)");
+});
+await test("T10j", "seated thighs press against the pods' inner sides instead of passing through them", async () => {
+  const s = await open(1200, 900, "?ui=0"); await s.ev(PERSON_SETTLED);
+  const rows: string[] = []; let worst = 0, pressed = true;
+  for (const [label, shape] of [["median man", "Median man"], ["M50_HEAVY", "M50_HEAVY"], ["M95H", "M95H"]]) {
+    await s.ev(`viewer.person.set({ shape: '${shape}', pose: null, script: 'hold', time: null }).then(() => true)`); await s.ev("viewer.frame()");
+    const d = await s.ev<any>("viewer.person.shells()");
+    for (const [pod, v] of Object.entries<any>(d ?? {})) { worst = Math.max(worst, v.after_mm); if (v.before_mm > 3 && !(v.after_mm < v.before_mm)) pressed = false; if (v.before_mm > 0 || v.after_mm > 0) rows.push(`${label} ${pod}: ${v.before_mm} mm inside before the contact, ${v.after_mm} mm after`); }
+    if (!d || !Object.keys(d).length) { pressed = false; rows.push(`${label}: no pod surfaces in the rig binding`); }
+  }
+  await close(s);
+  record("T10j", "person: the pods' inner sides hold the thighs", worst <= 3 && pressed, rows.join("; ") || "no skin inside a pod before or after", "the drawn skin at most 3 mm inside a pod's face (MPK full-01: M50_HEAVY 8.7 mm, M95H 7 mm; the seat's roll of displaced tissue also put the median man's thighs 9 mm into them)");
 });
 await test("T10i", "the seated hands hold the real levers without sinking into them", async () => {
   const s = await open(1200, 900, "?ui=0"); await s.ev(PERSON_SETTLED);

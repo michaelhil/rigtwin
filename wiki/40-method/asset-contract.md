@@ -254,7 +254,7 @@ the model frame at the neutral pose.
 | `components` | object[] | every `C_` node, assemblies and root included (53 as of round 2); see below |
 | `surfaces` | object[] | every `S_` node, same record shape with `kind: "surface"` (2) |
 | `joints` | object[] | every joint (20); see below |
-| `datums` | object[] | every `D_` node (21 since 2026-11-25): `id`, `parent`, `label`, `origin`, `x_axis`, `z_axis`; where the spec gives a `profile`, also `profile` ([t, radius] pairs: the named component's mesh cut across the datum's z axis, t from its origin; the grip handles') and `hold` (a parameter list copied beside it) |
+| `datums` | object[] | every `D_` node (23 since 2026-11-25): `id`, `parent`, `label`, `origin`, `x_axis`, `z_axis`; where the spec gives a `profile`, also `profile` ([t, radius] pairs: the named component's mesh cut across the datum's z axis, t from its origin; the grip handles') and `hold` (a parameter list copied beside it); where it gives a `surface`, also `surface` ([x, height, y from, y to]: how far the named component stands out along the datum's z at each x within `band` along y, the y range where it stands within `edge` of that height; the pods' inner sides), `band` and `edge` |
 | `motion` | object | the spec's expected-motion table, unchanged |
 | `omitted` | `{ id, reason }[]` | components left out on purpose (empty as of round 2) |
 | `missing` | string[] | nodes with neither mesh nor reason; must be empty |

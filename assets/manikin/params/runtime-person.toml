@@ -347,6 +347,12 @@ up_min = { value = 0.2, unit = "1", range = 0.1, class = "invented", tier = "lay
 normal_probe = { value = 0.003, unit = "m", range = 0.001, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts skinning patch: step along the surface for the bent normal (only when contact.pan.normals = 1)." }
 sink_range = { value = [0.20, 0.06], unit = "m", range = 0.02, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts sink pass: skin from this deep below to this high above the pan is drawn into the sink map." }
 
+[contact.slab]
+# hard shells beside the body (rig-binding.ts contactPlanes with a slab: the armrest pods' inner sides; MV-core, 2026-11-25, not in the lab)
+depth = { value = 0.05, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core shaders.ts labSlab: skin more than this behind a shell's face is not that shell's (the pods' shells are about 0.1 m across; the deepest clash in MPK's full-01 packet was 8.7 mm)." }
+knee = { value = 0.006, unit = "m", range = 0.002, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "MV-core shaders.ts labSlab: softness of the contact edge on a shell (quadratic knee, as the seat's 20 mm one); hard plastic does not give, so a third of the seat's: skin on the face stands 1.5 mm off it." }
+margin = { value = 0.06, unit = "m", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "MV-core contact.ts packSlab: a shell's sink map reaches this far beyond its face up, down, fore and aft, for the roll of displaced tissue (the seat's roll spreads 0.06 m)." }
+
 [contact.sink]
 moving_window_ms = { value = 150, unit = "ms", range = 50, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts renderSink: a new map within this time of the last counts as continuous motion (read back asynchronously)." }
 jump = { value = 0.02, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts renderSink: a sampled joint moving more than this since the map in use is a jump (read back at once)." }
@@ -563,6 +569,12 @@ side = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "loo
 # ==================================================================================================================
 # [runtime] how the product viewer runs the person (index.ts): loading, idle motion, stills
 # ==================================================================================================================
+[ground]
+# a standing body on its soles (MV-core, 2026-11-25, MPK full-01: A_POSE 6 to 9 mm under the floor with the joint rule alone)
+foot_weight = { value = 0.5, unit = "ratio", range = 0.2, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core avatar.ts soleVertices: a vertex moves with the foot when at least this share of its skin weight is on the foot joints and below; the sole of the trainer, the clay last and the bare foot are wholly on them." }
+sole_band = { value = 0.04, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "MV-core avatar.ts soleVertices: of those, the ones within this of the mesh's lowest at rest are the ones a turned foot can stand on (tread, heel and toe spring of the trainer are within 30 mm; the band keeps the skinning on the CPU to the sole)." }
+place_snap = { value = 0.0, unit = "m", range = 0.0, class = "assumed", basis = "convention", tier = "layout", evidence = "MV-core index.ts place: a standing spot is over the deck when it lies inside the platform's footprint grown by this (0: the deck's own edge); there the soles stand on the deck top, elsewhere on D_floor." }
+
 [runtime]
 idle_fps = { value = 30, unit = "frames_per_s", range = 10, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "MV-core: idle motion (breathing, blinks, small shifts) redraws at most this often while the person is shown in a live view; the lab drew every frame at 60. Blinks (365 ms) and saccades (30-100 ms) read at 30 frames a second; it halves the GPU time of a shown person against 60." }
 idle_after_input_ms = { value = 0, unit = "ms", range = 500, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "MV-core: idle motion resumes this long after the last pointer or wheel input on the view (0: it runs during input too; the view is redrawn then anyway)." }

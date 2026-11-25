@@ -2,7 +2,7 @@
 title: Checks
 tldr: Every automatic check of the asset and the platform (bun run check, 28 checks, 8 of them added by platform step 1 for the commands, the server, the live page and the deploy), of the distribution build (2) and of the viewer page (53), with what each verifies, the real failure it exists to catch, and its current result; plus the host's load test, what is not checked and how to add a check.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [checks, quality, method, viewer]
 ---
 
@@ -101,8 +101,14 @@ changed three. The browser checks of the rig (C-17 to C-20) now open the page wi
 | C-86 | person | The default person loads, is shown and seated; frame time at 1600 × 1000 while it idles (shadow map redrawn every frame); warns above 1000/55 ms | a person that fails to load, or one that makes the page too slow | ok, 15.4 ms (0.4 ms of it the pose), 153 draw calls |
 
 In `ui-accept`: T10 counts only the scripts loaded before the page is ready (748 kB); **T10b** (new) checks the loading line, the person
-shown within 6 s of the rig (0.63 s) and its scripts ≤ 400 kB (308 kB); T44 runs with `person=off`; **T44b** (new) checks that the person
+shown within 6 s of the rig (0.63 s) and its scripts ≤ 450 kB (415 kB: the person chunk, 357 kB with the person panel since phase 4,
+and three's KTX2 transcoder, 58 kB; the limit was 400 kB before the panel); T44 runs with `person=off`; **T44b** (new) checks that the person
 idles at most 30 frames a second in a live view (30.0) and that a still view draws nothing and repeats its picture exactly. 55 of 55 pass.
+After MPK's full packet (2026-11-25): **T10h** stands the dressed and the clay figure in A_POSE, the relaxed stand and the standing idle
+take, beside the platform and on the deck, and takes the lowest point of every visible mesh against the floor under the spot (0.0 mm;
+the joint rule alone left A_POSE 7.6 to 8.4 mm under); **T10j** (new) seats the median man, M50_HEAVY and M95H and measures, on the GPU
+as drawn (`viewer.person.shells()`), how deep skin lies inside each pod's inner side before and after the contact (12.5 to 0.7 mm and
+9.5 to 2.5 mm; limit 3 mm).
 Phase 4 added **T60 to T67** for [the person panel](../50-implementation/person-panel.md#checks):
 - a click on the person, and the rig picked as before
 - clay figure and back

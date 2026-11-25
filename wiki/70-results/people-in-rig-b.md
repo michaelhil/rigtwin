@@ -12,14 +12,14 @@ tags: [results, manikin, ergonomics, seat, reach, sight]
 
 - **What was done:** the manikin's seated operator was bound to Rig B's own points (seat cushion, front edge, backrest, armrest pads, grip handles, heel rest, pedal faces, both screens) instead of the lab's stand-in rig. Seated: the package's three presets, **P5 woman** (1.525 m, 58.3 kg), **P50 man** (1.756 m, 85.5 kg) and **P95 man** (1.870 m, 96.6 kg), and beside them, kept apart, a **tall heavy test body** (1.869 m, 115 kg; the lab's M95H test person, not a preset).
 - **P5 woman:** with her back on the backrest the seat's front edge lies 102 mm beyond her knee crease (24 mm by a survey estimate), and her feet fall 116 mm short of the pedals with the seat and the pedal tray as photographed. With the seat fully forward and the tray fully back (both assumed ranges) she reaches them.
-- **P95 man:** his thighs and hips meet the armrest pods' inner sides by 16 to 17 mm (the body's collision capsules against the parts' boxes; the survey's hip breadth leaves 49 mm each side), and touch the joystick bases. The heavier test body meets them by 26 to 27 mm. The P50 man has 2 to 3 mm.
+- **P95 man:** his thighs and hips meet the armrest pods' inner sides by 16 to 17 mm (the body's collision capsules against the parts' boxes; the survey's hip breadth leaves 49 mm each side). The heavier test body meets them by 26 to 27 mm. The P50 man has 2 to 3 mm. The joystick bases sit 12 mm beyond the pods' inner edges, above the plates: a thigh does not reach them past the pod.
 - **Reach:** every grip is within reach for all (73 to 84 % of the arm's length); while gripping, the forearm lies 13 mm (P95 man) to 68 mm (P5 woman) above the armrest pad.
 - **Sight:** the main monitor's centre is 0.85 to 0.88 m from the eye; its top edge stands 235 mm (P5 woman), 142 mm (P50 man) and 99 mm (P95 man) above the eye. The touchscreen is 27 to 37 degrees below the eye.
 - **How sure:** these are consequences of the model's sizes, which are photo estimates never checked against a tape; the seat depth hangs on the backrest surface position (±0.04 m, borrowed from other rigs) and the seat and pedal ranges are assumed.
 
 ## The rig points the person needs
 
-Seven empty markers added to the rig on 2026-11-25 (`assets/rig-b/spec/rig.toml`), each built from the rig's own
+Nine empty markers added to the rig on 2026-11-25 (`assets/rig-b/spec/rig.toml`), each built from the rig's own
 parameter records; the GLB's geometry stays byte-identical (build `098d38cfc6c3` against `0b6d8248b63f`). Positions in
 metres, model frame, neutral pose. The pedal faces, grip palm points, seat reference and screens were there already.
 
@@ -30,6 +30,7 @@ metres, model frame, neutral pose. The pedal faces, grip palm points, seat refer
 | `D_armrest_L`, `_R` | armrest pads | top centre of each pad, x along the pad | −0.548, ±0.321, 0.667 |
 | `D_grip_axis_L`, `_R` | joystick levers | middle of the handle section a closed hand wraps (from the end of the slim neck to the start of the head), z along the handle there (29° forward, 10° inward): new records `pods.grip_centre`, `grip_axis_rp`, `grip_radius` (0.026 m), `grip_hold_span`, derived from the grip's shape records; the build writes the lever's radius along this axis beside it (`profile`, `hold`) | −0.139, ±0.302, 0.728 |
 | `D_heel_rest` | pedal unit | top of the heel plate at its operator-side lip (`pedals.heel_profile`) | 0.200, 0, 0.036 |
+| `D_pod_inner_L`, `_R` | pod shells | the pod's inner side as a contact surface (the tray's inner edge, z toward the seat); the build writes how far the shell stands out toward the seat along the pod, and over which height, within `pods.inner_surface_band` (`surface`), and the solver's contact layer presses a wide thigh against it (`contactPlanes` `pod_L`, `pod_R`) | −0.190, ±0.251, 0.546 |
 
 ## How the people are seated
 
@@ -69,7 +70,7 @@ bodies), otherwise derived from the body's shape (see below). The last column is
 | Cushion top above the thigh's underside over the front rise, mm | 138.7 | 79.6 | 7.3 | 13.6 |
 | Legs short of the home pedals, mm | 115.5 | 0 | 0 | 0 |
 | Thigh or hip to the pod shells (left / right), mm | 26.3 / 27.7 | 1.8 / 3.1 | −17 / −15.6 | −27.2 / −25.8 |
-| Leg to the joystick bases (left / right), mm | 108.6 / 110 | 40.5 / 41.8 | −2.9 / −1.4 | −13.1 / −11.7 |
+| Thigh to the joystick base's bounding box, reachable only through the pod's inner side (left / right), mm | 108.6 / 110 | 40.5 / 41.8 | −2.9 / −1.4 | −13.1 / −11.7 |
 | Leg to the joystick levers (left / right), mm | 164.7 / 165.9 | 86 / 87.1 | 22.7 / 24 | 12.5 / 13.8 |
 | Leg to the armrest pads (left / right), mm | 97.4 / 99.2 | 47.2 / 48.8 | 7.4 / 9 | −2.1 / −0.4 |
 | Forearm to the armrest pad while gripping (left / right), mm | 68 / 68.4 | 23.6 / 23.9 | 12.6 / 12.9 | 12.7 / 12.9 |
@@ -90,8 +91,10 @@ What it means, in plain words:
   0.10 m back (the ends of both assumed ranges) her feet reach them, the cushion's front rise stands 84 mm less above her thighs'
   underside (55 mm remain), and the front edge still lies 90 mm beyond her knee crease.
 - **The P95 man is tight between the pods.** The capsules are round, so they overstate the hips' width; the
-  survey's hip breadth leaves 49 mm each side (31 mm for the heavier test body). With the seat forward the test body's
-  thighs meet the joystick levers too.
+  survey's hip breadth leaves 49 mm each side (31 mm for the heavier test body). The joystick bases are not a contact of
+  their own: they stand on the plates 12 mm outboard of the pods' inner edges, so a thigh reaches a base's bounding box
+  (−3 mm P95 man, −13 mm test body) only by passing the pod's inner side, which the contact layer now stops it at. With the
+  seat forward the test body's thighs meet the joystick levers too.
 - **The monitor stands high.** Its top edge is above every eye, by 99 to 235 mm (a common office rule puts it at or
   below eye height); the short woman looks up 4° to its centre. The monitor's height joint has 0.095 m of travel down.
 - **The front rise of the cushion lifts the thighs** of the P5 woman and the P50 man: the drawn top stands 80 to 139 mm above the

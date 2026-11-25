@@ -11,7 +11,7 @@
 //
 // URL parameters: person=0 (no person code at all) | off (loaded, not shown) | <manifest url>; person_style=dressed|clay; person_sex=m|f;
 // person_tone=<id>; person_wear=glasses:none,headset:none; person_shape=<preset name>; person_idle=0.
-// Script interface: window.viewer.person (state, definition, show, set, place, anchor, pickAt, object, still, bench, ready); every
+// Script interface: window.viewer.person (state, definition, show, set, place, anchor, pickAt, depthAt, shells, object, still, bench, ready); every
 // change is announced as the window event 'rigtwin:person' with the state as its detail.
 import * as THREE from "three";
 import { S, Q, scene, renderer, invalidate, on, hooks, keyLight, w2m, m2w, viewerApi, $, el, drawNow, DEG, frameSize, currentCamera, refollowEye, type Opts } from "../engine.ts";
@@ -21,7 +21,7 @@ import { section } from "./params.ts";
 import { rigBinding } from "./rig-binding.ts";
 import type { RigView, RigBinding } from "./types.ts";
 
-const RT = section("runtime");
+const RT = section("runtime"), GROUND = section("ground");
 /** The default person: the dressed operator package (MP, assets/manikin/), served under the asset folder; version.json names it
  *  when the release carries it (tools/serve.ts, tools/dist.ts). */
 export const DEFAULT_PACKAGE = "asset/manikin/operator-m/operator-m.avatar.json";
@@ -53,7 +53,7 @@ const rigView = (): RigView => {
 };
 /** Seat the person in the rig: the binding's place, targets and contact planes, then a fresh solve. A placement set with place()
  *  wins (a standing shot off the seat); without the operator layer (a clip, a dof pose) no binding is computed. */
-let placeOverride: { origin: number[]; yawDeg: number } | null = null;
+let placeOverride: { origin: number[]; yawDeg: number; on?: "deck" | "floor" } | null = null;
 function rebind() {
   if (!av?.ready) return;
   const t0 = performance.now(), opState = av.state("operator");
@@ -218,7 +218,27 @@ function definition() {
   };
 }
 /** Place the person off the seat (rig MODEL frame, metres; yaw about model Z, 0 = facing +X), or null: back on the seat binding. */
-function place(p: { origin: number[]; yawDeg?: number } | null) { placeOverride = p ? { origin: [...p.origin], yawDeg: p.yawDeg ?? 0 } : null; rebind(); changedSignal(); return state(); }
+/** How deep the drawn skin lies inside each hard shell of the rig binding (the pods' inner sides), before and after the contact (mm),
+ *  measured on the GPU as drawn: Avatar.skinnedPositions has no contact. null without a person; {} without shells. */
+function shells(): Record<string, { before_mm: number; after_mm: number; deepest_after?: { up_mm: number; along_mm: number } }> | null {
+  if (!av?.ready) return null;
+  const d = av.contact.shellDepths(av.meshes.filter((m) => m.visible), renderer, av.U), mm = (x: number) => +(x * 1000).toFixed(2);
+  return Object.fromEntries(Object.entries(d).map(([k, v]) => [k, { before_mm: mm(v.before), after_mm: mm(v.after), ...(v.at ? { deepest_after: { up_mm: mm(v.at[0]), along_mm: mm(v.at[1]) } } : {}) }]));
+}
+/** What a person standing at a point of the model frame stands on: the deck top over the platform (C_platform's footprint), the room
+ *  floor (D_floor, as posed now) anywhere else. MPK: figures placed beside the rig stood at the deck's height, afloat beside it. */
+function floorAt(x: number, y: number): { z: number; on: "deck" | "floor" } {
+  const bb = S.manifest?.components?.find((c: any) => c.id === "C_platform")?.bbox, g = GROUND.place_snap;
+  if (bb && x >= bb.min[0] - g && x <= bb.max[0] + g && y >= bb.min[1] - g && y <= bb.max[1] + g) return { z: bb.max[2], on: "deck" };
+  const f = rigView().point("D_floor");
+  return { z: f ? f[2] : bb ? bb.min[2] : 0, on: "floor" };
+}
+/** Stand the person at origin [x, y] (model frame; a z given is replaced by the surface there: the deck top over the platform, the
+ *  floor elsewhere) turned by yawDeg, or back to the rig binding's seat with null. state().placed says where the soles went. */
+function place(p: { origin: number[]; yawDeg?: number } | null) {
+  if (p) { const f = floorAt(p.origin[0], p.origin[1]); placeOverride = { origin: [p.origin[0], p.origin[1], f.z], yawDeg: p.yawDeg ?? 0, on: f.on }; } else placeOverride = null;
+  rebind(); changedSignal(); return state();
+}
 /** A named point of the person in the rig MODEL frame (eye_midpoint, head_centre, hand_L, hand_R, pelvis, feet, a joint name, ...). */
 function anchor(name: string) { if (!av?.ready) return null; av.holder.updateMatrixWorld(true); const p = av.anchor(name); return p ? w2m(p) : null; }
 /** The nearest point of the person under a pixel of the 3D view ({ distance, point } in metres, model frame), or null. Picked on the
@@ -281,7 +301,7 @@ export async function initPerson() {
   const q = Q.get("person"), hidden = q === "off", url = q && q !== "off" && q !== "1" ? q : await defaultPackage();
   if (!url) return;                                                  // no person in this release (version.json names none)
   idleOn = Q.get("person_idle") !== "0"; suppressed = hidden;
-  viewerApi.person = { state, definition, show, set, place, anchor, pickAt, depthAt, object: () => av?.holder ?? null, bench, ready, avatar: () => av, still: (on: boolean) => { live = !on; restart++; dirty(); changedSignal(); return state(); } };
+  viewerApi.person = { state, definition, show, set, place, anchor, pickAt, depthAt, shells, object: () => av?.holder ?? null, bench, ready, avatar: () => av, still: (on: boolean) => { live = !on; restart++; dirty(); changedSignal(); return state(); } };
   hooks.beforeRender.push(beforeRender);
   hooks.onApply.push((o: Opts) => { live = !(o.ui === "0" || o.ui === false || o.still === "1" || o.still === true); restart++; if (av?.ready) dirty(); });
   if (Q.get("ui") === "0") live = false;

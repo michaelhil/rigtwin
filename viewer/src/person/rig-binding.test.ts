@@ -169,6 +169,16 @@ describe("rig binding", () => {
     expect(seat.pan!.front).toBeCloseTo(b.targets.seatFront!, 9); expect(seat.pan!.rear).toBeLessThan(seat.pan!.front - 0.4);
     expect(seat.pan!.edge).toBe(param("seat.cushion_lip_radius")); expect(seat.pan!.halfWidth).toBeCloseTo(param("seat.pan_width_rear") / 2, 9);
     expect(back.compress_m).toBe(section("operator").targets.back_press);
+    // the pods' inner sides: facing the seat's centre line, on the trays' inner edges, carried with the seat
+    for (const [name, sx] of [["pod_L", -1], ["pod_R", 1]] as const) {
+      const pod = b.contactPlanes.find((c) => c.name === name)!, s2 = pod.slab!;
+      expect(Math.sign(pod.normal[0])).toBe(sx); expect(Math.abs(pod.normal[0])).toBeGreaterThan(0.99); expect(s2.up[1]).toBeGreaterThan(0.98);
+      expect(Math.abs(pod.point[0])).toBeCloseTo(param("pods.joy_y") + (manifest.parameters["pods.tray_outline_front"].value as number[][])[0][1], 6);
+      expect(s2.profile.length).toBeGreaterThan(20); expect(s2.box.height).toBeCloseTo(0, 3); expect(s2.box.up[1]).toBeLessThanOrEqual(0); expect(s2.box.up[0]).toBeLessThan(-0.05);
+      expect(s2.edge).toBe(param("pods.shell_bevel"));
+    }
+    const up = bind("F05", { J_seat_height: joint("J_seat_height").upper }).b.contactPlanes.find((c) => c.name === "pod_L")!;
+    expect(up.point[1] - b.contactPlanes.find((c) => c.name === "pod_L")!.point[1]).toBeCloseTo(joint("J_seat_height").upper, 6);
   });
 
   test("the findings are reported, not hidden", () => {

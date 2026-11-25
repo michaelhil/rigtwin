@@ -41,6 +41,12 @@ export interface ManifestDatum {
   profile?: number[][];
   /** a parameter list [from, to] along z copied beside the profile (spec `profile.hold`), metres */
   hold?: number[];
+  /** how far a component stands out along this datum's z at each x: [x, height, y from, y to], counting the part between
+   *  `band` [from, to] along y; the y range is where it stands within `edge` of that height (spec `surface`): a contact
+   *  surface, metres */
+  surface?: number[][];
+  band?: number[];
+  edge?: number;
 }
 
 export interface Manifest {

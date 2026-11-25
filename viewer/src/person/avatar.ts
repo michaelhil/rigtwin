@@ -26,7 +26,7 @@ import type { RigBinding } from "./types.ts";
 import { deriveBodyFit, hasModel } from "./body-fit.ts";
 import { section } from "./params.ts";
 
-const STYLE = section("materials").style, ANCH = section("anchors");
+const STYLE = section("materials").style, ANCH = section("anchors"), GROUND = section("ground"), HANDS = section("operator").hand;
 interface Dof { id: string; joint: string; axis: number[]; min: number; max: number; label?: string; group?: string }
 
 let ktx2: KTX2Loader | null = null;
@@ -446,15 +446,48 @@ export class Avatar {
     }
     if (!this.seated) this.ground();
   }
-  /** A standing body on its soles: the lower foot joint at its rest height above the package's floor (the rest pose stands on its shoe
-   *  soles, rest.soleHeight), as applyPose does for a dof pose. MPK found the takes' shoes 8 mm under the floor without it. */
+  /** A standing body on its soles. First the lower foot joint at its rest height above the package's floor (the rest pose stands on
+   *  its shoe soles, rest.soleHeight; MPK found the takes' shoes 8 mm under the floor without it); then, in update() after the
+   *  drivers, the lowest skinned sole point on the floor (groundSoles): a foot turned or rolled from rest dips its sole's edge below
+   *  what the joint says (MPK's full-01 packet: A_POSE 6 to 9 mm under the floor, the clay last and the trainer alike). */
   ground() {
     const a = this.manifest.anchors ?? {}, feet = [a.foot_L, a.foot_R].filter((n: string) => this.bones.has(n)); if (!feet.length) return;
     this.root.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert(), v = new THREE.Vector3(); let d = Infinity;
     for (const f of feet) d = Math.min(d, v.setFromMatrixPosition(this.bones.get(f)!.matrixWorld).applyMatrix4(inv).y - this.nowWorldP.get(f)!.y);
     if (Number.isFinite(d)) this.rootBone.position.y -= d;
+    this.groundPending = true;
   }
+  private groundPending = false;
+  private soleCache = new Map<THREE.SkinnedMesh, { key: string; idx: Int32Array }>();
+  /** The vertices a mesh can stand on: those that move with a foot (weight on the foot joints and below at least foot_weight) and
+   *  lie within sole_band of the mesh's lowest such vertex at rest. Per body shape and mesh. */
+  soleVertices(me: THREE.SkinnedMesh): Int32Array {
+    const key = this.restKey() + ":" + me.geometry.id, hit = this.soleCache.get(me); if (hit?.key === key) return hit.idx;
+    const a = this.manifest.anchors ?? {}, roots = new Set([a.foot_L, a.foot_R].filter(Boolean)), foot = new Set<number>();
+    me.skeleton.bones.forEach((b, i) => { for (let o: THREE.Object3D | null = b; o && (o as any).isBone; o = o.parent) if (roots.has(o.name)) { foot.add(i); break; } });
+    const g = me.geometry, A = g.attributes as any, pos = g.attributes.position, sets = [[A.skinIndex, A.skinWeight], [A.skinIndex1, A.skinWeight1]].filter(([i, w]) => i && w);
+    const B = me.bindMatrix.elements, cand: number[] = [], ys: number[] = []; let low = Infinity;
+    if (foot.size && A.skinIndex) for (let v = 0; v < pos.count; v++) {
+      let w = 0; for (const [ji, wi] of sets) for (let c = 0; c < 4; c++) if (foot.has(ji.getComponent(v, c))) w += wi.getComponent(v, c);
+      if (w < GROUND.foot_weight) continue;
+      const y = B[1] * pos.getX(v) + B[5] * pos.getY(v) + B[9] * pos.getZ(v) + B[13]; cand.push(v); ys.push(y); low = Math.min(low, y);
+    }
+    const idx = Int32Array.from(cand.filter((_, k) => ys[k] <= low + GROUND.sole_band));
+    this.soleCache.set(me, { key, idx }); return idx;
+  }
+  /** The lowest sole point of the visible meshes, skinned as drawn, in the package frame (y up from its floor); Infinity without feet. */
+  soleLow(): number {
+    this.root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert().elements; let low = Infinity;
+    for (const me of this.meshes) {
+      if (!me.visible) continue; const idx = this.soleVertices(me); if (!idx.length) continue;
+      const P = this.skinnedPositions(me, idx);
+      for (let k = 0; k < idx.length; k++) { const y = inv[1] * P[3 * k] + inv[5] * P[3 * k + 1] + inv[9] * P[3 * k + 2] + inv[13]; if (y < low) low = y; }
+    }
+    return low;
+  }
+  private groundSoles() { const low = this.soleLow(); if (Number.isFinite(low)) { this.rootBone.position.y -= low; this.root.updateMatrixWorld(true); } }
   // ---- per frame
   update(dt: number) {
     this.time += dt;
@@ -463,6 +496,7 @@ export class Avatar {
     for (const p of this.plugins) p.frame(this.context(p, dt));
     for (const b of this.bones.values()) b.quaternion.normalize();        // the skinning shader assumes rigid joints
     this.drive();
+    if (this.groundPending) { this.groundPending = false; this.groundSoles(); }     // standing: the sole as drawn on the floor (after the drivers)
     this.holder.updateMatrixWorld(true);
     const op: any = this.state("operator"), planes = op.on && !op.report?.error ? op.contactPlanes ?? [] : [];
     this.contact.packPlanes(planes, this.meshes.filter((me) => me.visible), this.renderer, this.U, dt === 0); this.contact.packCapsules(this.capsulesNow()); this.contact.upload();
@@ -500,8 +534,8 @@ export class Avatar {
   /** World positions of one mesh's vertices as the person's vertex shader computes them (shaders.ts): relative morph targets, the
    *  eight influences, linear blend mixed with dual-quaternion skinning by `_DQS`; the seat contact's few millimetres are left out.
    *  For picking (three's own raycast skins with four influences only: 190 mm off on operator-m) and for the checks. */
-  skinnedPositions(me: THREE.SkinnedMesh): Float32Array {
-    const g = me.geometry, pos = g.attributes.position, n = pos.count, out = new Float32Array(n * 3), A = g.attributes as any;
+  skinnedPositions(me: THREE.SkinnedMesh, idx?: ArrayLike<number>): Float32Array {      // idx: only these vertices, packed in that order
+    const g = me.geometry, pos = g.attributes.position, n = idx ? idx.length : pos.count, out = new Float32Array(n * 3), A = g.attributes as any;
     const morphs = g.morphAttributes.position ?? [], infl = me.morphTargetInfluences ?? [], rel = g.morphTargetsRelative;
     me.skeleton.update(); const BM = me.skeleton.boneMatrices!, nb = me.skeleton.bones.length;
     // per bone: the matrix (column major, as three keeps it) and its unit quaternion and translation
@@ -510,8 +544,8 @@ export class Avatar {
     const sets: [THREE.BufferAttribute, THREE.BufferAttribute][] = [[A.skinIndex, A.skinWeight]]; if (A.skinIndex1 && A.skinWeight1) sets.push([A.skinIndex1, A.skinWeight1]);
     const dqs = A._dqs as THREE.BufferAttribute | undefined, B = me.bindMatrix.elements, Bi = new THREE.Matrix4().copy(me.matrixWorld).multiply(me.bindMatrixInverse).elements;
     const p = [0, 0, 0];
-    for (let v = 0; v < n; v++) {
-      let x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+    for (let k = 0; k < n; k++) {
+      const v = idx ? idx[k] : k; let x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
       for (let k = 0; k < morphs.length; k++) { const w = infl[k]; if (!w) continue; const M = morphs[k]; if (rel) { x += w * M.getX(v); y += w * M.getY(v); z += w * M.getZ(v); } else { x += w * (M.getX(v) - pos.getX(v)); y += w * (M.getY(v) - pos.getY(v)); z += w * (M.getZ(v) - pos.getZ(v)); } }
       const sx = B[0] * x + B[4] * y + B[8] * z + B[12], sy = B[1] * x + B[5] * y + B[9] * z + B[13], sz = B[2] * x + B[6] * y + B[10] * z + B[14];
       let lx = 0, ly = 0, lz = 0; const mix = dqs ? Math.min(1, Math.max(0, dqs.getX(v))) : 0;
@@ -538,7 +572,7 @@ export class Avatar {
         const px = rx + 2 * (r3 * d0 - d3 * r0 + (r1 * d2 - r2 * d1)), py = ry + 2 * (r3 * d1 - d3 * r1 + (r2 * d0 - r0 * d2)), pz = rz + 2 * (r3 * d2 - d3 * r2 + (r0 * d1 - r1 * d0));
         p[0] = lx + (px - lx) * mix; p[1] = ly + (py - ly) * mix; p[2] = lz + (pz - lz) * mix;
       }
-      out[v * 3] = Bi[0] * p[0] + Bi[4] * p[1] + Bi[8] * p[2] + Bi[12]; out[v * 3 + 1] = Bi[1] * p[0] + Bi[5] * p[1] + Bi[9] * p[2] + Bi[13]; out[v * 3 + 2] = Bi[2] * p[0] + Bi[6] * p[1] + Bi[10] * p[2] + Bi[14];
+      out[k * 3] = Bi[0] * p[0] + Bi[4] * p[1] + Bi[8] * p[2] + Bi[12]; out[k * 3 + 1] = Bi[1] * p[0] + Bi[5] * p[1] + Bi[9] * p[2] + Bi[13]; out[k * 3 + 2] = Bi[2] * p[0] + Bi[6] * p[1] + Bi[10] * p[2] + Bi[14];
     }
     return out;
   }
@@ -551,6 +585,11 @@ export class Avatar {
     if (name === "body_centre") { const pel = pos(a.pelvis ?? this.rootBone.name)!, stature = this.measures.stature ? this.measures.stature / 1000 : (this.manifest.rest?.stature ?? 1) * this.legScale; return new THREE.Vector3(pel.x, ANCH.body_centre * stature, pel.z); }
     if (name === "feet") { const l = pos(a.foot_L), r = pos(a.foot_R); return l && r ? l.add(r).multiplyScalar(0.5) : null; }
     if (name === "hands") { const l = pos(a.hand_L), r = pos(a.hand_R); return l && r ? l.add(r).multiplyScalar(0.5) : null; }
+    const hc = /^hand_centre_([LR])$/.exec(name);
+    if (hc) {      // the middle of the palm (camera framing; MPK): the operator's palm centre, from the wrist toward the knuckle line, in the knuckle plane
+      const S = hc[1], s = S.toLowerCase(), w = pos(a[`joint:wrist_${S}`] ?? `hand_${s}`), i = pos(`index_01_${s}`), p = pos(`pinky_01_${s}`);
+      return w && i && p ? w.lerp(i.lerp(p, HANDS.palm_centre[0]), HANDS.palm_centre[1]) : pos(a[`hand_${S}`]);
+    }
     return pos(a[name] ?? name.replace(/^joint:/, ""));
   }
   dispose() { this.holder.removeFromParent(); this.contact.dispose(); this.root.traverse((o: any) => { if (o.isMesh) { o.geometry.dispose(); } }); }

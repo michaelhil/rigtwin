@@ -1,6 +1,6 @@
 // bun tools/person-packet.ts [--quick] [--only <shot ids, set letters or passes>] [--persons F05,M50,...] [--styles dressed,clay]
 //                            [--tones light,medium,dark] [--run <name>] [--out <folder>] [--shots <review-packet.json>]
-//                            [--scale 0.5] [--self-test] [--no-metrics] [--no-bench]
+//                            [--scale 0.5] [--self-test] [--no-metrics] [--no-bench] [--list]
 //
 // The designer's review packet of the person (manikin), rendered in the PRODUCT viewer: the real rig, the product's own lighting
 // (engine.ts: room environment, key and fill, its tone curve and exposure; no lab studio presets), the person seated by the
@@ -16,6 +16,11 @@
 //                  ground plane beside the rig, far enough out that no part of the body can touch it, with the rig behind the
 //                  figure. The camera stays on one side of the rig and the FIGURE turns (the lab's turntable): `az` is the
 //                  camera's azimuth around the figure as in the shot list, the light falls the same way for every azimuth.
+//   camera fit     a seated designer shot whose subject (its body-part target, or TOOL.subjectOf) the real rig hides is refitted:
+//                  the cheapest change within 30 degrees and 40 cm that shows the subject, else the designer's camera with the rig
+//                  parts in front of it hidden; both cameras and the reason are in manifest.json ("camera_fit") and the caption.
+//                  Hand and wrist shots aim at the palm's centre (anchor hand_centre_L / _R) when the package has it, and every
+//                  look-at point is kept inside the engine's orbit-target box (1.5 m round the rig), on the same line of sight.
 //   product views  P1 the viewer's default view (Overview), P2 the operator's eye view onto the screens, P3 front, P4 left:
 //                  exactly the views the page's buttons give, with the person seated.
 //   passes         dressed (default tone), clay (the clay figure package), tones (medium and dark on a few shots).
@@ -28,11 +33,10 @@
 // KNOWN-ISSUES.md (what was skipped) and, with --self-test, self-test/ (three shots rendered alone on a fresh page and twice
 // inside the run; the pictures must be identical).
 //
-// How the tool reaches the person: through viewer.person (set with pose, clip, script and time; place; anchor; avatar; still;
-// state; bench). The rig's triangles (for the penetration metrics) and the key light (for the standing side) are not in the page's
-// interface: they are reached through the DevTools protocol (the engine module's function scopes), a review-tool device only; no
-// product code is changed. On an older person module without place / anchor / avatar / set({ time }) the same is done on the
-// Avatar reached the same way.
+// How the tool reaches the person and the rig: only through the page's own interface. viewer.person: set (pose, clip, script,
+// time), place, anchor, avatar().skinnedPositions (the vertices as the person's shader skins them), still, state, bench;
+// viewer.person.object().parent is the scene (the rig's meshes for the penetration metrics, the key light for the standing side);
+// viewer.manifest() the rig's part boxes. No product code is changed and nothing is reached through the DevTools protocol.
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname, extname } from "node:path";
 import { loadavg, cpus } from "node:os";
@@ -59,8 +63,20 @@ const TOOL = {
   hiddenMargin: 0.03,
   /** a caption warns ("!") when less than this share of the person's outline is visible past the rig */
   visibleWarn: 0.6,
+  /** the operator's eye view warns ("!") when the person's own body within 150 mm of the camera covers more than this share of it */
+  ownBodyWarn: 0.02,
   /** penetration deeper than this (mm) is counted as a fault in the metrics' summary (the designer's body limit is 5, hands 3) */
   faultMm: 3,
+  /** engine.ts keeps the orbit target within this many metres of the rig (world x and z); the look-at point is kept inside it */
+  orbitBox: 1.5,
+  /** camera fit of seated designer shots whose subject the real rig hides: refit below trigger, accept at accept (shares of the
+   *  subject's visible surface), search within maxDeg of azimuth and elevation and maxMove metres nearer, at most maxTries cameras */
+  fit: { trigger: 0.75, accept: 0.85, maxDeg: 30, maxMove: 0.4, maxTries: 60, radiusOfFrame: 0.3, radiusMin: 0.06,
+    /** the parts the person rests on or holds: never hidden, and where they lie on the body (within contactDepth of its surface) they
+     *  are what a contact shot shows, not an obstruction; further in front they hide the subject like any other part */
+    contactParts: "^C_(seat_(pan|back_cushion)|joy_lever_[LR]|pedal_arm_.*|pod_armrest_[LR])$", contactDepth: 0.05 },
+  /** what a designer shot is meant to show when that is not its camera target (I5: "through the reach" of the left hand) */
+  subjectOf: { I5: ["hand_L"] } as Record<string, string[]>,
   /** frames of viewer.person.bench per shot set */
   benchFrames: 30,
 };
@@ -90,7 +106,7 @@ const runName = flag("run") ?? `${quick ? "quick" : "full"}-${stamp}`;
 const outBase = resolve(flag("out") ?? join(MAIN, "work", "manikin-v1-packets"));
 const out = join(outBase, runName);
 if (/(^|[\\/])\.\.?([\\/]|$)/.test(runName) || /[^A-Za-z0-9_.-]/.test(runName)) { console.error("error: --run takes a plain folder name"); process.exit(1); }
-mkdirSync(join(out, "shots"), { recursive: true }); mkdirSync(join(out, "sheets"), { recursive: true });
+if (!has("list")) { mkdirSync(join(out, "shots"), { recursive: true }); mkdirSync(join(out, "sheets"), { recursive: true }); }
 const PERSONS = [...TOOL.persons, ...(personFilter ?? []).filter((p) => !TOOL.persons.includes(p))];
 const wantPerson = (p: string) => PERSONS.includes(p) && (!personFilter || personFilter.includes(p));
 
@@ -146,7 +162,7 @@ function standingDofs(pkg: Pkg, name: string): Record<string, number> | null {
   return { ...p };
 }
 // the designer's early-gate list ("A1 (M50; az 0, 45, 90, 180)", "E-crit poses for M50, first view, beauty and clay", ...)
-interface QuickRule { persons?: string[]; men?: boolean; az?: number[]; handViews?: string[] }
+interface QuickRule { persons?: string[]; men?: boolean; az?: number[]; handViews?: string[]; all?: boolean }
 const Q = new Map<string, QuickRule>();
 for (const str of quick ? L.quick_packet?.shots ?? [] : []) {
   const id = str.match(/^\S+/)![0], r: QuickRule = {};
@@ -160,7 +176,7 @@ for (const str of quick ? L.quick_packet?.shots ?? [] : []) {
 Q.set("G3", { persons: ["F05", "M50", "M95H"] }); Q.set("F9", { persons: ["M50"] });
 const QUICK_CLAY: Record<string, QuickRule> = { A2: { persons: ["M50"], az: [45] }, C1: { persons: ["M50"], az: [35] }, F1: { persons: ["M50"] }, F2: { persons: ["M50"] }, G3: { persons: ["F05", "M50", "M95H"] } };
 const QUICK_TONES: Record<string, QuickRule> = { C1: { persons: ["M50"], az: [35] }, F1: { persons: ["M50"] } };
-const FULL_TONES: Record<string, QuickRule> = { A1: { persons: ["M50", "F05"], az: [0] }, C1: { persons: ["M50", "F05"], az: [35] }, F1: { persons: ["M50", "F05"] } };
+const FULL_TONES: Record<string, QuickRule> = { A1: { az: [0], all: true }, C1: { az: [35], all: true }, F1: { all: true } };          // every review person, in each tone
 const onlyOk = (id: string, set: string, pass: string) => !only || only.some((x) => x === id || x === set || x === pass || (x === "E" && id.startsWith("E")));
 const ruleFor = (pass: string, id: string): QuickRule | null | undefined => pass === "tones" ? (quick ? QUICK_TONES : FULL_TONES)[id] ?? null : pass === "clay" && quick ? QUICK_CLAY[id] ?? null : quick ? (Q.has(id) ? Q.get(id)! : null) : undefined;
 function personsOf(list: string[], rule: QuickRule | undefined, shot: string): string[] {
@@ -190,7 +206,8 @@ function add(pass: string, s: any, person: string, o: Partial<Img> & { kind: Kin
 }
 function expandShot(pass: string, s: any) {
   const set = s.set ?? s.id[0];
-  if (!onlyOk(s.id, set, pass)) return;
+  const romPick = !!s.poses_from && !!only?.some((x) => (L.rom_poses ?? []).some((r: any) => r.id === x));   // --only E16 picks one range-of-motion pose
+  if (!onlyOk(s.id, set, pass) && !romPick) return;
   const rule = ruleFor(pass, s.id); if (rule === null) return;
   const modes: string[] = s.modes ?? L.rom_defaults?.modes_first_view ?? ["beauty"];
   const inPass = (m: string) => (pass === "clay" ? m === "beauty" || m === "clay" : m === "beauty");
@@ -200,6 +217,7 @@ function expandShot(pass: string, s: any) {
     const D = L[s.defaults], ids: string[] | null = s.poses_from === "rom_critical_12" ? L.rom_critical_12 : null;
     for (const r of L.rom_poses) {
       if (ids && !ids.includes(r.id)) continue;
+      if (romPick && !onlyOk(s.id, set, pass) && !only!.includes(r.id)) continue;
       if (r.base_pose && /SEATED/.test(r.base_pose)) { skip(`range-of-motion pose ${r.id} ${r.name} (a dof pose on the lab's plain seat; the product seats a person only through the operator layer)`); continue; }
       const views: number[] = s.views === "first" || quick ? [r.views[0]] : r.views;
       for (const person of personsOf(rule?.persons?.length ? rule.persons : s.persons, undefined, s.id)) views.forEach((az, vi) => {
@@ -246,7 +264,7 @@ function expandShot(pass: string, s: any) {
     persons = s.group.map((g: any) => g.person);
     skip(`shot ${s.id}: ${s.what} as a line-up (the product shows one person at a time: rendered as a series, same camera, one person each)`);
   }
-  for (const person of personsOf(persons, rule, s.id)) {
+  for (const person of personsOf(rule?.all ? PERSONS : persons, rule, s.id)) {
     const style = pass === "clay" ? "clay" : "dressed", pkg = pkgFor(style, sexOf(person)); if (!pkg) continue;
     let dofs: Record<string, number> | undefined, named: string | undefined, time: number | undefined;
     const pk = pkg.manifest.packet?.poses?.[s.pose];
@@ -262,7 +280,7 @@ function productViews(pass: string) {
   if (pass === "tones") return;
   for (const [id, view, what] of PRODUCT_VIEWS) {
     if (!onlyOk(id, "P", pass)) continue;
-    const list = quick ? (pass === "clay" ? [] : ["M50", "F05"]) : pass === "clay" ? ["M50", "F05"] : PERSONS;
+    const list = quick ? (pass === "clay" ? [] : ["M50", "F05"]) : PERSONS;
     for (const person of list.filter(wantPerson)) add(pass, { id, set: "P", lighting: "product" }, person, { kind: "product", pose: "seated, " + what, view, script: "hold", az: 0, el: 0, camName: "seated", target: null, res: [1600, 1000] });
   }
 }
@@ -281,31 +299,24 @@ for (const pass of ["dressed", "clay", "tones"]) {
   }
 }
 if (!images.length && !(only?.length === 1 && only[0] === "none")) { console.error("nothing to render (check --only / --persons / --styles)"); process.exit(1); }
+if (has("list")) {                                                                 // a dry run: what would be rendered, and what not
+  const by = new Map<string, number>(); for (const im of images) by.set(im.sheet, (by.get(im.sheet) ?? 0) + 1);
+  console.log(`${images.length} image(s): ${[...by].map(([k, n]) => `${k} ${n}`).join(", ")}\nskipped:\n  ${skipped.join("\n  ")}`);
+  process.exit(0);
+}
 
 // ---- the page side: a small helper installed in every viewer page --------------------------------------------------------------
 const PAGE_HELPER = String.raw`(() => {
-  const P = viewer.person, av = () => (typeof P.avatar === "function" ? P.avatar() : window.__ppAv), S = window.__ppS;
-  const V3 = S.root.position.constructor, Q4 = S.root.quaternion.constructor, M4 = S.root.matrixWorld.constructor;
+  const P = viewer.person, av = () => P.avatar(), holder = () => P.object(), scene = () => holder().parent;
+  const V3 = holder().position.constructor, Q4 = holder().quaternion.constructor, M4 = holder().matrixWorld.constructor;
+  const ITEMS = [...viewer.manifest().components, ...viewer.manifest().surfaces], CONTACT = new RegExp(${JSON.stringify(TOOL.fit.contactParts)});
   const D = Math.PI / 180, m2w = (p) => new V3(p[0], p[2], -p[1]), w2m = (v) => [v.x, -v.z, v.y];
   const r4 = (x) => Math.round(x * 1e4) / 1e4, mm = (x) => Math.round(x * 10000) / 10;
   async function redraw() { P.still(true); await viewer.frame(); }
-  /** The seat-contact sink map made afresh, synchronously, from the pose of the next frame. Its own cache takes a time-based shortcut
-   *  (inside a short window after the last map it reads back asynchronously or keeps the previous one), so without this a still
-   *  picture could show a map of the shot before (the self-test found 1 of 255 in one pixel). */
-  function freshContact() { const c = av().contact; if (c) { c.sig = null; c.sink = null; c.pose = null; c.pending = false; } }
-  function place(origin, yawDeg) {
-    if (typeof P.place === "function") return P.place(origin ? { origin, yawDeg } : null);
-    if (!origin) return;
-    const h = av().holder; h.position.copy(m2w(origin)); h.rotation.set(0, Math.PI / 2 + yawDeg * D, 0); h.updateMatrixWorld(true);
-  }
-  function pinTime(t) {                    // a still at a chosen time of the operator's script (setStill writes still_time otherwise)
-    const st = av().state("operator");
-    if (t === null || t === undefined) { if (st.__pinned) { delete st.time; st.time = undefined; st.__pinned = false; } return; }
-    delete st.time; Object.defineProperty(st, "time", { configurable: true, get: () => t, set: () => {} }); st.__pinned = true;
-  }
+  function place(origin, yawDeg) { return P.place(origin ? { origin, yawDeg } : null); }
   function anchorW(name) {
     const a = av(); a.holder.updateMatrixWorld(true);
-    if (typeof P.anchor === "function") { const m = P.anchor(name); if (m) return m2w(m); }
+    { const m = P.anchor(name); if (m) return m2w(m); }
     if (name === "seated_centre") { const pel = a.anchor("pelvis"), b = a.bounds(); return new V3(pel.x, b.max.y / 2, pel.z); }
     return a.anchor(name);
   }
@@ -318,31 +329,99 @@ const PAGE_HELPER = String.raw`(() => {
     v.applyQuaternion(rootQ().invert());
     return { az: Math.atan2(v.x, v.z) / D, el: Math.asin(Math.max(-1, Math.min(1, v.y))) / D };
   }
+  /** hand and wrist shots aim at the palm's centre when the package names one (anchor hand_centre_L / _R) */
+  const HAND_CENTRE = { hand_R: "hand_centre_R", hand_L: "hand_centre_L", "joint:wrist_R": "hand_centre_R", "joint:wrist_L": "hand_centre_L" };
+  const handCentre = (name) => { const n = HAND_CENTRE[name]; const m = n ? P.anchor(n) : null; return m ? { name: n, at: m2w(m) } : null; };
+  /** engine.ts clamps the orbit target to ${TOOL.orbitBox} m in world x and z (model x and y) round the rig; a look-at point outside is
+   *  moved and the view swings away from the target. The look-at point is therefore put on the same line of sight, inside the box. */
+  const ORBIT_BOX = ${TOOL.orbitBox} - 0.05;
   function camera(o) {                     // the designer's camera convention in the person's frame -> the viewer's camera (model frame)
-    const q = rootQ(); let found = true, T;
+    const q = rootQ(); let found = true, T, aimed = Array.isArray(o.target) ? "point" : o.target;
     if (Array.isArray(o.target)) T = av().root.localToWorld(new V3(o.target[0], o.target[1], o.target[2]));
-    else { T = anchorW(o.target); if (!T) { found = false; T = anchorW(o.seated ? "seated_centre" : "body_centre"); } }
+    else { const hc = handCentre(o.target); if (hc) { T = hc.at; aimed = hc.name; } else { T = anchorW(o.target); if (!T) { found = false; T = anchorW(o.seated ? "seated_centre" : "body_centre"); } } }
     if (o.offset) T.add(new V3(o.offset[0], o.offset[1], o.offset[2]).applyQuaternion(q));
     const dir = new V3(Math.sin(o.az * D) * Math.cos(o.el * D), Math.sin(o.el * D), Math.cos(o.az * D) * Math.cos(o.el * D)).applyQuaternion(q);
     const C = T.clone().addScaledVector(dir, o.dist);
-    return { camera: [...w2m(C), ...w2m(T), o.fov].map((x) => +x.toFixed(5)), target_found: found };
+    let A = T.clone(); const inBox = (v) => Math.abs(v.x) <= ORBIT_BOX && Math.abs(v.z) <= ORBIT_BOX;
+    if (!inBox(A)) { const d = T.clone().sub(C); search: for (let k = 1; k <= 500; k++) for (const f of [1 + k * 0.01, 1 - k * 0.01]) { if (f <= 0.05) continue; const v = C.clone().addScaledVector(d, f); if (inBox(v)) { A = v; break search; } } }
+    return { camera: [...w2m(C), ...w2m(A), o.fov].map((x) => +x.toFixed(5)), target_found: found, aimed_at: aimed, target_point: w2m(T).map(r4), look_at_moved_m: r4(A.distanceTo(T)) };
   }
   const ANCH = ["eye_midpoint", "head_centre", "hand_L", "hand_R", "pelvis", "feet"];
   /** What the rig hides of the person, from the camera: the person's vertices (read back) projected into cells of the picture, the
    *  nearest one per cell is the person's visible surface there; a sample of cells is picked against the rig (the person is not in
    *  the pick list), and a cell is hidden when a rig surface lies in front of the person's. Named points use their cell. */
-  function sight(targetModel, maxCells = 320) {
+  /** the person's vertices of this shot's pose, read back once (newPose() at the start of every shot) */
+  let vertsCache = null; const verts = () => (vertsCache ??= personVertices());
+  function newPose() { vertsCache = null; }
+  /** the person's visible surface per cell of the picture, from the current camera */
+  function cellsNow() {
     const st = viewer.state(), cam = st.camera.position, tg = st.camera.target, w = st.frame.w, h = st.frame.h;
     const fwd = [tg[0] - cam[0], tg[1] - cam[1], tg[2] - cam[2]], fl = Math.hypot(...fwd); for (let k = 0; k < 3; k++) fwd[k] /= fl;
     const CS = Math.max(6, Math.round(Math.min(w, h) / 80)), cells = new Map(), dist = (p) => Math.hypot(p[0] - cam[0], p[1] - cam[1], p[2] - cam[2]);
-    const pick = (x, y) => { const hit = viewer.pickAt(x, y); return hit ? { id: hit.id, d: dist(hit.point) } : null; };
-    for (const m of personVertices()) for (let v = 0; v < m.P.length / 3; v += 2) {
+    for (const m of verts()) for (let v = 0; v < m.P.length / 3; v += 2) {
       const p = [m.P[3 * v], m.P[3 * v + 1], m.P[3 * v + 2]], q = [p[0] - cam[0], p[1] - cam[1], p[2] - cam[2]];
       if (q[0] * fwd[0] + q[1] * fwd[1] + q[2] * fwd[2] < 0.05) continue;
       const [x, y] = viewer.project(p); if (!(x >= 0 && y >= 0 && x < w && y < h)) continue;
       const k = Math.floor(x / CS) + "," + Math.floor(y / CS), d = Math.hypot(...q), c = cells.get(k);
-      if (!c || d < c.d) cells.set(k, { d, x, y, region: regionOf(m.names[m.dom[v]]) });
+      if (!c || d < c.d) cells.set(k, { d, x, y, p, region: regionOf(m.names[m.dom[v]]) });
     }
+    return { st, cam, w, h, CS, cells, dist };
+  }
+  /** How much of what the shot is meant to show (the person's surface within R of the subject points) the rig leaves visible */
+  function subjectSight(subjects, R, maxCells = 160) {
+    const { cells, dist } = cellsNow(), pts = subjects.map((n) => { const hc = handCentre(n); const v = hc ? hc.at : anchorW(n); return v ? w2m(v) : null; }).filter(Boolean);
+    const near = [...cells.values()].filter((c) => pts.some((q) => Math.hypot(c.p[0] - q[0], c.p[1] - q[1], c.p[2] - q[2]) <= R));
+    const stride = Math.max(1, near.length / maxCells), by = {}; let sampled = 0, hidden = 0;
+    for (let i = 0; i < near.length; i += stride) { const c = near[Math.floor(i)], hit = viewer.pickAt(c.x, c.y); sampled++;
+      const gap = hit ? c.d - dist(hit.point) : -1;                   // how far the rig surface lies in front of the person's
+      if (hit && gap > ${TOOL.hiddenMargin} && !(CONTACT.test(hit.id) && gap < ${TOOL.fit.contactDepth})) { hidden++; by[hit.id] = (by[hit.id] ?? 0) + 1; } }
+    const share = Object.fromEntries(Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k, Math.round((n / Math.max(1, sampled)) * 1000) / 1000]));
+    return { cells: near.length, sampled, visible_share: sampled ? Math.round((1 - hidden / sampled) * 1000) / 1000 : null, hidden_by: share };
+  }
+  /** The camera nearest the designer's that shows the shot's subject past the rig: the designer's own when enough of the subject is
+   *  visible (o.trigger); else the cheapest change of azimuth, elevation and distance (within o.maxDeg, o.maxMove metres) that shows
+   *  o.accept of it; else the designer's camera with the rig parts in front of the subject hidden. */
+  async function subjectAt(o) { const c = camera(o); await viewer.apply({ ui: "0", camera: c.camera.join(",") }); return subjectSight(o.subjects, o.R).visible_share; }
+  async function fitCamera(o) {
+    const at = async (daz, del, dk, hide = []) => {
+      const c = camera({ ...o, az: o.az + daz, el: o.el + del, dist: o.dist * dk });
+      await viewer.apply({ ui: "0", camera: c.camera.join(","), ...(hide.length ? { hide: hide.join(",") } : {}) });
+      const s = subjectSight(o.subjects, o.R), cam = viewer.state().camera.position;
+      const inside = ITEMS.filter((it) => it.bbox && it.triangles > 0 && !hide.includes(it.id) && [0, 1, 2].every((k) => cam[k] > it.bbox.min[k] && cam[k] < it.bbox.max[k])).map((it) => it.id);
+      return { daz, del, dk, camera: c.camera, visible: s.visible_share, hidden_by: s.hidden_by, inside, hide };
+    };
+    const good = (r, need) => r.visible !== null && r.visible >= need && !r.inside.length;
+    const base = await at(0, 0, 1);
+    if (good(base, o.trigger)) return { changed: false, designer: base, used: base, tried: 1 };
+    const steps = (max, s) => { const out = [0]; for (let v = s; v <= max; v += s) out.push(v, -v); return out; };
+    const cands = [];
+    for (const daz of steps(o.maxDeg, 5)) for (const del of steps(o.maxDeg, 5)) for (const dk of [1, 0.9, 0.8, 0.7, 0.6]) {
+      if ((!daz && !del && dk === 1) || o.dist * (1 - dk) > o.maxMove + 1e-9 || o.el + del > 85 || o.el + del < -30) continue;
+      cands.push({ daz, del, dk, cost: Math.abs(daz) / 5 + Math.abs(del) / 5 + (o.dist * (1 - dk)) / 0.1 });
+    }
+    cands.sort((a, b) => a.cost - b.cost);
+    let best = null, tried = 1;
+    for (const c of cands.slice(0, o.maxTries)) { const r = await at(c.daz, c.del, c.dk); tried++;
+      if (!r.inside.length && (!best || (r.visible ?? -1) > (best.visible ?? -1))) best = r;
+      if (good(r, o.accept)) { best = r; break; } }
+    const moved = best && (best.visible ?? 0) > (base.visible ?? 0) ? best : null;
+    if (moved && good(moved, o.trigger)) return { changed: true, how: "moved", designer: base, used: moved, tried };
+    // hide what stands in front of the subject, layer by layer (behind a hidden part there may be another), at most three rounds
+    let hide = [], used = base;
+    for (let round = 0; round < 3 && !good(used, o.accept); round++) {
+      const more = [...Object.entries(used.hidden_by).filter(([, v]) => v >= 0.03).map(([k]) => k), ...used.inside].filter((k) => !CONTACT.test(k) && !hide.includes(k));
+      if (!more.length) break;
+      hide = [...hide, ...more]; used = await at(0, 0, 1, hide); tried++;
+    }
+    // the better of the two; a moved camera wins a near tie, because it leaves the rig whole
+    if (moved && (!hide.length || (moved.visible ?? 0) >= (used.visible ?? 0) - 0.05)) return { changed: true, how: "moved", designer: base, used: moved, tried };
+    if (!hide.length || (used.visible ?? 0) <= (base.visible ?? 0)) return { changed: false, kept: true, designer: base, used: base, tried };
+    return { changed: true, how: "hidden", designer: base, used, tried };
+  }
+  function sight(targetModel, maxCells = 320) {
+    const { st, cam, w, h, CS, cells, dist } = cellsNow();
+    const pick = (x, y) => { const hit = viewer.pickAt(x, y); return hit ? { id: hit.id, d: dist(hit.point) } : null; };
+    const allCells = Math.ceil(w / CS) * Math.ceil(h / CS), nearCells = [...cells.values()].filter((c) => c.d < 0.15).length;
     const all = [...cells.values()], stride = Math.max(1, all.length / maxCells), by = {}, regions = {};
     let sampled = 0, hidden = 0;
     for (let i = 0; i < all.length; i += stride) {
@@ -359,33 +438,26 @@ const PAGE_HELPER = String.raw`(() => {
       const c = cells.get(Math.floor(x / CS) + "," + Math.floor(y / CS)), d = c ? c.d : dist(p), hit = pick(x, y);
       points[n] = hit && hit.d < d - ${TOOL.hiddenMargin} ? { in_frame: true, hidden_by: hit.id, in_front_m: r4(d - hit.d) } : { in_frame: true };
     }
-    const inside = S.items.filter((c) => c.bbox && c.triangles > 0 && [0, 1, 2].every((k) => cam[k] > c.bbox.min[k] && cam[k] < c.bbox.max[k])).map((c) => c.id);
+    const inside = ITEMS.filter((c) => c.bbox && c.triangles > 0 && [0, 1, 2].every((k) => cam[k] > c.bbox.min[k] && cam[k] < c.bbox.max[k])).map((c) => c.id);
     const eye = anchorW("eye_midpoint"), e = eye ? w2m(eye) : null;
-    return { person_cells: all.length, sampled, visible_share: sampled ? Math.round((1 - hidden / sampled) * 1000) / 1000 : null, hidden_by: share(by), hidden_regions: share(regions),
+    return { person_cells: all.length, own_body_within_150mm_share: Math.round((nearCells / allCells) * 1000) / 1000, sampled, visible_share: sampled ? Math.round((1 - hidden / sampled) * 1000) / 1000 : null, hidden_by: share(by), hidden_regions: share(regions),
       points, camera_inside: inside, camera_to_person_eye_mm: e ? mm(Math.hypot(e[0] - cam[0], e[1] - cam[1], e[2] - cam[2])) : null, camera: st.camera };
   }
-  // ---- CPU read-back of the person's vertices (shape bake, morphs, eight influences, linear blend; no dual quaternions, no contact flatten)
+  // ---- the person's vertices as its shader skins them (Avatar.skinnedPositions: shape, morphs, eight influences, the dual-quaternion
+  // mask; not the seat-contact flatten), model frame, with each vertex's heaviest joint for the body region
   function personVertices() {
     const a = av(), out = []; a.holder.updateMatrixWorld(true);
-    const tmp = new V3(), acc = new V3(), p = new V3(), M = new M4(), B = new M4();
     for (const me of a.meshes) {
       if (!me.visible || me.userData.hidden) continue;
       const cls = me.userData.cls ?? "plain"; if (/^(eye|cornea|lashes|lens|glass)/.test(cls) || /glass|lens|eye|lash|cornea/i.test(me.material?.name ?? "")) continue;
-      const g = me.geometry, pos = g.attributes.position, n = pos.count, si = [g.attributes.skinIndex, g.attributes.skinIndex1], sw = [g.attributes.skinWeight, g.attributes.skinWeight1];
-      const morph = g.morphAttributes?.position ?? [], inf = me.morphTargetInfluences ?? [], rel = g.morphTargetsRelative;
-      const bones = me.skeleton.bones, inv = me.skeleton.boneInverses, mats = bones.map((b, i) => new M4().multiplyMatrices(b.matrixWorld, inv[i]));
-      const pre = new M4().copy(me.matrixWorld).multiply(me.bindMatrixInverse), names = bones.map((b) => b.name);
+      const g = me.geometry, W = a.skinnedPositions(me), n = g.attributes.position.count, si = [g.attributes.skinIndex, g.attributes.skinIndex1], sw = [g.attributes.skinWeight, g.attributes.skinWeight1];
       const P3 = new Float32Array(n * 3), dom = new Int16Array(n);
       for (let v = 0; v < n; v++) {
-        p.fromBufferAttribute(pos, v);
-        for (let k = 0; k < morph.length; k++) { const f = inf[k]; if (!f) continue; tmp.fromBufferAttribute(morph[k], v); if (rel) p.addScaledVector(tmp, f); else p.add(tmp.sub(p).multiplyScalar(f)); }
-        p.applyMatrix4(me.bindMatrix); acc.set(0, 0, 0); let best = -1, bw = 0, sum = 0;
-        for (let s = 0; s < 2; s++) { const I = si[s], W = sw[s]; if (!I || !W) continue;
-          for (let c = 0; c < 4; c++) { const w = W.getComponent(v, c); if (!w) continue; const j = I.getComponent(v, c); acc.addScaledVector(tmp.copy(p).applyMatrix4(mats[j]), w); sum += w; if (w > bw) { bw = w; best = j; } } }
-        if (sum > 0) acc.multiplyScalar(1 / sum); else acc.copy(p);
-        acc.applyMatrix4(pre); P3[v * 3] = acc.x; P3[v * 3 + 1] = -acc.z; P3[v * 3 + 2] = acc.y; dom[v] = best;
+        P3[v * 3] = W[v * 3]; P3[v * 3 + 1] = -W[v * 3 + 2]; P3[v * 3 + 2] = W[v * 3 + 1];
+        let best = -1, bw = 0; for (let k = 0; k < 2; k++) { const I = si[k], Wt = sw[k]; if (!I || !Wt) continue; for (let c = 0; c < 4; c++) { const w = Wt.getComponent(v, c); if (w > bw) { bw = w; best = I.getComponent(v, c); } } }
+        dom[v] = best;
       }
-      out.push({ name: me.name, cls, P: P3, dom, names });
+      out.push({ name: me.name, cls, P: P3, dom, names: me.skeleton.bones.map((b) => b.name) });
     }
     return out;
   }
@@ -397,9 +469,10 @@ const PAGE_HELPER = String.raw`(() => {
   function rig() {
     if (rigCache) return rigCache;
     const by = new Map(), v = new V3();
-    S.root.updateMatrixWorld(true);
-    for (const m of S.meshes) {
-      const comp = m.userData.comp; if (!comp || !m.geometry?.attributes?.position) continue;
+    const meshes = []; scene().updateMatrixWorld(true);
+    scene().traverse((o) => { if (o.isMesh && !o.isSkinnedMesh && o.userData?.comp) meshes.push(o); });
+    for (const m of meshes) {
+      const comp = m.userData.comp; if (!m.geometry?.attributes?.position) continue;
       const g = m.geometry, pos = g.attributes.position, idx = g.index ? g.index.array : null, cnt = idx ? idx.length : pos.count;
       const e = by.get(comp) ?? { comp, T: [], min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
       for (let i = 0; i < cnt; i++) { v.fromBufferAttribute(pos, idx ? idx[i] : i).applyMatrix4(m.matrixWorld); const q = [v.x, -v.z, v.y]; e.T.push(q); for (let k = 0; k < 3; k++) { e.min[k] = Math.min(e.min[k], q[k]); e.max[k] = Math.max(e.max[k], q[k]); } }
@@ -493,31 +566,10 @@ const PAGE_HELPER = String.raw`(() => {
     for (const r of Object.values(res)) { r.deepest_mm = rd(r.deepest_mm); r.nearest_gap_mm = rd(r.nearest_gap_mm); for (const g of Object.values(r.regions)) { g.deepest_mm = rd(g.deepest_mm); g.nearest_gap_mm = rd(g.nearest_gap_mm); } }
     return { vertices: nv, meshes: verts.map((m) => m.name + " (" + m.cls + ")"), lowest_point_z_mm: mm(lowest), lowest_region: lowestRegion, top_z_mm: mm(top), parts: res, ms: Math.round(performance.now() - t0) };
   }
-  return { place, pinTime, freshContact, anchorW, handView, camera, sight, redraw, penetration, rig, w2m, m2w,
+  return { place, anchorW, newPose, fitCamera, subjectAt, handView, camera, sight, redraw, penetration, rig, w2m, m2w,
     anchorModel: (n) => { const v = anchorW(n); return v ? w2m(v).map(r4) : null; },
-    keyAzimuth: () => { const k = window.__ppKey; if (!k) return null; const p = w2m(k.position), t = w2m(k.target.position); return Math.atan2(p[1] - t[1], p[0] - t[0]) / D; } };
+    keyAzimuth: () => { let k = null; scene().traverse((o) => { if (!k && o.isDirectionalLight && o.castShadow) k = o; }); if (!k) return null; const p = w2m(k.position), t = w2m(k.target.position); return Math.atan2(p[1] - t[1], p[0] - t[0]) / D; } };
 })()`;
-
-/** Find a module-level variable of the page through the DevTools protocol: the scopes of `fnExpr` (a function of the module), the
- *  first object for which `test` (evaluated with `this` = the object) is true, stored as window[`name`]. */
-async function grabFromScopes(page: Page, fnExpr: string, test: string, name: string): Promise<boolean> {
-  const fn = await page.call("Runtime.evaluate", { expression: fnExpr, returnByValue: false });
-  if (!fn.result?.objectId) return false;
-  const props = await page.call("Runtime.getProperties", { objectId: fn.result.objectId, ownProperties: false });
-  const scopes = props.internalProperties?.find((x: any) => x.name === "[[Scopes]]");
-  if (!scopes) return false;
-  const list = await page.call("Runtime.getProperties", { objectId: scopes.value.objectId, ownProperties: true });
-  for (const s of list.result) {
-    if (!s.value?.objectId) continue;
-    const vars = await page.call("Runtime.getProperties", { objectId: s.value.objectId, ownProperties: true });
-    for (const v of vars.result) {
-      if (v.value?.type !== "object" || !v.value.objectId) continue;
-      const r = await page.call("Runtime.callFunctionOn", { objectId: v.value.objectId, functionDeclaration: `function () { try { if (${test}) { window.${name} = this; return true; } } catch (e) {} return false; }`, returnByValue: true });
-      if (r.result?.value === true) return true;
-    }
-  }
-  return false;
-}
 
 // ---- server, browser, pages ------------------------------------------------------------------------------------------------
 const tStart = performance.now();
@@ -550,17 +602,12 @@ async function openPage(pkg: Pkg, fresh = false): Promise<PkgPage> {
   const err = await page.evaluate("window.viewerError || null"); if (err) throw new Error(`viewer failed (${pkg.key}): ${err}`);
   const ok = await page.waitFor("viewer.person ? viewer.person.ready.then((x) => x ? 'ok' : 'failed') : null", `the person (${pkg.key})`, 90000);
   if (ok !== "ok") throw new Error(`the person did not load (${pkg.key}): ${JSON.stringify(await page.evaluate("viewer.person.state()"))}`);
-  const api = await page.evaluate("(() => { const P = viewer.person; return { place: typeof P.place === 'function', anchor: typeof P.anchor === 'function', avatar: typeof P.avatar === 'function', time: 'stillTime' in P.state() }; })()");
-  const probe = {
-    ...Object.fromEntries(Object.entries(api).map(([k, v]) => ["public_" + k, v as boolean])),
-    avatar: api.avatar || await grabFromScopes(page, "viewer.person.state", "this.holder && this.bones instanceof Map && this.manifest && Array.isArray(this.meshes) && typeof this.anchor === 'function'", "__ppAv"),
-    engine: await grabFromScopes(page, "viewer.state", "this.joints instanceof Map && Array.isArray(this.meshes) && this.manifest && this.root && this.byId", "__ppS"),
-    key: await grabFromScopes(page, "viewer.person.state", "this.isDirectionalLight === true && this.castShadow === true", "__ppKey"),
-  };
-  if (!probe.avatar || !probe.engine) throw new Error(`could not reach the person or the rig in the page (${JSON.stringify(probe)})`);
+  const probe = await page.evaluate("(() => { const P = viewer.person; return { place: typeof P.place === 'function', anchor: typeof P.anchor === 'function', avatar: typeof P.avatar === 'function', object: typeof P.object === 'function', skinned: typeof P.avatar?.()?.skinnedPositions === 'function', time: 'stillTime' in P.state(), manifest: typeof viewer.manifest === 'function' }; })()");
+  const missing = Object.entries(probe).filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length) throw new Error(`the page's person interface lacks ${missing.join(", ")} (this tool needs the person module of c85e5e8 or later)`);
   await page.evaluate(`window.pp = ${PAGE_HELPER}; true`);
   const version = await page.evaluate("fetch('version.json', { cache: 'no-store' }).then((r) => r.json()).catch(() => null)");
-  const pp: PkgPage = { page, pkg, cur: { person: null, tone: null }, loadMs: Math.round(performance.now() - t0), probe, version, timeApi: !!api.time };
+  const pp: PkgPage = { page, pkg, cur: { person: null, tone: null }, loadMs: Math.round(performance.now() - t0), probe, version, timeApi: true };
   if (!fresh) pages.set(pkg.key, pp);
   return pp;
 }
@@ -579,7 +626,31 @@ function computeStand(keyAz: number) {
 }
 
 // ---- one image ------------------------------------------------------------------------------------------------------------
-interface Shot { file: string; ms: number; camera: number[] | null; sight: any; place: any; found: boolean; az: number; el: number; state?: any }
+interface Shot { file: string; ms: number; camera: number[] | null; sight: any; place: any; found: boolean; az: number; el: number; state?: any; fit?: any; aim?: any }
+/** What a seated designer shot is meant to show, for the camera fit: its own subject (TOOL.subjectOf), or its target when that is a
+ *  part of the body; null for the views of the whole person (seated_centre, body_centre, a point), which keep the designer's camera. */
+function subjectsOf(im: Img): string[] | null {
+  const base = im.id.replace(/-t\d+$/, "");
+  if (TOOL.subjectOf[base]) return TOOL.subjectOf[base];
+  if (typeof im.target !== "string" || /^(seated_centre|body_centre)$/.test(im.target)) return null;
+  return im.target === "hands" ? ["hand_L", "hand_R"] : [im.target];
+}
+/** one fit per shot, person and style: the frames of a strip keep one camera */
+const fits = new Map<string, any>();
+function fitNotes(im: Img, f: any): string[] {
+  if (f?.kept) return [`designer's camera kept: no clearer view within ${TOOL.fit.maxDeg}° (${f.subjects.join(" + ")} ${Math.round((f.designer.visible ?? 0) * 100)} % visible${Object.keys(f.designer.hidden_by).length ? `, behind ${Object.keys(f.designer.hidden_by).join(", ")}` : ""})`];
+  if (!f?.changed) return [];
+  const d = f.designer, u = f.used, pc = (x: number | null) => `${Math.round((x ?? 0) * 100)} %`, sg = (x: number) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x);
+  const why = `designer's camera: ${f.subjects.join(" + ")} ${pc(d.visible)} visible${Object.keys(d.hidden_by).length ? `, behind ${Object.keys(d.hidden_by)[0]}` : ""}${d.inside.length ? `, camera inside ${d.inside[0]}` : ""}`;
+  if (f.how === "moved") {
+    const parts = [u.daz ? `${sg(u.daz)}° az` : "", u.del ? `${sg(u.del)}° el` : "", u.dk < 1 ? `${Math.round(im.dist * (1 - u.dk) * 100)} cm nearer` : ""].filter(Boolean).join(", ");
+    return [`camera moved ${parts} (${why}; now ${pc(u.visible)})`];
+  }
+  // what still covers the subject after the hiding: the parts the body rests on, which the shot is meant to show
+  const rest = Object.entries(u.hidden_by ?? {}).filter(([, v]) => (v as number) >= 0.03).map(([k]) => k);
+  const restNote = rest.length && u.visible < TOOL.fit.accept ? `; the rest is behind ${rest.join(", ")}, ${rest.every((k) => new RegExp(TOOL.fit.contactParts).test(k)) ? "which the body rests on and the shot shows" : "left in place"}` : "";
+  return [`${u.hide.join(", ")} hidden for this shot (${why}; no clear view within ${TOOL.fit.maxDeg}°; now ${pc(u.visible)}${restNote})`];
+}
 async function shoot(pp: PkgPage, im: Img, file: string): Promise<Shot> {
   const t0 = performance.now(), p = pp.page;
   await p.viewport(im.res[0], im.res[1]);
@@ -592,19 +663,16 @@ async function shoot(pp: PkgPage, im: Img, file: string): Promise<Shot> {
   else if (im.clip) Object.assign(set, { clip: im.clip });
   else if (im.named) Object.assign(set, { pose: im.named });
   else Object.assign(set, { clip: null, pose: im.dofs });
-  if (pp.timeApi) set.time = im.time ?? null;
-  // a fresh seated solver for every shot (the lab's shot reset): the solver kept for the same body carries a trace of its earlier
-  // solves past resetRun(), which moved one pixel by 1/255 in the self-test
-  await p.evaluate(`(() => { const st = (viewer.person.avatar ? viewer.person.avatar() : window.__ppAv).state("operator"); st._op = null; st._key = null; return true; })()`);
+  set.time = im.time ?? null;
   await p.evaluate(`viewer.person.set(${JSON.stringify(set)}).then(() => true)`);
   const holds = await p.evaluate("viewer.person.state().package");
   if (holds !== im.pkg.manifest.name) throw new Error(`the page of ${im.pkg.key} shows ${holds}: something else changed the person`);
   pp.cur.person = im.person; if (tone !== null) pp.cur.tone = tone;
-  if (!pp.timeApi) await p.evaluate(`(pp.pinTime(${im.time ?? "null"}), true)`);
   if (im.kind !== "standing") await p.evaluate(`(pp.place(null), true)`);
   let camera: number[] | null = null, found = true, az = im.az, el = im.el, place: any = null;
+  let fit: any = null, aim: any = null;
   if (im.kind === "product") {
-    await p.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", view: im.view })}).then(() => (pp.freshContact(), pp.redraw())).then(() => true)`);
+    await p.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", view: im.view })}).then(() => pp.redraw()).then(() => (pp.newPose(), true))`);
     place = "seated by the rig binding";
   } else {
     await p.evaluate(`viewer.apply({ ui: "0" }).then(() => true)`);
@@ -622,18 +690,45 @@ async function shoot(pp: PkgPage, im: Img, file: string): Promise<Shot> {
       }
       place = { origin: at, yaw_deg: yaw };
     } else place = "seated by the rig binding";
-    const c = await p.evaluate(`pp.camera(${JSON.stringify({ target: im.target, offset: im.offset, az, el, dist: im.dist, fov: im.fov, seated: im.kind === "seated" })})`);
-    camera = c.camera; found = c.target_found;
+    await p.evaluate(`(pp.newPose(), true)`);                     // this shot's pose and placement are final: read its vertices afresh
+    const copt = { target: im.target, offset: im.offset, az, el, dist: im.dist, fov: im.fov, seated: im.kind === "seated" };
+    let c = await p.evaluate(`pp.camera(${JSON.stringify(copt)})`), hide: string[] = [];
+    found = c.target_found;
     if (!found) im.notes.push(`target '${im.target}' is not an anchor of the package: framed on the body's centre`);
-    await p.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", camera: camera!.join(",") })}).then(() => true)`);
+    const subjects = im.kind === "seated" ? subjectsOf(im) : null;
+    if (subjects) {                                                  // the real rig may hide what the designer's camera is meant to show
+      const base = im.id.replace(/-t\d+$/, ""), key = `${base}|${im.person}|${im.az}|${im.el}`;   // one fit for both styles and every tone, so the pairs compare
+      fit = fits.get(key);
+      if (!fit) {
+        const frameH = 2 * im.dist * Math.tan((im.fov * Math.PI) / 360), R = +Math.max(TOOL.fit.radiusMin, TOOL.fit.radiusOfFrame * frameH).toFixed(3);
+        // a strip keeps one camera: it is fitted on the frame where the rig hides most of the subject
+        const sibs = im.time === undefined ? [] : images.filter((x) => x.pkg === im.pkg && x.person === im.person && x.style === im.style && x.az === im.az && x.el === im.el && x.time !== undefined && x.id.replace(/-t\d+$/, "") === base);
+        let on = im;
+        if (sibs.length > 1) {
+          let worst = Infinity;
+          for (const sb of sibs) {
+            await p.evaluate(`viewer.person.set({ time: ${sb.time} }).then(() => viewer.apply({ ui: "0" })).then(() => (pp.newPose(), true))`);
+            const v = await p.evaluate(`pp.subjectAt(${JSON.stringify({ ...copt, subjects, R })})`);
+            if ((v ?? 1) < worst) { worst = v ?? 1; on = sb; }
+          }
+          await p.evaluate(`viewer.person.set({ time: ${on.time} }).then(() => viewer.apply({ ui: "0" })).then(() => (pp.newPose(), true))`);
+        }
+        fit = await p.evaluate(`pp.fitCamera(${JSON.stringify({ ...copt, subjects, R, ...TOOL.fit })})`);
+        fit.subjects = subjects; fit.radius_m = R; fit.fitted_on = on.file; fits.set(key, fit);
+        if (on !== im) await p.evaluate(`viewer.person.set({ time: ${im.time} }).then(() => viewer.apply({ ui: "0" })).then(() => (pp.newPose(), true))`);
+      }
+      if (fit.changed) { c = await p.evaluate(`pp.camera(${JSON.stringify({ ...copt, az: az + fit.used.daz, el: el + fit.used.del, dist: im.dist * fit.used.dk })})`); hide = fit.used.hide; }
+    }
+    camera = c.camera; aim = { aimed_at: c.aimed_at, target_point: c.target_point, look_at_moved_m: c.look_at_moved_m };
+    await p.evaluate(`viewer.apply(${JSON.stringify({ ui: "0", camera: camera!.join(","), ...(hide.length ? { hide: hide.join(",") } : {}) })}).then(() => true)`);
     if (im.kind === "standing") await p.evaluate(`(async () => { pp.place(${JSON.stringify(place.origin)}, ${place.yaw_deg}); await pp.redraw(); return true; })()`);
-    else await p.evaluate(`(pp.freshContact(), pp.redraw()).then(() => true)`);
+    else await p.evaluate(`pp.redraw().then(() => true)`);
   }
   const sight = await p.evaluate(`pp.sight(${camera ? JSON.stringify(camera.slice(3, 6)) : "null"})`);
   // where the eyes aim: with the operator layer off (standing, a clip) the eye module should not keep the seated gaze point
-  sight.eyes = await p.evaluate(`(() => { const a = viewer.person.avatar ? viewer.person.avatar() : window.__ppAv, e = a.state("eyes"); return { target_world: e.target ?? null, mode: e.report?.mode ?? null, operator_on: !!a.state("operator").on }; })()`);
+  sight.eyes = await p.evaluate(`(() => { const a = viewer.person.avatar(), e = a.state("eyes"); return { target_world: e.target ?? null, mode: e.report?.mode ?? null, operator_on: !!a.state("operator").on }; })()`);
   await p.screenshot(file);
-  return { file, ms: Math.round(performance.now() - t0), camera, sight, place, found, az, el };
+  return { file, ms: Math.round(performance.now() - t0), camera, sight, place, found, az, el, fit, aim };
 }
 function sightNotes(im: Img, s: any): string[] {
   const n: string[] = [], t = s?.points?.target;
@@ -646,7 +741,10 @@ function sightNotes(im: Img, s: any): string[] {
   if (t && t.in_frame === false) n.push("!target out of frame");
   if (t?.hidden_by) n.push(`target behind ${t.hidden_by}`);
   if (s?.camera_inside?.length) n.push(`!camera inside ${s.camera_inside.join(", ")}`);
-  if (im.kind === "product" && im.view === "operator" && s?.camera_to_person_eye_mm !== null && s.camera_to_person_eye_mm < 150) n.push(`!camera ${s.camera_to_person_eye_mm} mm from the person's eyes (inside the head)`);
+  if (im.kind === "product" && im.view === "operator") {
+    if (s?.own_body_within_150mm_share > TOOL.ownBodyWarn) n.push(`!the person's own head or face covers ${Math.round(s.own_body_within_150mm_share * 100)} % of the eye view (within 150 mm of the camera)`);
+    if (s?.camera_to_person_eye_mm !== null) n.push(`camera ${s.camera_to_person_eye_mm} mm from the person's eye midpoint`);
+  }
   return n;
 }
 
@@ -694,7 +792,7 @@ try {
     const pp = await openPage(im.pkg);
     const s = await shoot(pp, im, join(out, im.file));
     shots.set(im.file, s);
-    im.notes.push(...sightNotes(im, s.sight));
+    im.notes.push(...fitNotes(im, s.fit), ...sightNotes(im, s.sight));
     const ps = perSet.get(im.sheet) ?? { images: 0, ms: [] }; ps.images++; ps.ms.push(s.ms); perSet.set(im.sheet, ps);
     if (doBench && !ps.bench) { ps.bench = await pp.page.evaluate(`viewer.person.bench(${TOOL.benchFrames}, { idle: false })`); ps.bench.at = im.file; ps.bench.viewport = im.res; }
     // metrics: once per package, person and posture (seated on the binding, standing in A-pose), on the pose of this image
@@ -751,9 +849,13 @@ try {
     renderer: { viewer: "the rigtwin product viewer (viewer/src, bundled by tools/bundle.ts), served by tools/serve.ts, headless Chromium", gl, three: "0.187.0", lighting: "the product's own (engine.ts LOOKS.now: room environment, key and fill directional lights, custom tone curve, exposure); the lab's lighting of each shot is recorded per image", pixel_ratio: 1, ui: "ui=0 (still view: the person posed at its fixed still time, no idle motion)" },
     placement: { seated: "viewer.person on the operator layer, targets from the rig binding (rig-binding.ts): survey-true seat, hands on the real grips (script 'hold' with the grips' lean), feet on the real pedals; rig at its neutral pose", standing: { spot_model_m: standSpot, camera_side_deg: +standU.toFixed(2), clearance_m: TOOL.standClearance, rule: "the person stands on the ground plane out from the rig's outline on the camera's side; the camera keeps the designer's azimuth around the figure by turning the figure (yaw = camera side - az), so the rig is behind the figure and the product's key light falls the same way in every standing shot" }, product_views: Object.fromEntries(PRODUCT_VIEWS.map(([id, view, what]) => [id, `${view}: ${what}`])) },
     camera_convention: "the shot list's: position = target + distance (sin az cos el, sin el, cos az cos el) in the figure's frame (az 0 from the front, 90 from its left); fov = the list's fov_v_deg; recorded per image in the model frame (metres, Z up, X forward, Y the operator's left) as [x, y, z, target x, y, z, fov]",
-    probe: anyPage?.probe ?? null, probe_note: "the loaded Avatar, the rig's state and the key light are reached through the DevTools protocol for standing placement, anchors, the strip times and the vertex read-back (review tool only; the public viewer.person calls are used when present)",
+    probe: anyPage?.probe ?? null, probe_note: "the public calls of viewer.person and viewer this tool needs, checked on each page (place, anchor, avatar, object, skinned positions, set with script and time, pickAt); nothing is reached through the DevTools protocol",
     images: images.map((i) => { const s = shots.get(i.file); return { file: i.file, shot: i.id, set: i.set, sheet: i.sheet, person: i.person, package: i.pkg.key, style: i.style, tone: i.tone ?? (i.style === "dressed" ? i.pkg.manifest.tones?.default ?? null : null), placement: i.kind, pose: i.pose, script: i.script ?? null, time_s: i.time ?? null, view: i.view ?? null,
-      az: s?.az ?? i.az, el: s?.el ?? i.el, hand_view: i.handView ?? null, lab_camera: i.camName, distance_m: i.kind === "product" ? null : i.dist, fov_v_deg: i.kind === "product" ? null : i.fov, target: i.target, camera_model: s?.camera ?? null, lab_lighting: i.labLighting, lighting: "product", resolution: i.res, place: s?.place ?? null, sight: s?.sight ?? null, notes: i.notes, render_ms: s?.ms ?? null }; }),
+      az: s?.az ?? i.az, el: s?.el ?? i.el, hand_view: i.handView ?? null, lab_camera: i.camName, distance_m: i.kind === "product" ? null : i.dist, fov_v_deg: i.kind === "product" ? null : i.fov, target: i.target, camera_model: s?.camera ?? null, aim: s?.aim ?? null,
+      camera_fit: s?.fit ? (s.fit.changed ? { how: s.fit.how, reason: fitNotes(i, s.fit)[0], subjects: s.fit.subjects, radius_m: s.fit.radius_m, fitted_on: s.fit.fitted_on, tried: s.fit.tried,
+        designer: { az: i.az, el: i.el, distance_m: i.dist, camera_model: s.fit.designer.camera, subject_visible: s.fit.designer.visible, hidden_by: s.fit.designer.hidden_by, camera_inside: s.fit.designer.inside },
+        used: { az: +(i.az + s.fit.used.daz).toFixed(2), el: +(i.el + s.fit.used.del).toFixed(2), distance_m: +(i.dist * s.fit.used.dk).toFixed(3), camera_model: s.camera, subject_visible: s.fit.used.visible, hidden_parts: s.fit.used.hide, still_hidden_by: s.fit.used.hidden_by } }
+        : { how: "designer's camera", subjects: s.fit.subjects, subject_visible: s.fit.designer.visible, fitted_on: s.fit.fitted_on, ...(s.fit.kept ? { reason: fitNotes(i, s.fit)[0], hidden_by: s.fit.designer.hidden_by } : {}) }) : null, lab_lighting: i.labLighting, lighting: "product", resolution: i.res, place: s?.place ?? null, sight: s?.sight ?? null, notes: i.notes, render_ms: s?.ms ?? null }; }),
     skipped, derived_poses: derived, page_messages: [...errorsSeen].filter((e) => !/the rig binding failed/.test(e)), rig_binding_failures_while_standing: [...errorsSeen].filter((e) => /the rig binding failed/.test(e)).length ? "the person module warns that the binding fails while a standing pose is set (expected: the binding seats an operator); the tool places the standing person itself" : null,
   }, null, 1));
 

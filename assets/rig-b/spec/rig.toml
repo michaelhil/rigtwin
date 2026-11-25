@@ -194,6 +194,17 @@ parent = "C_pod_L"
 group = "pods"
 label = "Left pod shell (blade, leg, tray)"
 
+# The pod's inner side as a contact surface for the seated person's thigh and hip: on the tray's inner edge at the joystick
+# axis, z pointing in toward the seat, y up the pod, x along the pod (forward on the left, backward on the right, as z and y
+# leave it); the build writes how far the shell stands out toward
+# the seat along x (surface) within the height band from below the cushion to the plate.
+[nodes.D_pod_inner_L]
+parent = "C_pod_shell_L"
+label = "Left pod inner side (contact surface for the thigh: the tray's inner edge, z toward the seat, x along the pod)"
+pos = ["0", "pods.tray_outline_front[0][1]", "0"]
+rpy = ["pi / 2", "0", "0"]
+surface = { of = "C_pod_shell_L", step = "pods.inner_surface_step", band = "pods.inner_surface_band", edge = "pods.shell_bevel" }
+
 [nodes.C_pod_plate_L]
 parent = "C_pod_L"
 group = "pods"
@@ -282,6 +293,17 @@ rpy = ["0", "pods.plate_tilt", "0"]
 parent = "C_pod_R"
 group = "pods"
 label = "Right pod shell (blade, leg, tray)"
+
+# The pod's inner side as a contact surface for the seated person's thigh and hip: on the tray's inner edge at the joystick
+# axis, z pointing in toward the seat, y up the pod, x along the pod (forward on the left, backward on the right, as z and y
+# leave it); the build writes how far the shell stands out toward
+# the seat along x (surface) within the height band from below the cushion to the plate.
+[nodes.D_pod_inner_R]
+parent = "C_pod_shell_R"
+label = "Right pod inner side (contact surface for the thigh: the tray's inner edge, z toward the seat, x along the pod)"
+pos = ["0", "-pods.tray_outline_front[0][1]", "0"]
+rpy = ["pi / 2", "0", "pi"]
+surface = { of = "C_pod_shell_R", step = "pods.inner_surface_step", band = "pods.inner_surface_band", edge = "pods.shell_bevel" }
 
 [nodes.C_pod_plate_R]
 parent = "C_pod_R"
@@ -737,10 +759,10 @@ signal = "pedal_3"
 
 # ================================================================================================ expected motion
 [motion]
-J_seat_swivel   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
-J_seat_height   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
-J_seat_slide    = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
-J_seat_tilt     = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*"]
+J_seat_swivel   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*", "D_pod_inner_*"]
+J_seat_height   = ["C_seat_carrier", "C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*", "D_pod_inner_*"]
+J_seat_slide    = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*", "D_pod_inner_*"]
+J_seat_tilt     = ["C_seat_base", "D_seat_ref_live", "D_eye_*", "C_seat_pan", "C_seat_hub_*", "C_seat_back*", "C_seat_headrest", "C_pod_*", "C_joy_*", "D_grip_*", "D_estop", "C_ts_*", "S_ts_screen", "D_seat_front", "D_backrest_ref", "D_armrest_*", "D_pod_inner_*"]
 J_seat_recline  = ["C_seat_back", "C_seat_back_shell", "C_seat_back_cushion", "C_seat_headrest", "D_backrest_ref"]
 J_pod_armrest_L = ["C_pod_armrest_L", "D_armrest_L"]
 J_pod_armrest_R = ["C_pod_armrest_R", "D_armrest_R"]

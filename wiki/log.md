@@ -2,7 +2,7 @@
 title: Project log
 tldr: The dated, append-only record of the project - from the owner's first request through planning, plan approval, implementation, the owner's mid-run requests, the model reviews, the viewer redesign, the usage-limit interruption and recovery, to the final fixes. Newest entries at the bottom; append, never rewrite.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [meta, log, history]
 ---
 
@@ -467,3 +467,26 @@ fist, 8–20 mm into the real lever) to the middle of the handle section a hand 
 `grip_radius`, new `grip_hold_span`, all derived from the grip's shape records). The lever's radius along the handle axis
 is now written by the rig's build into the description file (a datum's `profile` in the spec, on `D_grip_axis_L/R`), so
 the viewer and the server read it as data; the binding no longer imports generator code. Geometry byte-identical.
+
+**14:40** — Manikin v1, rig binding (MV-rig): the pods' inner sides are contact surfaces. Two more empty points,
+`D_pod_inner_L/R`, on the trays' inner edges; the build writes how far each pod shell stands out toward the seat along the
+pod and over which height (a datum's `surface` in the spec), and the binding hands them to the contact layer as `pod_L`,
+`pod_R` beside the seat and the backrest, so a wide thigh presses against the pod instead of passing through it. The
+clash figures stay in the report. Geometry byte-identical.
+
+**14:55** — Manikin v1, review packet tool (MPK): where the real rig hides what a designer's camera is meant to show
+(F6 inside the monitor stand, F7's lap, F8's neck, F9's feet, I5's reach), `tools/person-packet.ts` now measures the
+subject through the rig and takes the nearest clear camera (a few degrees, or tens of centimetres nearer) or hides only
+the parts in front of the subject for that shot, says so in the caption and keeps both cameras with the reason in
+`manifest.json` (`camera_fit`). Hand shots aim at the palm centre (`anchor("hand_centre_L|R")`). D1, E16 and E17 were
+off-frame because the viewer's orbit keeps its look-at point within ±1.5 m; the tool now moves the look-at point along
+the same line of sight into that box. [The person in the viewer](50-implementation/person-in-viewer.md).
+
+**15:01** — MV-core, after MPK's full packet (full-01): standing soles were still 6–9 mm under the floor in A_POSE in both styles
+because the joint rule keeps the ankle at its rest height while A_POSE rolls the foot onto its sole's edge (the old T10h tried only
+feet-flat poses); a standing body now also puts its lowest skinned sole point on the floor. `place()` puts the soles on what is
+under the spot, the deck top over the platform and `D_floor` elsewhere, so figures beside the rig no longer float 200 mm up. The
+pods' inner sides from the rig binding are hard shells in the contact, and the seat's roll of displaced tissue stops at them (it had
+pushed even the median man's thighs 9 mm into the pods): M50_HEAVY 12.5 → 0.7 mm, M95H 9.5 → 2.5 mm, measured as drawn
+(`viewer.person.shells()`). `anchor("hand_centre_L|R")` added. T10h extended, T10j new; the rig's 16 pictures still differ from
+`main` by 0 px. [The person in the viewer](50-implementation/person-in-viewer.md), [checks](40-method/checks.md).

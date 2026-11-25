@@ -14,13 +14,15 @@
 import * as THREE from "three";
 import { section, glslDefines } from "./params.ts";
 
-export const PLANES = 3, CAPSULES = 8, ROWS = PLANES + CAPSULES, SINK = 64, TEXW = SINK, MAPS = 2, PROFILE_MAX = 48;
-const CS = section("contact").shader, SH = section("shadow");
+/** Contact rows: 0 the seat pan, 1 the backrest, SLAB_ROW... up to SLABS hard shells beside the body (rig-binding.ts `slab`: the pods'
+ *  inner sides; MV-core, 2026-11-25), PLANES - 1 the parameters; then the capsules; then a sink map per surface (pan, backrest, slabs). */
+export const SLAB_ROW = 2, SLABS = 4, PLANES = SLAB_ROW + SLABS + 1, CAPSULES = 8, ROWS = PLANES + CAPSULES, SINK = 64, TEXW = SINK, MAPS = 2 + SLABS, PROFILE_MAX = 48, SLAB_MAX = TEXW - 8;
+const CS = section("contact").shader, SL = section("contact").slab, SH = section("shadow");
 const C = THREE.ShaderChunk as Record<string, string>;
 
 const CONTACT_DEFINES = glslDefines({ thigh_min: CS.thigh_min, reach: CS.reach, side_reach: CS.side_reach, soft_depth: CS.soft_depth, pan_box: CS.pan_box, back_box: CS.back_box,
   back_above_pan: CS.back_above_pan, back_floor: CS.back_floor, over_sink: CS.over_sink, capsule: CS.capsule, plane_reach: CS.plane_reach, plane_depth_share: CS.plane_depth_share,
-  up_min: CS.up_min, normal_probe: CS.normal_probe, sink_range: CS.sink_range }, "K_C_");
+  up_min: CS.up_min, normal_probe: CS.normal_probe, sink_range: CS.sink_range, slab_depth: SL.depth, slab_knee: SL.knee }, "K_C_");
 const SHADOW_DEFINES = glslDefines({ tap_falloff: SH.tap_falloff, slope_max: SH.slope_max, depth_bias: SH.depth_bias, backface: SH.backface, disc_min_texels: SH.disc_min_texels,
   disc_min: SH.disc_min, disc_max: SH.disc_max, probes: SH.probes, probe_weights: SH.probe_weights, lit: SH.lit, seam: SH.seam, wide_from: SH.wide_from }, "K_SH_")
   + [["P0", SH.probe_taps[0]], ["P1", SH.probe_taps[1]], ["P2", SH.probe_taps[2]], ["P3", SH.probe_taps[3]], ["NWIDE", SH.wide_taps], ["NNARROW", SH.narrow_taps], ["CN", SH.contact_taps], ["QUICK0", SH.quick_taps[0]], ["QUICK1", SH.quick_taps[1]]]
@@ -71,6 +73,19 @@ const DQS_SKIN = /* glsl */ `if ( labW1 > 0.0 ) skinned += ( labBone4 * skinWeig
 	}
 	transformed = ( bindMatrixInverse * skinned ).xyz;`;
 // ---- contact (lab contact.ts) ---------------------------------------------------------------------------------------------
+/** A shell's cross-section at one place along it (MV-core): the signed distance of a point (h out of the face, y up) and the outward
+ *  normal there (in h, y). The face runs from u0 up and is closed at the top: the plate and the joystick base stand above the shell,
+ *  so flesh is never squeezed over it; the bottom edge is rounded by R; there is no back (as for soft tissue on the pan: flesh pressed
+ *  in deep is still brought out to the front, never through to the far side). Shared by the contact and the sink pass. */
+const SHELL_SD = /* glsl */ `
+	vec3 labShellSd( float h, float y, float u0, float u1, float R ) {
+		float D = K_C_SOFT_DEPTH; R = min( R, 0.5 * max( u1 - u0, 0.0 ) );
+		vec2 p2 = vec2( h + 0.5 * D, y - u0 - 0.5 * D ), q2 = abs( p2 ) - vec2( 0.5 * D - R ), m2 = max( q2, 0.0 );
+		float l2 = length( m2 ), d = l2 + min( max( q2.x, q2.y ), 0.0 ) - R;
+		vec2 g = l2 > 1e-6 ? m2 / l2 : ( q2.x > q2.y ? vec2( 1.0, 0.0 ) : vec2( 0.0, 1.0 ) ); g *= sign( p2 ) + step( 0.0, - abs( p2 ) );
+		return vec3( d, g );
+	}
+`;
 const CONTACT_PARS = CONTACT_DEFINES + /* glsl */ `
 #ifdef USE_SKINNING
 	uniform highp sampler2D labContact;
@@ -188,6 +203,53 @@ const CONTACT_PARS = CONTACT_DEFINES + /* glsl */ `
 		}
 		return out_;
 	}
+	// A hard shell beside the body (rig-binding.ts slab; MV-core, 2026-11-25, not in the lab): the pods' inner sides. Its face toward the
+	// body is a height field along the shell: at a (along forward) it stands out H(a) along the normal, between u0(a) and u1(a) along up,
+	// its top and bottom rounded by the edge radius. Flesh pressed into it is brought out as on the seat (the quadratic knee, the lip by
+	// the seat's mask, the displaced tissue as a roll from the shell's own sink map); skin more than K_C_SLAB_DEPTH behind the face is not
+	// this shell's. Row r: t0 = normal, edge; t1 = point, highest H; t2 = -, mode (3), map, -; t3 = forward; t4 = samples, first a,
+	// step; t5 = up; t6 = the map's box (up from, to, along from, to); t8... = (H, u0, u1) every step. hard: only what is still inside, no knee.
+	${SHELL_SD}
+	vec3 labSlabAt( int r, float a ) {
+		vec4 h = labT( 4, r ); float t = clamp( ( a - h.y ) / max( h.z, 1e-6 ), 0.0, h.x - 1.0 ); int i = clamp( int( t ), 0, int( h.x + 0.5 ) - 2 );
+		return mix( labT( 8 + i, r ).xyz, labT( 9 + i, r ).xyz, t - float( i ) );
+	}
+	vec3 labSlab( vec3 x, vec3 x0, int r, inout vec3 roll, bool hard ) {
+		vec4 t0 = labT( 0, r ), t1 = labT( 1, r ), k3 = labT( 3, ${PLANES - 1} ); vec3 n = t0.xyz, rel = x - t1.xyz; float v = dot( rel, n );
+		float kn = K_C_SLAB_KNEE, reach = max( K_C_REACH.x * kn, k3.w > 0.0 ? K_C_REACH.y * k3.z : 0.0 );
+		if ( v > t1.w + reach ) return vec3( 0.0 );
+		vec4 hd = labT( 4, r ); vec3 f = labT( 3, r ).xyz, up = labT( 5, r ).xyz;
+		float a = dot( rel, f ), y = dot( rel, up ), a0 = hd.y, a1 = hd.y + hd.z * ( hd.x - 1.0 );
+		if ( a < a0 - reach || a > a1 + reach ) return vec3( 0.0 );
+		vec3 sa = labSlabAt( r, a ); float u0 = sa.y, u1 = sa.z, h = v - sa.x;
+		if ( h > reach || h < - K_C_SLAB_DEPTH - kn || y < u0 - reach || y > u1 + reach ) return vec3( 0.0 );
+		float m = labT( 2, 0 ).y > 1.5 ? labContactMask( x0, 0 ) : 0.0;                                // thigh, buttock, trunk 1; knee, calf, arms 0 (the seat's mask)
+		vec4 k0 = labT( 0, ${PLANES - 1} ), k1 = labT( 1, ${PLANES - 1} );
+		// the cross-section (labShellSd): flesh is brought out across the shell, never along it (a thigh lies along a pod: pushed out
+		// over the pod's end it would be stretched along itself). Above the top edge (u1) the shell gives way to the open gap under the
+		// joystick base, and at its ends the shell stops (the profile curves away there): the push fades out over the edge radius at both.
+		vec3 sd = labShellSd( h, y, u0, u1, t0.w ); float R = min( t0.w, 0.5 * max( u1 - u0, 0.0 ) ), Re = max( t0.w, 1e-4 );
+		vec3 nrm = n * sd.y + up * sd.z;
+		float e = - sd.x, top = ( 1.0 - smoothstep( u1 - R, u1 + R, y ) ) * smoothstep( a0 - Re, a0 + Re, a ) * ( 1.0 - smoothstep( a1 - Re, a1 + Re, a ) );
+		if ( hard ) return nrm * ( max( e, 0.0 ) * top );                                                // after everything else: nothing stays inside
+		float push = e <= - kn ? 0.0 : e >= kn ? e : ( e + kn ) * ( e + kn ) / ( 4.0 * kn );
+		push *= ( 1.0 - smoothstep( mix( k0.y, k1.x, m ), mix( k0.z, k1.y, m ), e ) ) * top;          // the lip, as on the seat
+		if ( m > 0.0 && k3.w > 0.0 ) { vec2 mv = labRoll( vec2( y, a ), h, labT( 6, r ), int( labT( 2, r ).z + 0.5 ), k3 ) * m; roll += up * mv.x + f * mv.y; }
+		return nrm * push;
+	}
+	// the roll of displaced tissue (the seat's, sideways) stops at a shell: toward its face it is a soft minimum of itself and the room
+	// left, as at the backrest (MV-core: without it the seat's roll put 9 to 21 mm of thigh into the pods)
+	vec3 labShellRoom( vec3 x, vec3 dd ) {
+		for ( int r = ${SLAB_ROW}; r < ${SLAB_ROW + SLABS}; r ++ ) {
+			if ( labT( 2, r ).y < 2.5 ) continue;
+			vec4 t0 = labT( 0, r ), t1 = labT( 1, r ); vec3 n = t0.xyz, rel = x - t1.xyz; float into = dot( dd, - n ); if ( into <= 0.0 ) continue;
+			vec4 hd = labT( 4, r ); vec3 f = labT( 3, r ).xyz, up = labT( 5, r ).xyz; float a = dot( rel, f ), y = dot( rel, up );
+			if ( a < hd.y || a > hd.y + hd.z * ( hd.x - 1.0 ) ) continue;
+			vec3 sa = labSlabAt( r, a ); float h = dot( rel, n ) - sa.x; if ( y < sa.y - t0.w || y > sa.z + t0.w || h < - K_C_SLAB_DEPTH ) continue;
+			float room = max( h, 0.0 ); dd += n * ( into - into * room / ( room + into + 1e-4 ) );
+		}
+		return dd;
+	}
 	vec3 labFlatten( vec3 x, vec3 x0 ) {
 		x = labCapsules( x );
 		// every plane (and the pan) is evaluated on the same point and the pushes are blended: at the corner of seat and backrest the
@@ -196,7 +258,8 @@ const CONTACT_PARS = CONTACT_DEFINES + /* glsl */ `
 		for ( int r = 0; r < ${PLANES - 1}; r ++ ) {
 			vec4 c = labT( 2, r ); if ( c.y < 0.5 ) continue;       // planes: c = press-in limit, on (1), bulge, radius; the pan: c.y = 2
 			vec3 dv = vec3( 0.0 ); float push = 0.0;
-			if ( c.y > 1.5 ) { dv = labPan( x, x0, r, roll ); push = length( dv ); }
+			if ( c.y > 2.5 ) { dv = labSlab( x, x0, r, roll, false ); push = length( dv ); }
+			else if ( c.y > 1.5 ) { dv = labPan( x, x0, r, roll ); push = length( dv ); }
 			else {
 				vec4 a = labT( 0, r ), b = labT( 1, r ), e = labT( 3, r );   // a.xyz normal, b.xyz point, e: knee, fade, depth
 				float d = dot( x - b.xyz, a.xyz ), lim = - c.x;
@@ -224,7 +287,9 @@ const CONTACT_PARS = CONTACT_DEFINES + /* glsl */ `
 		}
 		vec3 xb = total > 1e-7 ? x + sum / total * ( 0.5 + 0.5 * biggest / total ) : x;
 		if ( labT( 3, ${PLANES - 1} ).w > 0.0 && labT( 2, 0 ).y > 1.5 ) { vec3 none = vec3( 0.0 ); xb += labPan( xb, x0, 0, none ); }     // round 7: where seat and backrest were blended, the pan still holds
-		return xb + roll;
+		xb += labShellRoom( xb, roll );
+		for ( int r = ${SLAB_ROW}; r < ${SLAB_ROW + SLABS}; r ++ ) if ( labT( 2, r ).y > 2.5 ) { vec3 none = vec3( 0.0 ); xb += labSlab( xb, x0, r, none, true ); }   // and a hard shell holds what is still in it (MV-core)
+		return xb;
 	}
 #endif
 `;
@@ -371,7 +436,7 @@ export function personDepthMaterial(U: PersonUniforms): THREE.MeshDepthMaterial 
 export const SINK_VERTEX = /* glsl */ `#include <common>
 #include <morphtarget_pars_vertex>
 #include <skinning_pars_vertex>
-uniform vec3 uP, uN, uF, uS; uniform float uProfile; uniform vec4 uBox, uMask; uniform vec2 uMaskX; varying float vV, vW, vM;
+uniform vec3 uP, uN, uF, uS; uniform float uProfile, uSlab; uniform vec4 uBox, uMask; uniform vec2 uMaskX; varying float vV, vW, vM, vU;
 void main() {
 #include <begin_vertex>
 #include <morphtarget_vertex>
@@ -379,13 +444,22 @@ void main() {
 #include <skinning_vertex>
 	vec3 rel = transformed - uP; float v = dot( rel, uN ), w = dot( rel, uF ), u = dot( rel, uS );
 	v -= uProfile * labProfile( w );                                                                 // the real cushion's top, on the seat's map only (MV-core)
+	if ( uSlab > 0.5 ) v -= labSlabAt( int( uSlab + 0.5 ), w ).x;                                // a shell's map: height over its face (MV-core)
+	vU = u;
 	vM = smoothstep( uMask.x + uMask.z * uMask.y, uMask.x + uMask.w * uMask.y, labRest.y ) * ( 1.0 - smoothstep( uMaskX.x, uMaskX.y, abs( labRest.x ) ) );
 	vV = v; vW = w;
 	gl_Position = vec4( ( u - uBox.x ) / ( uBox.y - uBox.x ) * 2.0 - 1.0, ( w - uBox.z ) / ( uBox.w - uBox.z ) * 2.0 - 1.0, clamp( v * 4.0, -1.0, 1.0 ), 1.0 );
 }`;
-export const SINK_FRAGMENT = CONTACT_DEFINES + /* glsl */ `varying float vV, vW, vM; uniform float uR;
+export const SINK_FRAGMENT = CONTACT_DEFINES + SHELL_SD + /* glsl */ `varying float vV, vW, vM, vU; uniform float uR, uSlab; uniform highp sampler2D labContact;
 void main() {
 	if ( vM < 0.5 || vV < - K_C_SINK_RANGE.x || vV > K_C_SINK_RANGE.y ) discard;
+	if ( uSlab > 0.5 ) {                                                                              // a shell's map: only what lies in front of or inside its face
+		int r = int( uSlab + 0.5 ); vec4 h = texelFetch( labContact, ivec2( 4, r ), 0 ); float t = clamp( ( vW - h.y ) / max( h.z, 1e-6 ), 0.0, h.x - 1.0 ); int i = clamp( int( t ), 0, int( h.x + 0.5 ) - 2 );
+		vec3 sa = mix( texelFetch( labContact, ivec2( 8 + i, r ), 0 ).xyz, texelFetch( labContact, ivec2( 9 + i, r ), 0 ).xyz, t - float( i ) );
+		float E = texelFetch( labContact, ivec2( 0, r ), 0 ).w, R = min( E, 0.5 * max( sa.z - sa.y, 0.0 ) );          // where the push is whole (labSlab)
+		if ( vU > sa.z - R || vW < h.y + E || vW > h.y + h.z * ( h.x - 1.0 ) - E || vV < - K_C_SLAB_DEPTH ) discard;
+		gl_FragColor = vec4( max( - labShellSd( vV, vU, sa.y, sa.z, R ).x, 0.0 ), 1.0, 0.0, 1.0 ); return;     // how deep inside the shell
+	}
 	float top = uR > 0.0 && vW > - uR ? - ( uR - sqrt( max( uR * uR - ( vW + uR ) * ( vW + uR ), 0.0 ) ) ) : 0.0;     // the round-off of the seat's front edge
 	gl_FragColor = vec4( max( top - vV, 0.0 ), 1.0, 0.0, 1.0 );
 }`;

@@ -99,7 +99,7 @@ The person's pose update (solver, drivers, contact rows, eyes) is 0.4 ms of a fr
 
 ## Run-time numbers
 
-Every number the person code uses is a record of `assets/manikin/params/runtime-person.toml` (445 records: value, unit, range, class, tier,
+Every number the person code uses is a record of `assets/manikin/params/runtime-person.toml` (458 records: value, unit, range, class, tier,
 evidence), read through `params.ts`; the bundle carries only the values and refuses an incomplete record, and `bun run check` validates every
 `runtime*.toml` (MV-rig's `runtime-rig.toml` too). What stays in the code is arithmetic (halves, unit vectors, epsilons, indices) and the
 eye model's own method constants.
@@ -107,8 +107,12 @@ eye model's own method constants.
 ## Script interface
 
 `viewer.person`: `ready` (a promise), `state()`, `definition()` (controls, presets, tones, wardrobe slots, clips, poses, licences),
-`show(on)`, `set({ sex, style, tone, wear, shape, pose, script, clip, time })`, `place({ origin, yawDeg } | null)` (off the seat, model frame),
-`anchor(name)` (model frame), `pickAt(x, y)`, `object()`, `still(on)`, `bench(n, { idle })`. Every change raises the window event
+`show(on)`, `set({ sex, style, tone, wear, shape, pose, script, clip, time })`, `place({ origin, yawDeg } | null)` (off the seat, model frame:
+`origin` gives x and y; the soles go on what is there, the deck top over the platform's footprint and `D_floor` anywhere else, and
+`state().placed` says which, `on: "deck" | "floor"`, with the height used), `anchor(name)` (model frame: the package's anchors and joints,
+`eye_midpoint`, `head_centre`, `body_centre`, `feet`, `hands`, and `hand_centre_L|R`, the middle of the palm, for framing a hand),
+`pickAt(x, y)`, `depthAt(x, y)`, `shells()` (how deep the drawn skin lies inside each pod's inner side, before and after the contact, mm,
+measured on the GPU: the CPU skinning has no contact), `object()`, `still(on)`, `bench(n, { idle })`. Every change raises the window event
 `rigtwin:person` with the state. A swap of package (sex, or the clay figure) keeps the tone, what is worn and the pose; another sex takes
 the new package's default body unless a shape comes in the same call. URL: `person=0` (no person code), `person=off` (loaded, not shown), `person=<manifest url>`, `person_style`,
 `person_sex=m|f`, `person_tone`, `person_wear=glasses:none,headset:none`, `person_shape=<preset>`, `person_idle=0`. The render tool and the rig's checks use
@@ -130,15 +134,29 @@ bun tools/person-packet.ts --run full-01                            # everything
 ```
 
 Output: `<main checkout>/work/manikin-v1-packets/<run>/` with `shots/`, `sheets/` (the lab's sheet style), `manifest.json` (camera per
-image in the model frame, what the rig hides of the person, skipped shots) and `metrics.json` (the person's vertices read back on the CPU
-against every rig part's triangles: penetration by part and body region; hands against the real levers; shoes against the pedals; the eye
-against the survey; the binding's findings; frame time per shot set). `--self-test` renders three shots alone and twice inside the run
-and compares every pixel by the lab's rule (more than 2 of 255 counts).
+image in the model frame, what the rig hides of the person, where the eyes aim, skipped shots) and `metrics.json` (the person's vertices
+as its shader skins them, `Avatar.skinnedPositions`, against every rig part's triangles: penetration by part and body region; hands
+against the real levers; shoes against the pedals; the eye against the survey; the binding's findings; frame time per shot set).
+`--self-test` renders three shots alone and twice inside the run and compares every pixel by the lab's rule (more than 2 of 255
+counts); `--list` shows what a run would render and skip. The tool uses only the page's interface (`viewer.person`: `set`, `place`,
+`anchor`, `avatar`, `object`, `still`, `bench`; `viewer.manifest`, `pickAt`, `project`); the faults its first packet found are in the
+table below.
 
-What the tool found that the person module should fix: a still picture could depend on the shot before through the seat contact's
-sink map (its time-based shortcut keeps or reads back asynchronously a map made just before); the tool clears that map before each
-seated shot. `viewer.person.pickAt` raycasts with three's skinning, which reads only the first four of the eight influences (up to
-190 mm off on this package).
+**Where the real rig is in the way.** The designer's cameras were set round a person on a plain seat; in the rig some see the monitor
+stand, the pod shell or the seat back instead of what the shot is about. For each seated shot the tool measures how much of the
+subject (the target anchor, or the left hand for the reach strip) the camera sees through the rig: points of the person within 30 % of
+the frame height of the subject, a rig part counting only when it stands more than 3 cm in front of the skin, and a part the body rests
+on (seat pan, back cushion, grips, pedals, armrests) not counting where it is within 5 cm of the skin. Under 75 % visible, or with the
+camera inside a part, it tries the nearest cameras (5° steps up to 30° in azimuth and elevation, up to 40 cm nearer, cheapest change
+first) until one shows 85 %; failing that it hides, layer by layer, the parts in front of the subject (never one the body rests on),
+and keeps whichever of the two shows more, a moved camera winning a near tie. One fit holds for both styles and every tone, so pairs
+compare; a frame strip is fitted on its worst frame and keeps one camera. The caption says what was moved or hidden, and
+`manifest.json` keeps, per image, the designer's camera and the one used with the reason (`camera_fit`).
+
+**Hand shots** aim at `anchor("hand_centre_L|R")`, the middle of the palm, so the wrist and the fingertips stay in the frame. The
+viewer's orbit keeps its look-at point inside a box of ±1.5 m (engine controls); a camera aimed outside it would turn away from the
+hand, so the tool moves the look-at point along the same line of sight into the box (`aim.look_at_moved_m`), which leaves the picture
+the same.
 
 ## Fixes from the product review packet (MPK, 2026-11-25)
 
@@ -150,7 +168,24 @@ seated shot. `viewer.person.pickAt` raycasts with three's skinning, which reads 
 | Standing faces stared at the rig's screen | the eyes kept the seated gaze point | cleared when the operator layer does not drive the body | T10f |
 | Picks up to 190 mm off | three's raycast skins with four influences | picks on the vertices as the person's shader skins them (`Avatar.skinnedPositions`) | T10g: median 0.08 mm against the depth the shader draws |
 | Shoes 8 mm under the floor when standing | takes not grounded | the lower foot joint at its rest height for standing clips and poses | T10h: 0.0 mm |
+| Standing soles still 6–9 mm under the floor (full packet, A_POSE, both styles) | the joint rule keeps the ankle at its rest height, but A_POSE spreads the legs 7–8° and the foot rolls onto its sole's edge; the old T10h tried only feet-flat poses on the dressed package | then the lowest skinned sole point on the floor (`Avatar.groundSoles`, after the drivers: the vertices that move with a foot and lie within `[ground] sole_band` of its lowest at rest, 2–5 thousand, 0.8–0.9 ms on the CPU) | T10h: 0.0 mm in A_POSE, the relaxed stand and the idle take, dressed and clay (7.6–8.4 mm with the joint rule alone) |
+| Figures beside the rig afloat at the deck's height | `place()` put the package's floor at the given z (0, the deck top) | the soles go on what is under the spot: the deck top over the platform's footprint, `D_floor` (200 mm lower) elsewhere | T10h: placed on the floor beside the platform, on the deck over it |
+| Thighs through the pods' inner sides (M50_HEAVY 8.7 mm, M95H 7 mm) | the contact knew the seat and the backrest only; and the seat's roll of displaced tissue pushed thigh 9–21 mm sideways into the pods even for the median man | the pods' inner sides (MV-rig's `contactPlanes` `pod_L/R`, a `slab` profile) are hard shells in the contact: flesh pressed in is brought out as on the seat (quadratic knee, the lip by the seat's mask, the knee out of it, a roll from each shell's own sink map), the seat's roll stops at a shell (a soft minimum of itself and the room left, as at the backrest), and at the end nothing stays inside (see below) | T10j: M50_HEAVY 12.5 → 0.7 mm, M95H 9.5 → 2.5 mm, median man 0 (was 9 mm from the roll) |
+| No `hand_centre` anchor | not ported | `anchor("hand_centre_L|R")`: the operator's palm centre (`[operator.hand] palm_centre`) from the wrist toward the knuckle line | MPK's hand shots |
 | Hand skin 8–11 mm inside the levers | the solver held a 40 mm cylinder | on the real handle (`targets.grip.profile`, `hold`): the palm on the handle's surface at the middle of the hold section, its skin below where the button head widens; each finger's three joints solved together against the profile at their own height; the thumb opened until it clears; the lab's behaviour unchanged without a profile | T10i: at most 1.6 mm (P5 woman, P50 man, P95 man, both hands) |
+
+**The pods' inner sides (contact.ts, shaders.ts `labSlab`).** Each `slab` the binding gives (up to four: rows 2 to 5 of the contact
+texture, with a 64 × 64 sink map each) is the shell's face toward the body as a height field along it, resampled to at most 56 even steps:
+at each place how far it stands out and from what height up to its top edge. The cross-section is closed at the top (the plate and the
+joystick base stand above the shell, so flesh is not squeezed over it; the push fades over the 7 mm edge radius there and at the shell's
+ends), rounded at the bottom edge and has no back, so flesh is pushed across the shell, never along it. Numbers in `[contact.slab]`
+(depth 50 mm, knee 6 mm, map margin 60 mm). What is left (2.5 mm for M95H) lies at the shell's top edge, where the thigh rises into the gap
+under the joystick base; the joystick bases are not contact surfaces yet. The frame time with and without the shells is the same within
+the machine's noise (15.0–16.1 against 16.2–17.2 ms at 1600 × 1000, the machine busy).
+
+**For the packet tool:** a standing spot beside the rig is now on `D_floor` (z = −0.2 m), so the lowest point is measured against
+`state().placed.origin[2]`, not 0; and `metrics.json`'s penetration uses `Avatar.skinnedPositions`, which has no contact: the drawn depth
+in the pods is `viewer.person.shells()`.
 
 **Grip, a finding (facts, no standard claimed):** the handle at the hold is 70 mm across (220 mm round). Held there, the middle finger wraps
 116° (P5 woman, hand breadth 75 mm, length 171 mm), 124° (P50 man, 89 mm, 194 mm) and 133° (P95 man, 92 mm, 205 mm) round it, and the
