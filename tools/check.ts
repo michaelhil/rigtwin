@@ -343,7 +343,8 @@ if (!fast) {
   }
   else report("warn", "deploy checks", "skipped: no dist/ (run bun run dist first)");
   // the shared scene in two real browsers (tools/live-accept.ts, about 10 s)
-  const r = spawnSync("bun", [join(ROOT, "tools", "live-accept.ts")], { encoding: "utf8", cwd: ROOT, timeout: 180_000 });
+  // 180 s here; 360 s on a CI runner, where software rendering made the 14 steps take 165 s (GitHub, 2026-11-25)
+  const r = spawnSync("bun", [join(ROOT, "tools", "live-accept.ts")], { encoding: "utf8", cwd: ROOT, timeout: process.env.CI ? 360_000 : 180_000 });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "live viewer", `${lines.filter((l) => l.startsWith("ok ")).length} of ${lines.filter((l) => /^(ok |FAIL)/.test(l)).length} steps (two browsers and the command line on one local server: changes both ways, activity line and its Undo, stale refusal, link preview, view routing, no server)`, r.status === 0 ? [] : lines.filter((l) => l.startsWith("FAIL") || /error/i.test(l)));
 }

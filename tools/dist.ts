@@ -239,7 +239,9 @@ if (import.meta.main) {
       // 0. the landing: a small page, no viewer files
       if (api) {
         const land = await browser.page(`${origin}${base}`);
-        await land.waitFor("document.querySelector('.wl-list li, .wl-status')", "the deployed landing");
+        // the list's rows, or a final word in its status line (empty, nothing found, no server); the status line is there
+        // from the start, empty or "Loading workspaces…", so it alone is no sign that the list has come (a slow runner saw 0 rows)
+        await land.waitFor("document.querySelector('.wl-list li') || (document.querySelector('.wl-status')?.textContent ?? '').replace('Loading workspaces…', '').trim()", "the deployed landing's list of workspaces");
         const lm = await land.evaluate("({ js: performance.getEntriesByType('resource').filter((e) => /\\.m?js(\\?|$)/.test(e.name)).reduce((a, e) => a + e.decodedBodySize, 0), heavy: performance.getEntriesByType('resource').some((e) => /\\.(glb|wasm)|manifest/.test(e.name)), canvas: !!document.querySelector('canvas'), rows: document.querySelectorAll('.wl-list li').length })");
         if (lm.js > 40e3 || lm.heavy || lm.canvas || lm.rows < 1) errors.push(`landing: ${JSON.stringify(lm)} (a small page with the workspaces listed, no model, no canvas)`);
         errors.push(...land.errors.map((e) => "landing console: " + e));
@@ -252,7 +254,7 @@ if (import.meta.main) {
       const err = await page.evaluate("window.viewerError || null"), st = await page.evaluate("window.viewerReady ? viewer.state() : null");
       if (err) errors.push("viewer: " + err);
       if (version.person) {   // the person chunk, its package and the transcoder load after the page is ready: wait for them, so their requests are checked too
-        const ps = await page.waitFor("viewer.person ? viewer.person.ready.then((ok) => viewer.person.state()) : null", "the person", 60000).catch((e: any) => ({ error: e.message }));
+        const ps = await page.waitFor("viewer.person ? viewer.person.ready.then((ok) => viewer.person.state()) : null", "the person", process.env.CI ? 150000 : 60000)   // software rendering on a CI runner: the person took over a minute there.catch((e: any) => ({ error: e.message }));
         if (!ps?.loaded || !ps?.shown) errors.push(`person: not shown (${ps?.error ?? "unknown"})`);
       }
       if (!(st?.render.triangles > 0)) errors.push("viewer: nothing drawn");
