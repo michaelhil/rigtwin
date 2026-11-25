@@ -34,10 +34,16 @@ const origin = server.url;
 const WS = server.api!.playground()!.id, WSAPI = `${origin}/api/workspaces/${WS}`;
 process.env.RIG_WORKSPACE = WS;                    // the command line (rig()) works in it, whatever port the server has
 const browser = await Browser.launch();
+// On a CI runner WebGL runs in software and the person takes over a minute to load in each page (check.ts, "person": 82 s
+// on GitHub's runner, 2026-11-25), which held this test past the check's time limit after 13 steps. There the pages open
+// without the person and step 10 is skipped; it runs in every `bun run check` on the development machine.
+const CI = Boolean(process.env.CI);
 const open = async (query = "", at = origin) => {
   const p = await browser.page("about:blank");
   await p.viewport(1440, 900);
-  await p.call("Page.navigate", { url: at === origin ? `${at}/workspaces/${WS}${query}` : `${at}/${query}` });
+  const url = new URL(at === origin ? `${at}/workspaces/${WS}${query}` : `${at}/${query}`);
+  if (CI) url.searchParams.set("person", "0");
+  await p.call("Page.navigate", { url: url.href });
   await p.waitFor("window.viewerReady || window.viewerError", "the viewer");
   return p;
 };
@@ -145,7 +151,8 @@ try {
   check(!!quick && Date.now() - t1 < 2500, "the browser coming back online reconnects at once", `connected ${Date.now() - t1} ms after 'online' (the backoff would have waited 4 s or more)`);
 
   // 10. the person in the seat
-  if (await until<boolean>(A, "viewer.person ? viewer.person.ready : false", 30000)) {
+  if (CI) console.log("skip the person in the seat (step 10): not on the CI runner, where it takes over a minute to load in each page; checked on the development machine");
+  else if (await until<boolean>(A, "viewer.person ? viewer.person.ready : false", 30000)) {
     await A.evaluate("viewer.person.still(true)");                   // a still view: the pose the server solves (no idle motion)
     const rows: string[] = []; let worst = 0, all = true;
     for (const preset of ["P5 woman", "P50 man", "P95 man"]) {
