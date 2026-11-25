@@ -8,9 +8,15 @@ tags: [reference, agents, mcp, commands, discovery]
 
 # Remote commands
 
+## Start at the homepage
+
+Give your agent the Synergon homepage and describe what you want to do. The homepage links to the workspace directory and a short agent guide at `/llms.txt`. Both work with an ordinary HTTP client. An agent can look up a workspace by name and ask which one you mean when several fit. With a workspace open in the same browser tab that the agent can see, it can read the ID from that tab's address.
+
+Once the workspace is clear, send `{"id":"discover","args":{}}` to inspect its asset, available tools and connection counts. Send `{"id":"state","args":{}}` for the current scene. Both leave the scene version unchanged. Narrow discovery to the part or operation the user asks about. The command examples below apply to the origin of the homepage you started from.
+
 ## Connect to the workspace
 
-Use the workspace link supplied for the task. **Settings → Agent access** shows the workspace's MCP URL. A browser code on the same card pairs a view request with that tab and allows it to return requested JPEGs. A workspace ID identifies the scene and its history. It does not identify a particular browser.
+Agents with an HTTP client can use the command endpoint directly. For an MCP client, **Settings → Agent access** shows the workspace's MCP URL. A browser code on the same card pairs a view request with that tab and allows it to return requested JPEGs. A workspace ID identifies the scene and its history. It does not identify a particular browser.
 
 | Interface | Address or command |
 |---|---|
@@ -61,6 +67,7 @@ An aim-only request through `person` or `person.pose` patches the named fields. 
 
 ## Viewer routing and pictures
 
+- **Caller identity over HTTP.** Send `X-Synergon-Client: agent` and reuse a randomly generated `X-Synergon-Client-Id` (32 lowercase hex digits) across your requests. The viewer can then identify and follow the same caller throughout the session.
 - **Paired.** Send `viewer` to the MCP `look` tool or `session` at the HTTP request level. MCP remembers a working explicit route for that session. An expired pair fails on that route. Provide a fresh code from **Settings → Agent access** or use MCP `viewer:null` to select unpaired routing deliberately. HTTP callers supply the code on each paired request.
 - **Unpaired.** On the public sandbox a request reaches current followers or is offered to live connections for approval. In the viewer, **Allow & follow** grants the request and future views and requested images from that caller until following stops. Use **Trace → Follow** to choose the caller in the viewer. Locally an unpaired request goes to open live connections. Server-side measurements and edits do not depend on an open browser.
 - **Receipt.** Read `result.delivery` for `route`, `status` and `recipientCount`. Status `dispatched` means the server sent the view request. Status `approval_requested` means it offered the request. Either route can return a picture. `result.capture.status` is `not_requested`, `returned` or `timed_out`. An unpaired public capture can come from any consenting recipient. The scene version records command evaluation. The picture shows the responding browser's rendered scene at capture time.

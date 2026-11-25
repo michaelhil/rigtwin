@@ -1512,7 +1512,7 @@ await test("W11", "agent views: the stored choice belongs to one workspace; an o
     `an old plain "always" is read as "${old}"; after choosing always here the store is ${JSON.stringify(map)}; the other workspace shows "${other}", this one again "${back}"`);
   await closeExpecting(a, /404/);
 });
-await test("W12", "Connect an agent: this workspace's own agent address, with Copy", async () => {
+await test("W12", "Agent access: the optional MCP address belongs to this workspace", async () => {
   await purge();
   const [ws] = await seed(1, "Agent");
   const s = await openAt(`${ORIGIN}/workspaces/${ws.id}?person=0`, 1280, 900);
@@ -1521,8 +1521,10 @@ await test("W12", "Connect an agent: this workspace's own agent address, with Co
   const summary = "document.querySelector('#settings-agent summary')";
   const before = await s.ev<boolean>(`!(${section}).open`);
   await s.clickEl(summary, "Agent access");
-  const r = await s.ev<{ value: string; copy: boolean }>("({ value: document.querySelector('#settings-agent .connect input')?.value ?? '', copy: [...document.querySelectorAll('#settings-agent .connect button')].some((b) => b.textContent === 'Copy address' && b.getClientRects().length) })");
-  record("W12", "Agent access shows this workspace's own agent address and Copy", before && r.value === `${ORIGIN}/api/workspaces/${ws.id}/mcp` && r.copy, `agent settings initially collapsed: ${before}; address ${r.value}; Copy address button: ${r.copy}`);
+  const collapsed = await s.ev<boolean>("!document.querySelector('#settings-agent .connect').open");
+  await s.clickEl("document.querySelector('#settings-agent .connect summary')", "MCP address");
+  const address = await s.ev<string>("document.querySelector('#settings-agent .connect input').value");
+  record("W12", "The optional MCP address belongs to this workspace", before && collapsed && address === `${ORIGIN}/api/workspaces/${ws.id}/mcp`, `agent settings initially collapsed: ${before}; MCP address initially collapsed: ${collapsed}; address ${address}`);
   await closeExpecting(s, /404/);
 });
 await test("W14", "the landing's first screen: name, one sentence, one primary action, the picture; Continue is primary when there is a recent workspace", async () => {

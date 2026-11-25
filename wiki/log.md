@@ -2,7 +2,7 @@
 title: Project log
 tldr: The dated, append-only record of the project - from the owner's first request through planning, plan approval, implementation, the owner's mid-run requests, the model reviews, the viewer redesign, the usage-limit interruption and recovery, to the final fixes. Newest entries at the bottom; append, never rewrite.
 status: living
-updated: 2026-11-25
+updated: 2026-11-26
 tags: [meta, log, history]
 ---
 
@@ -522,3 +522,7 @@ seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `wo
 **Time not recorded** — Component clicks open movable controls when the workspace panel is closed. Shift-click opens another controls card. Routine activity and request history open from Trace in the workspace footer. [The viewer](50-implementation/viewer.md).
 
 **Time not recorded** — Overlapping controls cards retain their order as focus moves and cards close. On phones, shared-scene prompts keep their full width and floating cards open below them. [The viewer](50-implementation/viewer.md).
+
+## 2026-11-26
+
+**00:38** — The homepage now identifies the shared operator station and links directly to the agent guide and workspace directory before JavaScript runs. Agents can start with the homepage alone, resolve a workspace by name and discover its controls over HTTP. A fresh agent starting at an isolated homepage asked which of three workspaces to use, then set the operator’s grip and gaze and measured the distance to the screen. [Remote commands](80-reference/remote-commands.md).

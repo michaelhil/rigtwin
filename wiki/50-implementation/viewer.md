@@ -2,7 +2,7 @@
 title: The viewer
 tldr: The rig fills the viewer. Click a component or the seated person to edit it in the resizable left panel. The same panel holds the workspace selector, component list and Settings. Camera controls sit over the view. Live adjustments are shared and can be undone.
 status: living
-updated: 2026-11-25
+updated: 2026-11-26
 tags: [viewer, ux, implementation, typescript]
 ---
 
@@ -229,7 +229,7 @@ and ×. Authors are labels the server makes ([D-41](../20-decisions/decision-log
 its own changes by the versions its requests recorded. The words are the same as in the cards and in
 `bun run rig` (`shared/words.ts`).
 
-**Browser code** in **Settings → Agent access** identifies the open viewer to an agent. View commands that name the code reach that browser. The workspace’s own MCP address and Claude Code command are in the same section. [Workspace storage](workspaces.md#what-is-stored).
+**Browser code** in **Settings → Agent access** identifies the open viewer to an agent. View commands that name the code reach that browser. The optional **MCP address** disclosure is in the same section. Agents can start from the [homepage and remote command guide](../80-reference/remote-commands.md#start-at-the-homepage). [Workspace storage](workspaces.md#what-is-stored).
 
 **Agent interface v2** ([D-51](../20-decisions/decision-log.md#d-51)). The page also carries out `look`, the
 one-call view command of the intent layer: what it shows, the named view and the selection in one go. On a local
@@ -296,7 +296,7 @@ The site's root page is a landing, and the viewer lives at `/workspaces/<id>`. A
 - **The picture's credit.** The picture shows the dressed person, whose shirt and trousers are CC BY 4.0, so the credit line the person panel shows is printed under it too; both take it from one place, `viewer/src/credits.ts`.
 - **Recent in this browser** is kept in `localStorage` under `synergon.recentWorkspaces` (id, name, time; never a cookie; every access in try/catch, so a private window just forgets). A workspace the server no longer knows is dropped from the list.
 - **In the viewer** the workspace selector is at the top of the left panel above Components and any selected component controls. Its menu offers Copy workspace link, Rename, New workspace, recent workspaces, All workspaces and Delete. Renames appear in other open pages. A deletion shows a notice with a link to the landing page. **Copy view link** in the footer copies the current camera, selection and adjustments along with the workspace address.
-- **Settings → Agent access** has the browser code, the workspace’s agent address with a Copy button and the command for Claude Code.
+- **Settings → Agent access** has the browser code, view permissions and an optional MCP address.
 - **Agent views.** The choice "always allow" or "never" for views an agent asks for is stored per workspace under `synergon.agentViews`; an older single word stored there is not read.
 - **Manage** lists every workspace with a tick box, Select all shown and one delete with one confirmation that gives the count.
 - **Without a server** (a static preview, `serve --no-api`) `/` opens the standalone viewer without a workspace selector.

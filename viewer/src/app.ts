@@ -13,13 +13,14 @@ import { manage } from './manage.ts';
 
 const root = document.getElementById('app')!;
 
-/** A page of text and lists: the viewer's own elements are not needed. */
-function textPage() {
-  document.getElementById('viewer-shell')?.remove();
-  document.documentElement.classList.add('page'); document.body.classList.add('page'); root.hidden = false;
-}
+const viewerTemplate = document.getElementById('viewer-template') as HTMLTemplateElement;
+/** Text pages can discard the unmounted viewer controls. */
+function textPage() { viewerTemplate.remove(); }
 async function viewer() {
-  root.remove();
+  root.replaceWith(viewerTemplate.content);
+  viewerTemplate.remove();
+  document.documentElement.classList.remove('page');
+  document.body.classList.remove('page');
   const { startViewer } = await import('./main.ts');
   await startViewer();
 }

@@ -276,23 +276,6 @@ const conn = createConnection({
 async function backfill() {
   try { const t = await (await fetch(`${workspaceApi('trace')}?after=${lastSeen()}`, { cache: 'no-store' })).json(); for (const r of t?.traces ?? []) addTrace(r); } catch { /* an older server: no trace */ }
 }
-/** "Connect an agent": the address of this workspace's agent endpoint (MCP), with a button to copy it and the one command Claude Code needs. */
-function connectAgent(id: string): HTMLElement {
-  const url = mcpAddress(id), box = el('div', 'connect');
-  const field = el('input') as HTMLInputElement; field.type = 'text'; field.readOnly = true; field.value = url; field.setAttribute('aria-label', 'Agent address of this workspace');
-  field.addEventListener('focus', () => field.select());
-  const copy = el('button', null, 'Copy address') as HTMLButtonElement; copy.type = 'button';
-  copy.addEventListener('click', async () => {
-    let ok = false;
-    try { await navigator.clipboard.writeText(url); ok = true; } catch { field.select(); try { ok = document.execCommand('copy'); } catch { ok = false; } }
-    copy.textContent = ok ? 'Copied' : 'Select and copy'; window.setTimeout(() => { copy.textContent = 'Copy address'; }, 1800);
-  });
-  const how = el('details', 'live-about'), cmd = el('code', null, `claude mcp add --transport http synergon ${url}`);
-  how.append(el('summary', null, 'How to connect Claude Code'), el('p', null, 'Run this once in a terminal. The agent then works in this workspace only.'), cmd);
-  const row = el('div', 'connect-row'); row.append(field, copy);
-  box.append(el('p', 'live-code', 'Anyone with this address can change this workspace.'), row, how);
-  return box;
-}
 export async function initLive() {
   linked = Q.has('pose');
   agentViews = current.id ? storedViews(current.id) : 'ask';
@@ -323,8 +306,14 @@ export async function initLive() {
   viewsSelect.value = agentViews; viewsSelect.addEventListener('change', () => setAgentViews(viewsSelect.value as AgentViews));
   viewsRow.append(viewsSelect);
   const box = $('live-more'), settings = $('settings-agent');
-  if (current.id) box.prepend(connectAgent(current.id));
   box.append(viewsRow, followNote);
+  if (current.id) {
+    const endpoint = el('details', 'connect');
+    const address = el('input') as HTMLInputElement;
+    address.readOnly = true; address.value = mcpAddress(current.id); address.setAttribute('aria-label', 'Workspace MCP address');
+    endpoint.append(el('summary', null, 'MCP address'), address);
+    box.append(endpoint);
+  }
   settings.append(box); settings.hidden = false; box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });
   addEventListener('pointerdown', () => { down = true; }, true);

@@ -1,0 +1,22 @@
+# Synergon
+
+Synergon is a shared 3D operator station. You can adjust components, pose the seated person, measure reach and sight lines, and show the result in a viewer. All paths below use the same origin as this page.
+
+## Find the user's workspace
+
+- If the user supplied a workspace URL, use its /workspaces/<id>. Otherwise GET /api/workspaces?limit=10. Add &search=<encoded name> to narrow the list. Each item in workspaces has an id and name. Pass next as cursor for another page.
+- Use the workspace the user identified. If their intent is unclear, offer matching names and ask which one they mean. The directory is shared. Its order and viewer counts do not identify the user's own tab. If the directory is empty, offer to create a workspace.
+- If the user simply asks for help, start by exploring. Offer an action that fits their scene, such as checking the operator's view of a monitor. Make shared edits when the user asks for them.
+
+## Inspect the scene
+
+POST /api/workspaces/<id>/command with Content-Type: application/json and X-Synergon: 1. Substitute the id returned by the directory. Send one JSON object per request.
+
+- {"id":"discover","args":{}} returns the workspace, asset, available tools and viewer connection counts.
+- {"id":"state","args":{}} returns the current shared pose, person and recent changes.
+- {"id":"discover","args":{"kind":"part","query":"monitor"}} finds matching parts in this scene. Reuse the returned IDs. To learn one command, use kind "operation" with its name.
+
+When the action and target are clear, call the action directly. Its receipt reports the result. Check ok in each reply and use the hint on a refusal. Rig adjustments, person poses and measurements work with the viewer closed. For a camera change or picture in a particular browser, see viewer routing in the command guide.
+
+- [Remote commands and examples](/wiki/80-reference/remote-commands.html)
+- [Workspace directory](/api/workspaces?limit=10)

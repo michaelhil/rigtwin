@@ -30,7 +30,7 @@ import { buildWiki, lintWiki } from "./wiki.ts";
 import { currentVersion } from "./version.ts";
 import { personEntry } from "./serve.ts";
 
-const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
+const TYPES: Record<string, string> = { ".txt": "text/plain; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
 
 /** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/synergon.caddy): index.html for a folder, a
  *  redirect when the folder's slash is missing, 404 otherwise; the viewer page (index.html) for `<base>workspaces/*`; 404 for the server's folder `server/`; and, given `api` (the origin of a running Synergon
@@ -244,6 +244,19 @@ if (import.meta.main) {
         await land.waitFor("document.querySelector('.wl-list li') || (document.querySelector('.wl-status')?.textContent ?? '').replace('Loading workspaces…', '').trim()", "the deployed landing's list of workspaces");
         const lm = await land.evaluate("({ js: performance.getEntriesByType('resource').filter((e) => /\\.m?js(\\?|$)/.test(e.name)).reduce((a, e) => a + e.decodedBodySize, 0), heavy: performance.getEntriesByType('resource').some((e) => /\\.(glb|wasm)|manifest/.test(e.name)), canvas: !!document.querySelector('canvas'), rows: document.querySelectorAll('.wl-list li').length })");
         if (lm.js > 40e3 || lm.heavy || lm.canvas || lm.rows < 1) errors.push(`landing: ${JSON.stringify(lm)} (a small page with the workspaces listed, no model, no canvas)`);
+        const orientation = await land.evaluate(`(async () => {
+          const initial = new DOMParser().parseFromString(await (await fetch(location.href)).text(), 'text/html');
+          const guide = initial.querySelector('link[rel="help"]')?.getAttribute('href');
+          const links = [...initial.querySelectorAll('#app a[href]')].map(a => a.getAttribute('href'));
+          if (!guide || !links.includes(guide) || !links.some(href => href.startsWith('/api/workspaces?')))
+            return 'initial HTML must link to the agent guide and workspace directory';
+          if (![...document.querySelectorAll('a')].some(a => a.getAttribute('href') === guide))
+            return 'rendered homepage lost its agent guide';
+          const response = await fetch(guide);
+          return response.ok && response.headers.get('content-type')?.startsWith('text/plain')
+            && (await response.text()).includes('/api/workspaces/<id>/command') ? '' : 'agent guide is missing its command entry point';
+        })()`);
+        if (orientation) errors.push(`landing: ${orientation}`);
         errors.push(...land.errors.map((e) => "landing console: " + e));
         await land.close();
       }

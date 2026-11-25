@@ -5,7 +5,6 @@ import { workspaceList } from './browse.ts';
 import { CLOTHING, LICENCE } from './credits.ts';
 import { addressOf, createWorkspace, cleanName, forget, getWorkspace, NAME_MAX, recent, remember, rename, type Recent, type Workspace } from './workspace.ts';
 
-const SENTENCE = 'A 3D model of a remote operator’s station, with a seated person sized from body surveys: adjust it, measure it and share it.';
 const NOTE = 'A workspace is a shared copy of the rig and the person. Anyone with its link can see it and change it.';
 
 function shell(root: HTMLElement, title: string): HTMLElement {
@@ -19,6 +18,8 @@ const row = (name: string, id: string, when: string) => { const a = link('', add
 
 export function landing(root: HTMLElement) {
   document.title = 'Synergon';
+  const intro = root.querySelector<HTMLElement>('.hero-text')!;
+  const footer = root.querySelector('footer')!;
   const main = h('main', 'pg');
   root.textContent = ''; root.append(main);
 
@@ -44,8 +45,8 @@ export function landing(root: HTMLElement) {
   // the picture shows the dressed person, whose clothing is CC BY 4.0: credited wherever it is shown (credits.ts)
   const licence = h('a', null, CLOTHING[1]) as HTMLAnchorElement; licence.href = LICENCE; licence.target = '_blank'; licence.rel = 'noopener';
   const credit = h('figcaption', 'hero-credit'); credit.append(CLOTHING[0], licence, CLOTHING[2]);
-  const hero = h('section', 'hero',
-    h('div', 'hero-text', h('h1', null, 'Synergon'), h('p', 'lede', SENTENCE), cont, form, h('p', 'pg-note', NOTE)),
+  intro.append(cont, form, h('p', 'pg-note', NOTE));
+  const hero = h('section', 'hero', intro,
     h('figure', 'hero-fig', h('div', 'hero-art', picture), credit));
   main.append(hero);
 
@@ -82,7 +83,7 @@ export function landing(root: HTMLElement) {
   main.append(
     recentCard,
     h('section', 'card', h('div', 'card-head', h('h2', null, 'Browse workspaces'), count, link('Manage', '/workspaces/manage', 'card-link')), all.root),
-    h('footer', 'pg-foot', link('Documentation', '/wiki/')),
+    footer,
   );
 }
 

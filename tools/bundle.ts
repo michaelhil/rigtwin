@@ -9,7 +9,8 @@ import { ROOT } from "./timeline.ts";
 
 /** Viewer source directory, relative to the repository root: "viewer" unless SYNERGON_VIEWER_DIR (or `--viewer <dir>` of serve / render) names another one. */
 export const viewerDir = () => join(ROOT, process.env.SYNERGON_VIEWER_DIR || "viewer");
-const watch = () => { const VIEWER = viewerDir(); return [join(VIEWER, "src"), join(ROOT, "shared"), join(VIEWER, "index.html"), join(VIEWER, "viewer.css"), ...(existsSync(join(ROOT, "assets", "manikin", "params")) ? [join(ROOT, "assets", "manikin", "params")] : [])]; };
+const agentGuide = join(ROOT, "viewer", "llms.txt");
+const watch = () => { const VIEWER = viewerDir(); return [join(VIEWER, "src"), join(ROOT, "shared"), join(VIEWER, "index.html"), join(VIEWER, "viewer.css"), agentGuide, ...(existsSync(join(ROOT, "assets", "manikin", "params")) ? [join(ROOT, "assets", "manikin", "params")] : [])]; };
 
 function newest(path: string): number {
   const st = statSync(path);
@@ -43,6 +44,7 @@ export async function bundleViewer(): Promise<ViewerBundle> {
   const files: ViewerBundle["files"] = {
     "index.html": { body: readFileSync(join(VIEWER, "index.html"), "utf8"), type: "text/html; charset=utf-8" },
     "viewer.css": { body: readFileSync(join(VIEWER, "viewer.css"), "utf8"), type: "text/css; charset=utf-8" },
+    "llms.txt": { body: readFileSync(agentGuide, "utf8"), type: "text/plain; charset=utf-8" },
   };
   for (const o of res.outputs) files[basename(o.path)] = { body: await o.text(), type: "text/javascript; charset=utf-8" };
   if (!files["app.js"]) throw new Error("viewer bundle: no app.js among the outputs");

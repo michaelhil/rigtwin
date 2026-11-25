@@ -191,7 +191,6 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
 .about { margin: 14px 0 0; padding-top: 9px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
 .about a { color: var(--ink-2); } .about .version { display: block; margin-top: 2px; }
 .live-code { margin: 4px 0; font-size: 12px; color: var(--ink-2); } .live-code b { font-size: 14px; letter-spacing: .08em; color: var(--ink); } .live-code span { display: block; }
-.live-about { font-size: 12px; color: var(--ink-2); } .live-about summary { cursor: pointer; min-height: 24px; display: flex; align-items: center; } .live-about p { margin: 2px 0 0; }
 .note.live { font-weight: 400; }
 
 /* ---- the rig and person inspectors ---- */
@@ -429,9 +428,8 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .gone { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(20,24,30,.55); }
 .gone-card { max-width: 420px; background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
 .gone-card h2 { margin: 0 0 8px; font-size: 17px; } .gone-card p { margin: 6px 0; color: var(--ink-2); }
-.connect { margin: 9px 0; } .connect .live-code { margin: 4px 0 6px; }
-.connect-row { display: flex; gap: 6px; } .connect-row input { flex: 1; min-width: 0; font: 11.5px ui-monospace, Menlo, monospace; }
-.live-about code { display: block; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: #f4f6f9; color: var(--ink); font: 11px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+.connect { margin: 9px 0; } .connect summary { cursor: pointer; font-size: 12px; }
+.connect input { width: 100%; box-sizing: border-box; margin-top: 4px; font: 11.5px ui-monospace, Menlo, monospace; }
 @media (max-width: 899px) { .ws-name { min-height: 44px; } }
 
 /* ---- the landing, Manage and their dialogs (viewer/src/landing.ts, manage.ts, dialog.ts) ---- */
