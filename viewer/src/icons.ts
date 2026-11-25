@@ -4,6 +4,7 @@ const glyph = (body: string) => `<svg viewBox="0 0 20 20" width="18" height="18"
 export const icons = {
   link: glyph('<path d="m8 12 4-4M7 14l-1 1a3 3 0 0 1-4-4l4-4a3 3 0 0 1 4 0m3-1 1-1a3 3 0 0 1 4 4l-4 4a3 3 0 0 1-4 0"/>'),
   picture: glyph('<path d="M3 4.5h14v11H3zM3 13l4-4 3 3 2-2 5 5"/><circle cx="13" cy="8" r=".9"/>'),
+  trace: glyph('<path d="M3 5h14M3 15h14m-14-5h4l1.5-2.5 3 5 1.5-2.5H17"/>'),
   settings: glyph('<path d="m8.5 2-.6 2-1.4.8-2-.5-1.5 2.5 1.4 1.5v1.5L3 11.5l1.5 2.5 2-.5 1.4.8.6 2h3l.6-2 1.4-.8 2 .5 1.5-2.5-1.4-1.7V8.3l1.4-1.5-1.5-2.5-2 .5-1.4-.8-.6-2z" transform="translate(0 .8)"/><circle cx="10" cy="10" r="2.4"/>'),
   grip: glyph('<path d="M8 5v10m4-10v10"/>'),
   reopen: glyph('<path d="M4 4v12m4-10 4 4-4 4m4-4h5"/>'),

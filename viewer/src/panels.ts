@@ -1,4 +1,4 @@
-// The workspace panel holds one set of component controls. Desktop users can move those controls over the view.
+// One card can dock in the workspace panel. Additional cards float independently over the view.
 import { S, $, canvas, stageEl, layout } from './engine.ts';
 import { icons } from './icons.ts';
 
@@ -9,7 +9,13 @@ const dock = $('inspection');
 const body = document.body;
 const RAIL_MIN = 200, RAIL_MAX = 344, RAIL_SNAP = 105, RAIL_STEP = 16;
 let collapsed = false, drawer = false, expandedWidth = 244;
-let active: HTMLElement | null = null, floating = false;
+let active: HTMLElement | null = null;
+const floating = new Set<HTMLElement>();
+const wired = new WeakSet<HTMLElement>();
+const fitCards = new ResizeObserver(() => {
+  if (body.classList.contains('no-ui')) return;
+  for (const panel of floating) if (!panel.hidden && panel.style.left) place(panel, panel.offsetLeft, panel.offsetTop);
+});
 let resize: { id: number; start: number; width: number; value: number } | null = null;
 
 function setWidth(width: number) {
@@ -49,61 +55,156 @@ function setRail(open: boolean, moveFocus = false) {
 }
 
 function syncInspector() {
-  dock.hidden = !active || floating || browser.open;
+  dock.hidden = !active || floating.has(active) || browser.open;
 }
 
 export function revealInspector() {
-  if (!active || floating) return;
-  closeComponentBrowser();
-  if (!rail.inert || S.applying || body.classList.contains('no-ui')) return;
-  setRail(true);
-  if (narrow.matches) active.querySelector<HTMLElement>('h2')?.focus();
+  if (!active) return;
+  if (!floating.has(active)) {
+    closeComponentBrowser();
+    if (rail.inert && !S.applying && !body.classList.contains('no-ui')) floatCard(active);
+  }
 }
 
-function mount(panel: HTMLElement) {
-  const parent = floating && !narrow.matches ? stageEl : dock;
-  if (panel.parentElement !== parent) parent.append(panel);
+function place(panel: HTMLElement, x: number, y: number) {
+  panel.style.left = `${Math.round(Math.max(4, Math.min(x, stageEl.clientWidth - panel.offsetWidth - 4)))}px`;
+  panel.style.top = `${Math.round(Math.max(4, Math.min(y, stageEl.clientHeight - panel.offsetHeight - 4)))}px`;
+}
+
+function bringForward(panel: HTMLElement) {
+  if (!floating.delete(panel)) return;
+  for (const other of floating) other.classList.remove('front-card');
+  floating.add(panel);
+  panel.classList.add('front-card');
+}
+
+function wireCard(panel: HTMLElement) {
+  if (wired.has(panel)) return;
+  wired.add(panel);
+  panel.addEventListener('focusin', () => bringForward(panel));
+  panel.addEventListener('pointerdown', (event) => {
+    if (!floating.has(panel) || !event.isPrimary || event.button !== 0) return;
+    bringForward(panel);
+    const target = event.target as Element;
+    if (!target.closest('header') || target.closest('button')) return;
+    const { clientX: x, clientY: y, pointerId } = event;
+    const left = panel.offsetLeft, top = panel.offsetTop;
+    panel.setPointerCapture(pointerId);
+    panel.addEventListener('pointermove', move);
+    panel.addEventListener('lostpointercapture', end, { once: true });
+    event.preventDefault();
+
+    function move(next: PointerEvent) {
+      if (next.pointerId === pointerId) place(panel, left + next.clientX - x, top + next.clientY - y);
+    }
+    function end() {
+      panel.removeEventListener('pointermove', move);
+    }
+  });
+  panel.addEventListener('keydown', (event) => {
+    if (!floating.has(panel) || !event.altKey || !(event.target as Element).closest('header')) return;
+    const dx = event.key === 'ArrowLeft' ? -16 : event.key === 'ArrowRight' ? 16 : 0;
+    const dy = event.key === 'ArrowUp' ? -16 : event.key === 'ArrowDown' ? 16 : 0;
+    if (!dx && !dy) return;
+    event.preventDefault();
+    place(panel, panel.offsetLeft + dx, panel.offsetTop + dy);
+  });
+}
+
+function labelDock(panel: HTMLElement) {
   const button = panel.querySelector<HTMLButtonElement>('.dock-toggle');
-  if (button) labelDock(button);
+  if (!button) return;
+  const out = floating.has(panel), label = out ? 'Dock controls' : 'Pop out controls';
+  button.innerHTML = out ? icons.dock : icons.popOut;
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.hidden = panel !== active;
 }
-function labelDock(button: HTMLButtonElement) {
-  const label = floating ? 'Dock controls' : 'Pop out controls';
-  button.innerHTML = floating ? icons.dock : icons.popOut;
-  button.title = label; button.setAttribute('aria-label', label);
+
+function floatCard(panel: HTMLElement) {
+  if (!floating.has(panel)) {
+    panel.classList.add('floating-controls');
+    stageEl.append(panel);
+    wireCard(panel);
+    const others = [...floating].filter((item) => !item.hidden);
+    const left = panel.offsetLeft, top = panel.offsetTop, width = panel.offsetWidth;
+    if (others.length && width) {
+      const max = stageEl.clientWidth - width - 8;
+      let x = left;
+      while (x <= max && others.some((other) => Math.abs(other.offsetLeft - x) < width)) x += width + 12;
+      const step = Math.min(others.length * 38, 152);
+      place(panel, x <= max ? x : left + step, x <= max ? top : top + step);
+    }
+    floating.add(panel);
+    fitCards.observe(panel);
+  }
+  panel.querySelector('header')?.setAttribute('title', 'Drag to move');
+  bringForward(panel);
+  labelDock(panel);
+  syncInspector();
 }
-export function dockButton() {
+
+function unfloat(panel: HTMLElement) {
+  if (!floating.delete(panel)) return;
+  fitCards.unobserve(panel);
+  panel.classList.remove('floating-controls', 'front-card');
+  panel.querySelector('header')?.removeAttribute('title');
+  panel.style.removeProperty('left');
+  panel.style.removeProperty('top');
+}
+
+function dockCard(panel: HTMLElement) {
+  unfloat(panel);
+  if (panel.parentElement !== dock) dock.append(panel);
+  labelDock(panel);
+  syncInspector();
+}
+
+export function dockButton(panel: HTMLElement) {
   const button = document.createElement('button');
   button.className = 'icon-button dock-toggle'; button.type = 'button';
-  labelDock(button);
   button.addEventListener('click', () => {
-    if (!active || narrow.matches) return;
-    floating = !floating;
-    mount(active); syncInspector();
-    if (!floating) revealInspector();
+    if (active !== panel) return;
+    if (floating.has(panel)) {
+      closeComponentBrowser();
+      dockCard(panel);
+      if (rail.inert) setRail(true);
+    } else {
+      floatCard(panel);
+      if (narrow.matches) closeWorkspaceDrawer();
+    }
     button.focus();
   });
   return button;
 }
 
-export function showInspector(panel: HTMLElement, open: boolean) {
-  if (!open) {
-    if (active !== panel) return;
-    floating = false;
-    mount(panel);
-    active = null;
+export function showInspector(panel: HTMLElement, open: boolean, fromList = false) {
+  if (open) {
+    active = panel;
+    closeComponentBrowser();
+    if (fromList || (!rail.inert && !floating.has(panel))) dockCard(panel);
+    else if (!S.applying && !body.classList.contains('no-ui')) floatCard(panel);
+    labelDock(panel);
   } else {
-    if (active !== panel) {
-      if (active && floating) { floating = false; mount(active); }
-      active = panel;
-    }
-    browser.open = false;
-    mount(panel);
+    if (active === panel) active = null;
+    dockCard(panel);
   }
   syncInspector();
-  if (open) revealInspector();
+}
+
+export function openExtraInspector(panel: HTMLElement) {
+  if (active === panel) active = null;
+  floatCard(panel);
+  panel.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+}
+export function closeExtraInspector(panel: HTMLElement) {
+  unfloat(panel);
+  panel.remove();
 }
 export function inspectorCoverage() {
-  return floating && active && !body.classList.contains('no-ui') ? active.offsetWidth + (collapsed ? 34 : 12) : 0;
+  if (body.classList.contains('no-ui')) return 0;
+  const first = [...floating].filter((panel) => !panel.hidden && panel.offsetLeft < 48);
+  return Math.max(0, ...first.map((panel) => panel.offsetLeft + panel.offsetWidth));
 }
 export function closeWorkspaceDrawer() {
   if (narrow.matches && drawer) { setRail(false, true); return true; }
@@ -117,7 +218,8 @@ export function closeComponentBrowser() {
 }
 export function dismissInspector() {
   if (closeComponentBrowser()) { returnToViewer(true); return true; }
-  const close = active?.querySelector<HTMLButtonElement>('.x');
+  const panel = [...floating].at(-1) ?? active;
+  const close = panel?.querySelector<HTMLButtonElement>('.x');
   if (!close) return false;
   close.click();
   return true;
@@ -127,6 +229,7 @@ export function initPanels() {
   split.innerHTML = icons.grip;
   split.setAttribute('aria-valuemin', String(RAIL_MIN)); split.setAttribute('aria-valuemax', String(RAIL_MAX));
   setWidth(expandedWidth); refreshRail();
+  fitCards.observe(stageEl);
   reopen.addEventListener('click', () => setRail(narrow.matches ? !drawer : true, true));
   $('scrim').addEventListener('click', () => setRail(false, true));
   split.addEventListener('pointerdown', (event) => {
@@ -164,12 +267,10 @@ export function initPanels() {
 
   summary.insertAdjacentHTML('afterbegin', icons.components);
   browser.addEventListener('toggle', () => {
-    if (browser.open && active && floating) { floating = false; mount(active); }
     syncInspector();
   });
   narrow.addEventListener('change', () => {
     drawer = false;
-    if (active && floating && narrow.matches) { floating = false; mount(active); }
     refreshRail();
     syncInspector();
   });

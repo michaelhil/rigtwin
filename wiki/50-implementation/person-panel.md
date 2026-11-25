@@ -77,7 +77,7 @@ Without a server, or with one that does not know `person.set` (it answers `unkno
 | `viewer/src/engine.ts` | `hooks.click` (a click asked for before the rig is picked) and `outlineExtra` (the faint outline of another object) |
 | `viewer/src/interact.ts` | one line: ask `hooks.click` first |
 | `viewer/src/ui.ts` | `pictureCredits` builds the attribution lines a saved picture carries |
-| `viewer/src/panels.ts` | Workspace drawer, desktop pop-out and shared component controls |
+| `viewer/src/panels.ts` | Workspace panel and movable pop-outs shared with rig components |
 | `viewer/viewer.css` | the panel shares the part card's rules; a section for the panel, the row, the credits line and page |
 | `tools/ui-accept.ts` | checks T60 to T67, and three changes to the old ones (below) |
 

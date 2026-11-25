@@ -1,6 +1,6 @@
 // The trace on the page: every request to the shared scene (an agent's MCP tool call, the command line, another page),
 // as the server reports it in the live channel's "trace" events (server/trace.ts). The activity line names the latest
-// one by someone else. Trace and Settings → Agent access → Show requests open this list.
+// one by someone else. The Trace icon in the workspace footer opens this list.
 //
 // One block per caller's run (its requests with less than five minutes between them), newest run first. Each row: the
 // offset from the run's first request, ok or refused, the command, what happened in the server's words, and the
@@ -8,6 +8,8 @@
 // A row opens to the request as sent, the reply as the caller saw it, the picture's size and times, and for a change its
 // version, request name and an Undo. Kept in this page only (the last 200); nothing is stored.
 import { $, el } from './engine.ts';
+import { icons } from './icons.ts';
+import { closeWorkspaceDrawer } from './panels.ts';
 
 export interface TraceRec {
   n: number; at: string; by: string; kind: 'person' | 'agent' | 'script' | 'system'; actor: string; via: 'mcp' | 'http';
@@ -103,22 +105,43 @@ function render() {
   if (dropped) list.append(el('p', 'tr-empty', `${dropped} request(s) not shown: the server sends at most a few a second.`));
 }
 
-export function toggleTrace(show?: boolean) {
+export function initTrace(activity: HTMLElement) {
+  const button = $('trace-btn');
+  button.innerHTML = icons.trace;
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    if (!closeTrace()) openTrace(activity);
+  });
+}
+
+function openTrace(activity: HTMLElement) {
+  closeWorkspaceDrawer();
   if (!box) {
-    box = el('section', 'ui tr-box'); box.setAttribute('aria-label', 'Requests to the shared scene'); box.hidden = true;
+    box = el('section', 'ui tr-box'); box.id = 'trace'; box.setAttribute('aria-label', 'Requests to the shared scene');
     const head = el('div', 'tr-head');
     const peopleBox = el('label', 'check'), cb = el('input') as HTMLInputElement; cb.type = 'checkbox';
     cb.addEventListener('change', () => { people = cb.checked; render(); });
     peopleBox.append(cb, document.createTextNode('pages too'));
     const copy = el('button', null, 'Copy') as HTMLButtonElement; copy.type = 'button'; copy.title = 'Copy these requests as JSON';
     copy.addEventListener('click', () => { void navigator.clipboard?.writeText(JSON.stringify(recs.filter((r) => people || r.kind !== 'person'), null, 1)).catch(() => {}); });
-    const close = el('button', null, '×') as HTMLButtonElement; close.type = 'button'; close.setAttribute('aria-label', 'Close'); close.addEventListener('click', () => toggleTrace(false));
+    const close = el('button', null, '×') as HTMLButtonElement; close.type = 'button'; close.setAttribute('aria-label', 'Close Trace'); close.addEventListener('click', closeTrace);
     head.append(el('h3', null, 'Requests to the shared scene'), peopleBox, copy, close);
     list = el('div', 'tr-list');
-    box.append(head, list);
+    box.append(head, activity, list);
     $('notices').after(box);
   }
-  box.hidden = show === undefined ? !box.hidden : !show;
-  if (!box.hidden) render();
+  box.hidden = false;
+  $('trace-btn').setAttribute('aria-expanded', 'true');
+  render();
+  box.querySelector<HTMLElement>('[aria-label="Close Trace"]')?.focus();
+}
+
+export function closeTrace() {
+  if (!box || box.hidden) return false;
+  box.hidden = true;
+  const button = $('trace-btn');
+  button.setAttribute('aria-expanded', 'false');
+  ($('parts').inert ? $('open-parts') : button).focus();
+  return true;
 }
 export function onTraceUndo(f: (version: number) => void) { undoFn = f; }

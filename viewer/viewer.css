@@ -147,7 +147,7 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
   position: absolute; left: var(--float-offset); right: var(--edge); top: var(--edge); z-index: 3;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 520px; pointer-events: none;
 }
-#stage:has(> :is(#card, #person):not([hidden])) #notices { left: calc(var(--float-offset) + var(--float-width) + var(--edge)); }
+#stage:has(> .floating-controls:not([hidden])) #notices { left: calc(var(--float-offset) + var(--float-width) + var(--edge)); }
 .note { display: flex; align-items: center; max-width: 100%; gap: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 4px 4px 4px 12px; box-shadow: 0 1px 4px rgba(0,0,0,.12); min-height: 38px; pointer-events: auto; }
 .note button { flex: none; }
 .note.amber { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); font-weight: 600; }
@@ -191,31 +191,34 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
 .note.live { font-weight: 400; }
 
 /* ---- the rig and person inspectors ---- */
-#card, #person { min-width: 0; padding: 10px var(--edge) 14px; }
-#stage > :is(#card, #person) {
-  position: absolute; top: var(--edge); left: var(--float-offset); width: var(--float-width);
+.component-card, #person { min-width: 0; padding: 10px var(--edge) 14px; }
+#stage > .floating-controls {
+  position: absolute; top: var(--float-top, var(--edge)); left: var(--float-offset); width: var(--float-width);
   max-height: calc(100% - 72px); overflow: auto; overscroll-behavior: contain; z-index: 5;
   background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--surface-shadow);
 }
-#card header, #person header { display: flex; align-items: center; gap: 4px; }
-#card h2, #person h2 { flex: 1; margin: 0; min-width: 0; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+#stage > .front-card { z-index: 6; }
+.floating-controls > header { cursor: grab; touch-action: none; user-select: none; }
+.floating-controls > header:active { cursor: grabbing; }
+.component-card header, #person header { display: flex; align-items: center; gap: 4px; }
+.component-card h2, #person h2 { flex: 1; margin: 0; min-width: 0; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
 .inspector-tools { flex: none; display: flex; align-items: center; gap: 2px; }
-#card .x, #person .x, .credits .x {
+.component-card .x, #person .x, .credits .x {
   border: 0; background: none; font-size: 19px; line-height: 1; width: 30px; min-height: 30px; padding: 0; color: var(--ink-2);
 }
-#card .x:hover, #person .x:hover, .credits .x:hover { color: var(--accent); background: #eaf0f7; }
-#card p, #person p { margin: 4px 0; }
-#card .muted, #person .where, #person .muted { color: var(--ink-2); font-size: 12px; }
+.component-card .x:hover, #person .x:hover, .credits .x:hover { color: var(--accent); background: #eaf0f7; }
+.component-card p, #person p { margin: 4px 0; }
+.component-card .muted, #person .where, #person .muted { color: var(--ink-2); font-size: 12px; }
 .adjust { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 .adj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
 .adj-head h3 { margin: 0; flex: 1; }
 .adj-head .photo { min-height: 26px; padding: 0 8px; font-size: 12px; }
-#card .photo { margin-inline-start: auto; }
+.component-card .photo { margin-inline-start: auto; }
 .sec h4 { margin: 8px 0 2px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
 .adj { padding: 5px 0 3px; }
-#card .adj { padding: 3px 0 2px; }
-#card .adj-top { height: 22px; }
-#card .rng, #card .rng input { height: 24px; }
+.component-card .adj { padding: 3px 0 2px; }
+.component-card .adj-top { height: 22px; }
+.component-card .rng, .component-card .rng input { height: 24px; }
 .adj-top { display: flex; align-items: center; gap: 0 6px; height: 26px; white-space: nowrap; }
 .adj-top label, .adj-top .lbl { font-weight: 600; white-space: nowrap; }
 .adj-top output { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
@@ -247,6 +250,7 @@ body.part-drag #tip { display: none; }
 @media (max-width: 899px) {
   body { --drawer-w: min(300px, calc(100vw - env(safe-area-inset-right) - 52px)); }
   body:not(.no-ui, .rail-collapsed) #stage { left: 0; }
+  #stage, .rail-collapsed #stage { --float-offset: 8px; --float-top: calc(60px + env(safe-area-inset-top)); }
   #rail-resize { display: none; }
   #parts, .rail-collapsed #parts {
     display: flex; width: var(--drawer-w); transform: translateX(-102%); visibility: hidden;
@@ -284,10 +288,9 @@ body.part-drag #tip { display: none; }
   #components > summary { min-height: 44px; }
   .row .eye, .row .name, .row .expand, .row.kid .eye, .row.kid .name { min-height: 44px; }
   .row .eye, .row .expand, .row.kid .eye { width: 44px; }
-  #card, #person { padding-bottom: 12px; }
-  #card .dock-toggle, #person .dock-toggle { display: none; }
-  #card .x, #person .x { width: 44px; min-height: 44px; }
-  #card .rng, #card .rng input { height: 30px; }
+  .component-card, #person { padding-bottom: 12px; }
+  .component-card .x, #person .x { width: 44px; min-height: 44px; }
+  .component-card .rng, .component-card .rng input { height: 30px; }
   #key { width: min(290px, calc(100% - 24px)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -295,8 +298,9 @@ body.part-drag #tip { display: none; }
 /* ---- the trace (viewer/src/trace.ts) ---- */
 .note-meta { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 .note.live { flex-wrap: wrap; }
-.trace-open { margin: 4px 0 2px; }
-.tr-box { position: absolute; right: 12px; top: 48px; width: min(540px, calc(100% - 24px)); max-height: calc(100% - 64px); display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.2); z-index: 6; }
+.trace-activity .note { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: var(--dock); }
+#trace-btn[aria-expanded="true"] { color: var(--accent); background: #e0ecfa; }
+.tr-box { position: absolute; right: 12px; top: 48px; width: min(540px, calc(100% - 24px)); max-height: calc(100% - 64px); display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.2); z-index: 7; }
 .tr-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--line); }
 .tr-head h3 { margin: 0; flex: 1; }
 .tr-head .check { min-height: 0; font-size: 12px; color: var(--ink-2); }

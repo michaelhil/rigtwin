@@ -9,7 +9,8 @@ import {
 import { initPointer } from './interact.ts';
 import { adjWords, partName, sayOffset, CLASS_ORDER, CLASS_WORDS, type AdjWord } from '../../shared/words.ts';
 import { icons } from './icons.ts';
-import { initPanels, showInspector, dockButton, dismissInspector, closeComponentBrowser, closeWorkspaceDrawer, inspectorCoverage, returnToViewer, revealInspector } from './panels.ts';
+import { closeTrace } from './trace.ts';
+import { initPanels, showInspector, dockButton, dismissInspector, closeComponentBrowser, closeWorkspaceDrawer, inspectorCoverage, returnToViewer, revealInspector, openExtraInspector, closeExtraInspector } from './panels.ts';
 
 const svg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</g></svg>`;
 const EYE = svg('<path d="M1.8 10S4.8 4.6 10 4.6 18.2 10 18.2 10 15.2 15.4 10 15.4 1.8 10 1.8 10Z"/><circle cx="10" cy="10" r="2.5"/>');
@@ -27,7 +28,7 @@ let fromComponents = false;
 function inspectFromList(id: string) {
   fromComponents = true;
   select(id);
-  closeComponentBrowser();
+  showInspector($('card'), true, true);
   $('card').querySelector<HTMLElement>('h2')?.focus();
 }
 function buildTree() {
@@ -90,12 +91,13 @@ function refreshMarks() {
 }
 // --------------------------------------------------------------------------------------------- the card for the selected part
 type Control = { node: HTMLElement; refresh: () => void };
-let cardCtls: Control[] = [], cardJoints: string[] = [], resetPart: HTMLButtonElement | null = null;
+const extraCards = new Map<string, HTMLElement>();
+const cardUpdates = new Map<HTMLElement, () => void>();
 const unitOfJoint = (id: string) => S.joints.get(id)!.def.unit;
 const SLIDER_K = (unit: 'm' | 'rad') => (unit === 'm' ? 1000 : 1 / DEG);       // slider steps: millimetres, or degrees
-function sliderControl(w: AdjWord, owner: string): Control {
+function sliderControl(w: AdjWord, owner: string, cardId: string): Control {
   const def = S.joints.get(w.joint)!.def, unit = def.unit, k = SLIDER_K(unit) * (w.flip ? -1 : 1), r = adjustmentRange(w.joint, w.comp);
-  const box = el('div', 'adj'), top = el('div', 'adj-top'), id = `adj-${w.key.replace(/\W/g, '-')}`;
+  const box = el('div', 'adj'), top = el('div', 'adj-top'), id = `${cardId}-adj-${w.key.replace(/\W/g, '-')}`;
   const label = el('label', null, w.label) as HTMLLabelElement; label.htmlFor = id;
   const out = el('output'); top.append(label, out);
   const track = el('div', 'track'), rng = el('div', 'rng'), s = el('input') as HTMLInputElement, tick = el('i', 'tick');
@@ -161,8 +163,9 @@ function padControl(wx: AdjWord, wy: AdjWord, owner: string): Control {
   return { node: box, refresh };
 }
 /** Label the controls directly. Group an arm and display only when both sets of controls are present. */
-function adjustBlock(sel: string, owner: string): HTMLElement | null {
-  cardJoints = jointsFor(sel);
+function adjustBlock(sel: string, owner: string, cardId: string): Control | null {
+  const cardJoints = jointsFor(sel);
+  const controls: Control[] = [];
   if (!cardJoints.length) return null;
   const words = cardJoints.flatMap((id) => adjWords(S.joints.get(id)!.def)).sort((a, b) => a.order - b.order);
   const byKey = new Map(words.map((w) => [w.key, w]));
@@ -174,51 +177,86 @@ function adjustBlock(sel: string, owner: string): HTMLElement | null {
     if (held.has(w.key)) continue;
     if (mixedScreen && !w.fine && w.section !== prior) { box.append(el('h3', 'motion-group', w.section)); prior = w.section; }
     const pair = w.joint.startsWith('J_joy_') && w.pad && w.pad.map((key) => byKey.get(key));
-    const control = pair && pair[0] && pair[1] ? padControl(pair[0], pair[1], owner) : sliderControl(w, owner);
+    const control = pair && pair[0] && pair[1] ? padControl(pair[0], pair[1], owner) : sliderControl(w, owner, cardId);
     if (pair && pair[0] && pair[1]) for (const key of w.pad!) held.add(key);
-    cardCtls.push(control);
+    controls.push(control);
     (w.fine ? fine : box).append(control.node);
   }
   if (fine.childElementCount) { fine.prepend(el('summary', null, 'Fine adjustments')); box.append(fine); }
-  resetPart = button('photo part-reset', 'As photographed', () => resetJoints(cardJoints));
+  const resetPart = button('photo part-reset', 'As photographed', () => resetJoints(cardJoints));
   resetPart.title = 'Reset this component’s adjustments';
   box.append(resetPart);
-  return box;
+  return { node: box, refresh: () => {
+    for (const control of controls) control.refresh();
+    resetPart.hidden = !movedJoints().some((id) => cardJoints.includes(id));
+  } };
 }
-function renderCard() {
-  const card = $('card'), sel = S.selected;
-  card.hidden = !sel; card.textContent = ''; cardCtls = []; cardJoints = []; resetPart = null;
-  if (!sel) { showInspector(card, false); fromComponents = false; return; }
+
+function fillCard(card: HTMLElement, sel: string, closeCard: () => void, extra = false) {
+  card.textContent = '';
   const kind = kindOf(sel), name = nameOf(sel), owner = ownerOf(sel);
   const head = el('header'), h = el('h2', null, name), tools = el('div', 'inspector-tools');
   h.tabIndex = -1;
-  const close = button('icon-button x', '', () => {
+  card.setAttribute('aria-label', `${name} controls`);
+  const close = button('icon-button x', '', closeCard);
+  close.innerHTML = icons.close;
+  close.setAttribute('aria-label', 'Close controls'); close.title = 'Close controls (Esc)';
+  if (!extra) tools.append(dockButton(card));
+  tools.append(close); head.append(h, tools); card.append(head);
+  const adjust = adjustBlock(sel, name, card.id);
+  if (adjust) {
+    card.append(adjust.node);
+    cardUpdates.set(card, adjust.refresh);
+    adjust.refresh();
+    return;
+  }
+  const parent = owner && jointsFor(owner).length ? owner : null;
+  const child = !parent && kind === 'part' ? (S.children.get(sel) ?? []).map(firstPick).find((id) => S.byId.has(id) && jointsFor(id).length) : null;
+  const target = parent ?? child;
+  if (target) card.append(button('link related', `Adjust ${nameOf(target)}`, () => {
+    if (extra) openExtraCard(target);
+    else { select(target); card.querySelector<HTMLElement>('h2')?.focus(); }
+  }));
+}
+
+function removeExtraCard(id: string, card: HTMLElement) {
+  extraCards.delete(id);
+  cardUpdates.delete(card);
+  closeExtraInspector(card);
+}
+
+function openExtraCard(id: string) {
+  if (S.selected === id) {
+    revealInspector();
+    $('card').querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+    return;
+  }
+  let card = extraCards.get(id);
+  if (!card) {
+    const node = el('aside', 'ui component-card');
+    node.id = `controls-${id}`;
+    extraCards.set(id, node);
+    fillCard(node, id, () => { removeExtraCard(id, node); returnToViewer(); }, true);
+    card = node;
+  }
+  openExtraInspector(card);
+}
+
+function renderCard() {
+  const card = $('card'), sel = S.selected;
+  card.hidden = !sel; cardUpdates.delete(card);
+  if (!sel) { card.textContent = ''; showInspector(card, false); fromComponents = false; return; }
+  const extra = extraCards.get(sel);
+  if (extra) removeExtraCard(sel, extra);
+  fillCard(card, sel, () => {
     const origin = fromComponents;
     select(null);
     returnToViewer(origin);
   });
-  close.innerHTML = icons.close;
-  close.setAttribute('aria-label', 'Close controls'); close.title = 'Close controls (Esc)';
-  tools.append(dockButton(), close); head.append(h, tools); card.append(head);
-
-  const adjust = adjustBlock(sel, name);
-  if (adjust) card.append(adjust);
-  else {
-    const parent = owner && jointsFor(owner).length ? owner : null;
-    const child = !parent && kind === 'part' ? (S.children.get(sel) ?? []).map(firstPick).find((id) => S.byId.has(id) && jointsFor(id).length) : null;
-    const target = parent ?? child;
-    if (target) card.append(button('link related', `Adjust ${nameOf(target)}`, () => {
-      select(target);
-      card.querySelector<HTMLElement>('h2')?.focus();
-    }));
-  }
-  refreshCard();
   showInspector(card, true);
 }
 function refreshCard() {
-  if (!S.selected) return;
-  for (const c of cardCtls) c.refresh();
-  if (resetPart) resetPart.hidden = !movedJoints().some((id) => cardJoints.includes(id));
+  for (const refresh of cardUpdates.values()) refresh();
 }
 function freeWidth() {
   const w = stageEl.clientWidth;
@@ -319,7 +357,7 @@ function buildMore() {
     row.append(cam, mode); section.append(row); more.append(section);
   }
   const helpSection = settingDisclosure('Controls and shortcuts'), help = el('dl', 'help');
-  for (const [gesture, action] of [['Drag', 'Orbit'], ['Pinch or scroll', 'Zoom'], ['Right-drag', 'Pan'], ['Tap or click', 'Select a component'], ['Double-click', 'Zoom to the component'], ['H · I · A', 'Hide · show only · show all'], ['F · Esc', 'Zoom to · close controls']])
+  for (const [gesture, action] of [['Drag', 'Orbit'], ['Pinch or scroll', 'Zoom'], ['Right-drag', 'Pan'], ['Tap or click', 'Select a component'], ['Shift-click', 'Open another controls card'], ['Double-click', 'Zoom to the component'], ['H · I · A', 'Hide · show only · show all'], ['F · Esc', 'Zoom to · close controls']])
     help.append(el('dt', null, gesture), el('dd', null, action));
   helpSection.append(help); more.append(helpSection);
   const about = el('p', 'about'), doc = el('a', null, 'Documentation') as HTMLAnchorElement, version = el('span', 'version');
@@ -446,6 +484,7 @@ function savePicture() {
   toast('Picture saved to your downloads.');
 }
 function resetAll() {
+  for (const [id, card] of extraCards) removeExtraCard(id, card);
   closeComponentBrowser();
   dismissInspector();
   select(null); showAll(); resetJoints(); setMode('normal'); setMore(false); setViewsOpen(false); goHome();
@@ -454,7 +493,10 @@ function resetAll() {
 // --------------------------------------------------------------------------------------------- start
 export function initUi() {
   initPanels(); buildTree(); buildNotices(); buildViews(); buildMore();
-  initPointer({ freeWidth, revealSelection: revealInspector });
+  initPointer({
+    freeWidth, revealSelection: revealInspector, openAdditional: openExtraCard,
+    selectComponent: (id) => { fromComponents = false; select(id); },
+  });
 
   $('copy-link').innerHTML = icons.link;
   $('save-picture').innerHTML = icons.picture;
@@ -475,7 +517,7 @@ export function initUi() {
     if (k === 'escape') {
       if (!$('more').hidden) setMore(false, true);
       else if (document.body.classList.contains('views-open')) setViewsOpen(false, true);
-      else if (!closeWorkspaceDrawer() && !dismissInspector()) return;
+      else if (!closeWorkspaceDrawer() && !closeTrace() && !dismissInspector()) return;
     } else {
       if (t && (t.matches('textarea,select,input:not([type=range],[type=radio],[type=checkbox])') || t.isContentEditable)) return;
       if (k === 'a') showAll();

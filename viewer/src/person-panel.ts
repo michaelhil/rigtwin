@@ -18,7 +18,7 @@
 //               as before (interact.ts asks hooks.click first).
 import * as THREE from 'three';
 import { S, $, el, on, hooks, scene, canvas, currentCamera, stageEl, select, setHover, outlineExtra, pickAt, drawNow, viewerApi } from './engine.ts';
-import { dockButton, returnToViewer, showInspector } from './panels.ts';
+import { dockButton, openExtraInspector, returnToViewer, showInspector } from './panels.ts';
 import { icons } from './icons.ts';
 import { pictureCredits } from './ui.ts';
 import { workspaceApi } from './workspace.ts';
@@ -290,7 +290,7 @@ function buildBody() {
 function buildPanel() {
   panel = el('aside', 'ui'); panel.id = 'person'; panel.hidden = true; panel.setAttribute('aria-labelledby', 'person-title');
   const head = el('header'), h = el('h2', null, 'Person'), x = button('icon-button x', '', () => closePanel(true));
-  const tools = el('div', 'inspector-tools'); tools.append(dockButton(), x);
+  const tools = el('div', 'inspector-tools'); tools.append(dockButton(panel), x);
   h.id = 'person-title'; h.tabIndex = -1; x.innerHTML = icons.close; x.setAttribute('aria-label', 'Close controls'); x.title = 'Close controls (Esc)';
   head.append(h, tools);
   whereEl = el('p', 'where'); statusEl = el('p', 'p-status'); statusEl.setAttribute('role', 'status'); statusEl.hidden = true;
@@ -396,10 +396,14 @@ function updateCredit() {
 async function toggleShown() { const st = stateNow(); if (!st?.loaded) return; await person().show(!st.shown); if (panel && !panel.hidden) outline(true); refresh(); }
 
 // --------------------------------------------------------------------------------------------- open, close, select
-function openPanel(from: HTMLElement | null = null) {
+let additionalPanel = false;
+function openPanel(from: HTMLElement | null = null, additional = false) {
   if (!panel) return;
-  if (S.selected) select(null);                                  // the part card closes: one panel at a time
-  opener = from; panel.hidden = false; showInspector(panel, true);
+  additionalPanel = additional;
+  if (!additional && S.selected) select(null);
+  opener = from; panel.hidden = false;
+  if (additional) openExtraInspector(panel);
+  else showInspector(panel, true, !!from);
   outline(true); refresh();
   if (from) ($('person-title') as HTMLElement).focus();
 }
@@ -408,7 +412,7 @@ function closePanel(restoreFocus = false) {
   if (gesture) endGesture();
   panel.hidden = true; showInspector(panel, false); outline(false); refresh();
   if (restoreFocus) returnToViewer(!!opener);
-  opener = null;
+  opener = null; additionalPanel = false;
 }
 const holder = (): THREE.Object3D | null => person()?.object?.() ?? scene.getObjectByName('person') ?? null;
 function outline(on: boolean) { const g = holder(); outlineExtra(on && g && stateNow()?.shown ? g : null); }
@@ -426,9 +430,9 @@ function personAt(x: number, y: number): number {
 }
 /** interact.ts asks before it picks the rig: a click on the person (nearer than the rig there) is the person's. */
 const rigAt = (x: number, y: number) => pickAt(x, y)?.world.distanceTo(currentCamera().position) ?? Infinity;
-function onClick(x: number, y: number, rig: number): boolean {
-  if (personAt(x, y) < rig) { openPanel(); return true; }
-  closePanel();
+function onClick(x: number, y: number, rig: number, additional: boolean): boolean {
+  if (personAt(x, y) < rig) { openPanel(null, additional || additionalPanel); return true; }
+  if (!additional && !additionalPanel) closePanel();
   return false;
 }
 
@@ -526,7 +530,7 @@ export async function initPersonPanel() {
   hooks.beforeRender.push(() => { stale = false; });            // after the person module's own hook, which poses the person
   canvas.addEventListener('pointermove', onPoint); canvas.addEventListener('pointerleave', () => clearTimeout(rest)); canvas.addEventListener('pointerdown', () => clearTimeout(rest));
   pictureCredits.push(() => (viewCredit.hidden ? null : CLOTHING.join('')));
-  on((c) => { if (c === 'selection' && S.selected) closePanel(); });
+  on((c) => { if (c === 'selection' && S.selected && !additionalPanel) closePanel(); });
   addEventListener('synergon:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || document.querySelector('dialog[open]')) return;

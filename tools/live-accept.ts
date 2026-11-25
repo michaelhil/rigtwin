@@ -71,7 +71,11 @@ try {
   check(r2.ok && a2 !== null && b2 !== null && /^Claude Code · [0-9a-f]{4} — Monitor: tilt/.test(act2a) && act2a === act2b, "`bun run rig pose.set` appears in both pages with the activity line", `"${act2b}"`);
 
   // 3. Undo on B's activity line undoes it in both
+  check(await B.evaluate("!document.querySelector('#trace:not([hidden])') && ![...document.querySelectorAll('#notices .note')].some((n) => n.getClientRects().length)"), "ordinary activity leaves the view clear");
+  await B.evaluate("document.getElementById('trace-btn').click()");
   await clickText(B, "Undo");
+  await B.evaluate("document.querySelector('#trace [aria-label=\"Close Trace\"]').click()");
+  check(await B.evaluate("document.getElementById('trace').hidden && document.getElementById('trace-btn').getAttribute('aria-expanded') === 'false'"), "Trace closes and its footer icon reflects that");
   const neutralTilt = await B.evaluate("viewer.manifest().joints.find((j) => j.id === 'J_mon_tilt').neutral");
   const a3 = await until<boolean>(A, `Math.abs(viewer.state().joints.J_mon_tilt - ${neutralTilt}) < 1e-9`), b3 = await until<boolean>(B, `Math.abs(viewer.state().joints.J_mon_tilt - ${neutralTilt}) < 1e-9`);
   const act3 = (await live(A))?.activity ?? "", sum3 = await rig(origin, "scene.summary");

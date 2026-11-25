@@ -33,7 +33,7 @@ export async function press(p: Page, x0: number, x1: number, y: number) {
 }
 export const release = (p: Page, x: number, y: number) => mouse(p, "mouseReleased", x, y, 0);
 export async function clickText(p: Page, text: string) {
-  const r = await p.evaluate(`(() => { const b = [...document.querySelectorAll('#notices button')].find((b) => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  const r = await p.evaluate(`(() => { const b = [...document.querySelectorAll('#trace .trace-activity button, #notices button')].find((b) => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
   if (!r) throw new Error(`no visible button '${text}'`);
   await mouse(p, "mouseMoved", r[0], r[1], 0); await mouse(p, "mousePressed", r[0], r[1], 1); await mouse(p, "mouseReleased", r[0], r[1], 0);
 }

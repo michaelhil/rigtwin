@@ -11,9 +11,9 @@ tags: [viewer, ux, implementation, typescript]
 ## TL;DR
 
 - Orbit, zoom and pan the rig directly. Click a component or the seated person to show its controls in the left panel. Expand **Components** there to browse or select parts by name.
-- The workspace selector sits at the top of the left panel. Its footer has **Copy view link**, **Save picture** and **Settings**. Drag its right edge toward the left to collapse it. The translucent handle reopens it.
+- The workspace selector sits at the top of the left panel. Its footer has **Copy view link**, **Save picture**, **Trace** and **Settings**. Trace starts closed. Drag its right edge toward the left to collapse it. The translucent handle reopens it.
 - Camera presets, **Operator’s eye** and **Reset all** sit in the lower-right corner of the view. On a narrow screen, open **Views** for the direction presets.
-- A live workspace saves rig and person changes for everyone with its link. Changes by other people and agents appear with an activity line and Undo. The viewer also works as a standalone page.
+- A live workspace saves rig and person changes for everyone with its link. The Trace icon shows changes by other people and agents, with Undo. The viewer also works as a standalone page.
 - The TypeScript viewer shares the pose function with the generator. URL parameters also drive the headless viewer used to render pictures.
 
 Commands and every URL parameter are in the [tool reference](../80-reference/tools.md#the-viewers-url-interface).
@@ -28,7 +28,7 @@ Requirements: [R-36](../10-request/requirements.md), [R-51](../10-request/requir
 | Task | Where to do it |
 |---|---|
 | Orbit, zoom or pan | Drag to orbit, scroll to zoom toward the pointer, right-drag to pan. |
-| Pick or find a part | Click it on the rig, or open **Components** in the left panel and choose a part. The list starts closed. Selecting a part in the view reopens the panel if it is closed. |
+| Pick or find a part | Click it on the rig, or open **Components** in the left panel and choose a part. The list starts closed. When the left panel is closed, selection opens floating controls and leaves the panel closed. Shift-click a component to open an additional card and keep the existing controls. |
 | Adjust a part | Named sliders show current offsets. The joystick uses a two-axis pad, and finer motions are under **Fine adjustments**. **As photographed** resets that component’s adjustments. |
 | Control visibility or frame a selected part | Use the eye controls in **Components** to show or hide groups and individual parts. Press **H** to hide the selected part, **I** to show it alone, **A** to show all parts, or **F** to frame the selected part. Double-clicking a part also frames it. |
 | Pop out controls | On desktop, use **Pop out controls** in the card heading to place it over the left side of the view. Use **Dock controls** to return it to the workspace panel or × to close it. |
@@ -223,7 +223,7 @@ Claude Code · 0c24 — Monitor: height 8 cm lower came first. This page shows t
 **Apply** and **Dismiss**: nothing is saved until Apply.
 `viewer.apply()` from a script is treated the same way.
 
-**The activity line** appears only for changes made by someone else: "Claude Code · 3f2a — Monitor:
+**The activity line** in Trace reports changes made by someone else: "Claude Code · 3f2a — Monitor:
 height 3 cm lower" with **Undo** (which undoes that entry for everyone, [D-40](../20-decisions/decision-log.md#d-40))
 and ×. Authors are labels the server makes ([D-41](../20-decisions/decision-log.md#d-41)); the page knows
 its own changes by the versions its requests recorded. The words are the same as in the cards and in
@@ -241,7 +241,7 @@ makes a JPEG of the picture "Save picture" would make, smaller and coarser until
 **The trace** ([D-53](../20-decisions/decision-log.md#d-53)). Since the trace, the activity line names the latest
 request by anyone else, not only changes: "Claude Code · a3f5 — Monitor: tilt as photographed → 4° down", with a line
 of times under it ("19:53:35 · adjust (MCP) · server 2 ms · 2.2 s since its last request"), Undo for a change, and
-**Trace**. That button and **Show requests** under **Settings → Agent access** open the request history
+**Trace**. The footer icon opens the request history. Routine activity stays here and the history starts closed
 (`viewer/src/trace.ts`): one block per caller's run, headed with the number of requests, the time from first to last,
 the server's time and the agent's own time; a row per request with its offset, ✓ or ! (refused, amber), the command,
 the server's words and the server's time, and between two requests of an agent the time on its side. A row opens to

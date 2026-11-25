@@ -38,11 +38,11 @@ class Session {
     for (let i = 1; i <= steps; i++) await this.page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: x0 + ((x - x0) * i) / steps, y: y0 + ((y - y0) * i) / steps, buttons: 0 });
     this.x = x; this.y = y; await sleep(70);
   }
-  async click(x: number, y: number, what = "", count = 1) {
+  async click(x: number, y: number, what = "", count = 1, modifiers = 0) {
     await this.move(x, y);
     for (let c = 1; c <= count; c++) {
-      await this.page.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: c });
-      await this.page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: c });
+      await this.page.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: c, modifiers });
+      await this.page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: c, modifiers });
     }
     this.actions++; this.log.push(`${count === 2 ? "double-click" : "click"} ${what}`); await sleep(140);
   }
@@ -645,12 +645,12 @@ await test("T54", "drag or keyboard-resize the workspace panel, snap closed and 
   await s.ev(`(${handle}).focus()`); await s.press('Enter');
   const collapsedByKey = await s.ev<boolean>(`(${rail}).inert`);
   await s.click(...await s.find('S_mon_screen'), 'monitor with workspace panel collapsed');
-  const reopenedBySelection = await s.ev<boolean>(`!(${rail}).inert && !document.getElementById('card').hidden`);
+  const stayedClosed = await s.ev<boolean>(`(${rail}).inert && !!document.querySelector("#stage > #card.floating-controls:not([hidden])")`);
   record("T54", "workspace panel resizes, snaps closed, and has a keyboard path back",
     b.w > a.w + 20 && canvasB.w < canvasA.w - 20 && keyed.w < b.w && collapsed.w > canvasA.w + 20 &&
     !!onTop && keyboardAccess && translucent && unreachable && near(restored.w, keyed.w, 1) && canvasC.w < collapsed.w - 20 &&
-    collapsedByKey && reopenedBySelection && (await s.state()).selected === 'C_stand_monitor',
-    `rail ${Math.round(a.w)} → ${Math.round(b.w)} px by pointer → ${Math.round(keyed.w)} px by arrow; canvas after snap ${Math.round(collapsed.w)} px; translucent opener: ${translucent}; collapsed panel inert: ${unreachable}; rail restored by keyboard to ${Math.round(restored.w)} px; selecting the monitor reopens the panel: ${reopenedBySelection}`);
+    collapsedByKey && stayedClosed && (await s.state()).selected === 'C_stand_monitor',
+    `rail ${Math.round(a.w)} → ${Math.round(b.w)} px by pointer → ${Math.round(keyed.w)} px by arrow; canvas after snap ${Math.round(collapsed.w)} px; translucent opener: ${translucent}; collapsed panel inert: ${unreachable}; rail restored by keyboard to ${Math.round(restored.w)} px; selecting the monitor pops out the card and leaves the rail closed: ${stayedClosed}`);
   await close(s);
 });
 await test("T55", "one inspector stays in the workspace panel or floats over the canvas", async () => {
@@ -666,6 +666,10 @@ await test("T55", "one inspector stays in the workspace panel or floats over the
   const floats = await s.ev<boolean>(`(${card}).parentElement.id === "stage"`), floatWidth = await size();
   const stage = (await s.rect("document.getElementById('stage')"))!, overlay = (await s.rect(card))!;
   const atLeft = overlay.x >= stage.x && overlay.x - stage.x <= 24;
+  const header = (await s.rect("document.querySelector('#card h2')"))!;
+  await s.drag(header.x + 24, header.y + header.h / 2, header.x + 184, header.y + header.h / 2 + 100, "move the card by its title");
+  const movedCard = (await s.rect(card))!;
+  const dragged = near(movedCard.x - overlay.x, 160, 2) && near(movedCard.y - overlay.y, 100, 2);
   await s.shot("after-55-monitor-floating");
   await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Dock controls"]')`, "Dock controls");
   const same = await s.ev<boolean>(`(${card}).closest('#parts #inspection') && window.acceptanceCard === ${card} && window.acceptanceRange === ${s.slider("Height")}`);
@@ -675,8 +679,26 @@ await test("T55", "one inspector stays in the workspace panel or floats over the
   const after = await s.state();
   record("T55", "inspector opens in the left panel, pops out on the left, returns, and closes with X",
     dock && near(rest, dockWidth, 1) && floats && atLeft && near(floatWidth, dockWidth, 1) && near(stage.x + stage.w, s.w, 1) &&
-    same && stillThere && near(height, -0.035, 0.005) && !(await s.rect(card)) && after.selected === null && after.joints.J_mon_height === height,
-    `canvas ${Math.round(rest)} px empty, ${Math.round(dockWidth)} px docked and ${Math.round(floatWidth)} px floated; overlay at the canvas left: ${atLeft}; same controls after returning: ${same}; height ${after.joints.J_mon_height} m kept; selection cleared by X: ${after.selected === null}`);
+    same && stillThere && dragged && near(height, -0.035, 0.005) && !(await s.rect(card)) && after.selected === null && after.joints.J_mon_height === height,
+    `canvas ${Math.round(rest)} px empty, ${Math.round(dockWidth)} px docked and ${Math.round(floatWidth)} px floated; overlay at the canvas left: ${atLeft}; header drag works: ${dragged}; same controls after returning: ${same}; height ${after.joints.J_mon_height} m kept; selection cleared by X: ${after.selected === null}`);
+  await close(s);
+});
+await test("T59", "Shift-click opens a second component card without replacing the first", async () => {
+  const s = await open(1440, 900);
+  await s.click(...await s.find("S_mon_screen"), "monitor");
+  const seat = () => s.find("C_seat_back_shell", 3);
+  await s.click(...await seat(), "seat with Shift", 1, 8);
+  const cards = () => s.ev<string[]>("Array.from(document.querySelectorAll('#stage > .component-card:not([hidden]) h2'), e => e.textContent)");
+  const first = await cards();
+  const selected = (await s.state()).selected;
+  const primary = await s.ev<boolean>("!!document.querySelector('#parts #card:not([hidden])')");
+  await s.click(...await seat(), "seat with Shift again", 1, 8);
+  const again = await cards();
+  const rail = await s.ev<boolean>("!document.getElementById('parts').inert");
+  await s.clickEl("document.querySelector('#stage > .component-card .x')", "Close the extra card");
+  record("T59", "Shift-click keeps existing controls and opens one independent card per component",
+    selected === "C_stand_monitor" && primary && first.join() === "Seat" && again.join() === "Seat" && rail && !(await cards()).length && (await s.state()).selected === selected,
+    `main selection ${selected}; extra cards ${first.join()} and after repeat ${again.join()}; existing dock ${primary}`);
   await close(s);
 });
 await test("T56", "keyboard opens Components and reaches an adjustment", async () => {
@@ -722,7 +744,7 @@ await test("T57", "workspace and camera actions sit at their respective bottom e
     Object.values(r).every(Boolean), Object.entries(r).map(([name, pass]) => `${name} ${pass}`).join(', '));
   await close(s);
 });
-await test("T52", "phone-width window: selecting from the model opens the left drawer", async () => {
+await test("T52", "phone-width window: selecting from the model leaves the drawer closed", async () => {
   const s = await open(390, 800);
   const inv = await s.ev(INVENTORY);
   const rail = "document.getElementById('parts')", opener = "document.getElementById('open-parts')";
@@ -734,9 +756,11 @@ await test("T52", "phone-width window: selecting from the model opens the left d
   await s.shot("after-08b-narrow-workspace-drawer-390"); await s.key("Escape"); await s.settle(250);
   await s.click(...await s.find("S_mon_screen", 3), "monitor in the model"); await s.settle(350);
   const selection = (await s.state()).selected;
-  const drawer = (await s.rect(rail))!, frame = (await s.rect("document.getElementById('gl')"))!;
-  const openedFromModel = await openRail();
-  const cardInRail = await s.ev<boolean>("!!document.querySelector('#parts #inspection #card:not([hidden])')");
+  const frame = (await s.rect("document.getElementById('gl')"))!;
+  const floatedFromModel = !(await openRail()) && await s.ev<boolean>("!!document.querySelector('#stage > #card.floating-controls:not([hidden])')");
+  await s.clickEl("document.querySelector('#card .dock-toggle')", "Dock controls and open the workspace panel");
+  await s.settle(300);
+  const drawer = (await s.rect(rail))!;
   await s.browseComponents();
   await s.clickEl(`document.querySelector('#tree button[aria-label="Expand Monitor stand components"]')`, "Expand monitor stand");
   const monitor = "[...document.querySelectorAll('#tree .row.kid .name')].find((b) => b.querySelector('.label').textContent === 'Monitor')";
@@ -756,10 +780,10 @@ await test("T52", "phone-width window: selecting from the model opens the left d
   await s.clickEl(cameraMenu, "Views after closing the drawer");
   const cameraAccessible = await s.ev<boolean>(`(${cameraMenu}).getAttribute('aria-expanded') === 'true'`);
   record("T52", "phone shows one left drawer with workspace, component browser and selected controls",
-    start && openedFromHandle && !!workspace && !!footer && footer.x + footer.w <= 390.5 && openedFromModel && cardInRail && selection === 'C_stand_monitor' &&
-    treeClosed && !float && near(drawer.x, 0, 1) && drawer.w <= 390 * 0.9 && near(frame.w, 390, 1) && near(frame.h, 800, 1) && overflow <= 0 &&
+    start && openedFromHandle && !!workspace && !!footer && footer.x + footer.w <= 390.5 && floatedFromModel && selection === 'C_stand_monitor' &&
+    treeClosed && !!float && near(drawer.x, 0, 1) && drawer.w <= 390 * 0.9 && near(frame.w, 390, 1) && near(frame.h, 800, 1) && overflow <= 0 &&
     drawerClosed && near(after.joints.J_mon_height, -0.07, 0.01) && after.selected === selection && adjustedInView && cameraAccessible,
-    `drawer opens from the handle and model: ${openedFromHandle} / ${openedFromModel}; component list closes on selection: ${treeClosed}; model frame ${Math.round(frame.w)}×${Math.round(frame.h)} px with drawer open; monitor ${(after.joints.J_mon_height * 100).toFixed(1)} cm; direct adjustment and Views usable after closing: ${adjustedInView} / ${cameraAccessible}; ${inv.controls} controls by default`);
+    `drawer opens from the handle: ${openedFromHandle}; model opens a pop-out: ${floatedFromModel}; component list closes on selection: ${treeClosed}; model frame ${Math.round(frame.w)}×${Math.round(frame.h)} px with drawer open; monitor ${(after.joints.J_mon_height * 100).toFixed(1)} cm; direct adjustment and Views usable after closing: ${adjustedInView} / ${cameraAccessible}; ${inv.controls} controls by default`);
   await close(s);
   for (const [w, h, name] of [[1024, 768, "after-07b-seat-moved-1024"], [390, 800, "after-08d-narrow-scene-recovery-390"]] as [number, number, string][]) {
     const t = await open(w, h, "?pose=J_seat_slide:-0.06,J_seat_recline:22&sel=seat");
@@ -885,22 +909,22 @@ await test("T65", "keyboard and screen reader: the Person row, labels, focus ord
     `Enter on the row: panel ${opened.open ? "open" : "closed"}, focus on ${opened.focus}, aria-expanded ${opened.expanded}; unnamed controls: ${unnamed.length ? unnamed.join(" | ") : 0}; Tab order: ${order.join(" → ")}; Esc: panel ${after.open ? "open" : "closed"}, focus back on the ${after.focus}`);
   await close(s);
 });
-await test("T66", "phone-width window: the person's controls use the same left drawer", async () => {
+await test("T66", "phone-width window: the person uses the same floating controls", async () => {
   const s = await open(390, 800);
   const credit0 = await visibleIn(s, "person-credit");
   await s.click(...await personPixel(s), "Person in the model"); await s.settle();
-  const drawer = (await s.rect("document.getElementById('parts')"))!;
-  const single = await s.ev<boolean>("!document.getElementById('parts').inert && !document.getElementById('components').open && !!document.querySelector('#parts #inspection #person:not([hidden])') && document.getElementById('card').hidden");
+  const person = (await s.rect("document.getElementById('person')"))!;
+  const single = await s.ev<boolean>("document.getElementById('parts').inert && !!document.querySelector('#stage > #person.floating-controls:not([hidden])') && document.getElementById('card').hidden");
   const float = await s.rect("document.querySelector('#person .dock-toggle')"), overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
   await s.shot("after-66-person-drawer-narrow-390");
   await s.reveal(seg("Clay figure"));
   await s.clickEl(seg("Clay figure"), "Style: Clay figure"); await untilPerson(s, "st.style === 'clay'", "the clay figure"); await s.settle(400);
-  await s.clickEl("document.getElementById('open-parts')", "Close workspace panel"); await s.settle(250);
+  await s.clickEl("document.querySelector('#person .x')", "Close Person controls"); await s.settle(250);
   const credit1 = await visibleIn(s, "person-credit"), closed = await s.ev<boolean>("document.getElementById('parts').inert && document.getElementById('scrim').hidden");
   await s.shot("after-66b-person-clay-narrow-390");
-  record("T66", "phone width: selecting the person opens the left drawer; controls are reachable",
-    single && near(drawer.x, 0, 1) && drawer.w <= 390 * 0.9 && !float && overflow <= 0 && credit0 && !credit1 && closed,
-    `one drawer with the Person controls: ${single}; ${Math.round(drawer.w)} px wide, sideways overflow ${overflow} px; credits visible with clothing: ${credit0}; credits after switching to clay: ${credit1}; drawer closed: ${closed}`);
+  record("T66", "phone width: selecting the person opens a pop-out; controls are reachable",
+    single && person.x >= 0 && person.x + person.w <= 390 && !!float && overflow <= 0 && credit0 && !credit1 && closed,
+    `one pop-out with the Person controls: ${single}; ${Math.round(person.w)} px wide, sideways overflow ${overflow} px; credits visible with clothing: ${credit0}; credits after switching to clay: ${credit1}; drawer closed: ${closed}`);
   await close(s);
 });
 await test("T67", "the person's package fails: a plain error, the rig unaffected", async () => {

@@ -20,7 +20,7 @@
 import { S, $, el, on, hooks, Q, DEG, setJoint, setView, setExplicitCamera, showAll, showOnly, setVisible, select, viewerApi, drawNow, type Opts } from './engine.ts';
 import { sayJoint } from '../../shared/words.ts';
 import { createConnection } from './live-connection.ts';
-import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type TraceRec } from './trace.ts';
+import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, initTrace, type TraceRec } from './trace.ts';
 import { current, workspaceApi, getWorkspace, agentViews as storedViews, setAgentViews as storeViews, mcpAddress, type AgentViews, type Workspace } from './workspace.ts';
 import { renamed, showGone } from './workspace-bar.ts';
 import type { JointValue } from '../../shared/pose.ts';
@@ -72,13 +72,16 @@ function note(buttons: [string, () => void][]): Note {
   return { box, text, buttons: bs };
 }
 /** The activity line: a change by someone else (with Undo of that entry), or why this page's change was not saved. */
-function tell(text: string, undo = 0, line = '', caller: { actor: string; by: string } | null = null) {
+let traceActivity: HTMLElement;
+function tell(text: string, undo = 0, line = '', caller: { actor: string; by: string } | null = null, quiet = false) {
+  const parent = quiet ? traceActivity : $('notices');
+  if (activity.box.parentElement !== parent) parent.append(activity.box);
   activity.text.textContent = text; metaEl.textContent = line; undoOf = undo; activity.buttons[0].hidden = !undo;
   lastCaller = caller; showFollow(); activity.box.hidden = false;
 }
 /** the activity line's Follow button and the status under Settings, Agent access */
 function showFollow() {
-  const b = activity.buttons[2], on = !!lastCaller && following?.actor === lastCaller.actor;
+  const b = activity.buttons[1], on = !!lastCaller && following?.actor === lastCaller.actor;
   b.hidden = !lastCaller; b.textContent = on ? 'Following' : 'Follow'; b.setAttribute('aria-pressed', String(on));
   b.title = on ? 'This browser shows the views this agent asks for; click to stop' : 'Show the views this agent asks for in this browser, without giving it a code';
   followNote.hidden = !following; followNote.firstChild!.textContent = following ? `This browser follows the views of ${following.by}. ` : '';
@@ -96,7 +99,7 @@ function tellTrace(r: TraceRec) {
   if (ownTrace(r) || (r.kind === 'person' && r.version === undefined)) return;
   if (asked && asked.who.actor === r.actor && r.command === 'look') return;      // the open question already says it
   const undid = r.ok && (r.command === 'history.undo' || r.command === 'undo') ? ' undid a change' : '';
-  tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r), r.kind !== 'person' ? { actor: r.actor, by: r.by } : null);
+  tell(`${r.by}${undid} — ${r.summary}`, r.ok && r.version !== undefined ? r.version : 0, meta(r), r.kind !== 'person' ? { actor: r.actor, by: r.by } : null, true);
 }
 function onTrace(r: TraceRec) { addTrace(r); if (out) laterTraces.push(r); else tellTrace(r); }
 function setPreview(on: boolean) { preview = on; linkNote.box.hidden = !on; }
@@ -108,7 +111,7 @@ async function send(body: object): Promise<any> {
   try { r = await (await fetch(workspaceApi('command'), { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
   if (typeof r?.recorded === 'number') mine.add(r.recorded);
   if (typeof r?.you?.id === 'string' && !myActor) { myActor = r.you.id; setTraceOwner(myActor); }
-  if (--out === 0) { for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version); for (const t of laterTraces.splice(0)) tellTrace(t); }
+  if (--out === 0) { for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version, '', null, true); for (const t of laterTraces.splice(0)) tellTrace(t); }
   return r;
 }
 const schedule = () => { clearTimeout(timer); timer = window.setTimeout(save, 300); };
@@ -192,7 +195,7 @@ function applied(e: Entry) {
     if (differs(j.value, old[c.joint] ?? j.def.neutral)) base = Math.min(base ?? Infinity, e.version - 1);   // being changed here: it waits
     else if (differs(j.value, shared(c.joint))) put(c.joint, shared(c.joint));
   }
-  if (!own) { if (out) later.push(e); else tell(say(e), e.version); }      // while a request is out, it may turn out to be ours
+  if (!own) { if (out) later.push(e); else tell(say(e), e.version, '', null, true); }      // while a request is out, it may turn out to be ours
   if (again && version >= awaiting) { again = false; schedule(); }
 }
 // ---------------------------------------------------------------------------------------------- consent
@@ -305,16 +308,15 @@ export async function initLive() {
   consent.box.classList.add('amber', 'consent');
   consent.buttons[0].title = 'Show this view and the next ones this agent asks for, in this browser';
   consent.buttons[1].title = 'Show views from any agent in this workspace without asking. Change this under Settings, Agent access.';
-  activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
-  activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
-  activity.buttons[3].setAttribute('aria-label', 'Close');
+  activity = note([['Undo', undo], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
+  activity.buttons[2].setAttribute('aria-label', 'Dismiss activity');
+  traceActivity = el('div', 'trace-activity');
+  initTrace(traceActivity);
   followNote = el('p', 'live-follow'); followNote.append(document.createTextNode(''));
   const stop = el('button', null, 'Stop') as HTMLButtonElement; stop.type = 'button'; stop.addEventListener('click', () => void setFollow(null));
   followNote.append(stop); followNote.hidden = true;
   metaEl = el('span', 'note-meta'); activity.text.after(metaEl);
   onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
-  const traceBtn = el('button', 'trace-open', 'Show requests') as HTMLButtonElement; traceBtn.type = 'button';
-  traceBtn.addEventListener('click', () => toggleTrace(true));
   const viewsRow = el('label', 'live-views'); viewsRow.append(document.createTextNode('Views an agent asks for: '));
   viewsSelect = el('select') as HTMLSelectElement;
   for (const [v, t] of [['ask', 'ask me first'], ['always', 'always allow'], ['never', 'never']] as const) { const o = el('option', null, t) as HTMLOptionElement; o.value = v; viewsSelect.append(o); }
@@ -322,7 +324,7 @@ export async function initLive() {
   viewsRow.append(viewsSelect);
   const box = $('live-more'), settings = $('settings-agent');
   if (current.id) box.prepend(connectAgent(current.id));
-  box.append(viewsRow, followNote, traceBtn);
+  box.append(viewsRow, followNote);
   settings.append(box); settings.hidden = false; box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });
   addEventListener('pointerdown', () => { down = true; }, true);

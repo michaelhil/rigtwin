@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import {
   S, $, canvas, frameEl, stageEl, controls, currentCamera, frameSize, scene, persp,
-  pickAt, partOf, firstPick, kindOf, members, nameOf, select, setHover, jointsFor, poseJoint, setAdjustment, adjustmentRange, adjustmentValue,
+  pickAt, partOf, firstPick, kindOf, members, nameOf, setHover, jointsFor, poseJoint, setAdjustment, adjustmentRange, adjustmentValue,
   zoomTo, goHome, lookZoom, stopGlide, hooks as engineHooks, type JointState,
 } from './engine.ts';
 import { adjWords } from '../../shared/words.ts';
@@ -111,7 +111,7 @@ function follow(plan: DragPlan, dofs: Dof[], x: number, y: number) {
   dofs.forEach((d, k) => setAdjustment(d.id, d.comp, vals[k]));   // announces the change: card, notices, shadows, redraw
 }
 // --------------------------------------------------------------------------------------------- pointer wiring
-export function initPointer(hooks: { freeWidth: () => number; revealSelection: () => void }) {
+export function initPointer(hooks: { freeWidth: () => number; revealSelection: () => void; openAdditional: (target: string) => void; selectComponent: (target: string | null) => void }) {
   const tip = $('tip');
   let down: { x: number; y: number; id: number } | null = null, lastMove = 0;
   let lastClick: { t: number; x: number; y: number; target: string | null; person: boolean } | null = null;
@@ -170,14 +170,19 @@ export function initPointer(hooks: { freeWidth: () => number; revealSelection: (
     down = null; setCursor('grab');
     if (e.type !== 'pointerup' || !still || wasDrag || e.button !== 0) { lastClick = null; return; }
     const now = performance.now();
-    if (lastClick && now - lastClick.t < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 5) return;
+    if (!e.shiftKey && lastClick && now - lastClick.t < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 5) return;
     const h = pickAt(x, y);
-    const person = engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity));
+    const person = engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity, e.shiftKey));
+    if (e.shiftKey) {
+      lastClick = null;
+      if (!person && h) hooks.openAdditional(firstPick(partOf(h.id)));
+      return;
+    }
     const target = !person && h ? wouldPick(partOf(h.id)) : null;
     lastClick = { t: now, x: e.clientX, y: e.clientY, target, person };
     if (!person) {
       if (target && target === S.selected) hooks.revealSelection();
-      else select(target);
+      else hooks.selectComponent(target);
     }
   };
   canvas.addEventListener('pointerup', finish);

@@ -34,7 +34,7 @@ export const hooks = {
   /** runs at the start of every drawn frame (the person module advances its pose here, person/index.ts) */
   beforeRender: [] as (() => void)[],
   /** a click on the 3D view, asked before the rig is picked (`rig`: distance to the rig there, or Infinity): true takes it (person-panel.ts) */
-  click: [] as ((x: number, y: number, rig: number) => boolean)[],
+  click: [] as ((x: number, y: number, rig: number, additional: boolean) => boolean)[],
   /** the operator's eye when a person sits in the seat (person/index.ts): model frame, or null for the rig's own eye point */
   operatorGaze: [] as (() => number[] | null)[],
   operatorEye: [] as (() => number[] | null)[],

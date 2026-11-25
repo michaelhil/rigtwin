@@ -81,6 +81,7 @@ try {
   check(r1.ok && !!a1 && !!b1 && /^Claude Code · [0-9a-f]{4} — Monitor: turn/.test(act1a) && act1a === act1b, "a pose.set from the command line appears in both pages, the activity line naming Claude Code", `turn ${pan0}° → ${pan1}°; "${act1b}"`);
 
   // 2. Undo on B's activity line
+  await B.evaluate("document.getElementById('trace-btn').click()");
   await clickText(B, "Undo"); commands++;
   const [a2, b2] = [await seen(A, PAN, pan0 * DEG), await seen(B, PAN, pan0 * DEG)], act2 = await activityOf(A, /undid a change/);
   check(!!a2 && !!b2 && /undid a change/.test(act2), "Undo on B's activity line puts it back in both pages", `turn ${pan0}° again; A says "${act2}"`);
