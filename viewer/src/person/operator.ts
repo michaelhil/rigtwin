@@ -16,9 +16,8 @@
 //        op.solve(hold(), dt);                      // or operate8(t), demo30(t), or your own Controls
 //        op.locals()  ->  { q: local rotations per joint, pelvis: local translation }        op.report  ->  contact errors
 import { section } from "./params.ts";
-import { fixationAngles } from "./aim-eyes.ts";
 
-const O = section("operator");
+const O = section("operator"), EYE = section("eyes");
 const HAND = O.hand, HDL = O.handle, WRAP = O.wrap, CLAMP = O.clamp, IK = O.ik, IDLE = O.idle, TRUNK = O.trunk, HEAD = O.head, LEGS = O.legs, ARM = O.arm, FING = O.fingers, TG = O.targets, SI = O.standin, SCR = O.scripts, STILL = O.still, AIM = O.aim;
 
 export type V3 = [number, number, number];
@@ -135,6 +134,15 @@ function segSeg(p1: V3, q1: V3, p2: V3, q2: V3): [number, number, number] {
 const smooth = (u: number) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
 const ramp = (t: number, a: number, b: number) => smooth((t - a) / (b - a));
 const v3 = (a: number[]): V3 => [a[0], a[1], a[2]];
+
+/** Both the solver and the drawn eyes use the same clamped fixation in each eye's rest frame. */
+export function fixationAngles([x, y, z]: V3): [number, number] {
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  return [
+    clamp(Math.atan2(x, z) / RAD, -EYE.lim_yaw, EYE.lim_yaw),
+    clamp(Math.atan2(y, Math.hypot(x, z)) / RAD, -EYE.lim_down, EYE.lim_up),
+  ];
+}
 
 // ---- the grip-pose library: knuckle / middle / tip flexion in degrees per finger, thumb base / middle / tip, finger spread -------
 const FINGERS = ["index", "middle", "ring", "pinky"] as const;
@@ -606,7 +614,7 @@ export class Operator {
     const local = qrot(qinv(D[this.j("spine_05")]), sub(this.gazePoint, eyeMid));
     const yaw = Math.atan2(local[0], local[2]) / RAD, pitch = -Math.atan2(local[1], Math.hypot(local[0], local[2])) / RAD, comfort = HEAD.comfort_deg;
     const want = (a: number) => Math.sign(a) * Math.max(0, Math.abs(a) - comfort) + HEAD.inside_share * Math.max(-comfort, Math.min(comfort, a));
-    const limits = section("eyes").head_follow;
+    const limits = EYE.head_follow;
     const clamped = (a: number, limit: number) => Math.max(-limit, Math.min(limit, a));
     const goal: [number, number] = this.explicitGaze ? [clamped(want(yaw), limits[3]), clamped(want(pitch) * HEAD.pitch_gain, limits[4])] : c.headOverride ? [c.headOverride[0], c.headOverride[1]] : [want(yaw), want(pitch) * HEAD.pitch_gain];
     for (let k = 0; k < 2; k++) {                                                             // critically damped: the head trails the eyes

@@ -4,7 +4,7 @@
 // it reads is this frame's). Changes from the lab: no global (`globalThis.synergonEyes`): the person module hands the
 // operator layer's gaze point in through `state.target`; no lil-gui panel.
 // A package without an "eyes" block (the clay style's sculpted eyes) is left alone.
-import { fixationAngles } from "./aim-eyes.ts";
+import { fixationAngles } from "./operator.ts";
 import { section } from "./params.ts";
 import type { Plugin, FrameContext } from "./plugins.ts";
 
