@@ -14,7 +14,7 @@ description: >-
 
 ## Use the MCP tools, one call per request
 
-The Synergon server offers six tools over MCP, **one endpoint per workspace**. A workspace is one shared scene with its own
+The Synergon server offers seven tools over MCP, **one endpoint per workspace**. A workspace is one shared scene with its own
 history and undo; the endpoint's address (`/api/workspaces/<id>/mcp`) decides which one you act on.
 
 - **Locally** (`bun run serve`) you work in the **Playground**: `.mcp.json` names it as `mcp__synergon__*`
@@ -28,6 +28,7 @@ history and undo; the endpoint's address (`/api/workspaces/<id>/mcp`) decides wh
 
 | Tool | One call for |
 |---|---|
+| `discover` | Confirm the workspace with `{}` or find exact IDs with `{"query":"seat","kind":"adjustment"}` |
 | `adjust` | "make the backrest straight" → `{"target": "backrest", "to": "upright"}`; "lower the monitor 3 cm" → `{"target": "monitor height", "by": "-3 cm"}`; several at once in `changes` |
 | `look` | "show me the operator's view" → `{"view": "operator", "picture": true}`; "show me at eye height of a 180 cm person" → `{"eye": {"stature_cm": 180}, "picture": true}`; "from behind and above the seat" → `{"camera": {"at": {"point": "seat", "offset": [-1.2, 0, 1.0]}, "look_at": "monitor screen"}}`; `only`, `hide`, `all`, `select` |
 | `measure` | "how far is the eye from the screen" → `{"from": "median eye", "to": "monitor screen"}` |
@@ -35,19 +36,18 @@ history and undo; the endpoint's address (`/api/workspaces/<id>/mcp`) decides wh
 | `state` | what is moved and the last changes; `{"detail": "catalogue"}` for every adjustment |
 | `person` | "put the small woman in the seat" → `{"preset": "P5 woman"}` (also `P50 man`, `P95 man`); "the clay figure, no glasses" → `{"style": "clay", "glasses": false}`; `body` (stature mm, mass kg), `posture` ("operating", "relaxed stand"), `{"clear": true}`. Its reply has the key numbers; `measure {"person": "sight"}` (or eye, reach, clearance, all) gives every number with its source |
 
-Every adjustment, its travel, what 0 means and its directions are in the server's instructions
-(already in your context) and in [reference.md](reference.md). You don't need to look anything up
-before acting.
+Use known commands directly. For an unfamiliar target use `discover` with a focused query.
+[reference.md](reference.md) has the complete catalogue. Aim-only requests through `person` preserve other aims.
+Use `right_hand:"grip"` for the right joystick or `posture:"operating"` to reset all aims.
 
 - **The reply is the check.** `adjust` answers with before → after, the request name for undo and what
   else is moved. Don't call `state` before or after it unless the owner asks.
-- **Views on the public sandbox:** without a code, `look` asks every open browser to allow your views
-  (the reply says so); the owner clicks **Allow** (or has chosen "always allow"), and from then on your views
-  go there. **Follow** on the activity line does the same. The browser code (Settings → Agent access), given
-  once as `viewer`, pairs exactly. If `look` is refused with `needs_viewer`, no browser is open, or you asked
-  too often: ask the owner. Locally, `look` goes to every open page.
+- **Views on the public sandbox.** A browser code from **Settings → Agent access** can pair `look` with that tab.
+  MCP remembers a successful pair. Use a fresh code after `unknown_session` or `viewer:null` to unpair.
+  Without a pair, followers receive the view or the browser offers approval. **Allow & follow** includes requested images.
+  Use the receipt to distinguish dispatch, approval offered, and an image returned or timed out.
 - **Camera anywhere:** `eye` gives the operator's view of a person by stature (`stature_cm`, through an
-  assumed ratio of sitting eye height to stature: say so), sitting eye height or one of the three model
+  solved eye when a person is seated, otherwise an assumed ratio), sitting eye height or one of the three model
   persons; it rides with the seat. `camera` puts it at any point (model-frame metres, or a point name with an
   offset) looking at another.
 - **Pictures** (`look` with `picture: true`) show what that browser shows. Use them to check a view,
@@ -66,7 +66,7 @@ request name ("say 'undo seat-recline-21' to put it back"), and what is estimate
 - A distance is a **point estimate** at the photo-estimated sizes, with no range yet. Round to the
   centimetre or the degree.
 - Never call a setting "compliant", "correct" or "ergonomic": there is no assessment yet.
-- Authors are labels the server makes from what a caller claims ("Person · 3f2a", "Claude Code · 3f2a"):
+- Authors are labels the server makes from what a caller claims ("Person · 3f2a", "Agent · 3f2a"):
   say "a browser", not "the owner".
 
 ## When to ask

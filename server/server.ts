@@ -191,7 +191,7 @@ export function loadPeople(dir: string): People | null {
 
 /** One open live stream (of one workspace). */
 interface Stream { code: string; visitor: string; block: string; send(chunk: Uint8Array): void; close(why?: "slow" | "spent"): void }
-type Pending = { ws: string; codes: string[] | null; visitor: string; done(b: Uint8Array | null, pageMs?: number): void };
+type Pending = { ws: string; codes: string[]; exclusive: boolean; visitor: string; done(b: Uint8Array | null, pageMs?: number): void };
 type Reply = { status: number; body: Record<string, any> };
 type Note = { picture?: { bytes: number; wait_ms: number; page_ms?: number } | null; entry?: any };
 const mime = (req: Request) => (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
@@ -367,75 +367,89 @@ export function createApi(opts: ApiOptions) {
       return json(r.body, r.status);
     }
 
+    async function withRequest<T>(go: () => Promise<T>): Promise<T> {
+      sc.busy++;
+      try { return await go(); }
+      finally { sc.busy--; sc.lastUsed = performance.now(); }
+    }
+
     // ---- one command for an actor: the HTTP endpoint and the MCP tools both come here
     /** One request, timed and traced. */
     async function exec(you: Actor, visitor: string, wire: Record<string, unknown>, via: "mcp" | "http" = "http"): Promise<Reply> {
       const at = Date.now(), t0 = performance.now(), note: Note = {};
-      sc.busy++;
+      if (gone) return reply(404, "not_found", "this workspace no longer exists", "Choose an existing workspace.");
+      const r = await run(you, visitor, wire, note, via);
       try {
-        const r = await run(you, visitor, wire, note);
-        try {
-          trace.record({ at, ms: performance.now() - t0, you, via, command: String(wire.id ?? "?").slice(0, 40), args: wire.args, session: typeof wire.session === "string" ? wire.session : undefined,
-            ok: r.body.ok === true, result: r.body.result, error: r.body.error, entry: note.entry, picture: note.picture });
-        } catch (e: any) { console.error("trace:", e?.message ?? e); }
-        return r;
-      } finally { sc.busy--; sc.lastUsed = performance.now(); }
+        trace.record({ at, ms: performance.now() - t0, you, via, command: String(wire.id ?? "?").slice(0, 40), args: wire.args,
+          ok: r.body.ok === true, result: r.body.result, error: r.body.error, entry: note.entry, picture: note.picture });
+      } catch (e: any) { console.error("trace:", e?.message ?? e); }
+      return r;
     }
-    async function run(you: Actor, visitor: string, wire: Record<string, unknown>, note: Note): Promise<Reply> {
+    async function run(you: Actor, visitor: string, wire: Record<string, unknown>, note: Note, via: "mcp" | "http"): Promise<Reply> {
       const kind = get(String(wire.id))?.kind ?? "query";
       if (deployed) {
-        if (kind === "query" ? !queries.hit(visitor) : !edits.hit(visitor)) return reply(429, "rate_limited", kind === "query" ? `at most ${L.queriesPerMinutePerVisitor} queries a minute per visitor` : `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute and send fewer commands");
+        if (kind === "query" ? via === "http" && !queries.hit(visitor) : !edits.hit(visitor)) return reply(429, "rate_limited", kind === "query" ? `at most ${L.queriesPerMinutePerVisitor} queries a minute per visitor` : `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute and send fewer commands");
         if (kind !== "query" && !editsBlock.hit(blockKey(visitor))) return reply(429, "rate_limited", `at most ${L.editsPerSecondPerBlock} changes a second per network block`, "try again in a moment");
         if (kind !== "query" && !editsAll.hit("all")) return reply(429, "rate_limited", `the server takes at most ${L.editsPerSecondTotal} changes a second`, "try again in a moment");
-        if (kind === "view" && unknownSessions.count(visitor) >= L.unknownSessionsPerMinutePerVisitor) return reply(429, "rate_limited", `too many unknown session codes (${L.unknownSessionsPerMinutePerVisitor} a minute)`, "ask for the code shown in the browser's More menu");
+        if (kind === "view" && wire.session !== undefined && unknownSessions.count(visitor) >= L.unknownSessionsPerMinutePerVisitor) return reply(429, "rate_limited", `too many unknown session codes (${L.unknownSessionsPerMinutePerVisitor} a minute)`, "Copy the browser code in Settings → Agent access and try it again in a minute.");
         if (kind === "edit" && diskLow()) return reply(507, "disk_full", "the server's disk is nearly full, so changes are refused", "tell the owner of the server");
       }
       const denied = authorize(you, String(wire.id));
       if (denied) return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: denied } };
-      const out = runCommand({ doc, asset }, you, wire as any);
+      const followed = [...(followers.get(you.id) ?? [])].flatMap((code) => {
+        const stream = streams.get(code);
+        return stream ? [stream] : [];
+      });
+      const scope = {
+        workspace: { id: w.id, name: w.name },
+        viewers: { liveConnections: streams.size, followingThisCaller: followed.length, unpairedRoute: deployed ? "consent" as const : "local" as const },
+      };
+      const out = runCommand({ doc, asset, scope }, you, wire as any);
       let result: any = out.ok ? out.result : undefined;
       if (out.ok && out.view) {
         const v = out.view, one = v.session ? streams.get(v.session) : undefined;
-        // a code names one page; without one (only commands that allow it): the pages that follow this caller, and on a
-        // local server every open page
-        const followed = v.session ? [] : [...(followers.get(you.id) ?? [])].map((c) => streams.get(c)).filter((s): s is Stream => !!s);
-        // no code and no follower on the public sandbox: every open page is asked (the page shows the view only when its owner
-        // allows it, or allowed agents always), at most a few times a minute per caller
-        const asking = !v.session && !followed.length && deployed && streams.size > 0 && asks.hit(you.id);
-        const targets = v.session ? (one ? [one] : []) : followed.length && deployed ? followed : deployed ? (asking ? [...streams.values()] : []) : [...streams.values()];
+        const route = v.session ? "paired" : !deployed ? "local" : followed.length ? "followers" : "approval";
+        const targets = route === "paired" ? (one ? [one] : []) : route === "followers" ? followed : [...streams.values()];
         if (!targets.length) {
           if (v.session) {
             unknownSessions.hit(visitor);
-            return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error: { code: "unknown_session", message: `no viewer with session code ${v.session} is connected to this workspace`, hint: "the code is shown in the viewer's More menu; it changes when the page is reloaded" } } };
+            return reply(200, "unknown_session", "The paired browser is no longer connected to this workspace.",
+              "Open the same workspace and copy a fresh browser code in Settings → Agent access.");
           }
-          const error = deployed
-            ? { code: "needs_viewer", message: `${v.id} on the public sandbox needs the code of the browser it is for, or a browser that follows this agent`, hint: "ask the owner to open the viewer (it then asks them to allow your views) or to click Follow on the activity line, then send look again; or ask for the code shown under More, \"Shared scene\", and pass it as viewer" }
-            : { code: "no_viewer", message: "no viewer page is open on this workspace", hint: "ask the owner to open the workspace in the viewer (bun run serve, then http://127.0.0.1:4173/)" };
-          return { status: 200, body: { ok: false, server: server(), version: doc.version, you, error } };
+          return deployed
+            ? reply(200, "needs_viewer", "There is no live connection in this workspace.", "Ask the owner to open the workspace, then send look again.")
+            : reply(200, "no_viewer", "There is no live connection in this workspace.", "Open the workspace in the local viewer.");
         }
+        const asking = route === "approval";
+        if (asking && !asks.hit(you.id)) return reply(429, "rate_limited", "This caller reached its browser approval request limit.",
+          "Wait a minute or use the browser code in Settings → Agent access.");
         let wait: Promise<{ b: Uint8Array; pageMs?: number } | null> | null = null, replyId: string | undefined;
-        const waitStart = performance.now();
+        const waitStart = performance.now(), timeoutMs = asking ? L.pictureAskWaitMs : L.pictureWaitMs;
         if (v.args.picture) {
-          const codes = v.session ? [v.session] : followed.length && deployed ? followed.map((s) => s.code) : null;
-          const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.ws === w.id && p.codes !== null && codes !== null && p.codes.some((c) => codes.includes(c))).length;
+          const codes = targets.map((stream) => stream.code);
+          const mine = [...pending.values()].filter((p) => p.visitor === visitor).length, ofPage = [...pending.values()].filter((p) => p.ws === w.id && p.exclusive && !asking && p.codes.some((c) => codes.includes(c))).length;
           if (pending.size >= L.picturesPending || (deployed && (mine >= L.picturesPerVisitor || ofPage >= 1))) return reply(429, "rate_limited", `at most ${L.picturesPerVisitor} pictures per visitor and one per browser are waited for at once`, "wait for the picture asked for before, then ask again");
           const id = (replyId = randomBytes(16).toString("hex"));
           wait = new Promise((resolve) => {
-            const timer = setTimeout(() => { pending.delete(id); resolve(null); }, asking ? L.pictureAskWaitMs : L.pictureWaitMs);
-            pending.set(id, { ws: w.id, codes, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
+            const timer = setTimeout(() => { pending.delete(id); resolve(null); }, timeoutMs);
+            pending.set(id, { ws: w.id, codes, exclusive: !asking, visitor, done(b, pageMs) { clearTimeout(timer); pending.delete(id); resolve(b ? { b, pageMs } : null); } });
           });
         }
         // the question names the caller and what it wants in the server's own words (no text a caller wrote)
-        const ask = asking ? { actor: you.id, by: you.label, summary: summarize(v.id, true, result, undefined) } : null;
+        const ask = asking ? { actor: you.id, by: you.label, summary: summarize(v.id, true, result, undefined), ...(replyId ? { expiresInMs: timeoutMs } : {}) } : null;
         const event = enc.encode(sse("view", { id: v.id, args: v.args, ...(replyId ? { reply: replyId } : {}), ...(ask ? { ask } : {}) }));
         for (const s of targets) s.send(event);
-        if (!v.session && deployed) result = { ...result, text: `${result?.text ?? ""}\n${asking ? `(No browser follows this agent: the ${targets.length} open browser${targets.length === 1 ? " was" : "s were"} asked to allow it. The view shows where the owner allows it; ask the owner to click Allow.)` : `(Sent to ${targets.length} browser${targets.length === 1 ? "" : "s"} that follow${targets.length === 1 ? "s" : ""} this agent.)`}`.trim() };
+        result = { ...result, delivery: { route, status: asking ? "approval_requested" : "dispatched", recipientCount: targets.length },
+          capture: { status: wait ? "timed_out" : "not_requested" } };
+        if (asking) result.text = `${result.text ?? ""}\nOpen connections were asked to allow it. Ask the owner to click Allow & follow in the viewer.`.trim();
+        else if (route === "followers") result.text = `${result.text ?? ""}\nSent to ${targets.length} live connection${targets.length === 1 ? " that follows" : "s that follow"} this agent.`.trim();
+        else result.text = `${result.text ?? ""}\nSent to ${route === "paired" ? "the paired browser" : `${targets.length} local live connection${targets.length === 1 ? "" : "s"}`}.`.trim();
         if (wait) {
           const answer = await wait, got = answer?.b ?? null;
           note.picture = got ? { bytes: got.byteLength, wait_ms: Math.round(performance.now() - waitStart), ...(answer?.pageMs !== undefined ? { page_ms: answer.pageMs } : {}) } : null;
           result = { ...result };
-          if (got) { result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB${!v.session && deployed ? `, from a browser that ${asking ? "allowed" : "follows"} this agent: anyone can do that, so treat it as unverified` : ""}).`.trim(); }
-          else result.text = `${result.text ?? ""}\nNo picture: the browser did not send one within ${L.pictureWaitMs / 1000} s (a tab in the background may not draw: ask the owner to bring it to the front).`.trim();
+          if (got) { result.capture = { status: "returned" }; result.picture = { mime: "image/jpeg", bytes: got.byteLength, base64: Buffer.from(got).toString("base64") }; result.text = `${result.text ?? ""}\nPicture attached (${Math.max(1, Math.round(got.byteLength / 1024))} kB${!v.session && deployed ? `, from a browser that ${asking ? "allowed" : "follows"} this agent: anyone can do that, so treat it as unverified` : ""}).`.trim(); }
+          else { result.capture = { status: "timed_out", timeoutMs }; result.text = `${result.text ?? ""}\nNo picture was received within ${timeoutMs / 1000} s.`.trim(); }
         }
       }
       if (out.ok && out.entry) { save(); broadcast(sse("applied", out.entry, out.entry.version)); note.entry = out.entry; }
@@ -470,11 +484,12 @@ export function createApi(opts: ApiOptions) {
       if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("image/jpeg")) return fail(415, "bad_request", "a picture is sent as image/jpeg", "send Content-Type: image/jpeg");
       const id = url.searchParams.get("reply") ?? "", p = /^[0-9a-f]{32}$/.test(id) ? pending.get(id) : undefined;
       if (!p || p.ws !== w.id) return fail(404, "not_asked", "no picture is being waited for with this id", "a picture is sent only in answer to a look command, within a few seconds");
-      if (p.codes && !p.codes.includes(url.searchParams.get("session") ?? "")) return fail(403, "wrong_session", "this picture was asked of another browser", "only the page with that code answers");
+      if (!p.codes.includes(url.searchParams.get("session") ?? "")) return fail(403, "wrong_session", "this picture was asked of another browser", "only the page with that code answers");
       const b = await readBytes(req, L.pictureBytes, L.bodyTimeoutMs);
       if (typeof b === "string") return fail(b === "too_large" ? 413 : 400, b === "too_large" ? "too_large" : "bad_request", b === "too_large" ? `a picture is at most ${L.pictureBytes / 1024} kB` : "the picture did not arrive", "send a smaller JPEG");
       if (b.byteLength < 4 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(400, "bad_picture", "the body is not a JPEG", "send the picture as image/jpeg");
-      const pageMs = Number(req.headers.get("x-synergon-ms"));
+      if (pending.get(id) !== p) return fail(404, "not_asked", "this picture was answered or expired", "Ask for a new picture if needed.");
+      const pageMs = Number(req.headers.get("x-synergon-ms") ?? NaN);
       p.done(b, Number.isFinite(pageMs) && pageMs >= 0 && pageMs < 60_000 ? Math.round(pageMs) : undefined);
       return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
     }
@@ -483,7 +498,7 @@ export function createApi(opts: ApiOptions) {
     const mcp = createMcp({
       exec: async (you, wire, visitor) => (await exec(you, visitor, wire as any, "mcp")).body as any,
       onConnect: (you) => trace.record({ at: Date.now(), ms: 0, you, via: "mcp", command: "connect", args: {}, ok: true, result: { text: "connected over MCP" } }),
-      secret, instructions: () => agentInstructions(asset, opts.mode), revision: opts.revision, maxSessions: L.mcpSessions,
+      secret, instructions: () => agentInstructions(opts.mode), revision: opts.revision, maxSessions: L.mcpSessions,
     });
     /** an Origin a page of this server would send: exactly https://mightwork.ai deployed, exactly http://<Host> locally */
     const ownOrigin = (origin: string, req: Request) => (deployed ? origin === "https://mightwork.ai" : origin === `http://${req.headers.get("host") ?? ""}`);
@@ -496,15 +511,19 @@ export function createApi(opts: ApiOptions) {
       if (text === "too_large" || text === "too_slow" || text === "aborted") return fail(text === "too_large" ? 413 : 400, text, "the request could not be read", "send it again, smaller");
       let body: unknown;
       try { body = JSON.parse(text); } catch { return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error: the body is not JSON" } }, { status: 400 }); }
-      sc.busy++;
-      try { return await mcp.handle(req, body, visitor); } finally { sc.busy--; sc.lastUsed = performance.now(); }
+      if (gone) return fail(404, "not_found", "this workspace no longer exists", "Choose an existing workspace.");
+      return await mcp.handle(req, body, visitor);
     }
 
-    /** the file is written now when a write is pending */
-    function flush() { if (saveTimer) { try { write(); } catch (e: any) { console.error(`doc.json not written: ${e.message}`); } } }
+    /** Retry dirty writes, including a write whose timer has already fired and failed. */
+    function flush(): boolean {
+      if (!edited) return true;
+      try { write(); return true; }
+      catch (e: any) { console.error(`doc.json not written: ${e.message}`); return !edited; }
+    }
     const sc = {
       id: w.id, busy: 0, lastUsed: performance.now(),
-      record: () => w, streams, live, command, follow, picture, mcpPost, mcpEnd: (sid: string | null) => mcp.end(sid), flush,
+      record: () => w, streams, live, command, follow, picture, mcpPost, withRequest, mcpEnd: (sid: string | null) => mcp.end(sid), flush,
       traces: (after: number) => trace.recent(after), version: () => doc.version, fail,
       /** the asset was rebuilt (local): bring the pose into line and tell the pages */
       onAsset() { const e = reconcile(doc, asset); save(); if (e) broadcast(sse("applied", e, e.version)); },
@@ -519,7 +538,7 @@ export function createApi(opts: ApiOptions) {
         for (const p of [...pending.values()]) if (p.ws === w.id) p.done(null);
       },
       /** leaves memory: what is pending is written, the streams (there are none when idle) are closed */
-      dispose() { flush(); gone = true; for (const s of [...streams.values()]) s.close(); },
+      dispose() { gone = true; for (const s of [...streams.values()]) s.close(); },
     };
     return sc;
   }
@@ -533,7 +552,10 @@ export function createApi(opts: ApiOptions) {
     catch { /* mid-build: keep the asset we have and look again next time */ }
   }
   const idle = (s: Scene) => s.streams.size === 0 && s.busy === 0;
-  function drop(s: Scene) { scenes.delete(s.id); s.dispose(); }
+  function drop(s: Scene, closing = false): boolean {
+    if (!s.flush() && !closing) return false;
+    scenes.delete(s.id); s.dispose(); return true;
+  }
   /** The workspace in memory (loaded now when it is not), "busy" when none can make room, null when there is no such workspace. */
   function scene(id: string): Scene | "busy" | null {
     refreshAsset();
@@ -542,9 +564,8 @@ export function createApi(opts: ApiOptions) {
     const w = store.get(id);
     if (!w) return null;
     if (scenes.size >= L.workspacesLoaded) {
-      const victim = [...scenes.values()].filter(idle).sort((a, b) => a.lastUsed - b.lastUsed)[0];
-      if (!victim) return "busy";
-      drop(victim);
+      const dropped = [...scenes.values()].filter(idle).sort((a, b) => a.lastUsed - b.lastUsed).some((s) => drop(s));
+      if (!dropped) return "busy";
     }
     const s = openScene(w);
     scenes.set(id, s);
@@ -633,13 +654,13 @@ export function createApi(opts: ApiOptions) {
     if (s === "busy") return err(503, "busy", "the server is holding as many workspaces as it can", "try again in a moment");
     switch (sub) {
       case "live": return s.live(req, url, visitor);
-      case "command": return await s.command(req, visitor);
+      case "command": return await s.withRequest(() => s.command(req, visitor));
       case "follow": return await s.follow(req, visitor);
       case "picture": return await s.picture(req, url);
       case "trace": return json({ ok: true, server: server(), traces: s.traces(Math.max(0, Number(url.searchParams.get("after")) || 0)) });
       default:                                               // mcp
         if (m === "DELETE") { s.mcpEnd(req.headers.get("mcp-session-id")); return new Response(null, { status: 204 }); }
-        return await s.mcpPost(req, visitor);
+        return await s.withRequest(() => s.mcpPost(req, visitor));
     }
   }
 
@@ -667,7 +688,8 @@ export function createApi(opts: ApiOptions) {
   }
   function close() {
     clearInterval(heartbeat); clearInterval(sweeper); clearInterval(idleSweeper); if (watch) clearInterval(watch);
-    for (const s of [...scenes.values()]) drop(s);
+    for (const p of [...pending.values()]) p.done(null);
+    for (const s of [...scenes.values()]) drop(s, true);
     for (const s of [...allStreams]) s.close();
     allStreams.clear();
     try { store.close(); } catch { /* closed */ }

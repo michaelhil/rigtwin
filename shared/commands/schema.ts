@@ -9,24 +9,27 @@ export type Schema = { description?: string } & (
   | { type: "object"; properties?: Record<string, Schema>; required?: string[]; additionalProperties?: Schema | false; propertyNames?: { pattern: string } }
   | { type: "number" | "integer"; unit?: string; minimum?: number; maximum?: number }
   | { type: "string"; enum?: string[]; pattern?: string; maxLength?: number }
-  | { type: "boolean" }
+  | { type: "boolean" | "null" }
   | { type: "array"; items: Schema; minItems?: number; maxItems?: number }
   | { anyOf: Schema[] }
 );
 
+export interface TargetRef { id: string; kind: "adjustment" | "part" | "datum" | "joint" | "group"; label: string }
+
 /** The error shape of every refusal: what went wrong, what to do about it, and (for bad arguments) the schema. */
-export interface CommandError { code: string; message: string; hint: string; schema?: Schema }
+export interface CommandError { code: string; message: string; hint: string; schema?: Schema; candidates?: TargetRef[] }
 
 /** Thrown by a command (or the document) to refuse; turned into `{ok: false, error}` by the caller. */
 export class Refusal extends Error {
-  constructor(public code: string, message: string, public hint: string, public schema?: Schema) { super(message); }
-  toError(): CommandError { return { code: this.code, message: this.message, hint: this.hint, ...(this.schema ? { schema: this.schema } : {}) }; }
+  constructor(public code: string, message: string, public hint: string, public schema?: Schema, public candidates?: TargetRef[]) { super(message); }
+  toError(): CommandError { return { code: this.code, message: this.message, hint: this.hint, ...(this.schema ? { schema: this.schema } : {}), ...(this.candidates?.length ? { candidates: this.candidates } : {}) }; }
 }
 
 const show = (v: unknown) => { const s = JSON.stringify(v); return s === undefined ? String(v) : s.length > 60 ? s.slice(0, 57) + "..." : s; };
 const what = (s: Schema): string => {
   if ("anyOf" in s) return s.anyOf.map(what).join(" or ");
   if (s.type === "array") return `a list of ${s.minItems !== undefined && s.minItems === s.maxItems ? `${s.minItems} ` : ""}${what(s.items).replace(/^an? /, "")}s`;
+  if (s.type === "null") return "null";
   if (s.type === "object") return s.additionalProperties && !s.properties ? "a map" : "an object";
   return s.type === "integer" ? "a whole number" : `a ${s.type}`;
 };
@@ -38,6 +41,7 @@ export function check(schema: Schema, value: unknown, path = "args"): string | n
     return errs.includes(null) ? null : `${path}: expected ${what(schema)}, got ${show(value)}`;
   }
   switch (schema.type) {
+    case "null": return value === null ? null : `${path}: expected null, got ${show(value)}`;
     case "boolean": return typeof value === "boolean" ? null : `${path}: expected true or false, got ${show(value)}`;
     case "number": case "integer": {
       if (typeof value !== "number" || !Number.isFinite(value)) return `${path}: expected ${what(schema)}${schema.unit ? ` (${schema.unit})` : ""}, got ${show(value)}`;
@@ -66,7 +70,7 @@ export function check(schema: Schema, value: unknown, path = "args"): string | n
       for (const k of schema.required ?? []) if (o[k] === undefined) return `${path}.${k}: required`;
       for (const [k, v] of Object.entries(o)) {
         if (v === undefined) continue;
-        if (props[k]) { const e = check(props[k], v, `${path}.${k}`); if (e) return e; continue; }
+        if (Object.hasOwn(props, k)) { const e = check(props[k], v, `${path}.${k}`); if (e) return e; continue; }
         if (!schema.additionalProperties) return `${path}.${k}: unknown argument (known: ${Object.keys(props).join(", ") || "none"})`;
         if (schema.propertyNames && !new RegExp(schema.propertyNames.pattern).test(k)) return `${path}: key ${show(k)} does not match ${schema.propertyNames.pattern}`;
         const e = check(schema.additionalProperties, v, `${path}.${k}`); if (e) return e;

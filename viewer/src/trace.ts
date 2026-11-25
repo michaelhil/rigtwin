@@ -15,7 +15,7 @@ export interface TraceRec {
   n: number; at: string; by: string; kind: 'person' | 'agent' | 'script' | 'system'; actor: string; via: 'mcp' | 'http';
   command: string; ok: boolean; code?: string; summary: string; ms: number; after_ms?: number;
   version?: number; request?: string; picture?: { bytes: number; wait_ms: number; page_ms?: number } | null;
-  detail: { args: unknown; session?: string; reply: string }; dropped?: number;
+  detail: { args: unknown; reply: string }; dropped?: number;
 }
 
 const MAX = 200, RUN_GAP = 5 * 60_000;
@@ -71,7 +71,7 @@ function row(r: TraceRec, start: number, prev: TraceRec | undefined): HTMLElemen
   if (opened.has(r.n)) {
     const d = el('div', 'tr-detail');
     const sec = (title: string, body: string) => { d.append(el('div', 'tr-h', title)); d.append(el('pre', null, body)); };
-    sec(`Request · ${clock(r.at)} · ${via(r)}${r.detail.session ? ` · for browser ${r.detail.session}` : ''}`, JSON.stringify(r.detail.args ?? {}, null, 1));
+    sec(`Request · ${clock(r.at)} · ${via(r)}`, JSON.stringify(r.detail.args ?? {}, null, 1));
     sec(r.ok ? 'Reply, as the caller saw it' : `Refused (${r.code})`, r.detail.reply);
     if (r.picture !== undefined) d.append(el('p', 'tr-p', r.picture ? `Picture ${Math.round(r.picture.bytes / 1024)} kB · ${r.picture.page_ms !== undefined ? `drawn and packed by the page in ${secs(r.picture.page_ms)} · ` : ''}waited ${secs(r.picture.wait_ms)} for it` : 'No picture came back'));
     d.append(el('p', 'tr-p', `Server time ${secs(r.ms)}${r.after_ms !== undefined ? ` · ${secs(r.after_ms)} since this caller's previous reply` : ''}`));

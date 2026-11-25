@@ -32,6 +32,36 @@ a direction word in `to` goes to that end of the travel. ASSUMED: not seen in th
 
 ## Tools
 
+### discover
+
+Find the connected workspace, rig, live routing counts, and available tools, or search for exact IDs to use in commands. Use kind to focus a search. An exact operation ID returns its argument schema. Examples: {}: workspace and tools; {"query":"seat","kind":"adjustment"}: find seat controls; {"query":"person.pose","kind":"operation"}: get one HTTP command schema
+
+```
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "maxLength": 160,
+      "description": "Target words or exact ID. Omit for the workspace overview."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "adjustment",
+        "part",
+        "datum",
+        "joint",
+        "group",
+        "operation"
+      ],
+      "description": "Focus on one class of match."
+    }
+  }
+}
+```
+
 ### adjust
 
 Move one or more adjustments, named in plain words, in one request: {target, to} or {target, by}, or several in `changes`. Relative changes are worked out on the server, so read nothing first. Assumed adjustments are moved and marked. The reply is the verification: before → after, the request name for undo, and what else is moved. Examples: {"target":"backrest","to":"upright"}: the backrest vertical (0°); an assumed adjustment; {"target":"monitor height","by":"-3 cm"}: the monitor 3 cm lower than it is now; {"changes":[{"target":"seat height","to":"as photographed"},{"target":"monitor tilt","by":"5° up"}]}: two adjustments as one request
@@ -115,6 +145,11 @@ Move one or more adjustments, named in plain words, in one request: {target, to}
       "minItems": 1,
       "maxItems": 20,
       "description": "several adjustments as one request"
+    },
+    "expectedVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional guard on affected joints or the whole person, from an earlier state version."
     }
   }
 }
@@ -140,6 +175,11 @@ Undo a change, as a new change: "that" / "last" (the newest change not yet undon
         }
       ],
       "description": "\"last\" (default), \"mine\", a request name such as \"backrest-recline-21\", or a version number"
+    },
+    "expectedVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional guard on affected joints or the whole person, from an earlier state version."
     }
   }
 }
@@ -387,9 +427,16 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
       "description": "return a picture of the browser's view after the change"
     },
     "viewer": {
-      "type": "string",
-      "pattern": "^[A-Za-z2-9]{8}$",
-      "description": "browser code (Settings → Agent access), remembered for later calls. Locally, omit it to reach every open page."
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-HJKMNP-Z2-9]{8}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Browser code from Settings → Agent access. A successful pair is remembered. Use null to clear it and use unpaired routing."
     }
   }
 }
@@ -397,7 +444,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
 
 ### person
 
-The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. A posture or aim request resets omitted aims to the operating defaults. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"look_at":"little monitor","right_hand":{"point":"touchscreen"}}: look at and point to the touchscreen; {"clear":true}: nobody in the seat
+The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. Aim updates keep omitted aims. Supplying posture resets aims first. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {"person": ...} gives every number with its source. Examples: {"preset":"P5 woman"}: the small woman in the seat, with her numbers; {"style":"clay","glasses":false}: the clay figure; glasses off for the dressed person; {"posture":"relaxed stand"}: standing; {"look_at":"little monitor","right_hand":{"point":"touchscreen"}}: look at and point to the touchscreen; {"clear":true}: nobody in the seat
 
 ```
 {
@@ -461,9 +508,17 @@ The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"
       "description": "operating (seated, hands on the grips, feet on the pedals), relaxed stand, or a pose of the package's library by id or name (\"E37\", \"E37 seated_slump\")"
     },
     "look_at": {
-      "type": "string",
-      "maxLength": 80,
-      "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 80,
+          "description": "A named part's centre or a reference point, by plain words or ID. Named points follow rig adjustments. Examples: touchscreen (also little monitor or small screen), soundbar, D_pedal_face_2."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Gaze target, or null to restore the default gaze."
     },
     "left_hand": {
       "anyOf": [
@@ -606,6 +661,11 @@ The person in the seat, in one request: preset ("P5 woman", "P50 man", "P95 man"
     "clear": {
       "type": "boolean",
       "description": "true: nobody in the seat"
+    },
+    "expectedVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional guard on affected joints or the whole person, from an earlier state version."
     }
   }
 }

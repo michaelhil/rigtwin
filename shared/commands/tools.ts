@@ -1,5 +1,6 @@
 // The intent commands as tool definitions (name, description, JSON Schema): what the MCP endpoint lists (server/mcp.ts),
 // what the generated documentation shows (agent-docs.ts) and what the step-4 agent in the app is given.
+import { SESSION_PATTERN } from "./core.ts";
 import type { Schema } from "./schema.ts";
 import { tools as toolSpecs, type CommandSpec } from "./registry.ts";
 
@@ -18,12 +19,17 @@ export function toJsonSchema(s: Schema): Record<string, unknown> {
 export function toolList() {
   return toolSpecs().map((spec: CommandSpec) => {
     const schema = toJsonSchema(spec.args) as any;
-    if (spec.id === "look") schema.properties = { ...schema.properties, viewer: { type: "string", pattern: "^[A-Za-z2-9]{8}$", description: "browser code (Settings → Agent access), remembered for later calls. Locally, omit it to reach every open page." } };
+    if (spec.id === "look") schema.properties = { ...schema.properties, viewer: {
+      anyOf: [{ type: "string", pattern: SESSION_PATTERN }, { type: "null" }],
+      description: "Browser code from Settings → Agent access. A successful pair is remembered. Use null to clear it and use unpaired routing.",
+    } };
+    if (spec.kind === "edit") schema.properties = { ...schema.properties, expectedVersion: {
+      type: "integer", minimum: 0, description: "Optional guard on affected joints or the whole person, from an earlier state version.",
+    } };
     const examples = spec.examples.map((e) => `${JSON.stringify(e.args)}: ${e.note}`).join("; ");
     return {
       name: spec.tool!, description: `${spec.summary} Examples: ${examples}`, inputSchema: { type: "object", ...schema },
-      annotations: { readOnlyHint: spec.kind !== "edit", destructiveHint: false, idempotentHint: spec.kind !== "edit", openWorldHint: false },
-      _meta: { "anthropic/alwaysLoad": true },
+      annotations: { readOnlyHint: spec.kind === "query", destructiveHint: false, idempotentHint: spec.kind === "query", openWorldHint: false },
     };
   });
 }

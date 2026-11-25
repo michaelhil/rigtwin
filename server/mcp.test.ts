@@ -100,13 +100,13 @@ describe("the MCP endpoint", () => {
     expect(text(await call(s.base, "look", { picture: true, viewer: c.code() }))).toContain("No picture");       // slots free again
     a.close(); b.close(); c.close(); s.stop();
   });
-  test("initialize: the requested protocol, the instructions with every adjustment, a session id", async () => {
+  test("initialize: the requested protocol, the compact discovery instructions, a session id", async () => {
     const s = start();
     const r = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
     expect(r.body.result.protocolVersion).toBe("2025-06-18");
     expect(r.body.result.serverInfo.name).toBe("synergon");
-    expect(r.body.result.instructions).toContain("[J_seat_recline]");
-    expect(r.body.result.instructions.length).toBeLessThanOrEqual(4096);
+    expect(r.body.result.instructions).toContain("discover");
+    expect(r.body.result.instructions.length).toBeLessThanOrEqual(1600);
     expect(r.session).toMatch(/^[0-9a-f]{32}$/);
     expect((await rpc(s.base, "initialize", { protocolVersion: "1999-01-01" })).body.result.protocolVersion).toBe("2025-11-25");
     const note = await fetch(`${s.base}/api/workspaces/playground/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });
@@ -114,21 +114,57 @@ describe("the MCP endpoint", () => {
     expect((await rpc(s.base, "nothing/here")).body.error.code).toBe(-32601);
     s.stop();
   });
-  test("tools/list: six tools, always loaded, plain JSON Schema", async () => {
+  test("tools/list: seven tools with plain JSON Schema and accurate effect hints", async () => {
     const s = start(), tools = (await rpc(s.base, "tools/list")).body.result.tools;
-    expect(tools.map((t: any) => t.name).sort()).toEqual(["adjust", "look", "measure", "person", "state", "undo"]);
-    for (const t of tools) { expect(t._meta["anthropic/alwaysLoad"]).toBe(true); expect(t.inputSchema.type).toBe("object"); expect(JSON.stringify(t.inputSchema)).not.toContain('"unit"'); }
-    expect(tools.find((t: any) => t.name === "look").inputSchema.properties.viewer).toBeDefined();
+    expect(tools.map((t: any) => t.name).sort()).toEqual(["adjust", "discover", "look", "measure", "person", "state", "undo"]);
+    for (const t of tools) { expect(t.inputSchema.type).toBe("object"); expect(JSON.stringify(t.inputSchema)).not.toContain('"unit"'); }
+    const look = tools.find((t: any) => t.name === "look");
+    expect(look.inputSchema.properties.viewer).toBeDefined();
+    expect(look.annotations.readOnlyHint).toBe(false);
     s.stop();
   });
-  test("a tool call changes the scene, is labelled Claude Code, and reaches the pages", async () => {
+  test("discovery and refusals carry bounded replayable data, with a text fallback for legacy clients", async () => {
+    const s = start(), p = page(s.base);
+    try {
+      await p.ready;
+      const sid = (await rpc(s.base, "initialize", { protocolVersion: "2025-11-25" })).session!;
+      const structured = async (name: string, args: unknown) => (await call(s.base, name, args, sid)).body.result.structuredContent;
+      const overview = await structured("discover", {});
+      expect(overview).toMatchObject({ ok: true, version: 0, result: {
+        workspace: { name: "Playground" }, viewers: { liveConnections: 1, followingThisCaller: 0 },
+      } });
+      expect(JSON.stringify(overview)).not.toContain(p.code());
+      const tilt = await structured("discover", { query: "touchscreen tilt", kind: "adjustment" });
+      expect(tilt.result.matches[0]).toMatchObject({ id: "J_ts_screen:1", kind: "adjustment", unit: "deg" });
+      expect(await structured("adjust", { target: tilt.result.matches[0].id, by: 1 })).toMatchObject({ ok: true, version: 1, recorded: 1 });
+      const surface = await structured("discover", { query: "little monitor", kind: "part" });
+      expect(surface.result.matches[0].id).toBe("S_ts_screen");
+      expect((await structured("discover", { query: "monitor font height", kind: "adjustment" })).result.matches).toEqual([]);
+      expect(await structured("adjust", { target: "monitor font height", to: "3 cm" })).toMatchObject({ ok: false, version: 1, error: { code: "unknown_target" } });
+      expect(await structured("adjust", { target: "armrest", by: "1 cm" })).toMatchObject({ ok: false, error: { code: "ambiguous", candidates: [expect.objectContaining({ kind: "adjustment" }), expect.any(Object)] } });
+      expect(await structured("adjust", { target: tilt.result.matches[0].id, by: 1, expectedVersion: 0 })).toMatchObject({ ok: false, error: { code: "stale" } });
+      const legacy = (await rpc(s.base, "initialize", { protocolVersion: "2025-03-26" })).session!;
+      const fallback = await call(s.base, "discover", {}, legacy);
+      expect(fallback.body.result.structuredContent).toBeUndefined();
+      expect(JSON.parse(text(fallback)).workspace.name).toBe("Playground");
+    } finally { p.close(); s.stop(); }
+  });
+  test("MCP consumes just one query quota unit per POST", async () => {
+    const s = start({ mode: "deployed", limits: { queriesPerMinutePerVisitor: 2 } });
+    try {
+      expect((await call(s.base, "discover", {})).body.result.structuredContent.ok).toBe(true);
+      expect((await call(s.base, "state", {})).body.result.structuredContent.ok).toBe(true);
+      expect((await call(s.base, "state", {})).status).toBe(429);
+    } finally { s.stop(); }
+  });
+  test("a tool call changes the scene, is labelled Agent, and reaches the pages", async () => {
     const s = start(), p = page(s.base); await p.ready;
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" });
     const r = await call(s.base, "adjust", { target: "backrest", to: "upright" }, init.session!);
     expect(r.body.result.isError).toBeUndefined();
     expect(text(r)).toContain("Backrest: recline as photographed → upright");
     const st = await call(s.base, "state", {}, init.session!);
-    expect(text(st)).toMatch(/v1 Claude Code · [0-9a-f]{4} \[seat-recline-1\]/);
+    expect(text(st)).toMatch(/v1 Agent · [0-9a-f]{4} \[seat-recline-1\]/);
     const bad = await call(s.base, "adjust", { target: "armrest", by: "1 cm" });
     expect(bad.body.result.isError).toBe(true);
     expect(text(bad)).toContain("Refused (ambiguous)");
@@ -141,6 +177,11 @@ describe("the MCP endpoint", () => {
     const a = page(s.base, { answer: JPEG }), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const r = await call(s.base, "look", { view: "front", picture: true });
     expect(r.body.result.content[1]).toEqual({ type: "image", data: Buffer.from(JPEG).toString("base64"), mimeType: "image/jpeg" });
+    expect(r.body.result.structuredContent.result).toMatchObject({
+      delivery: { route: "local", status: "dispatched", recipientCount: 2 },
+      capture: { status: "returned" }, picture: { mime: "image/jpeg", bytes: JPEG.length },
+    });
+    expect(JSON.stringify(r.body.result.structuredContent)).not.toContain("base64");
     expect(a.views[0]).toMatchObject({ id: "look", args: { view: "front", picture: true } });
     expect(b.views.length).toBe(1);
     a.close(); b.close(); s.stop();
@@ -149,12 +190,26 @@ describe("the MCP endpoint", () => {
     const s = start({ mode: "deployed" }), a = page(s.base), b = page(s.base); await Promise.all([a.ready, b.ready]);
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");          // no code: every page is asked
-    expect(text(await call(s.base, "look", { view: "top", viewer: a.code().toLowerCase() }, sid))).toContain("Showing the top view");
-    expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("Showing the left view");
+    expect(text(await call(s.base, "look", { view: "top", viewer: a.code().toLowerCase() }, sid))).toContain("Requested the top view");
+    expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("Requested the left view");
     await Bun.sleep(50);
     expect(a.views.filter((v) => !v.ask).map((v) => v.args.view)).toEqual(["top", "left"]);
     expect(b.views.filter((v) => !v.ask).length).toBe(0);
     a.close(); b.close(); s.stop();
+  });
+  test("a mistaken pairing does not replace a working pair or reroute to other viewers", async () => {
+    const s = start({ mode: "deployed" }), a = page(s.base), b = page(s.base);
+    try {
+      await Promise.all([a.ready, b.ready]);
+      const sid = (await rpc(s.base, "initialize", { protocolVersion: "2025-11-25" })).session!;
+      expect((await call(s.base, "look", { view: "top", viewer: a.code() }, sid)).body.result.isError).toBeUndefined();
+      const wrong = await call(s.base, "look", { view: "left", viewer: "ZZZZZZZZ" }, sid);
+      expect(wrong.body.result.structuredContent.error.code).toBe("unknown_session");
+      expect(JSON.stringify(wrong.body)).not.toContain("ZZZZZZZZ");
+      expect((await call(s.base, "look", { view: "right" }, sid)).body.result.structuredContent.result.delivery.route).toBe("paired");
+      expect(b.views).toHaveLength(0);
+      expect((await call(s.base, "look", { view: "left", viewer: null }, sid)).body.result.structuredContent.result.delivery.status).toBe("approval_requested");
+    } finally { a.close(); b.close(); s.stop(); }
   });
   test("person: one tool call seats a person and reaches the pages; measure {person} and look's eye need no browser", async () => {
     const s = start(), p = page(s.base); await p.ready;
@@ -204,9 +259,9 @@ describe("the MCP endpoint", () => {
     expect(r.body.result.content[1]?.type).toBe("image");                                                  // the page that allowed answered
     expect(text(r)).toContain("allowed this agent");
     await Bun.sleep(30);
-    for (const p of [a, b]) expect(p.views[0]).toMatchObject({ id: "look", args: { view: "operator", eye: 0.819 }, ask: { by: expect.stringMatching(/^Claude Code · /), summary: expect.stringContaining("person 180 cm tall") } });
+    for (const p of [a, b]) expect(p.views[0]).toMatchObject({ id: "look", args: { view: "operator", eye: 0.819 }, ask: { by: expect.stringMatching(/^Agent · /), summary: expect.stringContaining("person 180 cm tall") } });
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
-    expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("needs_viewer");               // the third question in a minute
+    expect(text(await call(s.base, "look", { view: "left" }, sid))).toContain("rate_limited");               // the third question in a minute
     a.close(); b.close(); s.stop();
   });
   test("no picture within the wait: the reply says so", async () => {
@@ -215,6 +270,24 @@ describe("the MCP endpoint", () => {
     expect(text(r)).toContain("No picture");
     expect(r.body.result.content.length).toBe(1);
     p.close(); s.stop();
+  });
+  test("a read and an edit complete while an approval picture is pending", async () => {
+    const s = start({ mode: "deployed", limits: { pictureWaitMs: 30, pictureAskWaitMs: 550, diskMinFreeFraction: 0, diskMinFreeBytes: 0 } }), p = page(s.base);
+    try {
+      await p.ready;
+      let settled = false;
+      const waiting = call(s.base, "look", { view: "top", picture: true }).then((r) => { settled = true; return r; });
+      for (let i = 0; i < 50 && !p.views.length; i++) await Bun.sleep(5);
+      expect(p.views[0].ask.expiresInMs).toBe(550);
+      expect((await call(s.base, "measure", { from: "D_eye_median", to: "S_mon_screen" })).body.result.structuredContent.ok).toBe(true);
+      expect((await call(s.base, "adjust", { target: "monitor height", by: "-1 cm" })).body.result.structuredContent.recorded).toBe(1);
+      expect(settled).toBe(false);
+      const r = await waiting;
+      expect(r.body.result.structuredContent).toMatchObject({ version: 0, result: {
+        delivery: { route: "approval", status: "approval_requested" },
+        capture: { status: "timed_out", timeoutMs: 550 },
+      } });
+    } finally { p.close(); s.stop(); }
   });
   test("the picture endpoint takes only an awaited JPEG from the asked page", async () => {
     const s = start({ limits: { pictureWaitMs: 1500 } }), p = page(s.base); await p.ready;

@@ -10,18 +10,19 @@
 //   person   the person in the seat (person.ts, manikin v1): preset, style, body, posture, clear; measure {person} measures it
 //
 // They are a layer over the commands of step 1 (core.ts): the same document, history, refusals, guards and undo. Each
-// reply carries `text`, a few lines for the reader (the MCP tools return only that), and the same facts as data. An edit
+// reply carries `text`, a few lines for the reader (the MCP text fallback uses it), and the same facts as data. An edit
 // gets its request name from the server ("backrest-recline-21"), so nobody has to invent one. Assumed adjustments are
 // moved and marked in the reply instead of refused: the caller says "assumed adjustment" (the honesty rule), and asks
 // first only when it chose one that the owner did not name.
 //
 // What each adjustment means (what 0 is, which way is +, its everyday names) is in shared/words.ts, next to the words
-// the page uses; `catalogue()` turns it into the lines agents read (the MCP server's instructions, `state` with detail
+// the page uses; `catalogue()` turns it into the lines agents read (`state` with detail
 // "catalogue", the Skill's reference and the wiki page, all generated).
-import { register, get, type AssetInfo, type CommandSpec, type RunOutput } from "./registry.ts";
-import { Refusal, type Schema } from "./schema.ts";
+import { register, get, list, tools, type AssetInfo, type CommandSpec, type RunOutput } from "./registry.ts";
+import { Refusal, type Schema, type TargetRef } from "./schema.ts";
 import { planUndo, GROUP_PATTERN, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
-import { checkId, findIds, resolvePoint, idTokens, isAssumed, labelOf, sameSI, tokens, unitOf, VIEW_NAMES } from "./core.ts";
+import { checkId, rankTargets, resolvePoint, pointAlias, targetRefs, idTokens, isAssumed, labelOf, sameSI, tokens, unitOf, VIEW_NAMES } from "./core.ts";
+import { toJsonSchema } from "./tools.ts";
 import type { ManifestJoint } from "../manifest.ts";
 import { worldFrames } from "../kinematics.ts";
 import type { JointValue } from "../pose.ts";
@@ -82,25 +83,27 @@ function num(a: Adjustment, v: number) {
 const travel = (a: Adjustment) => `${num(a, a.lo).replace(/^(\d)/, a.lo > 0 ? "+$1" : "$1")} … ${a.hi > 0 ? "+" : ""}${num(a, a.hi)}`.replace("+−", "−");
 const value = (a: Adjustment, pose: Record<string, JointValue>) => { const v = pose[a.joint.id] ?? a.joint.neutral; return Array.isArray(v) ? v[a.comp!] : v; };
 
-/** The adjustment meant by plain words or an id; refuses `ambiguous` (with the candidates) when two are about as likely. */
-export function resolveAdjustment(asset: AssetInfo, text: string): Adjustment {
-  const all = adjustments(asset), q = norm(text).replace(touchscreenAlias, "touchscreen"), t = text.trim().toLowerCase();
-  const exact = all.filter((a) => a.key.toLowerCase() === t || (a.comp === null && a.joint.id.toLowerCase() === t));
-  if (exact.length === 1) return exact[0];
-  if (all.some((a) => a.comp !== null && a.joint.id.toLowerCase() === t)) {
-    throw new Refusal("ambiguous", `${text} is a three-angle mount: name one of its angles`, `one of: ${all.filter((a) => a.joint.id.toLowerCase() === t).map((a) => `"${a.name}" (${a.key})`).join(", ")}`);
-  }
+const adjustmentRef = (a: Adjustment): TargetRef => ({ kind: "adjustment", id: a.key, label: a.name });
+function rankAdjustments(asset: AssetInfo, text: string) {
+  const q = norm(text).replace(touchscreenAlias, "touchscreen"), id = text.trim().toLowerCase();
   const words = tokens(q).filter((w) => !STOP.has(w));
-  const scored = all.map((a) => {
-    let s = 0, every = words.length > 0;
-    for (const w of words) { const p = a.main.has(w) ? 3 : a.extra.has(w) ? 1 : [...a.main].some((t) => w.length >= 4 && t.startsWith(w)) ? 2 : 0; s += p; if (!p) every = false; }
-    return { a, s: s + (every ? 2 : 0) + (a.phrases.has(q) ? 4 : 0) };
-  }).filter((x) => x.s > 0).sort((x, y) => y.s - x.s);
-  if (!scored.length) throw new Refusal("unknown_target", `nothing adjustable matches ${JSON.stringify(text)}`, `name it as in the list (state {"detail": "catalogue"}), e.g. "monitor height", "backrest", "left armrest", "seat height"`);
-  const [best, next] = scored;
-  if (next && best.s - next.s < 2) {
-    const near = scored.filter((x) => x.s >= best.s - 1).slice(0, 6).map((x) => `"${x.a.name}"`);
-    throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${near.join(" or ")}`, "ask the owner which one is meant, or name it more exactly");
+  return adjustments(asset).flatMap((a) => {
+    if (a.key.toLowerCase() === id || a.joint.id.toLowerCase() === id) return [{ a, score: 100 }];
+    if (/^j_[a-z0-9_:]+$/.test(id)) return [];
+    const scores = words.map((w) => a.main.has(w) ? 3 : a.extra.has(w) ? 1 : [...a.main].some((t) => w.length >= 4 && t.startsWith(w)) ? 2 : 0);
+    const score = scores.reduce<number>((x, y) => x + y, 0);
+    if (a.phrases.has(q)) return [{ a, score: score + 6 }];
+    return scores.length && scores.every(Boolean) ? [{ a, score: score + 2 }] : [];
+  }).sort((x, y) => y.score - x.score);
+}
+
+/** Resolve the exact write target, refusing incomplete matches and close alternatives. */
+export function resolveAdjustment(asset: AssetInfo, text: string): Adjustment {
+  const scored = rankAdjustments(asset, text), [best, next] = scored;
+  if (!best) throw new Refusal("unknown_target", `nothing adjustable matches ${JSON.stringify(text)}`, 'Use discover {"query":"...","kind":"adjustment"}, e.g. "monitor height" or "backrest".');
+  if (next && best.score - next.score < 2) {
+    const near = scored.filter(({ score }) => score >= best.score - 1).slice(0, 6).map(({ a }) => adjustmentRef(a));
+    throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${near.map((a) => `"${a.label}" (${a.id})`).join(" or ")}`, "ask which one is meant or give its ID", undefined, near);
   }
   return best.a;
 }
@@ -256,18 +259,89 @@ const GROUP_WORDS: Record<string, string> = {
 /** a part, group or unit meant by plain words (or an id) */
 function resolvePart(asset: AssetInfo, text: string): string {
   const q = norm(text);
-  if (asset.manifest.groups.includes(text) || asset.nodes.some((n) => n.name === text)) return text;
+  if (asset.manifest.groups.includes(text) || asset.manifest.components.some((c) => c.id === text) || asset.manifest.surfaces.some((c) => c.id === text)) return text;
   if (Object.hasOwn(GROUP_WORDS, q)) return GROUP_WORDS[q];
   const unit = UNITS.find((u) => norm(u.name) === q);
   if (unit) return unit.parts[0];
-  const hit = findIds(asset, text, "part", 3), same = hit.find((h) => norm(h.label.replace(/\s*\([^)]*\)/g, "")) === q);
-  if (same) return same.id;                                   // a name given exactly wins
-  if (!hit.length) throw new Refusal("unknown_target", `no part matches ${JSON.stringify(text)}`, "use a group (stand, seat, pods, pedals, platform) or a part's name, e.g. \"monitor\", \"left joystick\"");
-  if (hit[1] && hit[0].score === hit[1].score) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${hit.slice(0, 3).map((h) => `"${h.label}"`).join(" or ")}`, "name it more exactly");
-  return hit[0].id;
+  if (/^[CDSJ]_[A-Za-z0-9_]+$/i.test(text.trim())) throw new Refusal("unknown_target", `no part has ID ${JSON.stringify(text)}`, "Search for the part with discover.");
+  const hits = rankTargets(asset, text, ["part"], true);
+  const same = hits.filter((h) => norm(h.label.replace(/\s*\([^)]*\)/g, "")) === q);
+  const candidates = same.length ? same : hits.filter((h) => h.score === hits[0].score);
+  if (candidates.length === 1) return candidates[0].id;
+  if (!candidates.length) throw new Refusal("unknown_target", `no part matches ${JSON.stringify(text)}`, 'Use discover {"query":"...","kind":"part"} or give a group ID.');
+  throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${candidates.slice(0, 6).map((h) => `"${h.label}" (${h.id})`).join(" or ")}`, "ask which one is meant or give its ID", undefined, targetRefs(candidates));
 }
 
+const DISCOVERY_LIMIT = 10;
+type DiscoveryKind = TargetRef["kind"] | "operation";
+const wireNames = (spec: Pick<CommandSpec, "id" | "kind" | "tool">) =>
+  ({ id: spec.id, kind: "operation" as const, effect: spec.kind, ...(spec.tool ? { tool: spec.tool } : {}) });
+
+const discovery: CommandSpec<{ query?: string; kind?: DiscoveryKind }> = {
+  id: "discover", kind: "query", tool: "discover",
+  summary: "Find the connected workspace, rig, live routing counts, and available tools, or search for exact IDs to use in commands. Use kind to focus a search. An exact operation ID returns its argument schema.",
+  args: { type: "object", additionalProperties: false, properties: {
+    query: { type: "string", maxLength: 160, description: "Target words or exact ID. Omit for the workspace overview." },
+    kind: { type: "string", enum: ["adjustment", "part", "datum", "joint", "group", "operation"], description: "Focus on one class of match." },
+  } },
+  examples: [
+    { args: {}, note: "workspace and tools" },
+    { args: { query: "seat", kind: "adjustment" }, note: "find seat controls" },
+    { args: { query: "person.pose", kind: "operation" }, note: "get one HTTP command schema" },
+  ],
+  run({ doc, asset, scope }, a) {
+    const query = a.query?.trim();
+    if (!query) {
+      if (a.kind) throw new Refusal("invalid_args", "discover: kind needs a query", 'Try {"query":"monitor","kind":"adjustment"}.');
+      const toolsHere = tools().map(wireNames);
+      return { result: {
+        workspace: scope?.workspace ?? null,
+        asset: { name: asset.name, title: asset.manifest.title, glbSha256: asset.sha256 },
+        person: { supported: !!asset.people, present: doc.person !== null },
+        viewers: scope?.viewers ?? null,
+        tools: toolsHere,
+        workspaceIndex: "/api/workspaces",
+      } };
+    }
+
+    const op = get(query);
+    if (op && (!a.kind || a.kind === "operation")) {
+      return { result: { query, matches: [{ ...wireNames(op), description: op.summary, args: toJsonSchema(op.args), examples: op.examples }], more: false } };
+    }
+
+    const refs: { score: number; match: object }[] = [];
+    if (!a.kind || a.kind === "adjustment") {
+      for (const { a: adj, score } of rankAdjustments(asset, query)) {
+        const scale = adj.unit === "m" ? 1 : 1 / DEG;
+        refs.push({ score, match: { ...adjustmentRef(adj), unit: adj.unit === "m" ? "m" : "deg",
+          min: adj.lo * scale, max: adj.hi * scale, value: value(adj, doc.pose) * scale, evidence: adj.evidence, assumed: adj.assumed } });
+      }
+    }
+    if (!a.kind || ["part", "datum", "joint"].includes(a.kind)) {
+      const alias = pointAlias(asset, query);
+      for (const hit of rankTargets(asset, alias ?? query, a.kind ? [a.kind] : ["part", "datum"], true)) {
+        refs.push({ score: hit.score, match: { id: hit.id, kind: hit.kind, label: hit.label } });
+      }
+    }
+    if (!a.kind || a.kind === "group") {
+      const group = Object.hasOwn(GROUP_WORDS, norm(query)) ? GROUP_WORDS[norm(query)] : norm(query);
+      if (asset.manifest.groups.includes(group)) refs.push({ score: 7, match: { id: group, kind: "group", label: rowName(group, group) } });
+    }
+    if (a.kind === "operation") {
+      const terms = tokens(query);
+      for (const spec of list()) {
+        const words = new Set(tokens(`${spec.id} ${spec.summary}`));
+        if (terms.length && terms.every((word) => words.has(word))) refs.push({ score: 1, match: wireNames(spec) });
+      }
+    }
+    refs.sort((a, b) => b.score - a.score);
+    return { result: { query, matches: refs.slice(0, DISCOVERY_LIMIT).map(({ match }) => match), more: refs.length > DISCOVERY_LIMIT } };
+  },
+};
+
+
 const intent: CommandSpec[] = [
+  discovery,
   {
     id: "adjust", kind: "edit", tool: "adjust",
     summary: "Move one or more adjustments, named in plain words, in one request: {target, to} or {target, by}, or several in `changes`. Relative changes are worked out on the server, so read nothing first. Assumed adjustments are moved and marked. The reply is the verification: before → after, the request name for undo, and what else is moved.",
@@ -356,7 +430,7 @@ const intent: CommandSpec[] = [
     summary: "The scene in a few lines: what is moved from as photographed and the last changes (who, request). detail \"catalogue\": every adjustment with its travel, what 0 means and its directions; \"history\": the last 20 changes.",
     args: { type: "object", properties: { detail: { type: "string", enum: ["catalogue", "history"] } } },
     examples: [{ args: {}, note: "what is moved, and the last changes" }, { args: { detail: "catalogue" }, note: "every adjustment and what its numbers mean" }],
-    run({ doc, asset }, a: { detail?: string }) {
+    run({ doc, asset, scope }, a: { detail?: string }) {
       if (a.detail === "catalogue") return { result: { text: [`${asset.manifest.title ?? asset.name}: every adjustment (lengths from as photographed; angles as the joint gives them)`, ...catalogue(asset)].join("\n") } };
       const moved = movedLines(asset, doc.pose), recent = doc.history.slice(a.detail === "history" ? -20 : -3).reverse();
       return {
@@ -367,7 +441,7 @@ const intent: CommandSpec[] = [
             ...(asset.people ? [`In the seat: ${sayPersonOrNobody(doc.person)}.`] : []),
             recent.length ? `Last changes:\n${recent.map((e) => `  ${entryWords(asset, e)} (${ago(e.at)})`).join("\n")}` : "No changes yet.",
           ].join("\n"),
-          version: doc.version, moved, ...(asset.people ? { person: doc.person } : {}), recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group && /-\d+$/.test(e.group) ? { request: e.group } : {}), at: e.at })),
+          ...(scope ? { workspace: scope.workspace } : {}), version: doc.version, moved, ...(asset.people ? { person: doc.person } : {}), recent: recent.map((e) => ({ version: e.version, by: e.actor.label, ...(e.group && /-\d+$/.test(e.group) ? { request: e.group } : {}), at: e.at })),
         },
       };
     },
@@ -469,7 +543,7 @@ const intent: CommandSpec[] = [
       if (a.select !== undefined) { const s = resolvePart(asset, a.select); out.select = s; said.push(`${nameOf(s)} selected`); }
       if (a.picture) out.picture = true;
       if (!Object.keys(out).length) throw new Refusal("invalid_args", "look: give a view, only, hide, all, select or picture", "e.g. {\"view\": \"operator\", \"picture\": true}");
-      return { result: { text: said.length ? `Showing ${said.join("; ")}.` : "Taking a picture of the view as it is." , ...out }, view: out };
+      return { result: { text: said.length ? `Requested ${said.join("; ")}.` : "Requested a picture of the current browser view." , ...out }, view: out };
     },
   },
 ];

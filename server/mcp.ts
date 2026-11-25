@@ -1,13 +1,12 @@
 // The MCP endpoint of a workspace of the synergon server (agent interface v2): POST /api/workspaces/<id>/mcp, Model Context
 // Protocol over Streamable HTTP, tools only. One endpoint (and one createMcp) per workspace: the address names the scene the tools
 // work in. The same tools on the laptop (http://127.0.0.1:4173/api/workspaces/playground/mcp) and on the host
-// (https://synergon.mightwork.ai/api/workspaces/<id>/mcp): adjust, look, measure, undo, state, person (shared/commands/intent.ts). Their schemas and
-// descriptions come from the command registry, the server's instructions (shown to the model at session start, at most
-// 4,096 characters in Claude Code) from the catalogue of adjustments, so nothing about them is written by hand.
+// (https://synergon.mightwork.ai/api/workspaces/<id>/mcp): discover, adjust, look, measure, undo, state, person (shared/commands/intent.ts). Their schemas and
+// descriptions come from the command registry, the server's instructions (shown to the model at startup) point to scoped discovery when needed.
 //
 // Kept small on purpose: JSON-RPC requests answered with one JSON body (no server-initiated stream: GET is 405), the
 // methods initialize, ping, tools/list and tools/call; notifications are accepted with 202. A tool call goes through the
-// same path as POST /api/workspaces/<id>/command (guards, refusals, history, live channel). The caller is "Claude Code · <id>", with the id
+// same path as POST /api/workspaces/<id>/command (guards, refusals, history, live channel). The caller is "Agent · <id>", with the id
 // made from the MCP session (Mcp-Session-Id, made here at initialize) the same way as for any other client: a keyed hash.
 // The session also remembers the last viewer code `look` was given, so an agent names a browser once.
 //
@@ -18,15 +17,16 @@ import { createHmac, randomBytes } from "node:crypto";
 import type { Actor } from "../shared/commands/doc.ts";
 import { tools as toolSpecs } from "../shared/commands/registry.ts";
 import { toolList } from "../shared/commands/tools.ts";
+import type { CommandError } from "../shared/commands/schema.ts";
 import { SESSION_PATTERN } from "../shared/commands/core.ts";
 
 export const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const SESSION_RE = /^[0-9a-f]{32}$/;
 
-export interface ToolReply { ok: boolean; result?: any; error?: { code: string; message: string; hint: string } }
+interface ToolReply { ok: boolean; version?: number; recorded?: number | null; result?: Record<string, unknown>; error?: CommandError }
 export interface McpOptions {
   /** run one command the way POST /api/workspaces/<id>/command does (guards included) */
-  exec(you: Actor, wire: { id: string; args: unknown; session?: string }, visitor: string): Promise<ToolReply>;
+  exec(you: Actor, wire: { id: string; args: unknown; session?: string; expectedVersion?: unknown }, visitor: string): Promise<ToolReply>;
   secret: Buffer;
   instructions(): string;
   revision: string;
@@ -36,8 +36,8 @@ export interface McpOptions {
 }
 
 export function createMcp(o: McpOptions) {
-  const sessions = new Map<string, { viewer?: string; last: number }>();
-  const actor = (sid: string): Actor => { const id = createHmac("sha256", o.secret).update(`mcp:${sid}`).digest("hex").slice(0, 12); return { kind: "agent", id, label: `Claude Code · ${id.slice(0, 4)}` }; };
+  const sessions = new Map<string, { viewer?: string; protocol?: string; last: number }>();
+  const actor = (sid: string): Actor => { const id = createHmac("sha256", o.secret).update(`mcp:${sid}`).digest("hex").slice(0, 12); return { kind: "agent", id, label: `Agent · ${id.slice(0, 4)}` }; };
   function session(sid: string) {
     let s = sessions.get(sid);
     if (!s) {
@@ -51,23 +51,42 @@ export function createMcp(o: McpOptions) {
   const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
   async function call(sid: string, name: string, args: Record<string, unknown>, visitor: string) {
-    const spec = toolSpecs().find((s) => s.tool === name);
-    if (!spec) return { content: [{ type: "text", text: `There is no tool ${JSON.stringify(name)}; the tools are ${toolSpecs().map((s) => s.tool).join(", ")}.` }], isError: true };
     const s = session(sid), a = { ...args };
-    let viewer: string | undefined;
+    const structured = (s.protocol ?? PROTOCOL_VERSIONS[0]) >= "2025-06-18";
+    const refusal = (error: CommandError, version?: number) => ({
+      content: [{ type: "text", text: `Refused (${error.code}): ${error.message}\nWhat to do: ${error.hint}` }],
+      isError: true,
+      ...(structured ? { structuredContent: { ok: false, version, error } } : {}),
+    });
+    const spec = toolSpecs().find((s) => s.tool === name);
+    if (!spec) return refusal({ code: "unknown_tool", message: `There is no tool ${JSON.stringify(name)}.`, hint: "Use tools/list for available tools." });
+    let viewer: string | undefined, explicit = false;
     if (spec.id === "look") {
-      if (typeof a.viewer === "string" && a.viewer.trim()) {
-        viewer = a.viewer.trim().toUpperCase();
-        if (!new RegExp(SESSION_PATTERN).test(viewer)) return { content: [{ type: "text", text: "Refused (invalid_args): viewer is not a browser's code\nWhat to do: the code is the eight characters under More, \"Shared scene\", in the viewer" }], isError: true };
-        s.viewer = viewer;                                       // kept only once it looks like a code
-      } else viewer = s.viewer;
+      if (a.viewer === null) delete s.viewer;
+      else if (a.viewer === undefined) viewer = s.viewer;
+      else {
+        viewer = typeof a.viewer === "string" ? a.viewer.trim().toUpperCase() : undefined;
+        if (!viewer || !new RegExp(SESSION_PATTERN).test(viewer)) return refusal({
+          code: "invalid_args", message: "viewer is not a browser's code", hint: "Copy the eight-character code in Settings → Agent access.",
+        });
+        explicit = true;
+      }
       delete a.viewer;
     }
-    const r = await o.exec(actor(sid), { id: spec.id, args: a, ...(viewer ? { session: viewer } : {}) }, visitor);
-    if (!r.ok) return { content: [{ type: "text", text: `Refused (${r.error?.code}): ${r.error?.message}\nWhat to do: ${r.error?.hint}` }], isError: true };
-    const res = r.result ?? {}, content: any[] = [{ type: "text", text: typeof res.text === "string" ? res.text : JSON.stringify(res) }];
-    if (res.picture?.base64) content.push({ type: "image", data: res.picture.base64, mimeType: res.picture.mime });
-    return { content };
+    const expectedVersion = spec.kind === "edit" ? a.expectedVersion : undefined;
+    if (spec.kind === "edit") delete a.expectedVersion;
+    const r = await o.exec(actor(sid), { id: spec.id, args: a, ...(viewer ? { session: viewer } : {}), expectedVersion }, visitor);
+    if (!r.ok) return refusal(r.error!, r.version);
+    if (explicit) s.viewer = viewer;
+
+    const { picture, ...rest } = r.result ?? {};
+    const { base64, ...metadata } = (picture ?? {}) as { base64?: string; mime?: string; bytes?: number };
+    const result = picture ? { ...rest, picture: metadata } : rest;
+    const content: { type: string; text?: string; data?: string; mimeType?: string }[] = [
+      { type: "text", text: typeof rest.text === "string" ? rest.text : JSON.stringify(result) },
+    ];
+    if (base64) content.push({ type: "image", data: base64, mimeType: metadata.mime });
+    return { content, ...(structured ? { structuredContent: { ok: true, version: r.version, recorded: r.recorded, result } } : {}) };
   }
 
   async function one(sid: string, m: any, visitor: string): Promise<object | null> {
@@ -77,9 +96,11 @@ export function createMcp(o: McpOptions) {
     switch (m.method) {
       case "initialize": {
         const want = m.params?.protocolVersion;
+        const protocolVersion = PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0];
+        session(sid).protocol = protocolVersion;
         o.onConnect?.(actor(sid));
         return rpc(m.id, {
-          protocolVersion: PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0],
+          protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "synergon", title: "synergon shared scene", version: o.revision },
           instructions: o.instructions(),

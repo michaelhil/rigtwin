@@ -208,7 +208,7 @@ function applied(e: Entry) {
 let agentViews: AgentViews = 'ask';
 const declined = new Set<string>();
 let consent: Note, consentTimer = 0, asked: { d: ViewEvent; who: { actor: string; by: string } } | null = null, viewsSelect: HTMLSelectElement;
-type ViewEvent = { id: string; args: any; reply?: string; ask?: { actor: string; by: string; summary: string } };
+type ViewEvent = { id: string; args: any; reply?: string; ask?: { actor: string; by: string; summary: string; expiresInMs?: number } };
 function setAgentViews(v: AgentViews) { agentViews = v; if (current.id) storeViews(current.id, v); if (viewsSelect) viewsSelect.value = v; }
 function answer(how: 'allow' | 'always' | 'no') {
   consent.box.hidden = true; clearTimeout(consentTimer);
@@ -225,9 +225,9 @@ function view(d: ViewEvent) {
   if (agentViews === 'never' || declined.has(who.actor)) return;
   if (agentViews === 'always') { void setFollow(who); applyView(d); return; }
   asked = { d, who };
-  consent.text.textContent = `${who.by} wants to change the view in this browser: ${d.ask.summary}.`;
+  consent.text.textContent = `${who.by} asks this browser for the following view: ${d.ask.summary}.${d.reply ? ' This also sends a JPEG of the resulting view to the agent.' : ''}`;
   consent.box.hidden = false; clearTimeout(consentTimer);
-  consentTimer = window.setTimeout(() => { consent.box.hidden = true; asked = null; }, 60_000);
+  consentTimer = window.setTimeout(() => { consent.box.hidden = true; asked = null; }, d.ask.expiresInMs ?? 60_000);
 }
 /** `look` does what the three view commands do in one go, and with a reply id sends a picture of the result back. */
 function applyView(d: ViewEvent) {
@@ -242,7 +242,7 @@ function applyView(d: ViewEvent) {
       else if (a.view) setView(a.view, { ortho: false, eye: typeof a.eye === 'number' ? a.eye : null, eyePoint: Array.isArray(a.eye_point) ? a.eye_point.map(Number) : null, eyeDirection: Array.isArray(a.eye_direction) ? a.eye_direction.map(Number) : null, followPerson: a.follow_person === true ? true : undefined });
       if (a.select) select(a.select);
     }
-  } catch { /* an id this model does not have */ }
+  } catch { return; } // A picture would show an unapplied or partially applied view.
   if (d.reply) void sendPicture(d.reply);
 }
 async function sendPicture(reply: string) {
@@ -304,10 +304,10 @@ export async function initLive() {
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';
-  consent = note([['Allow', () => answer('allow')], ['Always allow', () => answer('always')], ['No', () => answer('no')]]);
+  consent = note([['Allow & follow', () => answer('allow')], ['Always allow', () => answer('always')], ['No', () => answer('no')]]);
   consent.box.classList.add('amber', 'consent');
-  consent.buttons[0].title = 'Show this view and the next ones this agent asks for, in this browser';
-  consent.buttons[1].title = 'Show views from any agent in this workspace without asking. Change this under Settings, Agent access.';
+  consent.buttons[0].title = 'Allow this agent’s views and requested pictures in this browser until you stop following.';
+  consent.buttons[1].title = 'Allow views and requested pictures from any agent in this workspace. Change this in Settings → Agent access.';
   activity = note([['Undo', undo], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
   activity.buttons[2].setAttribute('aria-label', 'Dismiss activity');
   traceActivity = el('div', 'trace-activity');
@@ -317,7 +317,7 @@ export async function initLive() {
   followNote.append(stop); followNote.hidden = true;
   metaEl = el('span', 'note-meta'); activity.text.after(metaEl);
   onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
-  const viewsRow = el('label', 'live-views'); viewsRow.append(document.createTextNode('Views an agent asks for: '));
+  const viewsRow = el('label', 'live-views'); viewsRow.append(document.createTextNode('Unpaired agent views: '));
   viewsSelect = el('select') as HTMLSelectElement;
   for (const [v, t] of [['ask', 'ask me first'], ['always', 'always allow'], ['never', 'never']] as const) { const o = el('option', null, t) as HTMLOptionElement; o.value = v; viewsSelect.append(o); }
   viewsSelect.value = agentViews; viewsSelect.addEventListener('change', () => setAgentViews(viewsSelect.value as AgentViews));

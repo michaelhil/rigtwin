@@ -1,8 +1,8 @@
 ---
 title: Decision log
-tldr: 58 decisions, D-01 to D-58, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
+tldr: 59 decisions, D-01 to D-59, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
 status: living
-updated: 2026-11-25
+updated: 2026-11-26
 tags: [decisions, log, platform]
 ---
 
@@ -17,6 +17,7 @@ tags: [decisions, log, platform]
 - Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
 - Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)); a trace of every request in the browser ([D-53](#d-53)); the camera anywhere, a person's eye by stature, and Follow ([D-54](#d-54)); a consent question in the browser ([D-55](#d-55)).
 - The name Synergon, its own subdomain and the wiki at `/wiki` are D-56; public workspaces modelled on Leitbild's are D-57 (both 2026-11-25).
+- [D-59](#d-59) makes the HTTP command registry canonical and adds scoped discovery shared with MCP.
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
@@ -459,7 +460,17 @@ project's working files.
 ### D-58 — Seated targets are stored as rig IDs
 
 - **Decided by / status.** The owner requested seated targets on 2026-11-25. Implemented on the `person-aims` branch for review.
-- **What.** An optional field in `synergon-scene/1` holds resolved IDs and limb modes. Each aim request specifies the complete set of active targets for the operating posture. Body and clothing edits preserve it. The shared solver works out the pose from the rig's current parts and points.
+- **What.** An optional field in `synergon-scene/1` holds resolved IDs and limb modes. The initial command treated each aim request as replacement. D-59 changes this to patch semantics. Body and clothing edits preserve it. The shared solver works out the pose from the rig's current parts and points.
 - **Reason.** Targets should move when the rig moves. Existing workspace documents and history already describe the operating defaults by omitting the new field.
 - **Alternative considered.** Saving a library pose or a coordinate would tie the aim to one rig arrangement.
 - **Consequences.** One command sets the requested targets and reports the result. Contact and gaze are model estimates. Standing remains a fixed pose. [The person's commands](../50-implementation/person-commands.md#seated-targets).
+
+
+<a id="d-59"></a>
+### D-59 — Scoped discovery over the shared command registry
+
+- **Decided by and status.** The project coordinator after the owner-requested architecture and independent review on 2026-11-26. In force.
+- **Context.** The flat startup catalogue and text-only MCP responses made unfamiliar targets and errors harder to recover from. One aim update could discard other aims.
+- **Decision.** Keep HTTP as the canonical command path and MCP as an adapter. Use one bounded discovery query with exact reusable references. Keep edit versions, routing state and asset identity distinct. Aim-only requests patch the selected fields. A supplied posture resets the baseline.
+- **Alternatives.** A second generic executor, vendor-specific tool search, an immediate stateless MCP migration and multi-asset persistence were considered in the [design review](../50-implementation/remote-command-design.md).
+- **Consequences.** Familiar actions take one call. Existing scripts that relied on full aim replacement can include `posture:"operating"`. Workspace metadata and structured receipts are available through the shared path. A second placed asset will trigger explicit instance identity.

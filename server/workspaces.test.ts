@@ -474,6 +474,21 @@ describe("loading and dropping", () => {
     s.stop();
   });
 
+  test("shutdown retries a document save that failed before a timer was scheduled", async () => {
+    const dataDir = tempDir(), s = start({ dataDir, limits: { saveEveryMs: 0 } });
+    const w = await s.make("Interrupted save");
+    await s.command(w.id, { id: "scene.summary" });
+    const obstruction = join(dataDir, "workspaces", w.id, `doc.json.${process.pid}.tmp`);
+    mkdirSync(obstruction);
+    try {
+      const edit = await s.command(w.id, { id: "adjust", args: { target: "monitor height", by: "-1 cm" } });
+      expect(edit.recorded).toBe(1);
+    } finally { rmSync(obstruction, { recursive: true }); s.stop(); }
+    const reopened = start({ dataDir });
+    try { expect((await reopened.command(w.id, { id: "scene.summary" })).version).toBe(1); }
+    finally { reopened.stop(); }
+  });
+
   test("closing the server writes what is pending", async () => {
     const dataDir = tempDir(), s = start({ dataDir, limits: { saveEveryMs: 60_000 } }), a = await s.make("A");
     await s.command(a.id, lower); await s.command(a.id, { id: "pose.set", args: { joints: { J_mon_tilt: 0 } } });

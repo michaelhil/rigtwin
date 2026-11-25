@@ -17,6 +17,13 @@ export interface AssetInfo {
   people?: People | null;
 }
 
+/** Live metadata supplied by the workspace host, separate from the scene document. */
+export interface RuntimeScope {
+  workspace: { id: string; name: string };
+  viewers?: { liveConnections: number; followingThisCaller: number; unpairedRoute: "local" | "consent" };
+}
+export interface CommandContext { doc: SceneDoc; asset: AssetInfo; actor: Actor; scope?: RuntimeScope }
+
 export interface RunOutput<R> {
   result: R;
   /** edits: the changes to record (`before` = current value) */
@@ -37,7 +44,7 @@ export interface CommandSpec<A = any, R = any> {
   kind: "query" | "edit" | "view";
   args: Schema;
   examples: { args: A; note: string }[];
-  run?(ctx: { doc: SceneDoc; asset: AssetInfo; actor: Actor }, args: A): RunOutput<R>;
+  run?(ctx: CommandContext, args: A): RunOutput<R>;
   /** intent commands (intent.ts): the request name the server gives an edit when the caller names none ("backrest-recline");
    *  runCommand appends the version, so every request has its own name and agents never invent one */
   autoGroup?(args: A, out: RunOutput<R>): string;

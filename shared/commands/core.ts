@@ -16,9 +16,9 @@
 //
 // The person's commands (person.set, person.pose, person.clear, person.report and the intent tool `person`) are in
 // person.ts (manikin v1).
-import { register, get, validate, type AssetInfo, type CommandSpec } from "./registry.ts";
+import { register, get, validate, type AssetInfo, type CommandSpec, type RuntimeScope } from "./registry.ts";
 import { apply, planUndo, GROUP_PATTERN, HISTORY_CAP, PERSON_KEY, type Actor, type Entry, type JointChange, type SceneDoc } from "./doc.ts";
-import { Refusal, type CommandError, type Schema } from "./schema.ts";
+import { Refusal, type CommandError, type Schema, type TargetRef } from "./schema.ts";
 import { nodesFromGlb, worldFrames } from "../kinematics.ts";
 import { limitViolation, type JointValue } from "../pose.ts";
 import type { Manifest, ManifestJoint } from "../manifest.ts";
@@ -87,7 +87,7 @@ export const showEntry = (asset: AssetInfo, e: Entry) => ({
 });
 
 // ------------------------------------------------------------------------------------------- scene.find
-type Candidate = { id: string; kind: "part" | "joint" | "datum"; label: string; main: Set<string>; extra: Set<string> };
+type Candidate = TargetRef & { main: Set<string>; extra: Set<string> };
 export const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
 export const idTokens = (id: string) => tokens(id.replace(/^[CJDS]_/, "").split("_").map((x) => (Object.hasOwn(WORDS, x) ? WORDS[x] : x)).join(" "));
 const STOP = new Set(["the", "a", "an", "of", "to", "and", "in", "on", "at", "for", "with", "by", "from", "me", "my", "its", "it", "show", "set", "move", "make", "please", "cm", "mm", "deg", "degrees", "s"]);
@@ -111,10 +111,10 @@ function index(asset: AssetInfo): Candidate[] {
   return ix;
 }
 /** Ranked matches for plain words: whole words of the name count most, then related everyday words, then word starts, then details. */
-export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 10, requireAll = false) {
+export function rankTargets(asset: AssetInfo, text: string, kinds?: string[], requireAll = false) {
   const q = tokens(text).filter((w) => !STOP.has(w));
   const exact = text.trim().toLowerCase();
-  const scored = index(asset).filter((c) => !kind || c.kind === kind).map((c) => {
+  const scored = index(asset).filter((c) => !kinds || kinds.includes(c.kind)).map((c) => {
     if (c.id.toLowerCase() === exact) return { c, score: 100 };
     let score = 0, all = q.length > 0;
     for (const w of q) {
@@ -126,7 +126,14 @@ export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 1
     return { c, score: score + (all ? 2 : 0) - (score && /\balias of\b/.test(c.label) ? 1 : 0) };
   }).filter((x) => x.score > 0);
   scored.sort((a, b) => b.score - a.score || a.c.label.length - b.c.label.length);
-  return scored.slice(0, limit).map(({ c, score }) => ({ id: c.id, kind: c.kind, label: c.label, score, ...(c.kind === "joint" ? { joint: describeJoint(asset, asset.joints.get(c.id)!) } : {}) }));
+  return scored.map(({ c, score }) => ({ id: c.id, kind: c.kind, label: c.label, score }));
+}
+export function findIds(asset: AssetInfo, text: string, kind?: string, limit = 10) {
+  return rankTargets(asset, text, kind ? [kind] : undefined).slice(0, limit)
+    .map((ref) => ref.kind === "joint" ? { ...ref, joint: describeJoint(asset, asset.joints.get(ref.id)!) } : ref);
+}
+export function targetRefs(matches: TargetRef[], limit = 6): TargetRef[] {
+  return matches.slice(0, limit).map(({ id, kind, label }) => ({ id, kind, label }));
 }
 
 // ------------------------------------------------------------------------------------------- schemas
@@ -142,25 +149,32 @@ export function checkId(asset: AssetInfo, id: string, what: string) {
   if (!known) throw new Refusal("unknown_id", `${what} ${JSON.stringify(id)} is not a part, group, joint or datum of ${asset.name}`, `scene.find {"text": "..."} gives ids from plain words`);
 }
 
+export function pointAlias(asset: AssetInfo, text: string): string | undefined {
+  if (TOUCHSCREEN_NAMES.includes(tokens(text).join(" ")) && asset.manifest.surfaces.some((s) => s.id === "S_ts_screen")) return "S_ts_screen";
+}
+
 /** Resolve the same rig vocabulary for measures, cameras and the person. */
 export function resolvePoint(asset: AssetInfo, text: string, aim = false): string {
   const q = tokens(text.trim()).join(" ");
   const isAimTarget = (id: string) => /^[CDS]_/.test(id);
   const named = asset.nodes.find((n) => n.name.toLowerCase() === text.trim().toLowerCase())?.name;
   if (named && (aim ? isAimTarget(named) : /^[CDSJ]_/.test(named))) return named;
-  if (TOUCHSCREEN_NAMES.includes(q) && asset.manifest.surfaces.some((s) => s.id === "S_ts_screen")) return "S_ts_screen";
+  const alias = pointAlias(asset, text);
+  if (alias) return alias;
 
-  const hits = findIds(asset, text, undefined, 12, aim).filter((h) => h.kind !== "joint");
+  if (/^[CDSJ]_[A-Za-z0-9_]+$/i.test(text.trim())) {
+    throw new Refusal("unknown_target", `no eligible point has ID ${JSON.stringify(text)}`, 'Use discover {"query":"...","kind":"datum"} or search for a part.');
+  }
+  const hits = rankTargets(asset, text, ["part", "datum"], true);
   const exact = hits.filter((h) => tokens(h.label.replace(/\s*\([^)]*\)/g, "")).join(" ") === q);
   const candidates = exact.length ? exact : hits.filter((h) => h.score === hits[0].score);
   if (candidates.length === 1) return candidates[0].id;
   const names = (list: { label: string; id: string }[]) => list.slice(0, 4).map((h) => `"${h.label.replace(/\s*\([^)]*\)/g, "")}" (${h.id})`).join(", ");
-  if (candidates.length) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${names(candidates)}`, "name it more exactly, or give the ID");
-  if (!aim && /^[CDSJ]_[A-Za-z0-9_]{1,60}$/.test(text)) checkId(asset, text, "point");
-  const near = findIds(asset, q, undefined, 12).filter((h) => h.kind !== "joint");
+  if (candidates.length) throw new Refusal("ambiguous", `${JSON.stringify(text)} could be ${names(candidates)}`, "name it more exactly, or give the ID", undefined, targetRefs(candidates, 4));
+  const near = rankTargets(asset, q, ["part", "datum"]);
   const examples = index(asset).filter((h) => h.kind !== "joint");
   throw new Refusal("unknown_target", `no ${aim ? "part or point" : "point"} matches ${JSON.stringify(text)}`,
-    `${near.length ? "Possible matches" : "Examples"}: ${names(near.length ? near : examples)}. scene.find lists names and IDs.`);
+    `${near.length ? "Possible matches" : "Examples"}: ${names(near.length ? near : examples)}. discover lists names and IDs.`, undefined, targetRefs(near, 4));
 }
 
 // ------------------------------------------------------------------------------------------- commands
@@ -170,7 +184,7 @@ const commands: CommandSpec[] = [
     summary: "What is open: the asset, the scene version, every moved joint with its value and unit, and the recent changes (version, who, group, what changed).",
     args: { type: "object", properties: {} },
     examples: [{ args: {}, note: "start here, and read it again after a change to verify" }],
-    run({ doc, asset }) {
+    run({ doc, asset, scope }) {
       const moved = [...asset.joints.values()].filter((j) => doc.pose[j.id] !== undefined && !sameSI(doc.pose[j.id], j.neutral)).map((j) => {
         const v = doc.pose[j.id], d = describeJoint(asset, j);
         const off = Array.isArray(v) ? v.map((x, i) => x - (j.neutral as number[])[i]) : (v as number) - (j.neutral as number);
@@ -178,7 +192,7 @@ const commands: CommandSpec[] = [
       });
       return {
         result: {
-          scene: "Playground", version: doc.version,
+          scene: scope?.workspace.name ?? asset.manifest.title, ...(scope ? { workspace: scope.workspace } : {}), version: doc.version,
           asset: { name: asset.name, title: asset.manifest.title, sha256: asset.sha256.slice(0, 12), joints: asset.joints.size },
           units: "lengths in metres; angles in degrees (a three-angle mount is [roll, pitch, yaw]); the same units pose.set takes",
           frame: asset.manifest.conventions.frame,
@@ -316,7 +330,7 @@ export function autoName(slug: string, version: number): string {
 
 /** Validate and run one command. Edits change `state.doc` in place and return the new entry; view commands
  *  return what to send to the addressed browser. Refusals come back as `{ok: false, error}`. */
-export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Actor, wire: WireCommand): Outcome {
+export function runCommand(state: { doc: SceneDoc; asset: AssetInfo; scope?: RuntimeScope }, actor: Actor, wire: WireCommand): Outcome {
   const { doc, asset } = state, refuse = (e: CommandError): Outcome => ({ ok: false, version: doc.version, error: e });
   try {
     const checked = validate(wire.id, wire.args ?? {});
@@ -325,8 +339,8 @@ export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Ac
     if (wire.expectedVersion !== undefined && !(Number.isInteger(wire.expectedVersion) && (wire.expectedVersion as number) >= 0)) return refuse({ code: "invalid_args", message: "expectedVersion must be a whole number", hint: "the scene version from scene.summary" });
     const { spec } = checked;
     const hasSession = typeof wire.session === "string" && new RegExp(SESSION_PATTERN).test(wire.session);
-    if (spec.kind === "view" && !hasSession && (!spec.sessionOptional || wire.session !== undefined)) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (${JSON.stringify(wire.session)} is not one: eight characters)`}`, hint: "pass --viewer <code> with the browser code under Settings → Agent access" });
-    const out = spec.run!({ doc, asset, actor }, checked.args);
+    if (spec.kind === "view" && !hasSession && (!spec.sessionOptional || wire.session !== undefined)) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (expected an eight-character browser code)`}`, hint: "pass --viewer <code> with the browser code under Settings → Agent access" });
+    const out = spec.run!({ doc, asset, actor, scope: state.scope }, checked.args);
     if (spec.kind === "query") return { ok: true, version: doc.version, result: out.result };
     if (spec.kind === "view") return { ok: true, version: doc.version, result: out.result, view: { session: hasSession ? (wire.session as string) : null, id: spec.id, args: (out.view ?? checked.args) as Record<string, unknown> } };
     const changes = out.changes ?? [];

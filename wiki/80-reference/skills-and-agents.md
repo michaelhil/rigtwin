@@ -91,16 +91,14 @@ scene**: it moves the rig's adjustments, shows a view in a browser and returns a
 undoes changes, locally or on the public sandbox. Its description triggers on everyday requests such as "make the backrest
 straight", "lower the monitor 3 cm and show me the operator's view", "how far is the eye from the screen" or "undo that".
 
-Since v2 the ability to act is not in the Skill but in the five MCP tools the server offers (`adjust`, `look`, `measure`,
-`undo`, `state`; [agent interface](agent-interface.md)); their descriptions and the server's instructions, both generated,
-tell the model every adjustment's travel, what 0 means and its directions before its first call. The Skill keeps what tools
-cannot say:
+The agent acts through seven server tools. Startup instructions point to bounded discovery for unfamiliar targets.
+The operating skill records common workflows. [Remote commands guide](remote-commands.md) · [Generated reference](agent-interface.md)
 
 | Part | What it says |
 |---|---|
 | Which tools | `mcp__synergon__*` for the owner's local scene, `mcp__synergon-public__*` for the public sandbox: the tool name says where it acts. One call per request, with a table from everyday requests to calls |
 | The reply is the check | `adjust` answers with before → after, the request name for undo and what else is moved: no `state` before or after unless the owner asks |
-| Views and pictures | Target a browser using **Settings → Agent access → Browser code**. A local request without a code reaches each open page. Public broadcast requests follow the workspace’s consent and Follow rules. A picture shows the resulting view. |
+| Views and pictures | Target a browser using **Settings → Agent access → Browser code**. A local request without a code reaches each open page. Public broadcast requests follow the workspace’s consent and Follow rules. A returned picture shows the responding browser’s view. |
 | Report | two or three lines: what changed, before → after in cm and degrees, the request name, what is estimated or assumed |
 | Honesty words | "assumed adjustment" whenever a reply notes one (move it when the owner named it; ask first only when the agent chose it, [D-49](../20-decisions/decision-log.md#d-49)); a distance is a point estimate with no range yet; never "compliant", "correct" or "ergonomic"; authors are labels the server makes from what a caller claims |
 | When to ask | `ambiguous` (the reply lists the candidates), `out_of_range` (the travel is given), `stale` or "replaces a change by", `needs_viewer` / `unknown_session` |

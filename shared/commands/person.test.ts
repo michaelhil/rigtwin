@@ -364,6 +364,22 @@ describe("seated aims", () => {
     }
   });
 
+  test("changing or clearing one aim keeps the other aims and is independently undoable", () => {
+    const s = fresh();
+    const person = (args: Record<string, unknown>) => ok(run(s, agent, { id: "person", args }));
+    person({ preset: "P5 woman", look_at: "little monitor", right_hand: { point: "touchscreen" } });
+    expect(s.doc.person?.aims).toMatchObject({ look: "S_ts_screen", right_hand: { target: "S_ts_screen" } });
+    person({ right_hand: "grip" });
+    expect(s.doc.person?.aims).toEqual({ look: "S_ts_screen" });
+    expect(s.doc.version).toBe(2);
+    ok(run(s, agent, { id: "undo", args: { what: 2 } }));
+    expect(s.doc.person?.aims).toHaveProperty("right_hand");
+    person({ look_at: null });
+    expect(s.doc.person?.aims).toEqual({ right_hand: { mode: "point", target: "S_ts_screen" } });
+    person({ posture: "operating" });
+    expect(s.doc.person?.aims).toBeUndefined();
+  });
+
   test("reports a distant point, an unsuccessful touch, and a target behind the seat", () => {
     const s = fresh();
     const report = (args: Record<string, unknown>) => ok(run(s, agent, { id: "person.pose", args })).result.aims;
@@ -381,7 +397,7 @@ describe("seated aims", () => {
     expect(behind.left_foot.status).toBe("behind");
     expect(s.doc.person?.aims?.look).toBe("C_seat_headrest");
     const feet = report({ left_hand: "rest", right_foot: "floor", left_foot: { on: "D_pedal_face_2" } });
-    expect(feet.look).toBeUndefined();
+    expect(feet.look).toMatchObject({ status: "behind" });
     expect(feet.left_hand.status).toBe("contact");
     expect(feet.right_foot).toMatchObject({ target: "D_origin", status: "contact" });
     expect(feet.left_foot).toMatchObject({ target: "D_pedal_face_2", status: "contact" });

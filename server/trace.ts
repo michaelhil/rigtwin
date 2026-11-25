@@ -28,7 +28,7 @@ export interface TraceRecord {
   version?: number; request?: string;
   picture?: { bytes: number; wait_ms: number; page_ms?: number } | null;
   /** the request and the reply as the caller sent and saw them (masked on the public sandbox) */
-  detail: { args: unknown; session?: string; reply: string };
+  detail: { args: unknown; reply: string };
   /** records not sent since the previous one (the public sandbox sends at most a few a second) */
   dropped?: number;
 }
@@ -58,8 +58,9 @@ export function summarize(command: string, ok: boolean, result: any, error: { co
     case "adjust": return (r.changes ?? []).map((c: any) => `${c.adjustment} ${c.before} → ${c.after}`).join("; ") || "nothing changed";
     case "undo": return (r.lines ?? []).join("; ") || `v${(r.undid ?? []).join(", v")}`;
     case "state": return "read the scene";
+    case "discover": return r.matches ? `looked up ${r.matches.length} match(es)` : "read workspace capabilities";
     case "measure": return typeof r.text === "string" ? (r.computed_by ? "measured the person" : r.text.split(". ")[0]) : "measured";
-    case "look": return typeof r.text === "string" ? r.text.split("\n")[0].replace(/^Showing /, "showing ").replace(/\.$/, "") : "look";
+    case "look": return typeof r.text === "string" ? r.text.split("\n")[0].replace(/^Requested /, "requested ").replace(/\.$/, "") : "look";
     case "pose.set": case "history.undo": return [...new Set((r.changes ?? []).map((c: any) => c.said ?? c.label))].join("; ") || "nothing changed";
     case "scene.summary": return "read the scene";
     case "scene.find": return `looked up ${(r.matches ?? []).length} match(es)`;
@@ -89,7 +90,7 @@ export function createTrace(o: { publicMode: boolean; keep?: number; perSecond?:
   const ring: TraceRecord[] = [], lastReply = new Map<string, number>();
   let n = 0, dropped = 0, windowStart = 0, inWindow = 0;
   function record(x: {
-    at: number; ms: number; you: Actor; via: "mcp" | "http"; command: string; args: unknown; session?: string;
+    at: number; ms: number; you: Actor; via: "mcp" | "http"; command: string; args: unknown;
     ok: boolean; result?: any; error?: { code: string; message?: string; hint?: string }; entry?: Entry | null;
     picture?: { bytes: number; wait_ms: number; page_ms?: number } | null;
   }): TraceRecord {
@@ -103,7 +104,7 @@ export function createTrace(o: { publicMode: boolean; keep?: number; perSecond?:
       ...(prev !== undefined ? { after_ms: Math.max(0, Math.round(x.at - prev)) } : {}),
       ...(x.entry ? { version: x.entry.version, ...(group && (!o.publicMode || SERVER_NAME.test(group)) ? { request: group } : {}) } : {}),
       ...(x.picture !== undefined ? { picture: x.picture } : {}),
-      detail: { args: o.publicMode ? mask(x.args, o.allow) : x.args, ...(x.session ? { session: o.publicMode ? "‹code›" : x.session } : {}), reply: replyText(x.ok, x.result, x.error, o.publicMode) },
+      detail: { args: o.publicMode ? mask(x.args, o.allow) : x.args, reply: replyText(x.ok, x.result, x.error, o.publicMode) },
     };
     ring.push(rec); if (ring.length > keep) ring.shift();
     const now = Date.now();

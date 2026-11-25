@@ -2,7 +2,7 @@
 title: Glossary
 tldr: Plain-language meanings of every technical term this wiki uses - from asset contract, blockout and camera solve to tier, triangulate and build folder - in one alphabetical table, each with the page where it matters most.
 status: living
-updated: 2026-11-23
+updated: 2026-11-26
 tags: [overview, glossary, reference]
 ---
 
@@ -29,6 +29,7 @@ tags: [overview, glossary, reference]
 | Anthropometric | About human body sizes (stature, sitting eye height, reach). Used here for the small, median and large eye points | [standards](../80-reference/standards.md) |
 | Assembly | A node of the tree that groups parts and has no shape of its own (for example the seat assembly) | [decomposition](../40-method/decomposition.md) |
 | Asset | The deliverable 3D object: a model file (GLB) plus its description file, built from parameter files and code | [pipeline](../40-method/pipeline.md) |
+| Asset definition and instance | A definition describes reusable rig geometry and capabilities. An instance is one placement in a workspace. Each current workspace has one implicit rig instance. | [Remote command design](../50-implementation/remote-command-design.md#data-model-and-evolution) |
 | Asset contract | The written specification every asset must meet: units, axes, names, parameter records, joints, reference frames, file conventions, budgets | [asset contract](../40-method/asset-contract.md) |
 | Assumed | A size class: a value chosen without a measurement (by eye from a photo, or taken from another rig of the same product). Carries a range where possible | [filling gaps](../40-method/filling-gaps.md) |
 | Assumed adjustment, assumed range | A movement no photo shows (for example the seat's slide). It is in the model and usable in the viewer, tagged "assumed range" with a notice; the description file records it as assumed | [viewer](../50-implementation/viewer.md) |
@@ -112,6 +113,7 @@ tags: [overview, glossary, reference]
 | Pose, pose function | A set of joint values; the one shared piece of code (`shared/pose.ts`) that turns a joint value into a movement, used by both generator and viewer | [viewer](../50-implementation/viewer.md#from-javascript-to-typescript-with-one-pose-function) |
 | Provenance | Where a value comes from; recorded as class, basis and evidence | [filling gaps](../40-method/filling-gaps.md) |
 | Range (±) | The interval meant to contain the true value about nine times in ten; a judgment, not a computed confidence interval. No range may exclude a derivation not shown wrong | [measuring from photos](../40-method/measuring-from-photos.md#the-three-honest-classes-and-what--means) |
+| Progressive discovery | Look up only the capabilities and targets needed for a task. | [Remote commands](../80-reference/remote-commands.md#discover-only-what-the-task-needs) |
 | Render | An image of the model made by the viewer page | [tool reference](../80-reference/tools.md#render-sets) |
 | Residual | How far, in pixels, a point predicted by the solved camera lands from where it was picked in the photo. Small residuals on features *not* used in the solve are evidence | [measurement results](../50-implementation/measurement-results.md#cameras-solved-and-their-residuals) |
 | Reviewer (independent) | An agent that did not build the model, makes its own renders and measurements, does not read the builders' notes, and gives a verdict per component | [patterns](../60-lessons/patterns.md#p-15) |

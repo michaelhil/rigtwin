@@ -188,11 +188,25 @@ describe("look: the camera anywhere", () => {
   });
 });
 
-test("the MCP instructions fit Claude Code's limit and carry every adjustment", () => {
+test("discovery caps a common label while resolution still refuses ambiguous geometry", () => {
+  const base = asset.manifest.datums[0];
+  const duplicate = Array.from({ length: 18 }, (_, i) => ({ ...base, id: `D_probe_${i}`, label: "Inspection probe" }));
+  const large = { ...asset, manifest: { ...asset.manifest, datums: [...asset.manifest.datums, ...duplicate] } };
+  const s = { doc: newDoc(large), asset: large };
+  const lookup = runCommand(s, agent, { id: "discover", args: { query: "inspection probe", kind: "datum" } });
+  expect(lookup.ok && lookup.result).toMatchObject({ matches: Array(10).fill(expect.objectContaining({ kind: "datum" })), more: true });
+  const ambiguous = runCommand(s, agent, { id: "measure", args: { from: "inspection probe", to: "S_mon_screen" } });
+  expect(!ambiguous.ok && ambiguous.error).toMatchObject({ code: "ambiguous", candidates: Array(4).fill(expect.objectContaining({ kind: "datum" })) });
+  const typo = runCommand(s, agent, { id: "measure", args: { from: "D_headrest_fake", to: "S_mon_screen" } });
+  expect(!typo.ok && typo.error.code).toBe("unknown_target");
+});
+
+test("the MCP instructions stay compact and point to discovery", () => {
   for (const mode of ["local", "deployed"] as const) {
-    const t = instructions(asset, mode);
+    const t = instructions(mode);
     expect(t.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX);
-    for (const a of adjustments(asset)) expect(t).toContain(`[${a.key}]`);
+    expect(t).toContain("discover");
+    expect(t).not.toContain("[J_seat_recline]");
   }
-  expect(instructions(asset, "deployed")).toContain("PUBLIC");
+  expect(instructions("deployed")).toContain("PUBLIC");
 });

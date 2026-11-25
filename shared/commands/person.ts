@@ -116,9 +116,9 @@ const footSchema: Schema = { anyOf: [
   { type: "string", enum: ["pedal", "floor"], description: "the foot's own pedal (the default), or flat on the floor under the rig, including its deck" },
   targetAction("on", "Place the sole under the ball of the foot at a named point."),
 ] };
-const aimProps = { look_at: targetSchema, left_hand: handSchema, right_hand: handSchema, left_foot: footSchema, right_foot: footSchema };
+const aimProps = { look_at: { anyOf: [targetSchema, { type: "null" }], description: "Gaze target, or null to restore the default gaze." } satisfies Schema, left_hand: handSchema, right_hand: handSchema, left_foot: footSchema, right_foot: footSchema };
 type PoseArgs = {
-  posture?: string; look_at?: string;
+  posture?: string; look_at?: string | null;
   left_hand?: "grip" | "rest" | { point: string } | { touch: string };
   right_hand?: PoseArgs["left_hand"];
   left_foot?: "pedal" | "floor" | { on: string };
@@ -128,19 +128,23 @@ const hasAims = (a: PoseArgs) => Object.keys(aimProps).some((key) => a[key as ke
 
 function applyPose(asset: AssetInfo, people: People, p: PersonState, a: PoseArgs) {
   if (a.posture !== undefined) p.posture = resolvePosture(people, p, a.posture);
-  if (a.posture !== undefined || hasAims(a)) delete p.aims;
+  if (a.posture !== undefined) delete p.aims;
   if (!hasAims(a)) return;
   if (p.posture !== OPERATING) throw new Refusal("invalid_args", "Named targets need the operating posture.", 'Include {"posture": "operating"} with the targets to sit down.');
-  const aims: PersonAims = {}, resolve = (text: string) => resolvePoint(asset, text, true);
-  if (a.look_at !== undefined) aims.look = resolve(a.look_at);
+  const aims: PersonAims = p.aims ?? {}, resolve = (text: string) => resolvePoint(asset, text, true);
+  if (a.look_at === null) delete aims.look;
+  else if (a.look_at !== undefined) aims.look = resolve(a.look_at);
   for (const side of ["left", "right"] as const) {
     const h = a[`${side}_hand`], f = a[`${side}_foot`];
-    if (h === "rest") aims[`${side}_hand`] = { mode: "rest" };
+    if (h === "grip") delete aims[`${side}_hand`];
+    else if (h === "rest") aims[`${side}_hand`] = { mode: "rest" };
     else if (h && typeof h === "object") aims[`${side}_hand`] = "point" in h ? { mode: "point", target: resolve(h.point) } : { mode: "touch", target: resolve(h.touch) };
-    if (f === "floor") aims[`${side}_foot`] = { mode: "floor" };
+    if (f === "pedal") delete aims[`${side}_foot`];
+    else if (f === "floor") aims[`${side}_foot`] = { mode: "floor" };
     else if (f && typeof f === "object") aims[`${side}_foot`] = { mode: "on", target: resolve(f.on) };
   }
   if (Object.keys(aims).length) p.aims = aims;
+  else delete p.aims;
 }
 
 // ------------------------------------------------------------------------------------------- building a new state
@@ -264,7 +268,7 @@ export const personCommands: CommandSpec[] = [
   },
   {
     id: "person.pose", kind: "edit",
-    summary: "The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. In the operating posture one call can set gaze, hands and feet. A posture or aim request resets omitted aims to the operating defaults.",
+    summary: "The person's posture: operating (seated on the rig's own grips, pedals, seat and screens), relaxed stand, or a pose of the package's library by id or name. In the operating posture one call can set gaze, hands and feet. Aim updates keep omitted aims. Supplying posture resets aims first.",
     args: { type: "object", additionalProperties: false, properties: { posture: postureSchema, ...aimProps } },
     examples: [{ args: { posture: "operating" }, note: "back in the seat, hands on the grips" }, { args: { posture: "relaxed stand" }, note: "standing, arms hanging" }, { args: { posture: "E37" }, note: "the library's seated slump" }, { args: { look_at: "little monitor", right_hand: { point: "touchscreen" } }, note: "look at and point to the touchscreen" }],
     run({ doc, asset }, a: PoseArgs) {
@@ -296,7 +300,7 @@ export const personCommands: CommandSpec[] = [
   },
   {
     id: "person", kind: "edit", tool: "person",
-    summary: "The person in the seat, in one request: preset (\"P5 woman\", \"P50 man\", \"P95 man\"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. A posture or aim request resets omitted aims to the operating defaults. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {\"person\": ...} gives every number with its source.",
+    summary: "The person in the seat, in one request: preset (\"P5 woman\", \"P50 man\", \"P95 man\"), sex, style (dressed or clay), tone, glasses, headset, body controls (stature mm, mass kg, r_* SD), posture (operating, relaxed stand, a library pose), seated gaze, hands and feet, or clear: true for nobody. Aim updates keep omitted aims. Supplying posture resets aims first. The reply is the check: before → after, the request name for undo, and the key numbers (eye, screens, reach, knee and hips). measure {\"person\": ...} gives every number with its source.",
     args: { type: "object", properties: { ...setProps, posture: postureSchema, ...aimProps, clear: { type: "boolean", description: "true: nobody in the seat" } } },
     examples: [
       { args: { preset: "P5 woman" }, note: "the small woman in the seat, with her numbers" },
