@@ -1,0 +1,43 @@
+# Every push to a branch other than main: every local step of a deploy (checks, build, dist and its verify in
+# Chromium), as the deploy workflow runs them before it uploads, so a branch shows on GitHub's own runner whether
+# main would deploy. No environment, no secret, no key, no upload: this workflow cannot reach the server.
+# The actions are pinned to the same commits as in deploy.yml (see there how to update them).
+
+name: Check
+
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SYNERGON_AGENT: github-actions
+      SYNERGON_CHROME: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Check the Bun build
+        run: test "$(bun --revision)" = "1.4.0+34cbb9a40" || { echo "unexpected Bun build $(bun --revision)"; exit 1; }
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check and build
+        run: bun run deploy --dry-run --no-images

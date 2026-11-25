@@ -249,6 +249,8 @@ for a commit. To publish a wiki fix without regenerating the images, add `--no-i
 
 ## Continuous deployment from GitHub
 
+A second workflow, `.github/workflows/check.yml` (2026-11-25), runs step 3 below on every push to any other branch: the same checks and build, with no environment, no secret and no upload, so a branch shows on GitHub's own machine whether `main` would deploy.
+
 Workflow `.github/workflows/deploy.yml`, first set up on 2026-11-23 at the owner's request and moved to the new account for Synergon.
 
 1. **Trigger**: every push to `main`, or by hand from the repository's Actions tab. Runs never overlap

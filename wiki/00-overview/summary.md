@@ -115,7 +115,7 @@ As of 2026-11-25 (the model's rows unchanged since 2026-11-23, about 22:00 local
 | Wiki | 39 pages on the platform branch (37 published on main); lint clean; published with the viewer |
 | Skill | version 0.1.0; not yet tested on a second object |
 | Tape measurements, seat make and model, which adjustments exist | requested, not received |
-| GitHub repository (private) | <https://github.com/michaelhil/synergon> (the repository takes this name at the cutover) |
+| GitHub repository | <https://github.com/michaelhil/synergon> (the repository takes this name at the cutover); **public**, as GitHub reports it since its creation on 2026-11-23, although the request and [D-33](../20-decisions/decision-log.md#d-33) said private: the owner decides |
 | Public site | <https://synergon.mightwork.ai/>, from the first Synergon release (no date yet); every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
 | Public wiki | <https://synergon.mightwork.ai/wiki/>, from the same release |
 | Platform step 1 (agent control) | live on the public site since 2026-11-24 (commit `ff90f30`): the server's health check reports the deployed revision, the checks on the host after the release passed, and the two-browser check on the live site passed and left the public scene as it found it. Open: the result of the ten-minute idle test, the owner's own trial, the re-forecast of the later steps ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
