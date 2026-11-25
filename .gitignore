@@ -5,3 +5,4 @@ tools/.venv/
 dist/
 assets/*/build/
 .DS_Store
+tools/manikin-build/config.json

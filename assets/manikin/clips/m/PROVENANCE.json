@@ -1,0 +1,290 @@
+{
+ "what": "motion clips of the men, baked per packet person on the lab's rig, shared by operator-m and clay-m",
+ "sources": [
+  {
+   "what": "motion capture",
+   "source": "CMU Graphics Lab Motion Capture Database, http://mocap.cs.cmu.edu/",
+   "licence": "free for research; may be included in commercially sold products, not resold directly, even converted (http://mocap.cs.cmu.edu/, read 2026-11-24)",
+   "credit": "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.",
+   "takes": "subjects 07, 79, 86 and 143: takes 07_01, 79_22, 79_76, 79_85, 86_15, 143_18, 143_21 (as downloaded and named in the lab clip notes)"
+  },
+  {
+   "what": "retargeting, seated-operator layer, baking per body",
+   "source": "the avatar lab's motion builder (tools/manikin-build/pipeline/motion.py)",
+   "licence": "the project's own work"
+  }
+ ],
+ "built": {
+  "lab_commands": [
+   "$PY -I pipeline/motion.py build --package packages/body-clay",
+   "$PY -I pipeline/motion.py bake --package packages/body-clay",
+   "$PY -I pipeline/motion.py stand --package packages/body-clay --also packages/abstract-m",
+   "$PY -I pipeline/build_body.py --merge-motion"
+  ],
+  "pack": "bun tools/manikin-build/pack.ts",
+  "settings": {
+   "clips.rotation_bits": 16,
+   "clips.translation_bits": 20
+  }
+ },
+ "repository_revision": "67e22d92b57e21330a2862e012fcd7f79b9e9b3b",
+ "files": {
+  "clips/m/M50/demo30.glb": {
+   "from": "packages/body-clay/clips/M50/demo30.glb",
+   "bytes": 115996,
+   "sha256": "7494bbddbf29774028dc1688626873abb47bffa13598e4542fae35171887b988",
+   "source_bytes": 892876,
+   "rotation_error": 0.0000321,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50/idle-stand.glb": {
+   "from": "packages/body-clay/clips/M50/idle-stand.glb",
+   "bytes": 59412,
+   "sha256": "2cc959155b112eef1518813da588a1b553bd70da649df5977615708f5a329526",
+   "source_bytes": 259192,
+   "rotation_error": 0.000026,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50/move-stand.glb": {
+   "from": "packages/body-clay/clips/M50/move-stand.glb",
+   "bytes": 58596,
+   "sha256": "363174f91fe4b50121e316abb76884f6a3a9e8b2908b728d70d17acde7477c90",
+   "source_bytes": 170988,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000763
+  },
+  "clips/m/M50/operate8.glb": {
+   "from": "packages/body-clay/clips/M50/operate8.glb",
+   "bytes": 47384,
+   "sha256": "ac045864e6e69f62f95509f69fa9803def26853bf365b13a10f872d94140392d",
+   "source_bytes": 259196,
+   "rotation_error": 0.0000321,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50/rom-a.glb": {
+   "from": "packages/body-clay/clips/M50/rom-a.glb",
+   "bytes": 148124,
+   "sha256": "e99cbc73889c0984270f015b7ff7b57f694b43866aaa4761cd63550deb6ec5b9",
+   "source_bytes": 544024,
+   "rotation_error": 0.000026,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50/rom-b.glb": {
+   "from": "packages/body-clay/clips/M50/rom-b.glb",
+   "bytes": 123904,
+   "sha256": "8ab8cccacb07910c395e97b707b4a2e68a869986f86bc3d5763f74fae6666cd1",
+   "source_bytes": 449940,
+   "rotation_error": 0.0000288,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50/seated-base.glb": {
+   "from": "packages/body-clay/clips/M50/seated-base.glb",
+   "bytes": 409388,
+   "sha256": "06a22da6be4c6f52f3af0addb8ff0925e82aa580e9642055fe861d062a28c801",
+   "source_bytes": 1729780,
+   "rotation_error": 0.000028,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M50/sit-down-get-up.glb": {
+   "from": "packages/body-clay/clips/M50/sit-down-get-up.glb",
+   "bytes": 66980,
+   "sha256": "6445372122c6e3e2e76bd7cf21bf3a3ecb4745ce6c6bdc07da3f3fbeffb2a58e",
+   "source_bytes": 208008,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50/walk-loop.glb": {
+   "from": "packages/body-clay/clips/M50/walk-loop.glb",
+   "bytes": 33196,
+   "sha256": "3bdcbd79cdcc95bff5e9776713e588dc418e4739464431fc7387f7deadc8b3b3",
+   "source_bytes": 60620,
+   "rotation_error": 0.0000258,
+   "translation_error_m": 0.00000186
+  },
+  "clips/m/M50/walk.glb": {
+   "from": "packages/body-clay/clips/M50/walk.glb",
+   "bytes": 43584,
+   "sha256": "611cb2ea948c0660ce73d2b7890591f0b4bb0faea58e054d22140e9d4b20af7f",
+   "source_bytes": 103260,
+   "rotation_error": 0.000026,
+   "translation_error_m": 0.00000381
+  },
+  "clips/m/M50_HEAVY/demo30.glb": {
+   "from": "packages/body-clay/clips/M50_HEAVY/demo30.glb",
+   "bytes": 97652,
+   "sha256": "abfb63b8ec154d99880a9b36b26c170519f9ab09ca7ceba2023cbc681f28b836",
+   "source_bytes": 892904,
+   "rotation_error": 0.0000323,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50_HEAVY/idle-stand.glb": {
+   "from": "packages/body-clay/clips/M50_HEAVY/idle-stand.glb",
+   "bytes": 59848,
+   "sha256": "92a09a00c09056784f36a92d39b5a269c02bba543fc8a370e373f67872efd0a6",
+   "source_bytes": 259232,
+   "rotation_error": 0.000026,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50_HEAVY/move-stand.glb": {
+   "from": "packages/body-clay/clips/M50_HEAVY/move-stand.glb",
+   "bytes": 58628,
+   "sha256": "d64a77ba4a8139ba80f6c51f91ab857142cb2656a160c5161206ffcb0a09726b",
+   "source_bytes": 171016,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000757
+  },
+  "clips/m/M50_HEAVY/operate8.glb": {
+   "from": "packages/body-clay/clips/M50_HEAVY/operate8.glb",
+   "bytes": 43600,
+   "sha256": "47915b29a9e5f9f634e71136ff4a40b7d865fbcb94408069067975727a13ece4",
+   "source_bytes": 259224,
+   "rotation_error": 0.0000321,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50_MID/demo30.glb": {
+   "from": "packages/body-clay/clips/M50_MID/demo30.glb",
+   "bytes": 96896,
+   "sha256": "ef1950ed6ab6faf06775c07a42720e6137f2cb62e96ea7e8e7c793c87d2c249b",
+   "source_bytes": 892884,
+   "rotation_error": 0.0000312,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50_MID/idle-stand.glb": {
+   "from": "packages/body-clay/clips/M50_MID/idle-stand.glb",
+   "bytes": 59296,
+   "sha256": "288802657e05e23e00710f449fdec5d943339320b5d1f7b8f402aabfd1064dbb",
+   "source_bytes": 259212,
+   "rotation_error": 0.000026,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50_MID/move-stand.glb": {
+   "from": "packages/body-clay/clips/M50_MID/move-stand.glb",
+   "bytes": 58600,
+   "sha256": "cbfc30829459ec4288c85d1aae413cfd6c567c478644538cfc2d144c3595195a",
+   "source_bytes": 170996,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000763
+  },
+  "clips/m/M50_MID/operate8.glb": {
+   "from": "packages/body-clay/clips/M50_MID/operate8.glb",
+   "bytes": 43456,
+   "sha256": "48eb174ed69806484396f93aaddb9d6c280c599eea049705bc1e9ce59dcca4f3",
+   "source_bytes": 259204,
+   "rotation_error": 0.0000333,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50_THIN/demo30.glb": {
+   "from": "packages/body-clay/clips/M50_THIN/demo30.glb",
+   "bytes": 96852,
+   "sha256": "7793973d54fbed082a485c63814dc91368623894e101880f749149cf74a56e99",
+   "source_bytes": 892876,
+   "rotation_error": 0.0000289,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M50_THIN/idle-stand.glb": {
+   "from": "packages/body-clay/clips/M50_THIN/idle-stand.glb",
+   "bytes": 59236,
+   "sha256": "7a15dd4f96736846d2a4358f7461b88605be04fe8e60cdf0d6564703da13c5c9",
+   "source_bytes": 259208,
+   "rotation_error": 0.000026,
+   "translation_error_m": 9.54e-7
+  },
+  "clips/m/M50_THIN/move-stand.glb": {
+   "from": "packages/body-clay/clips/M50_THIN/move-stand.glb",
+   "bytes": 58616,
+   "sha256": "095903c61e9150e242adf4c81e1842f84171836204ff210c7828e09ead5b9a90",
+   "source_bytes": 170988,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000763
+  },
+  "clips/m/M50_THIN/operate8.glb": {
+   "from": "packages/body-clay/clips/M50_THIN/operate8.glb",
+   "bytes": 43512,
+   "sha256": "13083cca3f94283d935acedae6412dbc8c35eca419ceb0f6706a64531ec87837",
+   "source_bytes": 259192,
+   "rotation_error": 0.0000327,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M95H/demo30.glb": {
+   "from": "packages/body-clay/clips/M95H/demo30.glb",
+   "bytes": 115564,
+   "sha256": "2f0da2067675b40b99bc13eb3efd5760556a0eeda2c90b6cb1eb28e73b3e52ef",
+   "source_bytes": 892884,
+   "rotation_error": 0.0000316,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M95H/idle-stand.glb": {
+   "from": "packages/body-clay/clips/M95H/idle-stand.glb",
+   "bytes": 59772,
+   "sha256": "ef881687fd416d56a76b28b3d32339bbe1d7404c0fce72424ab3ac5b44231d8b",
+   "source_bytes": 259208,
+   "rotation_error": 0.000026,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M95H/move-stand.glb": {
+   "from": "packages/body-clay/clips/M95H/move-stand.glb",
+   "bytes": 58604,
+   "sha256": "43409dffc3ab44ad19b74d0fb53043fc145460748b79723179f27923c10e781c",
+   "source_bytes": 170996,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000751
+  },
+  "clips/m/M95H/operate8.glb": {
+   "from": "packages/body-clay/clips/M95H/operate8.glb",
+   "bytes": 47388,
+   "sha256": "0d5c33ac8dea1d4453ad801e46bf019b733d0660959682da539ee2cc56f04fb7",
+   "source_bytes": 259204,
+   "rotation_error": 0.0000287,
+   "translation_error_m": 9.52e-7
+  },
+  "clips/m/M95H/rom-a.glb": {
+   "from": "packages/body-clay/clips/M95H/rom-a.glb",
+   "bytes": 148360,
+   "sha256": "5c993b798a9204120ba3f199a9cfd03edbd84fa12bb3b2800c8685ba7fda3c93",
+   "source_bytes": 544040,
+   "rotation_error": 0.000026,
+   "translation_error_m": 0.00000184
+  },
+  "clips/m/M95H/rom-b.glb": {
+   "from": "packages/body-clay/clips/M95H/rom-b.glb",
+   "bytes": 123964,
+   "sha256": "1721870cdcbe46e088b768b7d1894c0e94af187f19aacb2c7aa9c1fdae2518fe",
+   "source_bytes": 449956,
+   "rotation_error": 0.000026,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M95H/seated-base.glb": {
+   "from": "packages/body-clay/clips/M95H/seated-base.glb",
+   "bytes": 409432,
+   "sha256": "4ebff136037283d299ee53ccd967ef58ff1eaec66e356a8da58187f963b22e91",
+   "source_bytes": 1729796,
+   "rotation_error": 0.0000287,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M95H/sit-down-get-up.glb": {
+   "from": "packages/body-clay/clips/M95H/sit-down-get-up.glb",
+   "bytes": 67120,
+   "sha256": "86fb569dd2b2f4b67219385838e9f09da2055335b16e416e0e3a4be7e26064ba",
+   "source_bytes": 208024,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M95H/walk-loop.glb": {
+   "from": "packages/body-clay/clips/M95H/walk-loop.glb",
+   "bytes": 33196,
+   "sha256": "50d281c1f4d0cda4de31ddd5ab13f43a14b9c3f5e629c84cbbfbdd5a59feb777",
+   "source_bytes": 60636,
+   "rotation_error": 0.0000259,
+   "translation_error_m": 0.00000191
+  },
+  "clips/m/M95H/walk.glb": {
+   "from": "packages/body-clay/clips/M95H/walk.glb",
+   "bytes": 43620,
+   "sha256": "2eee142c71750729a285586dd59f018b93abdd0a49d629b5a58ef41862a25a28",
+   "source_bytes": 103276,
+   "rotation_error": 0.0000258,
+   "translation_error_m": 0.00000381
+  }
+ },
+ "bytes": 2989776
+}

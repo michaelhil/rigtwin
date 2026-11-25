@@ -74,3 +74,12 @@ Not in the repository: unmasked photographs, solved camera files and the plannin
 
 Code and the Agent Skill: MIT (see [LICENSE](LICENSE)). Wiki text: CC BY 4.0. The model of Rig B and
 the masked photographs depict a third party's product and are not openly licensed.
+
+The manikin (`assets/manikin/`) is built from openly licensed parts, listed with their authors in
+[assets/manikin/CREDITS.md](assets/manikin/CREDITS.md) and per package in its `PROVENANCE.json`: the MakeHuman body,
+skins, cap and glasses are CC0; the work shirt ("Male shirt untucked BD1" by Elvaerwyn) and the work trousers ("Male
+trousers 2" by Mindfront) are **CC BY 4.0 and must be credited wherever the dressed manikin is shown**; the motion
+clips are retargeted from the CMU Graphics Lab Motion Capture Database, whose terms allow use inside products but not
+resale of the data, and ask for its credit line; the fabric weave maps are Poly Haven CC0. The project's own parts (the
+fitted shape space, rig, eyes, props, hair, clay style, and the build code in `tools/manikin-build/`) are under the
+repository's MIT licence.

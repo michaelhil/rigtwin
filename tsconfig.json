@@ -11,5 +11,6 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["shared", "generator", "tools", "server", "viewer/src", "assets/*/src"]
+  "include": ["shared", "generator", "tools", "server", "viewer/src", "assets/*/src"],
+  "exclude": ["tools/manikin-build"]
 }

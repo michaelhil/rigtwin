@@ -1,0 +1,241 @@
+# Packaging of the manikin: how the lab's packages are compressed into assets/manikin/, and the budgets the result
+# must meet. One record per number, in the rig's record format (value, unit, range, class, basis, tier, evidence;
+# wiki/40-method/asset-contract.md section 4), read by tools/manikin-build/pack.ts with generator/params.ts (units
+# converted: mm becomes m) and checked by `bun run check` (tools/manikin-check.ts).
+# Owner: MP (asset packing). The viewer's run-time numbers are in runtime*.toml, owned by the viewer engineers.
+# Classes: assumed with basis "user" = the owner's decision; assumed with basis "convention" = the visual designer's
+# budget from the lab's brief; invented = a choice of this packaging, with the measurement that supports it.
+
+# ------------------------------------------------------------------------------------------------------------------
+# Budgets (checked on every `bun run check`)
+# ------------------------------------------------------------------------------------------------------------------
+[budget.default_person_bytes]
+value = 10_000_000
+unit = "count"
+class = "assumed"
+basis = "user"
+tier = "critical"
+evidence = "Owner's decision 2 of 2026-11-25 (work/next/PLAN-manikin-v1.md): the first person shown, the dressed operator (median man, light tone), downloads 10 MB or less including its shape data. Counted as the bytes the production server sends for every file the person needs before it can be drawn: manifest, GLB, shape files, side maps, pose list (not the motion clips, which load when one is played). The server's Caddy compresses JSON (encode zstd gzip), counted as gzip level 6; GLB, KTX2, PNG and the shape files are sent as they are (compressed already). The bytes on disk are reported beside it."
+
+[budget.person_bytes]
+value = 10_000_000
+unit = "count"
+class = "assumed"
+basis = "user"
+tier = "layout"
+evidence = "Every other person (the dressed woman, the clay man and woman) is fetched only when asked for; the same 10 MB limit as the first person is applied so that switching costs no more than the first load (MP's reading of the owner's loading decision 4, 'the person a few seconds later')."
+
+[budget.tone_bytes]
+value = 2_000_000
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "A second or third skin tone loads only its own textures (skin albedo, skin ORM, lash texture). 2 MB is about a fifth of a person; measured 0.8-1.0 MB per tone on 2026-11-25."
+
+[budget.clips_bytes_per_sex]
+value = 8_000_000
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "All motion clips of one sex together (every clip baked for every packet person), fetched one clip at a time when played. Raw in the lab 14 MB (men) and 11 MB (women)."
+
+[budget.gpu_texture_bytes]
+value = 128_000_000
+unit = "count"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "The visual designer's texture budget per outfit (VD/ABSTRACT-AND-WARDROBE.md, BENCHMARK.md 'Budget on the M2'; REVIEW-10 quotes 106 and 113 MB for the uncompressed lab packages). Counted as an upper bound: every KTX2 texture at 1 byte per texel (BC7 or ASTC 4x4 after transcoding) and every PNG or JPEG at 4 bytes per texel, each with a full mipmap chain (x 4/3), plus the viewer's two combined body-mask canvases at the largest mask size."
+
+[budget.triangles_per_outfit]
+value = 120_000
+unit = "count"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "VD/ABSTRACT-AND-WARDROBE.md section 2.2 item 7: any outfit 120,000 triangles or fewer. Counted over every mesh the default style can show with every wardrobe slot filled (the most an outfit can draw)."
+
+[budget.draw_calls_per_outfit]
+value = 12
+unit = "count"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "VD/ABSTRACT-AND-WARDROBE.md section 2.2 item 7: any outfit 12 draw calls or fewer (one per primitive shown, counted as for the triangles)."
+
+# ------------------------------------------------------------------------------------------------------------------
+# Geometry: EXT_meshopt_compression without filters; every attribute keeps its lab data type (the viewer reads and
+# rewrites positions, normals, _SRC, _DQS and the 8-influence weights in JavaScript), values are rounded onto a
+# power-of-two grid first so that the byte codec finds the repetition. No KHR_mesh_quantization: it would fold a
+# transform into the inverse bind matrices, which the viewer recomputes when the body shape changes.
+# ------------------------------------------------------------------------------------------------------------------
+[geometry.position_grid_bits]
+value = 16
+unit = "count"
+range = 2
+class = "invented"
+tier = "layout"
+evidence = "Positions rounded to 2^-16 m (0.015 mm; at most 0.008 mm off). Must stay finer than 0.03 mm: the eye module finds the lid vertices by their rest position within 3e-5 m (lab viewer/src/eyes.ts). The shape files' base uses the same grid, so GLB and shape file stay equal."
+
+[geometry.normal_grid_bits]
+value = 12
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "Normals (and tangents, colours' companions) of meshes the CPU bake does not rewrite: components rounded to 2^-12, under 0.02 degrees."
+
+[geometry.baked_normal_grid_bits]
+value = 8
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "Normals of the meshes the viewer's shape bake rewrites at load (body, garments, props in shape.bake) are recomputed from the positions before the first frame; the GLB's own normals only serve other glTF readers. 2^-8 is under 0.3 degrees."
+
+[geometry.uv_grid_bits]
+value = 16
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "Texture coordinates rounded to 2^-16 of the texture: 1/32 texel on the 2048 skin map."
+
+[geometry.weight_grid_bits]
+value = 12
+unit = "count"
+range = 2
+class = "invented"
+tier = "layout"
+evidence = "Skin weights of the 8-influence set (_WEIGHTS8_0, _WEIGHTS8_1) rounded to 1/4096 with the largest-remainder rule, so each vertex's weights still sum to exactly 1 (a sum off 1 would shrink the vertex toward the joints)."
+
+[geometry.weight4_grid_bits]
+value = 10
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "The standard 4-influence set (JOINTS_0 / WEIGHTS_0) is what other glTF readers skin with; the viewer skins with the 8-influence set and uses this one only when switched to four for comparison. Rounded to 1/1024 with the largest-remainder rule (three.js renormalises it on load)."
+
+[geometry.dqs_grid_bits]
+value = 8
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "The dual-quaternion mask _DQS (0 to 1) rounded to 1/256."
+
+[geometry.color_grid_bits]
+value = 10
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "Vertex colours (eyeball zones, the glasses' frame and lens alpha) rounded to 1/1024."
+
+[geometry.morph_position_grid_bits]
+value = 15
+unit = "count"
+range = 2
+class = "invented"
+tier = "layout"
+evidence = "Morph target position deltas (GPU shape targets of eyes and lashes, the trousers' cloth correctives, wrist correctives) rounded to 2^-15 m (0.03 mm; at most 0.015 mm off at full weight). The trousers' ten cloth correctives were the largest single item of the geometry at 2^-17."
+
+[geometry.morph_normal_grid_bits]
+value = 10
+unit = "count"
+range = 2
+class = "invented"
+tier = "cosmetic"
+evidence = "Morph target normal deltas rounded to 2^-10 (under 0.06 degrees)."
+
+# ------------------------------------------------------------------------------------------------------------------
+# Shape files: the lab's int16 deltas re-quantised onto an absolute step, rows reordered along the mesh for the codec
+# (_SRC renumbered to match), then meshopt-encoded (format in the manifest's shape.bake entries, 'encoding').
+# ------------------------------------------------------------------------------------------------------------------
+[shape.delta_step]
+value = 0.02
+unit = "mm"
+range = 0.01
+class = "invented"
+tier = "layout"
+evidence = "The body's shape targets (and the clay figure's) rounded to 0.02 mm (at most 0.01 mm off per unit of weight; the lab's int16 step was 0.0013-0.0026 mm). The surface error stays far under the body model's own error (stature 2.7 mm, limb girths 1-5 mm on unseen survey people); measurement read-backs are computed from the weights, not the mesh, and do not change. Halving the step adds about 25 % to the shape files (measured on operator-m, 2026-11-25)."
+
+[shape.wear_delta_step]
+value = 0.04
+unit = "mm"
+range = 0.02
+class = "invented"
+tier = "cosmetic"
+evidence = "The garments', props' and hair's shape file (<name>.wear.shape.bin) on twice the body's step: at most 0.02 mm off per unit of weight, under 0.25 mm in the worst case of the packet's most extreme person (sum of weights about 12, F05_LONGARM), against 3 to 7 mm of cloth clearance. Saves 0.4 MB on each dressed person (measured 2026-11-25), which keeps the dressed woman under 10 MB."
+
+[shape.base_grid_bits]
+value = 16
+unit = "count"
+range = 2
+class = "invented"
+tier = "layout"
+evidence = "The shape files' base positions on the same 2^-16 m grid as the GLB positions."
+
+# ------------------------------------------------------------------------------------------------------------------
+# Motion clips: EXT_meshopt_compression with filters: rotations by the quaternion filter, translations (root and
+# pelvis only) by the exponential filter with more mantissa than glTF-Transform's default.
+# ------------------------------------------------------------------------------------------------------------------
+[clips.rotation_bits]
+value = 16
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "Quaternion filter at 16 bits (glTF-Transform's choice): largest rotation error 3e-5 measured on the M50 walk, seated base and demo clips (2026-11-25)."
+
+[clips.translation_bits]
+value = 20
+unit = "count"
+range = 4
+class = "invented"
+tier = "layout"
+evidence = "Exponential filter mantissa for root and pelvis translation. glTF-Transform's 12 bits gave errors up to 0.98 mm on the walk (pelvis travels 3.7 m), enough to move a foot that the lab holds to 9 of 10 mm of slide; 20 bits keep it under 0.01 mm."
+
+# ------------------------------------------------------------------------------------------------------------------
+# Textures: KTX2 by KTX-Software toktx 4.4.2 (Apache-2.0). Colour maps ETC1S, normal and occlusion-roughness-metal
+# maps UASTC with rate-distortion optimisation and Zstandard; which map takes which encoder is in pack.ts (TEXTURE_ROLES).
+# ------------------------------------------------------------------------------------------------------------------
+[texture.etc1s_quality]
+value = 255
+unit = "count"
+range = 64
+class = "invented"
+tier = "cosmetic"
+evidence = "toktx --qlevel (1-255): the highest ETC1S quality. The skin albedo at 2048 is 0.59 MB at 255 (0.57 MB as JPEG in the lab)."
+
+[texture.etc1s_level]
+value = 4
+unit = "count"
+range = 1
+class = "invented"
+tier = "cosmetic"
+evidence = "toktx --clevel (0-5): encoder effort; 4 is slower and smaller than the default 1 at the same quality."
+
+[texture.uastc_quality]
+value = 2
+unit = "count"
+range = 1
+class = "invented"
+tier = "cosmetic"
+evidence = "toktx --uastc_quality (0-4): 2 is the default speed/quality point."
+
+[texture.uastc_rdo_lambda]
+value = 2.0
+unit = "1"
+range = 1.0
+class = "invented"
+tier = "cosmetic"
+evidence = "toktx --uastc_rdo_l: rate-distortion lambda for UASTC. 2.0 makes the trousers' 1024 fold map 0.46 MB after Zstandard (1.0: 0.53 MB, 4.0: 0.42 MB; the plain UASTC file would be about 1.4 MB); checked in the look comparison of the key shots."
+
+[texture.zstd_level]
+value = 19
+unit = "count"
+range = 3
+class = "invented"
+tier = "cosmetic"
+evidence = "toktx --zcmp: Zstandard level for UASTC textures (1-22)."

@@ -1,0 +1,583 @@
+# Run-time numbers of the person in the product viewer (viewer/src/person/). One record per number:
+#   value, unit, range (the span in which the number is credible or was tried, same unit), class, basis (for "assumed"),
+#   tier (critical: changes an ergonomic result; layout: posture or placement; cosmetic: look or motion only), evidence.
+# Units are not converted: the unit says how the code reads the number. Validated by shared/runtime-params.ts in
+# `bun run check` and when the viewer is bundled (tools/bundle.ts refuses an incomplete record).
+# Owner: MV-core (viewer). The values were ported unchanged from the avatar lab (work/avatar-lab/viewer/src/, the
+# version the visual designer passed in REVIEW-08 and REVIEW-10); the lab's file and section are named in each record.
+# Classes: measured = measured on the lab's meshes or renders; assumed = chosen (basis: convention = the designer's
+# shot list or pose library, literature = textbook or paper, look_dev = tuned by eye in the lab's look development,
+# by_eye = set by eye for geometry); invented = a device of the method (iterations, step sizes, softness).
+
+# ==================================================================================================================
+# [operator] the seated-operator solver (operator.ts; lab operator.ts, owner B4)
+# ==================================================================================================================
+[operator.grips]
+# knuckle / middle / tip flexion per finger [index, middle, ring, pinky], thumb [base, middle, tip], then [spread], degrees
+relaxed = { value = [[25, 30, 15], [32, 37, 18], [38, 43, 22], [45, 50, 25], [10, 12, 10], [0]], unit = "deg", range = 10, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts GRIPS.relaxed: the designer's HAND_RELAXED pose (VD/BENCHMARK.md), used while a hand travels." }
+point = { value = [[0, 0, 0], [80, 90, 60], [80, 90, 60], [80, 90, 60], [38, 28, 25], [0]], unit = "deg", range = 10, class = "assumed", basis = "convention", tier = "layout", evidence = "Lab operator.ts GRIPS.point: the designer's HAND_POINT pose, the touchscreen hand." }
+flat = { value = [[4, 6, 3], [4, 6, 3], [5, 7, 4], [7, 9, 5], [4, 6, 4], [4]], unit = "deg", range = 5, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts GRIPS.flat: palm on an armrest or a screen, set by eye in the lab." }
+fist = { value = [[90, 100, 70], [90, 100, 70], [90, 100, 70], [90, 100, 70], [45, 40, 40], [0]], unit = "deg", range = 10, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts GRIPS.fist: the designer's HAND_FIST pose." }
+power = { value = [[58, 80, 45], [62, 84, 48], [64, 86, 50], [66, 88, 52], [40, 30, 35], [0]], unit = "deg", range = 15, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts GRIPS.power: the starting power grip, replaced per body by the solved wrap (wrapGrip); its thumb is used as it is." }
+
+[operator.hand]
+grip_radius = { value = 0.02, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts Operator.gripRadius: radius of the held grip cylinder (40 mm handle) the hand wraps; the real handle's size comes from the rig binding when it differs." }
+segment_radius = { value = [[0.0258, 0.0176, 0.0143], [0.0136, 0.0128, 0.0104], [0.018, 0.0132, 0.0105], [0.0152, 0.0119, 0.0102], [0.0109, 0.0093, 0.0076]], unit = "m", range = 0.001, class = "measured", tier = "cosmetic", evidence = "Lab operator.ts SEG_R [thumb, index, middle, ring, pinky] x 3 segments: joint-to-skin radius measured on the median man's hand mesh (B4/finger_radii.py; 90th percentile on the first segment, 97th on the others); F05 and M95H agree scaled by hand length within 1 mm." }
+thumb_close_axis = { value = [0.6, 0.8], unit = "1", range = 0.2, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts buildHand: the thumb closes about an axis mixed from the palm normal (first) and the across-palm direction (second)." }
+tip_extension = { value = 0.9, unit = "ratio", range = 0.2, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts buildHand: a fingertip lies this share of the last segment's length beyond the last joint when the skeleton has no tip joints." }
+palm_centre = { value = [0.45, 0.62], unit = "ratio", range = 0.05, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts buildHand: the palm centre between index and little knuckle (first), then from the wrist toward that point (second)." }
+reference_length = { value = 0.095, unit = "m", range = 0.005, class = "measured", tier = "layout", evidence = "Lab operator.ts buildHand: wrist to middle knuckle of the median man (hm08), the unit of hand size for the per-hand scaled numbers." }
+palm_pad = { value = 0.0183, unit = "m", range = 0.003, class = "measured", tier = "layout", evidence = "Lab operator.ts buildHand: palm pad over the joint plane, 11 mm guessed plus 7.3 mm measured on the skinned hm08 hand (B4/NOTES.md)." }
+grip_crease = { value = 0.86, unit = "ratio", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts buildHand: a held stick lies along the knuckle crease, this share of the way from the wrist to the knuckle line." }
+thumb_open = { value = [5, 45], unit = "deg", range = 5, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts buildHand: the probe angle that finds which way the power-grip thumb opens, and the most it may open." }
+thumb_clear = { value = 0.0075, unit = "m", range = 0.002, class = "measured", tier = "cosmetic", evidence = "Lab operator.ts buildHand: the thumb skin measured 7.5 mm inside the grip cylinder in the rig's opposed pose; the thumb opens until it clears by that." }
+thumb_iterations = { value = 20, unit = "count", range = 5, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts buildHand: bisection steps of the thumb opening." }
+grip_half_length = { value = 0.06, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts clampFingers and solve: half the length of the grip cylinder the fingers and palm keep out of (a 120 mm handle)." }
+
+[operator.wrap]
+finger_pad = { value = [0.0137, 0.0149, 0.0132, 0.012], unit = "m", range = 0.001, class = "measured", tier = "cosmetic", evidence = "Lab operator.ts wrapGrip [index, middle, ring, pinky]: joint centre to finger pad, measured on the skinned hm08 hand (first guess was 9 mm all round)." }
+limits = { value = [[15, 95], [15, 110], [5, 80]], unit = "deg", range = 10, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab operator.ts wrapGrip: least and most flexion of the knuckle, middle and tip joint in the solved wrap." }
+tip_clear = { value = 0.002, unit = "m", range = 0.001, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts wrapGrip: the fingertip stops this much short of the cylinder." }
+iterations = { value = 24, unit = "count", range = 4, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts wrapGrip: bisection steps per finger joint." }
+round = { value = 0.1, unit = "deg", range = 0.1, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts wrapGrip: the solved angles are rounded to this." }
+
+[operator.clamp]
+allow_min = { value = 0.001, unit = "m", range = 0.0005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts clampFingers (round 9): a finger segment may always enter the grip by this." }
+allow_extra = { value = 0.0005, unit = "m", range = 0.0005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: on top of what the held grip has (the designer accepted the grip's skin at 1.8 mm)." }
+iterations = { value = 24, unit = "count", range = 4, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: opening steps per finger." }
+open_max = { value = 40, unit = "deg", range = 10, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: the most a finger joint opens to clear the grip." }
+open_step = { value = 3, unit = "deg", range = 1, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: opening step." }
+rate = { value = [240, 90], unit = "deg_per_s", range = 30, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: the opening follows its target at most this fast while opening (first) and closing (second), so it does not pop." }
+apply_min = { value = 0.01, unit = "deg", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts clampFingers: an opening below this is not applied." }
+
+[operator.ik]
+reach_max = { value = 0.9995, unit = "ratio", range = 0.0005, class = "invented", tier = "layout", evidence = "Lab operator.ts twoBone: a limb never straightens past this share of its length (keeps the bend plane defined)." }
+straight = { value = 0.03, unit = "1", range = 0.01, class = "invented", tier = "layout", evidence = "Lab operator.ts twoBone: below this bend (length of the cross product of the rest segment directions) the rest limb counts as straight." }
+
+[operator.idle]
+breath_hz = { value = 0.24, unit = "hz", range = 0.06, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab operator.ts solve: breathing, about 14 breaths a minute at rest (12-20 is the usual adult range)." }
+shift_hz = { value = [0.071, 0.113], unit = "hz", range = 0.03, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: two slow, incommensurate weight-shift waves." }
+shift_second = { value = 0.5, unit = "ratio", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: amplitude of the second weight-shift wave against the first." }
+shift_phase = { value = 1.3, unit = "rad", range = 1.0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: phase of the second weight-shift wave." }
+
+[operator.trunk]
+lean_rate = { value = 6, unit = "per_s", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the trunk follows a lean command with this first-order rate." }
+pelvis_shift_deg = { value = 0.5, unit = "deg", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: roll of the pelvis per unit weight shift; the spine takes it back by its shares." }
+pelvis_lean_share = { value = 0.3, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: share of a forward lean taken by the pelvis." }
+pelvis_shift_m = { value = 0.002, unit = "m", range = 0.002, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: sideways pelvis travel per unit weight shift." }
+spine_share = { value = [0.10, 0.25, 0.30, 0.25, 0.10], unit = "ratio", range = 0.05, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: how a lean is shared over spine_01..spine_05." }
+spine_breath_share = { value = [0, 0, 0.2, 0.4, 0.4], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: how breathing is shared over spine_01..spine_05 (the chest)." }
+spine_lean_gain = { value = 0.7, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: share of a forward lean taken by the spine (the pelvis takes pelvis_lean_share)." }
+breath_deg = { value = 0.9, unit = "deg", range = 0.4, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: chest extension at the top of a breath." }
+clavicle_breath_deg = { value = 0.6, unit = "deg", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the clavicles rise with the breath." }
+
+[operator.head]
+screen_curve = { value = 0.18, unit = "ratio", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: a gaze point across a curved screen comes this share of the screen width (times the square of the across position) nearer." }
+eye_fallback_offset = { value = [0, 0.08, 0.08], unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: eye midpoint from the head joint for a skeleton without eye joints." }
+comfort_deg = { value = 12, unit = "deg", range = 4, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab operator.ts solve: gaze within this of straight ahead is taken mostly by the eyes (eye-head coordination; the head turns for larger shifts)." }
+inside_share = { value = 0.35, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: share of a gaze shift inside comfort_deg that the head still takes." }
+pitch_gain = { value = 0.8, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: the head takes less of a vertical gaze shift." }
+omega = { value = 9, unit = "per_s", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: critically damped head follower, about 0.35 s to settle: the head trails the eyes." }
+neck_share = { value = [0.25, 0.30, 0.45], unit = "ratio", range = 0.05, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: a head turn shared over neck_01, neck_02, head." }
+eye_fallback_limit = { value = 35, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab operator.ts solve: eye-in-head limit of the solver's own eye aim (the eye module overrides the eye joints afterwards)." }
+
+[operator.legs]
+pedal_lift = { value = 0.05, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: the foot lifts this much at the middle of a move from one pedal to another." }
+knee_pole = { value = [4, 0.6, 0.35], unit = "1", range = 0.2, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: knee pole from the hip-foot midpoint: sideways = knee_out times the first value, then up and forward in metres." }
+
+[operator.arm]
+wrist_limit = { value = 30, unit = "deg", range = 10, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab operator.ts Operator.wristLimit: at the touchscreen the hand swings no more than this off the forearm (comfortable wrist deviation)." }
+margin = { value = 0.003, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts Operator.margin: clearance kept between forearm and hand capsules and the body's capsules." }
+forearm_share = { value = 0.85, unit = "ratio", range = 0.1, class = "measured", tier = "layout", evidence = "Lab operator.ts armPen: share of the forearm's 90th-percentile radial extent (elbow bulk included) that lies toward the body." }
+knuckle_dir = { value = [-0.26, 0.2, 0.94], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: on a vertical stick the knuckles point forward, a little up and inward (x is multiplied by the side's sign)." }
+touch_finger_tilt = { value = [0, -0.25, 0], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: the pointing finger dips this much below the screen's inward normal." }
+touch_palm = { value = [0, -1, 0.15], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: the palm faces down and a little forward at the touchscreen." }
+armrest_finger_dir = { value = [-0.12, -0.05, 1], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: fingers forward on an armrest, toeing in (x times the side's sign)." }
+travel_clear = { value = [0, 0.035, -0.03], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: a travelling hand lifts and draws back by this at the middle of its way." }
+palm_radius = { value = 0.024, unit = "m", range = 0.003, class = "measured", tier = "cosmetic", evidence = "Lab operator.ts solve: palm skin's 97th-percentile distance from the wrist-knuckle lines per unit hand size (B4/finger_radii.py: 25.9 mm M50, 23.3 F05, 27.8 M95H)." }
+forearm_radius_default = { value = 0.031, unit = "m", range = 0.005, class = "measured", tier = "cosmetic", evidence = "Lab operator.ts solve: wrist radius when the body has no fit (median man's fit value)." }
+grip_clear = { value = 0.001, unit = "m", range = 0.001, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: palm and forearm clear the grip by this more than the held grip itself has them." }
+elbow_min_distance = { value = 0.05, unit = "m", range = 0.02, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: the forearm test runs only when last frame's elbow is at least this far from the wrist." }
+forearm_test_length = { value = 0.12, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab operator.ts solve: the stretch of forearm next to the wrist tested against the grip." }
+away = { value = [0.3, 0.7], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the hand counts as leaving the stick from the first value of its travel, over the second." }
+held = { value = 0.999, unit = "ratio", range = 0.001, class = "invented", tier = "layout", evidence = "Lab operator.ts solve: a goal weight above this counts as being on that goal (grip held, finger on the screen, palm on the armrest)." }
+clear_iterations = { value = 8, unit = "count", range = 2, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: push-out steps of the palm and forearm off the grip." }
+clear_done = { value = 0.0002, unit = "m", range = 0.0002, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: a remaining push under this ends the push-out." }
+clear_turn_max = { value = 10, unit = "deg", range = 5, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: most the hand turns about the fingertip in one push-out step." }
+reach_max = { value = 0.985, unit = "ratio", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts solve: the arm's usable reach as a share of upper arm plus forearm." }
+clavicle_from = { value = 0.90, unit = "ratio", range = 0.05, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: the shoulder girdle starts helping beyond this share of the usable reach." }
+clavicle_max = { value = 16, unit = "deg", range = 4, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab operator.ts solve: most the clavicle swings toward a far goal." }
+clavicle_gain = { value = 260, unit = "1", range = 60, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: clavicle swing in degrees per metre of reach beyond clavicle_from." }
+pole_offset = { value = [0.10, -0.32, -0.02], unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: the elbow pole while travelling or at the screen, from the shoulder (x times the side's sign)." }
+pole_mix = { value = [0.5, 0.6], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab operator.ts solve: weight of that pole for a travelling hand (first) and a hand at the screen (second)." }
+touch_from = { value = 0.01, unit = "ratio", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: the wrist limit at the screen applies from this touch weight." }
+wrist_iterations = { value = 4, unit = "count", range = 1, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts solve: passes of the comfortable-wrist correction." }
+
+[operator.arm.slide]
+travel = { value = [0.3, 1.0], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve (round 6b): between grip and touchscreen the hand travels over this part of the blend, after sliding off the stick." }
+lift = { value = 0.14, unit = "m", range = 0.03, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the closed hand slides this far up the stick before it travels." }
+up = { value = [0.0, 0.3], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the slide up the stick happens over this part of the blend." }
+down = { value = [0.88, 1.0], unit = "ratio", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the hand comes down onto the screen point over this part of the blend." }
+turn = { value = [0.12, 1.0], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the hand turns over this part of the blend (spread wider to lower the joint change per frame)." }
+
+[operator.arm.swivel]
+probe = { value = 6, unit = "deg", range = 2, class = "invented", tier = "layout", evidence = "Lab operator.ts solve: probe angle that finds which elbow swivel direction is outward." }
+range = { value = [-24, 72], unit = "deg", range = 10, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: the elbow may swivel this far inward (negative) and outward to keep the forearm clear of the body." }
+step = { value = 3, unit = "deg", range = 1, class = "invented", tier = "layout", evidence = "Lab operator.ts solve: swivel candidates are this far apart." }
+extra_clear = { value = 0.004, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: a swivel counts as clear at the margin plus this." }
+rate = { value = 160, unit = "deg_per_s", range = 40, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: most the elbow swivel changes per second." }
+shift_max = { value = 0.06, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts solve: a free hand moves outward by at most this when no swivel clears." }
+shift_rate = { value = 0.25, unit = "m_per_s", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: how fast that outward shift follows." }
+
+[operator.fingers]
+life_deg = { value = 2.5, unit = "deg", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: idle finger movement when not gripping." }
+life_rate = { value = 1.9, unit = "per_s", range = 0.5, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: angular rate (rad/s) of the finger life." }
+thumb_share = { value = 0.4, unit = "ratio", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: the thumb takes this share of the finger life." }
+vary = { value = 0.3, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: per-joint variation of the finger life." }
+vary_rate = { value = 0.9, unit = "per_s", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts solve: angular rate (rad/s) of that variation." }
+
+[operator.targets]
+# the stand-in rig of defaultTargets: the fallback when viewer/src/person/rig-binding.ts supplies no real rig
+reference_thigh = { value = 0.44, unit = "m", range = 0.01, class = "measured", tier = "layout", evidence = "Lab operator.ts defaultTargets: the median man's thigh length (hip to knee joint), the unit for the thigh-scaled numbers." }
+hip_above_pan = { value = 0.125, unit = "m", range = 0.02, class = "measured", tier = "critical", evidence = "Lab operator.ts defaultTargets: hip centre above the pan at the median thigh length when the body has no fit; at 0.085 the buttock sat 74-102 mm inside the pan." }
+bone_below_hip = { value = 0.085, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: bone under the hip joint at the median thigh length; the tissue below it is what a cushion compresses." }
+press_limits = { value = [0.02, 0.04], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the cushion takes at least and at most this much tissue." }
+press_share = { value = 0.3, unit = "ratio", range = 0.1, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the cushion takes this share of the soft tissue under the hip joint." }
+pan_below_knee = { value = 0.045, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the pan top lies this far below the knee joint's height above the sole (popliteal height)." }
+feet_from_hip = { value = [0.93, 0.10], unit = "ratio", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the feet rest ahead of the hip by these shares of thigh and calf length." }
+foot_out = { value = 0.03, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the feet stand this much wider than the hips." }
+recline = { value = 10, unit = "deg", range = 5, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: trunk recline of the stand-in seat; the rig binding uses the real backrest." }
+knee_out = { value = 0.03, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the knees fall outward by this." }
+stick_length = { value = 0.14, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: pivot to grip centre of the stand-in stick." }
+touch_normal = { value = [-0.25, 0.35, -1], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the stand-in touchscreen faces back, up and a little to the right." }
+screen_size = { value = [1.3, 0.5], unit = "m", range = 0.1, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: width and height of the stand-in screen the gaze ranges over." }
+pedal_pitch = { value = 15, unit = "deg", range = 5, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: pedal rest pitch, toes up." }
+pedal_travel = { value = 12, unit = "deg", range = 4, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: pedal press travel." }
+pedal_offsets = { value = [0.02, -0.13], unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the right home pedal and the third pedal, sideways from the right foot." }
+upper_arm = { value = [15, 10], unit = "deg", range = 5, class = "assumed", basis = "convention", tier = "critical", evidence = "Lab operator.ts defaultTargets: the designer's SEATED_GRIPS upper arm, flexed (first) and abducted (second)." }
+forearm_dir = { value = [-0.10, 0.02, 1], unit = "1", range = 0.05, class = "assumed", basis = "convention", tier = "critical", evidence = "Lab operator.ts defaultTargets: forearm level and toeing in a little (elbow about 95 degrees), x times the side's sign." }
+elbow_pole_offset = { value = [0.02, -0.03, -0.02], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the elbow pole from the seated elbow (x times the side's sign)." }
+palm_ahead = { value = [-0.035, 0.012, 0.07], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the grip centre from the wrist (x times the side's sign; z scaled by forearm length)." }
+reference_forearm = { value = 0.26, unit = "m", range = 0.01, class = "measured", tier = "layout", evidence = "Lab operator.ts defaultTargets: the median man's forearm (elbow to wrist joint)." }
+touch_from_shoulder = { value = [-0.06, -0.10, 0.45], unit = "m", range = 0.03, class = "assumed", basis = "convention", tier = "layout", evidence = "Lab operator.ts defaultTargets: the designer's OPERATE: the stand-in touch point 0.45 ahead of and 0.10 below the left shoulder." }
+screen_from_eye = { value = [0.06, 0.85], unit = "m", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the stand-in screen centre below and ahead of the eyes." }
+back_press = { value = 0.015, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the backrest presses the upper back in by this." }
+pelvis_press = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the backrest takes this much at the pelvis." }
+back_clear = { value = 0.018, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the backrest plane lies this much behind the back's fit." }
+back_behind_hip = { value = 0.115, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the backrest plane behind the hip centre when the body has no fit." }
+pan_point_z = { value = 0.17, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the seat plane's reference point ahead of the hip centre." }
+knee_radius_default = { value = 0.055, unit = "m", range = 0.01, class = "measured", tier = "critical", evidence = "Lab operator.ts defaultTargets: thigh radius at the knee when the fit has no capsules (median man)." }
+seat_full_front = { value = 0.38, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the stand-in pan's deepest front edge ahead of the hip centre." }
+seat_short_of_crease = { value = 0.05, unit = "m", range = 0.02, class = "assumed", basis = "literature", tier = "critical", evidence = "Lab operator.ts defaultTargets: the stand-in pan ends this far short of the knee crease (seat depth less than buttock-popliteal length)." }
+heel_share = { value = 0.40, unit = "ratio", range = 0.05, class = "measured", tier = "layout", evidence = "Lab op_heelBack: back of the heel behind the ankle as a share of ankle-to-ball length (median foot about 0.065 m) when the fit has no heel." }
+shoe_heel = { value = 0.015, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab op_heelBack: a shoe's heel behind the foot's own heel." }
+
+[operator.targets.armrest_widen]
+iterations = { value = 60, unit = "count", range = 10, class = "invented", tier = "layout", evidence = "Lab operator.ts defaultTargets: steps of the armrest widening." }
+clear = { value = 0.001, unit = "m", range = 0.001, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the elbow goes out until the forearm clears by the margin plus this." }
+wide_clear = { value = 0.006, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the same for round 3's wide armrest (before and after pictures only)." }
+step = { value = 0.003, unit = "m", range = 0.001, class = "invented", tier = "layout", evidence = "Lab operator.ts defaultTargets: elbow step outward." }
+wide_step = { value = 0.004, unit = "m", range = 0.001, class = "invented", tier = "layout", evidence = "Lab operator.ts defaultTargets: elbow and wrist step outward for the wide armrest." }
+
+[operator.targets.grip_clear]
+iterations = { value = 30, unit = "count", range = 5, class = "invented", tier = "critical", evidence = "Lab operator.ts defaultTargets: steps that raise the stand-in grip clear of the thighs." }
+travel = { value = 20, unit = "deg", range = 5, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the grip clears the thighs over this stick deflection both ways." }
+travel_diagonal = { value = 14, unit = "deg", range = 4, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the same on the diagonals." }
+capsule = { value = [0.07, 0.06], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the closed hand around the grip, below and above the grip centre along the stick." }
+hand_radius = { value = 0.025, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the closed hand's radius over the grip's." }
+spare = { value = 0.015, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: room left between the closed hand and the thigh." }
+step = { value = 0.005, unit = "m", range = 0.002, class = "invented", tier = "critical", evidence = "Lab operator.ts defaultTargets: the pivot rises by this per step." }
+
+[operator.targets.mount]
+housing_height = { value = 0.05, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets (round 8): the stand-in stick's mount housing under the pivot." }
+housing_radius = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: its radius as a capsule." }
+stick_min = { value = 0.06, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the stand-in stick shortens to this at the least." }
+clear = { value = 0.010, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab operator.ts defaultTargets: the mount clears the thigh by this." }
+step = { value = 0.005, unit = "m", range = 0.002, class = "invented", tier = "critical", evidence = "Lab operator.ts defaultTargets: the stick shortens by this per step." }
+
+[operator.targets.armrest]
+dir = { value = [-0.06, 0, 1], unit = "1", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the palm's place on the armrest lies along this from the elbow (x times the side's sign)." }
+reach = { value = [1.05, 0.02], unit = "1", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: at this multiple of forearm length plus this many metres." }
+below_elbow = { value = 0.045, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab operator.ts defaultTargets: the armrest point lies this far below the elbow." }
+
+[operator.standin]
+# the stand-in rig's drawn shapes (standInProps). Not drawn in the product; the pan solid feeds the seat contact when no rig binding does
+foot_length = { value = [1.62, 0.03], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: pedal length = heel back + ankle-to-ball x first value + second value (m)." }
+grip_height = { value = 0.12, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: drawn grip cylinder height." }
+stick = { value = [0.3, 0.6, 0.008], unit = "1", range = 0.1, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: drawn stick centre (share of length), length (share) and radius (m)." }
+pedal = { value = [0.10, 0.012, 0.008], unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: drawn pedal width, thickness, and its drop below the heel point." }
+touch = { value = [0.26, 0.17, 0.01], unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: drawn touchscreen size." }
+touch_inset = { value = 0.006, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: the drawn touchscreen lies this far behind the touch point." }
+screen_bar = { value = [0.012, 0.08], unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: the screen's marker bar thickness and corner stub height." }
+
+[operator.standin.backrest]
+size = { value = [0.46, 0.6, 0.04], unit = "m", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: stand-in backrest width, height, thickness." }
+
+[operator.standin.pan]
+edge = { value = 0.04, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab standInProps (RL, round 6): bull-nose radius of the stand-in pan's front edge." }
+thickness = { value = 0.08, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab standInProps: stand-in cushion thickness." }
+half_width = { value = 0.28, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "critical", evidence = "Lab standInProps: half of a 560 mm pan (the widest seated hips of the lab's persons, 512 mm, with room)." }
+back_default = { value = 0.10, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the backrest's line behind the hip when no backrest plane exists." }
+rear_under_back = { value = 0.05, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the pan runs this far under the backrest." }
+min_depth = { value = 0.30, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the pan is at least this deep." }
+
+[operator.standin.armrest]
+width = { value = 0.08, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: stand-in armrest pad width before narrowing." }
+below = { value = 0.025, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the pad's centre below the armrest point." }
+behind_elbow = { value = 0.01, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the pad starts this far behind the elbow." }
+length = { value = 0.30, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: pad length." }
+probe = { value = 0.015, unit = "m", range = 0.005, class = "invented", tier = "layout", evidence = "Lab standInProps: the pad's inner edge is tested this far above and below its middle." }
+iterations = { value = 10, unit = "count", range = 2, class = "invented", tier = "layout", evidence = "Lab standInProps: slide and narrow steps of the pad." }
+clear = { value = 0.005, unit = "m", range = 0.002, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab standInProps: the pad edge clears the body by this." }
+slide_step = { value = 0.003, unit = "m", range = 0.001, class = "invented", tier = "layout", evidence = "Lab standInProps: outward step of the pad." }
+narrow_step = { value = 0.003, unit = "m", range = 0.001, class = "invented", tier = "layout", evidence = "Lab standInProps: narrowing step of the pad." }
+thickness = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: pad thickness." }
+report_from = { value = 0.0005, unit = "m", range = 0.0005, class = "invented", tier = "critical", evidence = "Lab standInProps: an overlap above this is reported as a clash." }
+
+[operator.standin.post]
+from_back = { value = 0.10, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps (round 7): the armrest post stands this far from the pad's back end." }
+min_height = { value = 0.02, unit = "m", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab standInProps: shortest post." }
+inset = { value = 0.016, unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: the post's inset from the pad's outer edge." }
+size = { value = [0.022, 0.03], unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: post width and depth." }
+
+[operator.standin.mount]
+bracket_below = { value = 0.04, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps (round 8): the mount bracket runs this far below the pivot." }
+bracket_back = { value = 0.02, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: the bracket meets the armrest this far short of its front end." }
+housing = { value = [0.05, 0.05, 0.06], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: drawn mount housing size." }
+bracket = { value = [0.02, 0.025], unit = "m", range = 0.005, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab standInProps: bracket thickness and width." }
+
+[operator.scripts.reach_touch]
+out = { value = 0.75, unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts reachTouch: the left hand leaves the grip for the touchscreen over this." }
+back = { value = [1.25, 2.0], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts reachTouch: and comes back between these times after the start (one tap)." }
+per_tap = { value = 0.5, unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts reachTouch: each further tap holds the hand at the screen this much longer." }
+slide = { value = 0.35, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts reachTouch (round 8): the fist stays closed over this first part of the move off the stick." }
+open = { value = 0.75, unit = "ratio", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts reachTouch: how far the hand opens while travelling." }
+
+[operator.scripts.operate8]
+period = { value = 8, unit = "s", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: the designer's OPERATE clip is 8 s (VD/review-packet.json clips)." }
+stick_amplitude = { value = 20, unit = "deg", range = 5, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right-stick deflection (the stick's full travel)." }
+forward = { value = [0.1, 0.45, 0.55, 0.9], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right stick forward: rise from, to, fall from, to." }
+back = { value = [0.6, 0.95, 1.0, 1.3], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right stick back." }
+left = { value = [1.05, 1.35, 1.4, 1.65], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right stick left." }
+right = { value = [1.45, 1.7, 1.75, 1.98], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right stick right." }
+touch_at = { value = 2.0, unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: the left hand goes to the touchscreen at this time." }
+head_pulse = { value = [4.1, 4.9, 5.2, 5.95], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: a look to the upper left." }
+head = { value = [40, 20], unit = "deg", range = 5, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: head yaw left and pitch of that look." }
+gaze = { value = [1.0, -0.9], unit = "1", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: gaze across and up on the screen during the look." }
+move_pulse = { value = [6.0, 6.8, 7.1, 7.9], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: lean in with both sticks moving." }
+lean = { value = 10, unit = "deg", range = 3, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: forward lean of that move." }
+move_sticks = { value = [14, 10, 2.2, -12, 1.1, 12, 2.5], unit = "1", range = 2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts operate8: right stick forward and side amplitude (deg) and side rate (rad/s); left stick forward amplitude, rate (multiple of pi per s), side amplitude, rate (rad/s)." }
+
+[operator.scripts.demo30]
+duration = { value = 30, unit = "s", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the owner's 30-second proof." }
+on = { value = [0.6, 2.6], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: hands from the armrests to the grips." }
+off = { value = [27.2, 29.4], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: and back." }
+open = { value = 0.8, unit = "ratio", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts demo30: hands open while travelling." }
+sticks_pulse = { value = [3.2, 4.0, 8.2, 9.0], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: both sticks move." }
+phase_rate = { value = 1.6, unit = "per_s", range = 0.3, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: phase rate (rad/s) of the stick motion." }
+stick_r = { value = [18, 14, 0.5], unit = "1", range = 2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: right stick forward and side amplitude (deg), side phase multiple." }
+stick_l = { value = [10, 18, 0.7, 0.9], unit = "1", range = 2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: left stick forward and side amplitude (deg), their phase multiples." }
+second_axis = { value = [5.5, 6.5], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the second axis of each stick joins in (circles)." }
+touch_window = { value = [9.5, 14.5], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the touchscreen sequence runs in this window." }
+touch_at = { value = 10.0, unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the left hand leaves for the screen at this time." }
+touch_taps = { value = 3, unit = "count", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: taps on the screen." }
+touch_gaze_pulse = { value = [9.6, 10.2, 12.6, 13.2], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the gaze goes down to the touchscreen." }
+touch_gaze = { value = [0.25, -0.9], unit = "1", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: where on the screen that gaze goes." }
+pedal_pulse = { value = [15.0, 16.0, 19.0, 20.0], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the right foot goes to the third pedal." }
+pedal_index = { value = 2, unit = "count", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the pedal the right foot moves to (0-based)." }
+pedal_on = { value = 0.999, unit = "ratio", range = 0.001, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts demo30: above this the foot counts as on the pedal." }
+press = { value = [0.9, 0.3], unit = "ratio", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: depth of the press and of the tap after it." }
+press_pulse = { value = [16.3, 16.9, 17.6, 18.2], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the press." }
+tap_pulse = { value = [18.3, 18.6, 18.7, 18.95], unit = "s", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: the tap." }
+look_pulse = { value = [20.5, 21.2, 26.2, 27.0], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: a look across the screen." }
+look = { value = [0.95, 0.5], unit = "1", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: how far across and up that look goes." }
+lean = { value = 4, unit = "deg", range = 2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: lean toward the touchscreen." }
+lean_pulse = { value = [10.2, 10.9, 12.4, 13.4], unit = "s", range = 0.2, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab operator.ts demo30: when." }
+
+[operator.still]
+settle_s = { value = 1.5, unit = "s", range = 0.5, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab operator.ts seatedOperator: a still at time t runs the solver over the last 1.5 s so the head has settled." }
+step_s = { value = 0.0333333, unit = "s", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab operator.ts seatedOperator: fixed solver step of a still (1/30 s)." }
+fit_key_tolerance = { value = 0.003, unit = "m", range = 0.002, class = "invented", tier = "layout", evidence = "Lab operator.ts seatedOperator: a body uses a baked person's fit when its rest head and hand positions are within this of the person's key." }
+
+# ==================================================================================================================
+# [contact] flesh resting on the seat pan and backrest (contact.ts, shaders.ts; lab contact.ts, RL rounds 5-9)
+# ==================================================================================================================
+[contact.planes]
+knee = { value = 0.012, unit = "m", range = 0.004, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts contactParams.knee: softness of a plane's contact edge (softplus)." }
+radius = { value = 0.32, unit = "m", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts contactParams.radius: a plane acts within this distance of its point." }
+fade = { value = 0.14, unit = "m", range = 0.03, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts contactParams.fade: sideways fade beyond the radius." }
+depth = { value = 0.14, unit = "m", range = 0.03, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts contactParams.depth: deeper than this behind the plane is not pulled out (a limb passing behind)." }
+bulge = { value = 0.25, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts contactParams.bulge: sideways bulge per metre pushed, planes." }
+
+[contact.pan]
+knee = { value = 0.02, unit = "m", range = 0.005, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts contactParams.pan.knee: softness of the contact edge on the pan (quadratic knee), about one edge of the body mesh." }
+lip_knee = { value = [0.012, 0.030], unit = "m", range = 0.005, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts pan.lipKnee: knee, back of the knee and calf skin up to the first value inside is brought out, beyond the second left (the rigging lead's lip rule)." }
+lip_thigh = { value = [0.09, 0.16], unit = "m", range = 0.02, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts pan.lipThigh: thigh and buttock: everything a seated body can sink is brought out." }
+mask = { value = [0.10, 0.30], unit = "ratio", range = 0.05, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts pan.mask: the thigh mask rises from 0 to 1 between these shares of the rest thigh length above the rest knee." }
+mask_x = { value = [0.30, 0.36], unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.maskX: and is 0 farther than this from the midline at rest (arms and hands)." }
+bulge_knee = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts pan.bulgeKnee: reach of the pan's effect above its surface, in multiples of this." }
+side = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts pan.side: width of the band over which the bulge turns from inward to outward, at rest." }
+spread = { value = 0.06, unit = "m", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts pan.spread (round 7): height of the roll of displaced tissue just above the seat." }
+volume = { value = 1.2, unit = "ratio", range = 0.2, class = "measured", tier = "cosmetic", evidence = "Lab contact.ts pan.volume (round 7): share of the integrated sink put back; 1.2 kept the five persons' volume within 0.35 l." }
+bulge_max = { value = 0.05, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts pan.bulgeMax7: never more than this sideways." }
+normals = { value = 0, unit = "count", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts pan.normals: 0 = the skinned normals are kept at the contact (bent normals showed the triangles as diagonal streaks on this body)." }
+half_depth = { value = 0.21, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.halfDepth: fallback when the seat plane carries no pan geometry." }
+half_width = { value = 0.28, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.halfWidth: fallback." }
+thickness = { value = 0.08, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.thickness: fallback." }
+edge = { value = 0.04, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.edge: fallback front-edge radius." }
+knee_above_pan = { value = 0.045, unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.kneeAbovePan: fallback rest knee height above the pan." }
+thigh_length = { value = 0.40, unit = "m", range = 0.03, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.thighLength: fallback rest thigh length." }
+hip_x = { value = 0.09, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts pan.hipX: fallback rest hip joint distance from the midline." }
+rear = { value = 0.50, unit = "m", range = 0.05, class = "assumed", basis = "by_eye", tier = "layout", evidence = "Lab contact.ts packPlanes: fallback pan depth behind its front edge." }
+
+[contact.shader]
+thigh_min = { value = 0.15, unit = "m", range = 0.03, class = "invented", tier = "layout", evidence = "Lab contact.ts labPan: the rest thigh length used for the mask is at least this." }
+reach = { value = [3.0, 4.0], unit = "1", range = 0.5, class = "invented", tier = "layout", evidence = "Lab contact.ts labPan: the pan acts within this many bulge knees around it, and the roll within this many spreads above it." }
+side_reach = { value = 0.08, unit = "m", range = 0.02, class = "invented", tier = "layout", evidence = "Lab contact.ts labPan (round 7): beside and behind the pan the roll reaches this far." }
+soft_depth = { value = 2.0, unit = "m", range = 0.5, class = "invented", tier = "layout", evidence = "Lab contact.ts labPan: for soft tissue the pan has no bottom (a depth no body reaches)." }
+pan_box = { value = [0.02, 0.06], unit = "m", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts: the seat's sink map runs this far behind the pan's rear and ahead of its front edge." }
+back_box = { value = [-0.28, 0.28, -0.05, 0.60], unit = "m", range = 0.05, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts: the backrest's sink map: sideways from, to, and from below to above the pan top along the backrest." }
+back_above_pan = { value = [-0.01, 0.03], unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "layout", evidence = "Lab contact.ts labFlatten (round 7): the backrest stands on the pan: it takes over between these heights above the pan top." }
+back_floor = { value = 0.01, unit = "m", range = 0.005, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts labFlatten: the backrest roll never moves skin down to within this of the seat." }
+over_sink = { value = 0.005, unit = "m", range = 0.002, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts labRoll: skin over a sink deeper than this does not roll out." }
+capsule = { value = [6.0, 1.05, 1.35], unit = "1", range = 0.2, class = "invented", tier = "layout", evidence = "Lab contact.ts labCapsules: a capsule acts within this many knees of its surface; a limb's own surface gives way between these multiples of its radius." }
+plane_reach = { value = 8.0, unit = "1", range = 2, class = "invented", tier = "layout", evidence = "Lab contact.ts labFlatten: a plane acts within this many knees in front of it." }
+plane_depth_share = { value = 0.35, unit = "ratio", range = 0.1, class = "invented", tier = "layout", evidence = "Lab contact.ts labFlatten: the plane's effect fades in over this share of its depth." }
+up_min = { value = 0.2, unit = "1", range = 0.1, class = "invented", tier = "layout", evidence = "Lab contact.ts: a backrest leaning more than this lets the pan's top meet it no farther up (division guard)." }
+normal_probe = { value = 0.003, unit = "m", range = 0.001, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts skinning patch: step along the surface for the bent normal (only when contact.pan.normals = 1)." }
+sink_range = { value = [0.20, 0.06], unit = "m", range = 0.02, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts sink pass: skin from this deep below to this high above the pan is drawn into the sink map." }
+
+[contact.sink]
+moving_window_ms = { value = 150, unit = "ms", range = 50, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts renderSink: a new map within this time of the last counts as continuous motion (read back asynchronously)." }
+jump = { value = 0.02, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts renderSink: a sampled joint moving more than this since the map in use is a jump (read back at once)." }
+min_interval_ms = { value = 100, unit = "ms", range = 50, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts renderSink (round 9): while moving, a new map at most this often (it cost about 5 ms a frame)." }
+bone_stride = { value = 7, unit = "count", range = 2, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts renderSink: every this-many-th joint is sampled for the motion signature." }
+
+[contact.roll]
+direction_blur = { value = 5, unit = "texel", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts rollField: the direction toward the sink is the gradient of the sink blurred over this (about 45 mm)." }
+area_blur = { value = 3, unit = "texel", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts rollField: area and direction are then blurred over this." }
+sink_blur = { value = 0.8, unit = "texel", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab contact.ts rollField: the sink itself is blurred only this much." }
+steps = { value = 12, unit = "count", range = 2, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts rollField: the sink is integrated inward in this many steps (12 cm)." }
+step = { value = 0.01, unit = "m", range = 0.002, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts rollField: of this length." }
+start = { value = 0.005, unit = "m", range = 0.002, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts rollField: the first step's middle." }
+fade_steps = { value = 3, unit = "count", range = 1, class = "invented", tier = "cosmetic", evidence = "Lab contact.ts rollField: the last steps fade out." }
+
+# ==================================================================================================================
+# [shadow] the person's own soft-shadow filter and shadow look-up (shaders.ts; lab studio.ts installSoftShadows, rounds 6-9).
+# Only the person's materials use it; the rig keeps three's filter and its own light settings.
+# ==================================================================================================================
+[shadow]
+light_tan = { value = 0.12, unit = "1", range = 0.04, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts LIGHT_SIZE.key: apparent size of the key light (tan of its half-angle; a 1 m softbox at 4 m), sets the penumbra width with blocker distance." }
+normal_bias = { value = 0.0015, unit = "m", range = 0.001, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: the key light's normal offset on the person; a larger one (12 mm, 3 mm) reached through neighbouring surfaces and drew a speckled fringe along contact lines. The rig keeps its own." }
+disc_min_texels = { value = 2.5, unit = "texel", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8: smallest filter disc (was 1.5: aliasing on thin blockers)." }
+disc_min = { value = 0.0018, unit = "m", range = 0.0005, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: and at least this on the body." }
+disc_max = { value = 0.024, unit = "m", range = 0.008, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8 (REVIEW-06): the penumbra radius is capped here (was 80 mm)." }
+probes = { value = [0.015, 0.05, 0.15, 0.40], unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: the four blocker probes look this far in front of the receiver." }
+probe_weights = { value = [0.0325, 0.0675, 0.175, 0.425], unit = "m", range = 0.01, class = "invented", tier = "cosmetic", evidence = "Lab studio.ts: trapezoid weights of the probes for the mean blocker distance (with a 0.3 m tail after the last)." }
+probe_taps = { value = [6, 8, 12, 16], unit = "count", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 9: taps of the four probes." }
+wide_taps = { value = 64, unit = "count", range = 16, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8: a disc wider than wide_from texels gets this many taps." }
+narrow_taps = { value = 32, unit = "count", range = 8, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: other discs get this many." }
+wide_from = { value = 8.0, unit = "texel", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: a disc counts as wide from this many texels." }
+contact_disc = { value = 3.0, unit = "1", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8: a contact (under 15 mm) is filtered over this multiple of the smallest disc." }
+contact_taps = { value = 24, unit = "count", range = 8, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8: with this many taps (were 8)." }
+quick_taps = { value = [12, 4], unit = "count", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 9: the quick look for anything in front, then for a contact." }
+seam = { value = [0.002, 0.05], unit = "ratio", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 8: the contact result is blended in where the probes just begin to see a blocker." }
+lit = { value = 0.999, unit = "ratio", range = 0.001, class = "invented", tier = "cosmetic", evidence = "Lab studio.ts: a quick look above this counts as unshadowed." }
+backface = { value = -0.5, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts round 9: no filter where N.L is below this (the skin's wrapped diffuse ends before)." }
+depth_bias = { value = 0.001, unit = "m", range = 0.0005, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab studio.ts: receiver depth bias, plus one texel of slope (receiver-plane bias per pixel)." }
+slope_max = { value = 4.0, unit = "1", range = 1, class = "invented", tier = "cosmetic", evidence = "Lab studio.ts: the receiver plane's slope is capped here (metres of depth per metre across)." }
+tap_falloff = { value = 0.75, unit = "1", range = 0.2, class = "invented", tier = "cosmetic", evidence = "Lab studio.ts labPcf: tap weight 1 - this x (radius share)^2 (a soft kernel)." }
+
+# ==================================================================================================================
+# [materials] the person's material recipes (materials.ts; lab materials.ts, RL and B5). Colours are linear RGB.
+# ==================================================================================================================
+[materials.skin]
+roughness = { value = 0.52, unit = "1", range = 0.08, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: base roughness when the package has no roughness map." }
+ior = { value = 1.4, unit = "1", range = 0.05, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab materials.ts skin: index of refraction of skin (about 1.4)." }
+specular = { value = 1.0, unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: specular intensity." }
+clearcoat = { value = 0.22, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin (round 10): the thin oily coat's strength when the package's material entry gives none (the light tone; darker tones bring their own)." }
+clearcoat_roughness = { value = 0.28, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: the coat's roughness default." }
+sheen = { value = [0.35, 0.55], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: peach-fuzz sheen strength and roughness." }
+sheen_color = { value = [0.9, 0.75, 0.68], unit = "linear_rgb", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: sheen colour." }
+micro_tiling = { value = 48, unit = "count", range = 20, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: repeats of the procedural pore normal per unit of UV0 when the package gives none (operator-m gives 140)." }
+micro_strength = { value = 0.35, unit = "1", range = 0.15, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: its strength default (operator-m gives 0.16)." }
+mask_push = { value = 0.003, unit = "m", range = 0.001, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2b: skin under a garment's body mask is pushed this far inward so it cannot z-fight thin cloth." }
+scatter = { value = [1.0, 0.36, 0.22], unit = "linear_rgb", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skinUniforms.labScatter: colour of light carried past the terminator (red furthest)." }
+scatter_strength = { value = 0.42, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skinUniforms.labSkinStrength: how far the wrapped diffuse reaches past the terminator." }
+back_scatter = { value = 0.12, unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skinUniforms.labBackScatter: light through thin parts (ears, nose) from behind." }
+blend_normals = { value = [0.8, 0.5, 0.15], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: share of the smooth (unperturbed) normal in the red, green and blue diffuse (blended normals: soft red, crisp pores in blue)." }
+back_scatter_normal = { value = 0.4, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: back-scatter direction bent by this share of the normal." }
+back_scatter_power = { value = 3.0, unit = "1", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts skin: back-scatter lobe exponent." }
+
+[materials.detail]
+# the procedural tiling detail normals (lab materials.ts normalFromHeight); [size in texels, cells or repeats, height scale, normal strength]
+skin = { value = [256, 160, 14, 1.6], unit = "1", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts detailNormal('skin'): cellular pores and creases, 256 texels, 160 cells (seed 7), height x14, strength 1.6." }
+skin_seed = { value = 7, unit = "count", range = 0, class = "invented", tier = "cosmetic", evidence = "Lab materials.ts: seed of the pore pattern (fixed: pictures repeat)." }
+leather = { value = [256, 60, 8, 2.2], unit = "1", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts detailNormal('leather'): 60 cells (seed 3), height x8, strength 2.2." }
+leather_seed = { value = 3, unit = "count", range = 0, class = "invented", tier = "cosmetic", evidence = "Lab materials.ts: seed of the leather grain." }
+weave = { value = [128, 16, 0.9, 2.0], unit = "1", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts detailNormal('weave'): plain weave, 16 threads per tile, the thread on top 0.9 against 0.1, strength 2.0." }
+twill = { value = [128, 16, 32, 0.8, 2.0], unit = "1", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts detailNormal('twill'): diagonal ribs 16 per tile, 32 across, rib 0.8 + 0.2 across, strength 2.0." }
+knit = { value = [128, 12, 1.2, 0.55, 2.0], unit = "1", range = 0, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts detailNormal('knit'): 12 columns of loops, V of 1.2, loop 0.55 + 0.45, strength 2.0." }
+anisotropy = { value = 8, unit = "count", range = 4, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts: anisotropic filtering of the detail maps." }
+
+[materials.eye]
+roughness = { value = 0.45, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: base roughness of the eyeball." }
+ior = { value = 1.376, unit = "1", range = 0.005, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: refractive index of the cornea (1.376)." }
+specular = { value = 0.5, unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: specular intensity of the base." }
+clearcoat = { value = [1.0, 0.5], unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: clear coat (the tear film, the catch light) on a shell eye and on a recessed one." }
+clearcoat_roughness = { value = 0.03, unit = "1", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: tear-film roughness on the cornea." }
+iris_outer = { value = [0.34, 0.33, 0.16], unit = "linear_rgb", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: default outer iris colour (the package's eye_ball entry gives its own)." }
+iris_inner = { value = [0.5, 0.33, 0.12], unit = "linear_rgb", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: default inner iris colour." }
+pupil = { value = 0.3, unit = "ratio", range = 0.05, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts and materials.ts: pupil radius as a share of the iris (3.5 mm of 11.7)." }
+sclera = { value = [0.80, 0.765, 0.71], unit = "linear_rgb", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: sclera colour." }
+lid_shadow = { value = [0.7, 0.2, 0.3, 0.08], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell labLidK: analytic shadow under the upper lid (depth, falloff in radii) and the lower lid (depth, falloff)." }
+catch_light = { value = [-0.26, 0.3, 0.92, 0.2], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell labCatch: direction of the camera-fixed catch light (view space) and its strength; not a scene light, so a cap's brim cannot shade it." }
+catch_size = { value = [15, 0], unit = "deg", range = 5, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: catch light's outer and inner half-angle." }
+shell = { value = [0.38, 0.84, 1.25, 0.2073], unit = "1", range = 0.05, class = "measured", tier = "cosmetic", evidence = "Lab materials.ts eyeShell labEyeS defaults: limbus radius, iris plane depth (units of the radius), the vertex colour's scale, iris UV scale; the package's glTF extras (pipeline/eyes.py) give the measured ones." }
+
+[materials.eye_shader]
+limbus_band = { value = [0.985, 1.035], unit = "ratio", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the cornea fades out across this band of the limbus radius." }
+refract_guard = { value = 0.3, unit = "1", range = 0.1, class = "invented", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: grazing refracted rays are limited here." }
+iris_edge = { value = 1.06, unit = "ratio", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the iris ends at this multiple of the limbus radius." }
+iris_tone = { value = [0.30, 1.15], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: iris brightness = first + second x fibre structure." }
+iris_darken = { value = [0.6, 0.55], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the iris darkens to the first value outward from the second share of its radius." }
+limbal_ring = { value = [0.88, 0.84], unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: limbal ring depth, from this share of the iris radius." }
+pupil_edge = { value = [0.035, 0.02], unit = "ratio", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: soft pupil edge outside and inside its radius." }
+wall = { value = [0.03, 0.022, 0.018], unit = "linear_rgb", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the wall behind the limbus, seen at grazing angles." }
+wall_band = { value = [1.0, 1.05], unit = "ratio", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: where that wall shows (share of the iris radius)." }
+sclera_warm = { value = [1.0, 0.80, 0.72], unit = "linear_rgb", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the white warms toward the corners and the back by this factor." }
+sclera_warm_band = { value = [0.55, 1.25, 2.3], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: by this much, between these multiples of the limbus radius." }
+sclera_rim = { value = [0.62, 1.15, 2.5], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell (review 04): the white is a ball: it darkens to the first value between these multiples of the limbus radius." }
+veins = { value = [0.50, 0.13, 0.10], unit = "linear_rgb", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: vein colour." }
+veins_band = { value = [0.30, 1.08, 1.8], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: vein strength, fading in between these multiples of the limbus radius." }
+limbal_shadow = { value = [0.78, 1.4], unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: shadow on the white at the limbus, out to this multiple of its radius." }
+cornea_roughness = { value = 0.7, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: base roughness over the iris (the coat carries the gloss)." }
+iris_bowl = { value = 1.3, unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: the iris is a shallow bowl: its normal leans by this." }
+sclera_coat_roughness = { value = 0.16, unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: tear-film roughness over the white." }
+lid_occlusion = { value = [0.4, 0.6, 0.3], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: share of the lid shadow on the outgoing light, on the catch light, and the catch light's strength over the white." }
+catch_color = { value = [1.0, 0.98, 0.95], unit = "linear_rgb", range = 0.03, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeShell: catch-light colour." }
+
+[materials.wet]
+roughness = { value = [0.18, 0.06], unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts eyeWet: the tear line's base and coat roughness (reflections only, added)." }
+
+[materials.lashes]
+roughness = { value = 0.7, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts lashes (B5): dark, matt lash and brow cards." }
+specular = { value = 0.3, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts lashes: specular intensity." }
+darken = { value = 0.6, unit = "ratio", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts lashes: colour factor default (operator-m gives 1.0)." }
+alpha_test = { value = 0.2, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts lashes: cut for the alpha-to-coverage variant (blend: false)." }
+discard = { value = 0.03, unit = "1", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts lashes (round 4b): alpha-blended cards drop texels under this (empty card)." }
+polygon_offset = { value = [-1, -4], unit = "1", range = 1, class = "invented", tier = "cosmetic", evidence = "Lab materials.ts lashes: pulled toward the camera so a brow card never z-fights the skin under it." }
+
+[materials.cornea]
+roughness = { value = [0.03, 0.02], unit = "1", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cornea: additive shell and transmissive shell roughness." }
+thin_film = { value = [1.5, 1.38, 120, 160, 0.6], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cornea (a coated spectacle lens): IOR, iridescence IOR, film thickness range in nm, environment intensity." }
+thickness = { value = 0.0005, unit = "m", range = 0.0002, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cornea: transmissive shell thickness." }
+
+[materials.hair]
+roughness = { value = 0.42, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts hair: card roughness." }
+anisotropy = { value = 0.85, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts hair: anisotropic highlight along the card (rotated a quarter turn)." }
+specular = { value = 0.7, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts hair: specular intensity." }
+sheen = { value = [0.25, 0.4, 2.5], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts hair: sheen strength, roughness, and the sheen colour as a multiple of the hair colour." }
+alpha_test = { value = 0.12, unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts hair: alpha-to-coverage cut." }
+
+[materials.cloth]
+roughness = { value = 0.86, unit = "1", range = 0.08, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cloth: roughness without a roughness map." }
+sheen = { value = [1.0, 0.5], unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cloth: sheen strength and roughness." }
+sheen_tint = { value = [0.35, 0.6], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cloth: sheen colour = cloth colour mixed this much toward white, times the second value." }
+specular = { value = 0.5, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts cloth: specular intensity." }
+detail = { value = [60, 0.25], unit = "1", range = 20, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2c: built-in weave detail repeats per unit of UV0 and strength when the package gives none." }
+
+[materials.leather]
+roughness = { value = 0.46, unit = "1", range = 0.08, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts leather: roughness without a map." }
+clearcoat = { value = [0.35, 0.3], unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts leather: clear coat strength and roughness." }
+specular = { value = 1.0, unit = "1", range = 0.2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts leather: specular intensity." }
+detail = { value = [30, 0.3], unit = "1", range = 10, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts leather: grain repeats and strength without a normal map." }
+
+[materials.rubber]
+roughness = { value = 0.9, unit = "1", range = 0.05, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts rubber: matte rubber." }
+specular = { value = 0.6, unit = "1", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab materials.ts rubber: specular intensity." }
+
+[materials.copy]
+roughness = { value = 0.6, unit = "1", range = 0.1, class = "invented", tier = "cosmetic", evidence = "Lab materials.ts copyMaps: roughness of a glTF material that has none." }
+
+[materials.style]
+color = { value = [0.5, 0.5, 0.5], unit = "linear_rgb", range = 0.1, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab main.ts refreshWardrobe: a style material without a colour is the review packet's clay grey (albedo 0.5)." }
+roughness = { value = 0.9, unit = "1", range = 0.05, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab main.ts: and roughness 0.9 (the packet's clay)." }
+mask_size = { value = 2048, unit = "px", range = 0, class = "invented", tier = "cosmetic", evidence = "Lab main.ts combineMasks: the combined body mask is at most this wide." }
+mask_anisotropy = { value = 4, unit = "count", range = 2, class = "invented", tier = "cosmetic", evidence = "Lab main.ts combineMasks: its anisotropic filtering." }
+
+# ==================================================================================================================
+# [eyes] eye movement, blinks, lids (eyes.ts; lab eyes.ts, owner B5). Per-mode values are [portrait, screen, idle].
+# "literature" records name their source in the lab's notes (B5/NOTES.md); "believed" ones there are marked look_dev here.
+# ==================================================================================================================
+[eyes]
+sacc_dur_base = { value = 0.027, unit = "s", range = 0.01, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts saccDurBase: saccade duration = 27 ms + 2.4 ms per degree, chosen so peak velocities meet 300 deg/s at 10 deg and 500 at 30 (between Carpenter's 21 + 2.2 A and Baloh's 37 + 2.7 A, Europe PMC PMC7166123)." }
+sacc_dur_per_deg = { value = 0.0024, unit = "s", range = 0.0005, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts saccDurPerDeg: as above." }
+sacc_shape = { value = 0.27, unit = "1", range = 0.1, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts saccShape: blend of smoothstep and minimum jerk; peak/mean velocity 1.6 (measured ratio about 1.6-1.7)." }
+main_seq_vmax = { value = 551, unit = "deg_per_s", range = 50, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts mainSeqVmax: Baloh's main-sequence fit (PMC7166123); also the eye's rate limit per frame." }
+main_seq_c = { value = 14, unit = "deg", range = 3, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts mainSeqC: the fit's constant (check only)." }
+refractory = { value = 0.15, unit = "s", range = 0.05, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts refractory: shortest interval between saccades (150-200 ms)." }
+pursuit_tau = { value = 0.10, unit = "s", range = 0.03, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts pursuitTau: errors under pursuit_max are followed smoothly (first order)." }
+pursuit_max = { value = 3.0, unit = "deg", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts pursuitMax: larger errors trigger a saccade." }
+lim_yaw = { value = 35, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab eyes.ts limYaw: eye-in-head limit sideways (about +-35; the oculomotor range is wider, the customary range narrower)." }
+lim_up = { value = 25, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab eyes.ts limUp: eye-in-head limit upward." }
+lim_down = { value = 30, unit = "deg", range = 5, class = "assumed", basis = "literature", tier = "layout", evidence = "Lab eyes.ts limDown: eye-in-head limit downward." }
+rest_lid_upper = { value = [1.2, 0.5], unit = "deg", range = 0.5, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab eyes.ts restLidUpper [l, r]: the upper lids rest a little lowered and not alike (designer: a few per cent asymmetry)." }
+kappa = { value = 2.5, unit = "deg", range = 1, class = "measured", tier = "cosmetic", evidence = "Lab eyes.ts kappa: each optical axis turned outward; angle kappa is 5.46 +- 1.33 deg (PMID 20128530), 2.5 on this eyeball keeps the iris within 0.9 mm of the opening's centre on all five packet persons (B5 round 4)." }
+vergence_tau = { value = 0.18, unit = "s", range = 0.05, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts vergenceTau: vergence on 1/distance, about ten times slower than a saccade." }
+drift_sigma = { value = 0.06, unit = "deg", range = 0.03, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts driftSigma: fixational drift under 0.13 deg (Frontiers Integr. Neurosci. 2014 8:52)." }
+drift_tau = { value = 0.4, unit = "s", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts driftTau: the drift's correlation time." }
+micro_rate = { value = 1.2, unit = "hz", range = 0.5, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts microRate: 1-3 microsaccades per second." }
+micro_amp = { value = 0.22, unit = "deg", range = 0.1, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts microAmp: under 0.5 deg; the 0.22 is B5's choice." }
+fix_mean = { value = [2.6, 0.9, 1.6], unit = "s", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts fixMean: mean time between voluntary small gaze shifts per mode." }
+scan_yaw = { value = [2, 7, 14], unit = "deg", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts scanYaw: their spread sideways per mode (portrait round 4: 2)." }
+scan_pitch = { value = [1, 4, 6], unit = "deg", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts scanPitch: and vertically." }
+portrait = { value = [0, -1, 1.2], unit = "1", range = 0.5, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab eyes.ts portraitYaw, portraitPitch (deg), portraitDist (m): straight ahead of the face at the packet's head-camera distance, 1 deg down." }
+screen = { value = [0.75, -12], unit = "1", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts screenDist (m), screenPitch (deg): the screen target when nobody sets one." }
+idle = { value = [-3, 3], unit = "1", range = 1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts base(): the idle target, pitch (deg) and distance (m)." }
+blink_rate = { value = [17, 7, 17], unit = "per_min", range = 4, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts blinkRate: rest 17, reading 4.5, conversation 26 per minute (Bentivoglio et al. 1997, PMID 9399231); screen 7 between rest and reading." }
+blink_min_gap = { value = 0.9, unit = "s", range = 0.3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts blinkMinGap: shortest time between blinks." }
+blink_phases = { value = [0.10, 0.085, 0.18], unit = "s", range = 0.03, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts blinkClose, blinkHold, blinkOpen: closing 44 % faster than opening (PMID 18565090), 365 ms in all (100-400 ms); over 90 % closed for about 115 ms." }
+blink_partial = { value = [0.12, 0.7], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts blinkPartial, blinkPartialDepth: share of incomplete blinks and their depth." }
+blink_gaze = { value = [12, 33, 0.97], unit = "1", range = 3, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts blinkGazeFrom, blinkGazeFull (deg), blinkGazeMax: chance of a blink with a gaze shift, 97 % above 33 deg (Evinger et al. 1994, PMID 7813670)." }
+blink_roll = { value = [2.5, 1.0], unit = "deg", range = 1, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts blinkRollDown, blinkRollNasal: the eye turns down and toward the nose in a blink, 1-5 deg (Collewijn et al. 1985, PMID 4031978)." }
+blink_least_wait = { value = 0.2, unit = "s", range = 0.1, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts step: the mean wait to the next blink is at least this." }
+lid_upper = { value = [0.75, 0.92], unit = "ratio", range = 0.1, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts lidUpUp, lidUpDown: the upper lid follows upward and downward gaze (PMID 3193155, qualitatively; the gains are B5's)." }
+lid_lower = { value = [0.15, 0.22], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts lidLowUp, lidLowDown: the lower lid (0.4 opened a dark wedge under the iris from the side)." }
+lid_clear = { value = [0.00012, 0.0004], unit = "m", range = 0.0001, class = "measured", tier = "cosmetic", evidence = "Lab eyes.ts lidClear, lidClearMax: the lid margin rides this far above the eye surface (as pipeline/eyes.py)." }
+lid_sag_cornea = { value = 0.0078, unit = "m", range = 0.0005, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts lidSagCornea: corneal radius of curvature for the chord sag of wide lid faces (round 4b)." }
+lid_up_max_open = { value = 10, unit = "deg", range = 3, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts lidUpMaxOpen: the upper lid may rise this far above rest." }
+lid_over_close = { value = 1.03, unit = "ratio", range = 0.02, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts lidOverClose: a full blink closes a little past the package's closing angle." }
+pupil_near = { value = 0.05, unit = "ratio", range = 0.03, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab eyes.ts pupilNear: the pupil narrows a little on near targets (pupil itself: materials.eye.pupil)." }
+head_follow = { value = [12, 0.35, 9, 60, 30], unit = "1", range = 2, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts headDead (deg), headInside, headOmega (1/s), headMaxYaw, headMaxPitch (deg): the stand-in head follower (only with ownHead; the operator layer owns the head)." }
+head_share = { value = [0.55, 0.45], unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab eyes.ts setup: the stand-in head follower's turn shared by the neck joints and the head." }
+match_tolerance = { value = 0.00003, unit = "m", range = 0.00001, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts setup: lid vertices are found in the mesh within this of the block's rest positions." }
+ring_margin = { value = 0.00045, unit = "m", range = 0.0001, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts setup: a lid vertex within this of the eye surface is part of the margin ring." }
+still_step = { value = 0.0041667, unit = "s", range = 0.001, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts late: a still at time t re-runs the model from 0 in steps of 1/240 s (repeatable)." }
+live_step = { value = 0.0083333, unit = "s", range = 0.002, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts late: a live frame is split into steps of at most 1/120 s." }
+rate_window = { value = 0.5, unit = "s", range = 0.2, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts late (round 5): the rate limit counts at most this much clip time as passed." }
+
+[cloth_pose]
+side = { value = 0.03, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab cloth-pose.ts (B8): the left and right weights of the seated fold normal blend over this distance either side of the midline, when the manifest gives no side." }
+
+# ==================================================================================================================
+# [runtime] how the product viewer runs the person (index.ts): loading, idle motion, stills
+# ==================================================================================================================
+[runtime]
+idle_fps = { value = 30, unit = "frames_per_s", range = 10, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "MV-core: idle motion (breathing, blinks, small shifts) redraws at most this often while the person is shown in a live view; the lab drew every frame at 60. Blinks (365 ms) and saccades (30-100 ms) read at 30 frames a second; it halves the GPU time of a shown person against 60." }
+idle_after_input_ms = { value = 0, unit = "ms", range = 500, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "MV-core: idle motion resumes this long after the last pointer or wheel input on the view (0: it runs during input too; the view is redrawn then anyway)." }
+still_time = { value = 0, unit = "s", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "MV-core: a still picture (ui=0, scripts, the render tool) shows the person at this time of its idle motion and eye model, always the same: pictures are deterministic. 0 = the lab's packet frame (operate8 t = 0: both hands on the grips)." }
+eye_seed = { value = 1, unit = "count", range = 0, class = "invented", tier = "cosmetic", evidence = "Lab eyes.ts: the eye model's seed (the packet's)." }
+max_dt = { value = 0.1, unit = "s", range = 0.05, class = "invented", tier = "cosmetic", evidence = "Lab main.ts loop: a frame never advances the motion by more than this (a background tab coming back)." }
+eye_still_time = { value = 1.0, unit = "s", range = 0, class = "assumed", basis = "convention", tier = "cosmetic", evidence = "Lab README 'Every shot starts from a defined state': a still runs the eye model afresh from its seed to t = 1 s (the packet's)." }
+
+[anchors]
+bounds_pad = { value = 0.09, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab main.ts bounds(): the joints' box grown by this to hold the skin." }
+body_centre = { value = 0.52, unit = "ratio", range = 0.02, class = "assumed", basis = "literature", tier = "cosmetic", evidence = "Lab main.ts anchor('body_centre'): at this share of stature (about the navel)." }
+head_centre = { value = [0, -0.012, -0.085], unit = "m", range = 0.01, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab main.ts anchor('head_centre'): from the eye midpoint, in the head's frame." }
+
+[contact.capsules]
+knee = { value = 0.008, unit = "m", range = 0.003, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2f: softness of a capsule's contact edge when the manifest gives none." }
+radius_fallback = { value = 0.08, unit = "m", range = 0.02, class = "assumed", basis = "by_eye", tier = "cosmetic", evidence = "Lab main.ts capsulesNow: radius of a capsule whose measure the shape does not read back." }
+flatten = { value = 0.3, unit = "ratio", range = 0.1, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2f: a limb resting against another capsule gives way by this share of their overlap." }
+flatten_max = { value = 0.04, unit = "m", range = 0.01, class = "assumed", basis = "look_dev", tier = "cosmetic", evidence = "Lab FORMAT.md 2f: at most this much overlap is counted." }

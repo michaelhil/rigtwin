@@ -1,0 +1,195 @@
+{
+ "note": "The lab's build code as copied on 2026-11-25 into tools/manikin-build/ (pipeline/ from work/avatar-lab/pipeline/, shape-fit/ from work/avatar-lab/RP/). changed: true where only paths were rewritten to labpaths.LAB or $MANIKIN_PYTHON; lab_sha256 is the lab original's.",
+ "files": {
+  "pipeline/abstract.py": {
+   "from": "work/avatar-lab/pipeline/abstract.py",
+   "lab_sha256": "be8806f90ac5b7ffe02a5548f52d908adba5589d04ad01bbf2f31e01d53c4e78",
+   "changed": true
+  },
+  "pipeline/build_body.py": {
+   "from": "work/avatar-lab/pipeline/build_body.py",
+   "lab_sha256": "c64033adbd607e5dbb473abe0653fef69ef70757c398e86d901781091b92b5eb",
+   "changed": true
+  },
+  "pipeline/build_operator.py": {
+   "from": "work/avatar-lab/pipeline/build_operator.py",
+   "lab_sha256": "69ad31f63313a6a4f91f0feb7c00f1a8716e462d893567c0f7f34323650eab27",
+   "changed": true
+  },
+  "pipeline/cloth.py": {
+   "from": "work/avatar-lab/pipeline/cloth.py",
+   "lab_sha256": "73d1c6c53ffe70b1e84ecc88ad9718058e99d8fed9afd98218f8217b9c7febb5",
+   "changed": false
+  },
+  "pipeline/cloth_bake.py": {
+   "from": "work/avatar-lab/pipeline/cloth_bake.py",
+   "lab_sha256": "0ba73b70fb0592791f6960c0527ca036d2ffd27acd0b8cd8cde14d6c5028edca",
+   "changed": true
+  },
+  "pipeline/cloth_look.py": {
+   "from": "work/avatar-lab/pipeline/cloth_look.py",
+   "lab_sha256": "d6d418f2be3ef62d5582e1f8c75b6d9a83b3fc7ccc31108e70e9afc8beb15aef",
+   "changed": false
+  },
+  "pipeline/cloth_sim.py": {
+   "from": "work/avatar-lab/pipeline/cloth_sim.py",
+   "lab_sha256": "99e24726f54bd9c677068f9235101fbb86c5696e6ba3b0bfca3a36802496af66",
+   "changed": false
+  },
+  "pipeline/core_rp.py": {
+   "from": "work/avatar-lab/pipeline/core_rp.py",
+   "lab_sha256": "938f7b31e008522b68cf8a86b28bc983856a0920a02b5b6ed2aaed3a323f1499",
+   "changed": true
+  },
+  "pipeline/correctives.py": {
+   "from": "work/avatar-lab/pipeline/correctives.py",
+   "lab_sha256": "85901e70a3658903b626699bf17f830fdb33c516e740ba18476a868d98526443",
+   "changed": true
+  },
+  "pipeline/eyes.py": {
+   "from": "work/avatar-lab/pipeline/eyes.py",
+   "lab_sha256": "61dead14ac165e973d9c9fba7ad66ebee005a6e1f681fd1dd4ab416809a5a830",
+   "changed": true
+  },
+  "pipeline/glb.py": {
+   "from": "work/avatar-lab/pipeline/glb.py",
+   "lab_sha256": "4ad6fa36b11e1c303cc3a8806716a74a0c4cd5d6f38d8b40be9f885cd3ff34c7",
+   "changed": false
+  },
+  "pipeline/hair_cap.py": {
+   "from": "work/avatar-lab/pipeline/hair_cap.py",
+   "lab_sha256": "e2fa8665760a8e98ebbe5c189870e711f8f4cde39a901db8422381b386bc5925",
+   "changed": true
+  },
+  "pipeline/kit_fetch_fabrics.ts": {
+   "from": "work/avatar-lab/pipeline/kit_fetch_fabrics.ts",
+   "lab_sha256": "340bdf339b64c07396afdc709558c6a32284a25cd90c5f6fc76d9bf3c26ed949",
+   "changed": false
+  },
+  "pipeline/materials.py": {
+   "from": "work/avatar-lab/pipeline/materials.py",
+   "lab_sha256": "745a19edb048d76a5ba6538da45e3c2df2d816cb816c7bea43a62b2ae0fb3fc7",
+   "changed": true
+  },
+  "pipeline/mh_core.py": {
+   "from": "work/avatar-lab/pipeline/mh_core.py",
+   "lab_sha256": "d705877f877282b40a077e96258404afc63f786238e056c9ff5165a0fb04a6e7",
+   "changed": true
+  },
+  "pipeline/mh_wardrobe.py": {
+   "from": "work/avatar-lab/pipeline/mh_wardrobe.py",
+   "lab_sha256": "b4bbf4bc88ec777058ef0aa26517ebcbe8e0e1a3a8de8c3220854e49c5038964",
+   "changed": false
+  },
+  "pipeline/mo_bodies.py": {
+   "from": "work/avatar-lab/pipeline/mo_bodies.py",
+   "lab_sha256": "69900305e8ce422ed5398b5750dfb5bd4b601757cd7db6c91516fcd1d17412df",
+   "changed": true
+  },
+  "pipeline/mo_math.py": {
+   "from": "work/avatar-lab/pipeline/mo_math.py",
+   "lab_sha256": "8c6323d4bda225d030db04b65123a9d5b4786a79dd802697d9e9878b20dbcd43",
+   "changed": false
+  },
+  "pipeline/motion.py": {
+   "from": "work/avatar-lab/pipeline/motion.py",
+   "lab_sha256": "4261eb9b0438e02f98477f8f0f584022aa58df8f99bb4c7a5dc0f36286f2eb73",
+   "changed": true
+  },
+  "pipeline/pc_geom.py": {
+   "from": "work/avatar-lab/pipeline/pc_geom.py",
+   "lab_sha256": "dcfe6d3d20de399c7280109cef35094ce1b17364446082fde8dc1bf55452e8d7",
+   "changed": false
+  },
+  "pipeline/pc_proof.py": {
+   "from": "work/avatar-lab/pipeline/pc_proof.py",
+   "lab_sha256": "0ceed49ef2aa7b514f9238230ae9ceaf1434c26a981d0ffa7aba102b524f59e7",
+   "changed": true
+  },
+  "pipeline/pc_render.py": {
+   "from": "work/avatar-lab/pipeline/pc_render.py",
+   "lab_sha256": "c9736474baa21c29511d5b60005b652c3b1bc577da0cc1d451fb14630015646a",
+   "changed": false
+  },
+  "pipeline/pc_rom.py": {
+   "from": "work/avatar-lab/pipeline/pc_rom.py",
+   "lab_sha256": "a969f750f006031e9ac1f650396395022a2f603ee022618a7e8d43b944df88cd",
+   "changed": true
+  },
+  "pipeline/pc_soma_io.py": {
+   "from": "work/avatar-lab/pipeline/pc_soma_io.py",
+   "lab_sha256": "f191a7c4cee908c793c187d9a0dc3c345f66c743e12ae4eb0b6120a4fdb5742b",
+   "changed": true
+  },
+  "pipeline/prop_geo.py": {
+   "from": "work/avatar-lab/pipeline/prop_geo.py",
+   "lab_sha256": "a85c44f9488d744b2baa89e07c71b5e3b632601dddad35d0ed142faac56e3bcb",
+   "changed": false
+  },
+  "pipeline/prop_io.py": {
+   "from": "work/avatar-lab/pipeline/prop_io.py",
+   "lab_sha256": "dd3aa7307133f29824d09cdec3d1f42e846a5e7320b7e91941fc465312ca245d",
+   "changed": false
+  },
+  "pipeline/prop_model.py": {
+   "from": "work/avatar-lab/pipeline/prop_model.py",
+   "lab_sha256": "d9f3aa92d413591e5601578cb2d3ac3424f95c83c7482bcbffebe5b7f8e2c5d7",
+   "changed": true
+  },
+  "pipeline/prop_shoe.py": {
+   "from": "work/avatar-lab/pipeline/prop_shoe.py",
+   "lab_sha256": "a9f556b5d08e4ae0056bf43a8c59dc0c7c8daf2f1b3f200ef35f370e603c3ce3",
+   "changed": false
+  },
+  "pipeline/props.py": {
+   "from": "work/avatar-lab/pipeline/props.py",
+   "lab_sha256": "91e28ea039be6a3964a9dd1067d8af54c8d9931987abc13945946bf2be7e7a7f",
+   "changed": true
+  },
+  "pipeline/rig.py": {
+   "from": "work/avatar-lab/pipeline/rig.py",
+   "lab_sha256": "416128fd6f89387d30eeb95f72b74e5600bdbe606c659eda2eb8558870256f64",
+   "changed": true
+  },
+  "pipeline/rig_contact.py": {
+   "from": "work/avatar-lab/pipeline/rig_contact.py",
+   "lab_sha256": "df7b83e45c177650467db45166923cd61c074232cd149207596af401d473f354",
+   "changed": false
+  },
+  "pipeline/rig_rom.py": {
+   "from": "work/avatar-lab/pipeline/rig_rom.py",
+   "lab_sha256": "4c3b3f7a555a2aa9c9f82f0de823fe0601af74aa8d65d5235e663b761693a3ad",
+   "changed": false
+  },
+  "pipeline/README.md": {
+   "from": "work/avatar-lab/pipeline/README.md",
+   "lab_sha256": "3920e0e039868445a5c57ca41963278c7ead49355866b86c40d3388d4f904b89",
+   "changed": true
+  },
+  "shape-fit/rp.py": {
+   "from": "work/avatar-lab/RP/rp.py",
+   "lab_sha256": "9b6bcf4003c7949d87b8542feb785cbdb0f711442327b6e2f800f18ee8edaaf0",
+   "changed": true
+  },
+  "shape-fit/fit.py": {
+   "from": "work/avatar-lab/RP/fit.py",
+   "lab_sha256": "92f1718cb376352e0f3321bb0fa3c6a477e1bce247fb11ba6cd42347dbea9c46",
+   "changed": false
+  },
+  "shape-fit/space.py": {
+   "from": "work/avatar-lab/RP/space.py",
+   "lab_sha256": "f32a99042e84c68d40d16b12a50fb5f3d72f2e3a3be699c12903776549662455",
+   "changed": false
+  },
+  "shape-fit/export.py": {
+   "from": "work/avatar-lab/RP/export.py",
+   "lab_sha256": "f21486428bdc05cc02de976536b365fe3985d864ca5e912a7888bc8759590bbd",
+   "changed": false
+  },
+  "shape-fit/check_transfer.py": {
+   "from": "work/avatar-lab/RP/check_transfer.py",
+   "lab_sha256": "6cca4aeab29a6595acbbe8166c8d8103ae1444a7fe917d3f74a3cddeb309de40",
+   "changed": false
+  }
+ }
+}

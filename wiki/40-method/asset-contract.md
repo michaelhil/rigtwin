@@ -1,8 +1,8 @@
 ---
 title: The asset contract
-tldr: The specification an asset must satisfy - units and axes, naming, parameter records, the spec file, what a component module exports, materials, the GLB conventions, every field of the description file, the three kinds of variable, the shared pose definition and the budgets.
+tldr: What an asset must satisfy - units, axes, names, parameter records, spec, component modules, materials, GLB, description file, posing and budgets for the rig; and, in section 14, for a character asset (the manikin) - axes, joint names, skins, shape files, compression, budgets and credits.
 status: living
-updated: 2026-11-23
+updated: 2026-11-25
 tags: [contract, format, glb, manifest, parameters]
 ---
 
@@ -15,6 +15,7 @@ tags: [contract, format, glb, manifest, parameters]
 - Names follow `^(C|J|D|S)_[a-z0-9]+(_([a-z0-9]+|[LR]))*$` and are stable identifiers.
 - One definition of joint posing: `shared/pose.ts`. Consumers either import it or reproduce `rest · motion(neutral)⁻¹ · motion(value)`.
 - Schema identifiers are `rigtwin-manifest/1` and `rigtwin-glb/1`. Items marked **provisional** may change before version 2.
+- Sections 1 to 13 are the rig's rules and stay as they are. A **character asset** (the manikin, `assets/manikin/`) follows section 14 instead: glTF's Y-up, game joint names, skins and morphs, committed compressed binaries with checksums.
 
 This page is what tools and later phases bind to. It describes the code as it is (*verified by
 reading the code and the built manifest of round 2*). Terms are in the
@@ -367,3 +368,148 @@ Enforced by `bun run check` (C-14, C-18, C-19):
 | Evidence for `photo` values | free text; a link to a measurement record is planned |
 | `evidence: assumed` ⇒ `locked: true` | true in the data, not enforced by the spec loader |
 | Per-component mesh export (OBJ) and batch export of frames for many poses | planned for assessment tools; not implemented |
+
+## 14. Character assets (the manikin)
+
+The manikin is a second kind of asset: a skinned, morphed character in glTF's own frame, built on a Mac in the avatar
+lab and committed as compressed binaries (the owner's decision 3 of 2026-11-25). Sections 1 to 13 do not apply to it;
+this section does. Where the lab's package format (`work/avatar-lab/FORMAT.md` v0.5) and this section differ, this
+section is the product's rule. Who builds what: [tools/manikin-build/README.md](../../tools/manikin-build/README.md);
+the libraries and the choice behind it: [Manikin approaches](manikin-approaches.md).
+
+### 14.1 Files
+
+```
+assets/manikin/
+  CREDITS.md                       every third-party part, its author and licence; the CC-BY credit line to show
+  params/packaging.toml            compression settings and budgets (records as in section 4); owner: packing
+  params/runtime*.toml             the viewer's run-time numbers; owner: the viewer
+  operator-m/, operator-f/         the dressed operator (VD/REVIEW-10), one per sex
+    <name>.avatar.json             the manifest (lab format v0.4/0.5, plus tones, encoding, provenance, packaging)
+    <name>.glb                     skeleton, skinned meshes, GPU morph targets, materials, the default tone's textures
+    <name>.shape.bin               the body's shape file;  <name>.wear.shape.bin: garments', props' and hair's
+    maps/mask_*.png, cover_*.png   body-hide masks and cover maps (PNG: the viewer combines them on a canvas)
+    maps/*.ktx2                    the posed fold map of the seated trousers
+    tones/<tone>/*.ktx2            what another skin tone replaces (skin albedo, skin ORM, lash and brow texture)
+    poses.json, PROVENANCE.json
+  clay-m/, clay-f/                 the clay figure (VD/REVIEW-08), one per sex: manifest, GLB, shape file, poses
+  clips/m/<person>/<clip>.glb      motion clips baked per packet person, shared by operator-m and clay-m (f the same)
+  shared/maps/*.ktx2               the fabric weave detail maps both sexes use
+```
+
+Every path inside a manifest is relative to the manifest. A package's `PROVENANCE.json` lists every file it uses (its
+own and `../shared/...`) with bytes and SHA-256, the lab package and repository revision it came from with the
+checksums of the lab files read, its sources with licences, the build and pack commands and settings, and its
+budget reading. Nothing else may be in a package folder, and nothing may be a symbolic link.
+
+### 14.2 Units, axes and the rotation into the rig
+
+| Item | Rule |
+|---|---|
+| Units | metres; joint rotations in the manifest's `dofs` in degrees (lab format) |
+| Axes | glTF's: **+Y up, +Z the way the character faces, +X the character's left**; right-handed |
+| Origin | between the feet: soles on y = 0 (the dressed packages are lifted by the 28 mm shoe sole, `rest.soleHeight`), pelvis on x = z = 0 in the rest pose |
+| Rest pose | the authored A-pose (`rest.pose`, `rest.note`); unit scale on every joint |
+| Into the rig's model frame (Z up, X forward, Y to the operator's left; section 2) | `x_rig = z_char`, `y_rig = x_char`, `z_rig = y_char`: a rotation of 120° about (1, 1, 1), quaternion (x, y, z, w) = (0.5, 0.5, 0.5, 0.5); then a translation to the seat |
+| In the viewer's Y-up world, under the rig's root node (which turns the rig's Z-up into Y-up, section 8) | a rotation of +90° about +Y, quaternion (0, 0.7071, 0, 0.7071): the character's +Z (forward) becomes +X (the rig's forward), its +X (left) becomes −Z (the rig's left) |
+
+Left and right are the character's own; seated in the rig they are the operator's (section 2), the same side.
+
+### 14.3 Joint names
+
+One skeleton per package, shared by every skinned mesh: **102 joints**, Unreal-mannequin names in lower case with
+sides `_l` / `_r`, unique across joints, meshes and materials (three.js renames duplicates).
+
+| Group | Joints |
+|---|---|
+| Trunk and head | `root`, `pelvis`, `spine_01` … `spine_05`, `neck_01`, `neck_02`, `head` |
+| Arms (each side) | `clavicle`, `upperarm`, `lowerarm`, `hand`; fingers `thumb_01…03`, `index_metacarpal`, `index_01…03`, and the same for `middle`, `ring`, `pinky` |
+| Legs (each side) | `thigh`, `calf`, `foot`, `ball` |
+| Twist joints (driven, never animated) | `upperarm_twist_01`, `_02`, `lowerarm_twist_01`, `_02`, `thigh_twist_01`, `_02`, `calf_twist_01`, `_02` on each side, at about one and two thirds of the segment; the manifest's `drivers` (type `twist`) say how |
+| Helper joints (driven, 16) | `knee_front`, `glute`, `hip_belly`, `groin`, `armpit_chest`, `armpit_arm`, `shoulder_front`, `lap_thigh` on each side: they hold volume where skin folds |
+| Eyes | `eye_l`, `eye_r`, and the lids `eyelid_upper_l`, `eyelid_lower_l`, `eyelid_upper_r`, `eyelid_lower_r` (the manifest's `eyes` block) |
+
+The manikin uses none of the rig's `C_/J_/D_/S_` names. The degrees of freedom a person can be posed by are the
+manifest's `dofs` (ids such as `shoulder_l.flex`, `elbow_r.flex`); clinical angles map onto them by `packet.angles`.
+
+### 14.4 Skins
+
+| Attribute | Content |
+|---|---|
+| `JOINTS_0`, `WEIGHTS_0` | a complete four-influence set (a least-squares fit), for any glTF reader; three.js renormalises it |
+| `_JOINTS8_0`, `_JOINTS8_1` (unsigned byte), `_WEIGHTS8_0`, `_WEIGHTS8_1` (float) | **the eight influences** the viewer skins with, in every pass; the eight weights of a vertex sum to exactly 1 |
+| `_DQS` (float, 0 … 1) | the dual-quaternion mask: 0 linear blending, 1 dual-quaternion skinning, mixed in between (shoulders, hips, knees, wrists, twist zones); garments and shoes carry the mask of the body under them |
+| `_SRC` (float, integer values) | on every mesh whose shape is baked on the CPU: the row of its vertex in the shape file (vertices split at UV seams share a row) |
+
+Rest transforms are translation and rotation only; at most 256 joints (`JOINTS_0` stays unsigned byte).
+
+### 14.5 Morph targets and shape data
+
+- **Body shape is baked on the CPU** from the shape files when a body control moves (manifest `shape.bake`): positions
+  and normals of the listed meshes are rewritten, normals on the source topology. 40 shape components per sex,
+  driven by `shape.model` from the survey controls (`shape.controls`; stature, weight and 36 more dimensions);
+  joints follow by `shape.jointDeltas`; read-backs are `shape.measures`. Control and measure ids are the lab's
+  (`eyeheightsitting`, `buttockkneelength`, `poplitealheight`, …) and must not be renamed: the rig binding reads them.
+- **Shape files** (`encoding: "meshopt"` in the bake entry): two meshopt vertex streams. `base` (`stride` 12): float32
+  x, y, z per row. `deltas` (`stride` 8): int16 x, y, z and a zero per row, all rows of target 0, then target 1, and so
+  on. Decode each with `MeshoptDecoder.decodeGltfBuffer(target, count, stride, bytes, "ATTRIBUTES")`; a delta in metres
+  is `int16 / 32767 × targetScale[k]`, as in the lab's uncompressed layout (`quantisation` gives the step: 0.02 mm for
+  the body, 0.04 mm for garments, props and hair).
+- **GPU morph targets** are left to what the CPU bake does not cover: pose correctives `pc_*` (the clay figure's wrists),
+  the trousers' cloth correctives `cloth_trousers_*` (driven by the manifest's `clothCorrectives`), and the shape
+  components `pc00` … `pc39` of the meshes the bake does not list (eyeballs, tear line, lashes, the clay figure's shoe
+  last). Names in `mesh.extras.targetNames`; at most 40 per mesh.
+
+### 14.6 Materials, tones and styles
+
+- The material name selects the viewer's recipe, as in the lab: `skin*`, `eye*`, `lashes*`, `hair*`, `cloth*`,
+  `prop*`, `glasses*`, `clay*`; the manifest's `materials` block holds what glTF cannot say (skin micro-normal, iris
+  colours, cloth detail maps and their scale, clear coat).
+- Textures are KTX2 (`KHR_texture_basisu`): colour maps ETC1S (sRGB), normal maps and the props' occlusion-roughness-
+  metal maps UASTC (linear), occlusion-roughness maps without metal ETC1S; mipmaps in the file, box-filtered. Masks
+  and covers stay PNG.
+- **Tones** (`tones` block, dressed packages): one geometry, three skin tones (`light` the default, `medium`, `dark`).
+  A tone names the KTX2 files that replace a texture (`"<material>.<slot>"` → file; none for the default tone, whose
+  textures are the GLB's), the complete manifest entries of the materials it changes (replace, do not merge), and the
+  glTF factors that differ (`gltfMaterials`, given for every tone, the default included).
+- **Styles**: a dressed package has one style, `dressed`; the clay figure is its own package (`clay-<sex>`, style
+  `clay`) on the same skeleton, joint names, dofs and shape controls, so a switch keeps pose and body. The lab's copy
+  of the clay style inside the dressed packages is left out.
+- One outfit, as the designer passed it: work shirt, work trousers, safety trainer and cap always worn; glasses and
+  headset optional; the collar band (in the lab merged into the trainer's mesh, one draw call fewer); the women's hair under the cap. Colourways are factors on neutral
+  textures. Nothing outside this set is packaged.
+
+### 14.7 Compression
+
+Geometry: `EXT_meshopt_compression` without filters; every attribute keeps its lab data type (the viewer reads and
+rewrites positions, normals, `_SRC`, `_DQS` and the eight-influence weights in JavaScript); values are rounded onto
+power-of-two grids first (positions 2⁻¹⁶ m, the grids in `packaging.toml`). No `KHR_mesh_quantization`: it folds a
+transform into the inverse bind matrices, which the viewer recomputes when the body shape changes. Vertices are in
+fetch order (the manifest's vertex indices, `clothCorrectives.girth.probe`, are renumbered with them), triangles of
+opaque meshes in vertex-cache order. Clips: meshopt with the quaternion filter (16 bits) and the exponential filter
+(20 bits) for root and pelvis translation. The viewer needs three's `MeshoptDecoder` and `KTX2Loader` with the basis
+transcoder (`basis_transcoder.js`, `.wasm`).
+
+### 14.8 Budgets
+
+Checked by `bun run check` (`tools/manikin-check.ts`) against `assets/manikin/params/packaging.toml`:
+
+| Quantity | Limit | As packed, 2026-11-25 |
+|---|---|---|
+| First person's download (dressed man, light tone), as the server sends it | ≤ 10 MB | 9.33 MB (9.60 MB on disk) |
+| Any other person | ≤ 10 MB | dressed woman 9.66 MB; clay man 5.19 MB, clay woman 5.20 MB |
+| Another tone | ≤ 2 MB | 0.70–0.74 MB |
+| Motion clips of one sex, all | ≤ 8 MB, one clip loaded when played | men 2.99 MB (32 files), women 2.14 MB (26) |
+| Triangles of the most an outfit can draw | ≤ 120,000 | 72,771 (dressed man), 74,544 (woman), 112,574 / 112,736 (clay) |
+| Draw calls of the same | ≤ 12 | 11, 12, 4, 4 |
+| GPU texture memory per outfit, upper bound | ≤ 128 MB | 41.9 MB, 43.8 MB (the lab's uncompressed packages: 106 and 113 MB) |
+
+### 14.9 Credits and checks
+
+The work shirt and the work trousers are CC BY 4.0 and must be credited wherever the dressed manikin is shown (the
+line is in `CREDITS.md`); the motion clips carry the CMU motion-capture terms and credit line. `bun run check` fails
+on: a file that differs from its `PROVENANCE.json` checksum, or is unlisted, or is a symbolic link; a manifest naming
+a missing file; a budget broken; a glTF validator error or warning the provenance does not accept as inherited from
+the lab; a package or source without a licence, or a CC-BY author missing from `CREDITS.md`; a banned name in any file
+or file name, binaries included. The committed binaries are exempt from the determinism check (section 8): they are
+built on a Mac from the lab and are verified by checksum instead of rebuilt.

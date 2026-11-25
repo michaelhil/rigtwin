@@ -1,0 +1,704 @@
+{
+ "package": "operator-m",
+ "what": "the dressed operator (man), three skin tones on one geometry; passed by the visual designer in VD/REVIEW-10 (L4- at 1.5-4 m, L3 head at 1.2 m)",
+ "from": {
+  "lab": "work/avatar-lab/packages/operator-m (tones: operator-m, operator-m-medium, operator-m-dark)",
+  "lab_built": "pipeline/build_operator.py",
+  "lab_files": {
+   "packages/operator-m/maps/cover_top_shirt.png": {
+    "bytes": 22490,
+    "sha256": "4b9da6e74a8587922226394156180fba71706017a265f65132e3889e18cfb287"
+   },
+   "packages/operator-m/maps/mask_trousers_work.png": {
+    "bytes": 18694,
+    "sha256": "b4c9dd796b5c9a6acb0fe807f746dbc25f73c642706b88e69ccea937860accd1"
+   },
+   "packages/operator-m/maps/fabric_linen_n.jpg": {
+    "bytes": 916843,
+    "sha256": "e2402166d1a489f7414814e69e1836ab672aa24e30bec2d41fea356f81687e53"
+   },
+   "packages/operator-m/maps/garment_trousers_work_fold_seat_n.jpg": {
+    "bytes": 131183,
+    "sha256": "7d66d7a58734bffe555b6bcefdca2032c694c006aa1dfcd36671b2fac58fb812"
+   },
+   "packages/operator-m/maps/mask_shoes_safety_trainer.png": {
+    "bytes": 7869,
+    "sha256": "9173bf05c809c360bf51fbaf35eaf0e416410d85f5f3f4cf0a606d1372df89ae"
+   },
+   "packages/operator-m/maps/fabric_denim_n.jpg": {
+    "bytes": 948018,
+    "sha256": "d042e595687ae08f3c8e1188d3ea8cd45dbbf5f7777d2538671d41f08e3d1f15"
+   },
+   "packages/operator-m/maps/cover_shoes_safety_trainer.png": {
+    "bytes": 5414,
+    "sha256": "b2d90e60ac9e88c2f3ecbb8cebf18e4fae70dd92254429c92393c75f7b4f9073"
+   },
+   "packages/operator-m/maps/mask_top_shirt.png": {
+    "bytes": 30072,
+    "sha256": "589edc5e2b942921853bfd41df3caa6306c53a2a898d2023872f2866e245d9dc"
+   },
+   "packages/operator-m/maps/cover_trousers_work.png": {
+    "bytes": 14204,
+    "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
+   },
+   "packages/operator-m/penetration.json": {
+    "bytes": 52495,
+    "sha256": "613261a02f5df51531c04568cbc2f40f410f129866ac4311c5d0d7fcc3a4012a"
+   },
+   "packages/operator-m/CREDITS.md": {
+    "bytes": 2407,
+    "sha256": "9b484bf216ea7d9c1c44e2d4d3feb949df6ce72d53d70fed5a9bda2bbf198e3b"
+   },
+   "packages/operator-m/poses.json": {
+    "bytes": 39625,
+    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
+   },
+   "packages/operator-m/operator-m.avatar.json": {
+    "bytes": 316840,
+    "sha256": "4017eed31db25c53e611ef564ce20cf3b34dbc6b3d11170957c34197458ec842"
+   },
+   "packages/operator-m/operator-m.clay.shape.bin": {
+    "bytes": 3071880,
+    "sha256": "8819ce2e290579797c9721a7572a8bd4c7b1583f05b4ae1acaf9e36768e52a63"
+   },
+   "packages/operator-m/operator-m.glb": {
+    "bytes": 18858348,
+    "sha256": "cc6bb9d303eed09c85aa798c9e3f3db5dbdeaaf815b53722ee6628b5550d7dc6"
+   },
+   "packages/operator-m/operator-m.wear.shape.bin": {
+    "bytes": 7206192,
+    "sha256": "bf46bb4f0ceba8cccb66a22821ade8d2384c47bc7b368813388b1685d32c0a6c"
+   },
+   "packages/operator-m/operator-m.shape.bin": {
+    "bytes": 3371760,
+    "sha256": "142089c9c230b461afe4a1fb8ae7a4cb7ceff68e5a0fbfce4a364452c0d6030e"
+   },
+   "packages/operator-m-medium/maps/cover_top_shirt.png": {
+    "bytes": 22490,
+    "sha256": "4b9da6e74a8587922226394156180fba71706017a265f65132e3889e18cfb287"
+   },
+   "packages/operator-m-medium/maps/mask_trousers_work.png": {
+    "bytes": 18694,
+    "sha256": "b4c9dd796b5c9a6acb0fe807f746dbc25f73c642706b88e69ccea937860accd1"
+   },
+   "packages/operator-m-medium/maps/fabric_linen_n.jpg": {
+    "bytes": 916843,
+    "sha256": "e2402166d1a489f7414814e69e1836ab672aa24e30bec2d41fea356f81687e53"
+   },
+   "packages/operator-m-medium/maps/garment_trousers_work_fold_seat_n.jpg": {
+    "bytes": 131183,
+    "sha256": "7d66d7a58734bffe555b6bcefdca2032c694c006aa1dfcd36671b2fac58fb812"
+   },
+   "packages/operator-m-medium/maps/mask_shoes_safety_trainer.png": {
+    "bytes": 7869,
+    "sha256": "9173bf05c809c360bf51fbaf35eaf0e416410d85f5f3f4cf0a606d1372df89ae"
+   },
+   "packages/operator-m-medium/maps/fabric_denim_n.jpg": {
+    "bytes": 948018,
+    "sha256": "d042e595687ae08f3c8e1188d3ea8cd45dbbf5f7777d2538671d41f08e3d1f15"
+   },
+   "packages/operator-m-medium/maps/cover_shoes_safety_trainer.png": {
+    "bytes": 5414,
+    "sha256": "b2d90e60ac9e88c2f3ecbb8cebf18e4fae70dd92254429c92393c75f7b4f9073"
+   },
+   "packages/operator-m-medium/maps/mask_top_shirt.png": {
+    "bytes": 30072,
+    "sha256": "589edc5e2b942921853bfd41df3caa6306c53a2a898d2023872f2866e245d9dc"
+   },
+   "packages/operator-m-medium/maps/cover_trousers_work.png": {
+    "bytes": 14204,
+    "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
+   },
+   "packages/operator-m-medium/operator-m-medium.shape.bin": {
+    "bytes": 3371760,
+    "sha256": "142089c9c230b461afe4a1fb8ae7a4cb7ceff68e5a0fbfce4a364452c0d6030e"
+   },
+   "packages/operator-m-medium/operator-m-medium.avatar.json": {
+    "bytes": 316914,
+    "sha256": "0ce260aed2ea03269f31216296706c206b1c2cf29a5b1c7f39143a84edf68068"
+   },
+   "packages/operator-m-medium/CREDITS.md": {
+    "bytes": 2427,
+    "sha256": "87c7b39116cb6aa4a3caadf52b802b4b31b996e99b2caff3cc9b62ea2dfe8e2e"
+   },
+   "packages/operator-m-medium/poses.json": {
+    "bytes": 39625,
+    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
+   },
+   "packages/operator-m-medium/operator-m-medium.wear.shape.bin": {
+    "bytes": 7206192,
+    "sha256": "bf46bb4f0ceba8cccb66a22821ade8d2384c47bc7b368813388b1685d32c0a6c"
+   },
+   "packages/operator-m-medium/operator-m-medium.glb": {
+    "bytes": 18707784,
+    "sha256": "465f089e07fb86a3d9f418abf030ead469c472ce170cf87921a0d785d8d816c9"
+   },
+   "packages/operator-m-medium/operator-m-medium.clay.shape.bin": {
+    "bytes": 3071880,
+    "sha256": "8819ce2e290579797c9721a7572a8bd4c7b1583f05b4ae1acaf9e36768e52a63"
+   },
+   "packages/operator-m-dark/maps/cover_top_shirt.png": {
+    "bytes": 22490,
+    "sha256": "4b9da6e74a8587922226394156180fba71706017a265f65132e3889e18cfb287"
+   },
+   "packages/operator-m-dark/maps/mask_trousers_work.png": {
+    "bytes": 18694,
+    "sha256": "b4c9dd796b5c9a6acb0fe807f746dbc25f73c642706b88e69ccea937860accd1"
+   },
+   "packages/operator-m-dark/maps/fabric_linen_n.jpg": {
+    "bytes": 916843,
+    "sha256": "e2402166d1a489f7414814e69e1836ab672aa24e30bec2d41fea356f81687e53"
+   },
+   "packages/operator-m-dark/maps/garment_trousers_work_fold_seat_n.jpg": {
+    "bytes": 131183,
+    "sha256": "7d66d7a58734bffe555b6bcefdca2032c694c006aa1dfcd36671b2fac58fb812"
+   },
+   "packages/operator-m-dark/maps/mask_shoes_safety_trainer.png": {
+    "bytes": 7869,
+    "sha256": "9173bf05c809c360bf51fbaf35eaf0e416410d85f5f3f4cf0a606d1372df89ae"
+   },
+   "packages/operator-m-dark/maps/fabric_denim_n.jpg": {
+    "bytes": 948018,
+    "sha256": "d042e595687ae08f3c8e1188d3ea8cd45dbbf5f7777d2538671d41f08e3d1f15"
+   },
+   "packages/operator-m-dark/maps/cover_shoes_safety_trainer.png": {
+    "bytes": 5414,
+    "sha256": "b2d90e60ac9e88c2f3ecbb8cebf18e4fae70dd92254429c92393c75f7b4f9073"
+   },
+   "packages/operator-m-dark/maps/mask_top_shirt.png": {
+    "bytes": 30072,
+    "sha256": "589edc5e2b942921853bfd41df3caa6306c53a2a898d2023872f2866e245d9dc"
+   },
+   "packages/operator-m-dark/maps/cover_trousers_work.png": {
+    "bytes": 14204,
+    "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
+   },
+   "packages/operator-m-dark/operator-m-dark.glb": {
+    "bytes": 18689060,
+    "sha256": "e067f66013dceb47328d84b8730d0b5535225a92437b1203c8df843bd510dd9b"
+   },
+   "packages/operator-m-dark/operator-m-dark.avatar.json": {
+    "bytes": 316913,
+    "sha256": "c16dc17e9ac8e03115eb3c8b2da374a37980f587e93b77bcf03be50a682f6a05"
+   },
+   "packages/operator-m-dark/CREDITS.md": {
+    "bytes": 2410,
+    "sha256": "16e286f3e837d49a3981179e80c8af38470e9089dc7352185fef65e13e9b0c08"
+   },
+   "packages/operator-m-dark/poses.json": {
+    "bytes": 39625,
+    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
+   },
+   "packages/operator-m-dark/operator-m-dark.shape.bin": {
+    "bytes": 3371760,
+    "sha256": "142089c9c230b461afe4a1fb8ae7a4cb7ceff68e5a0fbfce4a364452c0d6030e"
+   },
+   "packages/operator-m-dark/operator-m-dark.wear.shape.bin": {
+    "bytes": 7206192,
+    "sha256": "bf46bb4f0ceba8cccb66a22821ade8d2384c47bc7b368813388b1685d32c0a6c"
+   },
+   "packages/operator-m-dark/operator-m-dark.clay.shape.bin": {
+    "bytes": 3071880,
+    "sha256": "8819ce2e290579797c9721a7572a8bd4c7b1583f05b4ae1acaf9e36768e52a63"
+   }
+  },
+  "repository_revision": "67e22d92b57e21330a2862e012fcd7f79b9e9b3b",
+  "note": "The lab is the project's working folder (work/, never committed); the SHA-256 of every lab file read identifies the version packed. The lab build code is in tools/manikin-build/pipeline/."
+ },
+ "sources": [
+  {
+   "what": "body mesh, UVs, shape targets, rig, weights",
+   "source": "MPFB2 2.0.18 data (MakeHuman hm08)",
+   "licence": "CC0-1.0",
+   "verified": "2026-11-24 by RA (RA/REPORT.md); CC0 header read in base.obj and weights.default.json by B1"
+  },
+  {
+   "what": "shape space (fit to ANSUR II measurements; no survey data in the package)",
+   "source": "RP (work/avatar-lab/RP), on Anny 0.6.2 phenotypes and MakeHuman targets",
+   "licence": "Apache-2.0 (Anny code), CC0-1.0 (targets)",
+   "verified": "see RP/REPORT.md"
+  },
+  {
+   "what": "head kit: brows",
+   "title": "eyebrow001 (its texture painted into the skin albedo; no card mesh)",
+   "author": "MakeHuman team",
+   "source": "downloads/makehuman-assets/extracted/makehuman_system_assets_cc0/eyebrows/eyebrow001/eyebrow001.mhclo",
+   "licence": "CC0-1.0"
+  },
+  {
+   "what": "head kit: hair",
+   "title": "short04 (used only as the painted hairline's shape)",
+   "author": "MakeHuman team",
+   "source": "downloads/makehuman-assets/extracted/makehuman_system_assets_cc0/hair/short04/short04.mhclo",
+   "licence": "CC0-1.0"
+  },
+  {
+   "what": "garment trousers.work",
+   "title": "Male trousers 2",
+   "author": "Mindfront",
+   "source": "downloads/makehuman-assets/extracted/pants02_ccby/clothes/mindfront_male_trousers_2/mindfront_male_trousers_2.mhclo",
+   "url": "http://www.makehumancommunity.org",
+   "licence": "CC-BY-4.0",
+   "changes": "re-fitted to the body shapes, edges given thickness, texture reduced to a neutral detail map and re-coloured"
+  },
+  {
+   "what": "garment top.shirt",
+   "title": "Male shirt untucked BD1",
+   "author": "Elvaerwyn",
+   "source": "downloads/makehuman-assets/extracted/shirts02_ccby/clothes/elvs_male_shirt_untucked_bd1/elvs_male_shirt_untucked_bd1.mhclo",
+   "url": "http://www.makehumancommunity.org",
+   "licence": "CC-BY-4.0",
+   "changes": "re-fitted to the body shapes, edges given thickness, texture reduced to a neutral detail map and re-coloured"
+  },
+  {
+   "what": "garment cap.work_cap",
+   "title": "Cap (mesh)",
+   "author": "toigo",
+   "source": "downloads/makehuman-assets/extracted/hats01_cc0/clothes/toigo_maga_hat/toigo_maga_hat.mhclo",
+   "url": "http://www.makehumancommunity.org",
+   "licence": "CC0-1.0 (mesh only; its slogan texture is not used)",
+   "changes": "re-fitted to the body shapes, edges given thickness, texture reduced to a neutral detail map and re-coloured"
+  },
+  {
+   "what": "garment glasses.safety_clear",
+   "title": "Sagerfrog's glasses 03",
+   "author": "spamrakuen",
+   "source": "downloads/makehuman-assets/extracted/glasses01_cc0/clothes/spamrakuen_sagerfrogs_glasses_03/spamrakuen_sagerfrogs_glasses_03.mhclo",
+   "url": "http://www.makehumancommunity.org",
+   "licence": "CC0-1.0",
+   "changes": "re-fitted to the body shapes, edges given thickness, texture reduced to a neutral detail map and re-coloured"
+  },
+  {
+   "what": "skin albedo (m, light)",
+   "source": "makehuman_system_assets_cc0/skins/young_caucasian_male/young_lightskinned_male_diffuse.png",
+   "licence": "CC0-1.0",
+   "changes": "baked shading reduced; cropped hair painted in"
+  },
+  {
+   "what": "skin roughness zones",
+   "source": "skins02_cc0/skins/mindfront_aksel_skin (SPEC)",
+   "licence": "CC0-1.0",
+   "author": "Mindfront"
+  },
+  {
+   "what": "eyeballs, tear line, lid joints, iris structure texture",
+   "source": "pipeline/eyes.py (B5), generated",
+   "licence": "own work"
+  },
+  {
+   "what": "skin albedo (m, medium)",
+   "source": "skins01_cc0/skins/callharvey3d_midtoned_female/harvey_midtoned_female_diffuse.png",
+   "licence": "CC0-1.0",
+   "changes": "baked shading reduced; cropped hair painted in"
+  },
+  {
+   "what": "skin albedo (m, dark)",
+   "source": "makehuman_system_assets_cc0/skins/young_african_male/young_darkskinned_male_diffuse.png",
+   "licence": "CC0-1.0",
+   "changes": "baked shading reduced; cropped hair painted in"
+  },
+  {
+   "what": "fabric weave detail normal maps (shared/maps/)",
+   "source": "Poly Haven: denim_fabric_04, rough_linen (nor_gl, 1k)",
+   "licence": "CC0-1.0",
+   "verified": "All assets on Poly Haven are CC0 (polyhaven.com/license)"
+  },
+  {
+   "what": "headset, collar band, safety trainer (props)",
+   "source": "the avatar lab's prop builder (pipeline/props.py)",
+   "licence": "the project's own work"
+  },
+  {
+   "what": "motion clips",
+   "source": "../clips/m/PROVENANCE.json",
+   "licence": "CMU motion capture terms"
+  }
+ ],
+ "credits": "../CREDITS.md",
+ "built": {
+  "lab_commands": [
+   "$PY -I pipeline/build_body.py",
+   "$PY -I pipeline/build_operator.py m light",
+   "$PY -I pipeline/build_operator.py m medium --name operator-m-medium --out packages/operator-m-medium",
+   "$PY -I pipeline/build_operator.py m dark --name operator-m-dark --out packages/operator-m-dark"
+  ],
+  "pack": "bun tools/manikin-build/pack.ts --only operator-m",
+  "tools": {
+   "@gltf-transform/core": "4.5.1",
+   "@gltf-transform/functions": "4.5.1",
+   "@gltf-transform/extensions": "4.5.1",
+   "meshoptimizer": "1.1.1",
+   "toktx": ""
+  },
+  "settings": {
+   "geometry.position_grid_bits": 16,
+   "geometry.normal_grid_bits": 12,
+   "geometry.baked_normal_grid_bits": 8,
+   "geometry.uv_grid_bits": 16,
+   "geometry.weight_grid_bits": 12,
+   "geometry.weight4_grid_bits": 10,
+   "geometry.dqs_grid_bits": 8,
+   "geometry.color_grid_bits": 10,
+   "geometry.morph_position_grid_bits": 15,
+   "geometry.morph_normal_grid_bits": 10,
+   "shape.delta_step": 0.02,
+   "shape.wear_delta_step": 0.04,
+   "shape.base_grid_bits": 16,
+   "clips.rotation_bits": 16,
+   "clips.translation_bits": 20,
+   "texture.etc1s_quality": 255,
+   "texture.etc1s_level": 4,
+   "texture.uastc_quality": 2,
+   "texture.uastc_rdo_lambda": 2,
+   "texture.zstd_level": 19
+  },
+  "textures": [
+   {
+    "name": "skin8_m_light.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "skin_body.baseColor"
+    ]
+   },
+   {
+    "name": "skin_orm_m_light_1k.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "skin_body.metallicRoughness"
+    ]
+   },
+   {
+    "name": "w7_m_trousers_work_base.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "cloth_trousers_work.baseColor"
+    ]
+   },
+   {
+    "name": "b8_trousers_fold_stand_hemflat_operator-m.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "cloth_trousers_work.normal"
+    ]
+   },
+   {
+    "name": "w13_m_top_shirt_base.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "cloth_top_shirt.baseColor"
+    ]
+   },
+   {
+    "name": "garment_top_shirt_fold_stand_n.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "cloth_top_shirt.normal"
+    ]
+   },
+   {
+    "name": "w7_m_cap_work_cap_base.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "cloth_cap_work_cap.baseColor"
+    ]
+   },
+   {
+    "name": "w7_m_cap_work_cap_normal.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "cloth_cap_work_cap.normal"
+    ]
+   },
+   {
+    "name": "atlas_operator-m_prop_shoes_baseColor_1024__operator-m_prop_collar_baseColor.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "prop_shoes.baseColor"
+    ]
+   },
+   {
+    "name": "atlas_operator-m_prop_shoes_normal_1024__operator-m_prop_collar_normal.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "prop_shoes.normal"
+    ]
+   },
+   {
+    "name": "atlas_operator-m_prop_shoes_orm_1024__operator-m_prop_collar_orm.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "prop_shoes.metallicRoughness",
+     "prop_shoes.occlusion"
+    ]
+   },
+   {
+    "name": "eye_iris_struct.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "eye_ball.baseColor"
+    ]
+   },
+   {
+    "name": "eye_hair_m.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "lashes_soft.baseColor"
+    ]
+   },
+   {
+    "name": "operator-m_prop_headset_baseColor.ktx2",
+    "codec": "etc1s",
+    "keys": [
+     "prop_headset.baseColor"
+    ]
+   },
+   {
+    "name": "operator-m_prop_headset_normal.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "prop_headset.normal"
+    ]
+   },
+   {
+    "name": "operator-m_prop_headset_orm.ktx2",
+    "codec": "uastc",
+    "keys": [
+     "prop_headset.metallicRoughness",
+     "prop_headset.occlusion"
+    ]
+   }
+  ],
+  "log": [
+   "left out the lab's copy of the clay style (body_clay, clay_eyeball_l, clay_eyeball_r, shoe_last); the clay figure is clay-m",
+   "clothCorrectives.girth.probe: 438 vertex indices of garment_trousers_work renumbered",
+   "vertices of 11 meshes in fetch order (opaque triangles in vertex-cache order)",
+   "operator-m.shape.bin: 3371760 -> 863432 bytes; worst delta rounding 0.00001 m per unit weight; GLB positions within 7.6e-6 m of the base",
+   "operator-m.wear.shape.bin: 7206192 -> 1437310 bytes; worst delta rounding 0.00002 m per unit weight; GLB positions within 7.6e-6 m of the base"
+  ]
+ },
+ "validator": {
+  "accepted": [
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/1/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/10/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/2/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/3/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/4/primitives/0/material",
+   "MESH_PRIMITIVE_TOO_FEW_TEXCOORDS /meshes/5/primitives/0/material",
+   "MESH_PRIMITIVE_TOO_FEW_TEXCOORDS /meshes/6/primitives/0/material"
+  ],
+  "lab": [
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/1/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/10/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/2/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/3/primitives/0/material",
+   "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE /meshes/4/primitives/0/material",
+   "MESH_PRIMITIVE_TOO_FEW_TEXCOORDS /meshes/5/primitives/0/material",
+   "MESH_PRIMITIVE_TOO_FEW_TEXCOORDS /meshes/6/primitives/0/material"
+  ],
+  "note": "Khronos glTF validator 2.0.0-dev.3.10 errors and warnings (less 'cannot read meshopt / KTX2'). The lab GLB has the same ones (eyeballs: a base-colour texture the eye recipe maps itself, without TEXCOORD_0; normal maps without tangents, which three.js generates); `bun run check` fails on any other."
+ },
+ "files": {
+  "maps/cover_top_shirt.png": {
+   "bytes": 22490,
+   "sha256": "4b9da6e74a8587922226394156180fba71706017a265f65132e3889e18cfb287"
+  },
+  "maps/mask_trousers_work.png": {
+   "bytes": 18694,
+   "sha256": "b4c9dd796b5c9a6acb0fe807f746dbc25f73c642706b88e69ccea937860accd1"
+  },
+  "maps/garment_trousers_work_fold_seat_n.ktx2": {
+   "bytes": 158375,
+   "sha256": "3b0e4f9c003cecb0aa43a61ab90131b6f404a124fe525a8df8dd4257c10d5f87"
+  },
+  "maps/mask_shoes_safety_trainer.png": {
+   "bytes": 7869,
+   "sha256": "9173bf05c809c360bf51fbaf35eaf0e416410d85f5f3f4cf0a606d1372df89ae"
+  },
+  "maps/cover_shoes_safety_trainer.png": {
+   "bytes": 5414,
+   "sha256": "b2d90e60ac9e88c2f3ecbb8cebf18e4fae70dd92254429c92393c75f7b4f9073"
+  },
+  "maps/mask_top_shirt.png": {
+   "bytes": 30072,
+   "sha256": "589edc5e2b942921853bfd41df3caa6306c53a2a898d2023872f2866e245d9dc"
+  },
+  "maps/cover_trousers_work.png": {
+   "bytes": 14204,
+   "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
+  },
+  "poses.json": {
+   "bytes": 39625,
+   "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
+  },
+  "operator-m.avatar.json": {
+   "bytes": 293448,
+   "sha256": "1b6a07e66d1d39fa24ca82003d56d5b347f4cf4445ee33f88a4f5701fb6a3953"
+  },
+  "operator-m.glb": {
+   "bytes": 6270804,
+   "sha256": "03fba6fafa96fb843a7092d2c9f006761c52a0e9b868a7cd124b89f491d00bc1"
+  },
+  "operator-m.wear.shape.bin": {
+   "bytes": 1437310,
+   "sha256": "3081a59f963eae9419b70740d3bd4e197d378807e76df4253c70acd942973797"
+  },
+  "tones/medium/skin_body_baseColor.ktx2": {
+   "bytes": 499984,
+   "sha256": "9d3d631a1ec83b8747658a69643ca520bf45b28d8778dae82bf85544bb346cc5"
+  },
+  "tones/medium/skin_body_metallicRoughness.ktx2": {
+   "bytes": 107681,
+   "sha256": "d4122f9d29792651689592148df0ae6587d4ecde04792179c7e3e4dff19ce97e"
+  },
+  "tones/medium/lashes_soft_baseColor.ktx2": {
+   "bytes": 134674,
+   "sha256": "99e664ff5ad6db290f0a127fc77d940cb32a25c0f0298d59175a6c545332f6c1"
+  },
+  "tones/dark/skin_body_baseColor.ktx2": {
+   "bytes": 477426,
+   "sha256": "1ba64081974efe0a8d76b831881964fe9f89a92208e5359ccbf350f452ec97c8"
+  },
+  "tones/dark/skin_body_metallicRoughness.ktx2": {
+   "bytes": 108048,
+   "sha256": "ba9c02479e11c4403785010e56253281f3e5354ff198da890748b16f2201afed"
+  },
+  "tones/dark/lashes_soft_baseColor.ktx2": {
+   "bytes": 133197,
+   "sha256": "f050173263d1fcd7b3f2b6cff8fd826dda8ff434a44920ec1323bf71f217bcdc"
+  },
+  "operator-m.shape.bin": {
+   "bytes": 863432,
+   "sha256": "6e04853b152c68c4b7b6d4f24fa0197a92ec380508e20df06aa676f50b47d07b"
+  },
+  "../shared/maps/fabric_denim_n.ktx2": {
+   "bytes": 220604,
+   "sha256": "c61a6efa1680c27c2c469888ce6991b43a5ea5f42bc5610afda4ddc80d7d1e8f"
+  },
+  "../shared/maps/fabric_linen_n.ktx2": {
+   "bytes": 216970,
+   "sha256": "f16cf54ca6aead9cc21771ed91b609de160180f5df64d470ebcfb0a800e5e851"
+  }
+ },
+ "budget": {
+  "transfer_bytes": 9327093,
+  "core_bytes": 9599311,
+  "core": [
+   {
+    "path": "operator-m.avatar.json",
+    "bytes": 293448,
+    "sha256": "1b6a07e66d1d39fa24ca82003d56d5b347f4cf4445ee33f88a4f5701fb6a3953"
+   },
+   {
+    "path": "operator-m.glb",
+    "bytes": 6270804,
+    "sha256": "03fba6fafa96fb843a7092d2c9f006761c52a0e9b868a7cd124b89f491d00bc1"
+   },
+   {
+    "path": "operator-m.shape.bin",
+    "bytes": 863432,
+    "sha256": "6e04853b152c68c4b7b6d4f24fa0197a92ec380508e20df06aa676f50b47d07b"
+   },
+   {
+    "path": "operator-m.wear.shape.bin",
+    "bytes": 1437310,
+    "sha256": "3081a59f963eae9419b70740d3bd4e197d378807e76df4253c70acd942973797"
+   },
+   {
+    "path": "poses.json",
+    "bytes": 39625,
+    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
+   },
+   {
+    "path": "maps/mask_trousers_work.png",
+    "bytes": 18694,
+    "sha256": "b4c9dd796b5c9a6acb0fe807f746dbc25f73c642706b88e69ccea937860accd1"
+   },
+   {
+    "path": "maps/cover_trousers_work.png",
+    "bytes": 14204,
+    "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
+   },
+   {
+    "path": "maps/mask_top_shirt.png",
+    "bytes": 30072,
+    "sha256": "589edc5e2b942921853bfd41df3caa6306c53a2a898d2023872f2866e245d9dc"
+   },
+   {
+    "path": "maps/cover_top_shirt.png",
+    "bytes": 22490,
+    "sha256": "4b9da6e74a8587922226394156180fba71706017a265f65132e3889e18cfb287"
+   },
+   {
+    "path": "maps/mask_shoes_safety_trainer.png",
+    "bytes": 7869,
+    "sha256": "9173bf05c809c360bf51fbaf35eaf0e416410d85f5f3f4cf0a606d1372df89ae"
+   },
+   {
+    "path": "maps/cover_shoes_safety_trainer.png",
+    "bytes": 5414,
+    "sha256": "b2d90e60ac9e88c2f3ecbb8cebf18e4fae70dd92254429c92393c75f7b4f9073"
+   },
+   {
+    "path": "../shared/maps/fabric_denim_n.ktx2",
+    "bytes": 220604,
+    "sha256": "c61a6efa1680c27c2c469888ce6991b43a5ea5f42bc5610afda4ddc80d7d1e8f"
+   },
+   {
+    "path": "maps/garment_trousers_work_fold_seat_n.ktx2",
+    "bytes": 158375,
+    "sha256": "3b0e4f9c003cecb0aa43a61ab90131b6f404a124fe525a8df8dd4257c10d5f87"
+   },
+   {
+    "path": "../shared/maps/fabric_linen_n.ktx2",
+    "bytes": 216970,
+    "sha256": "f16cf54ca6aead9cc21771ed91b609de160180f5df64d470ebcfb0a800e5e851"
+   }
+  ],
+  "tones": {
+   "medium": 742339,
+   "dark": 718671
+  },
+  "styles": {
+   "dressed": {
+    "triangles": 72771,
+    "drawCalls": 11,
+    "meshes": [
+     "body",
+     "garment_trousers_work",
+     "garment_top_shirt",
+     "garment_cap_work_cap",
+     "shoe_safety_trainer",
+     "eyeball_l",
+     "eyeball_r",
+     "eye_wetline",
+     "lashes",
+     "glasses",
+     "prop_headset"
+    ],
+    "gpuTextureBytes": 41928032
+   }
+  },
+  "totals": {
+   "triangles": 72771,
+   "primitives": 11,
+   "joints": 102,
+   "textures": 16,
+   "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "KHR_texture_basisu"
+   ],
+   "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "KHR_texture_basisu"
+   ]
+  },
+  "limits": {
+   "bytes": 10000000,
+   "tone": 2000000,
+   "tris": 120000,
+   "calls": 12,
+   "gpu": 128000000
+  },
+  "problems": []
+ }
+}

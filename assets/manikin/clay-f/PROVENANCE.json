@@ -1,0 +1,187 @@
+{
+ "package": "clay-f",
+ "what": "the clay figure (woman); passed by the visual designer in VD/REVIEW-08 (L3, the mannequin class)",
+ "from": {
+  "lab": "work/avatar-lab/packages/abstract-f",
+  "lab_built": "pipeline/abstract.py",
+  "lab_files": {
+   "packages/abstract-f/abstract-f.shape.bin": {
+    "bytes": 12704832,
+    "sha256": "47813969bec00cf0142073150f1db3f9749608dc0948095842b17f7d1bbd5577"
+   },
+   "packages/abstract-f/abstract-f.glb": {
+    "bytes": 12738668,
+    "sha256": "2680210ada2b950d5a8a3101d72f7c926cb06b64a938d3918719a4e0388c5630"
+   },
+   "packages/abstract-f/poses.json": {
+    "bytes": 91381,
+    "sha256": "dde0214fbb2aaf42aad78a3a84825b7fe3d58083123fdcf5ae10f72702b403d4"
+   },
+   "packages/abstract-f/abstract-f.avatar.json": {
+    "bytes": 437791,
+    "sha256": "e161d8d67a9cdb94823bc2ee3145aa9746b07a7676912d5b6d21d93db9dce147"
+   },
+   "packages/abstract-f/style.npz": {
+    "bytes": 5734233,
+    "sha256": "bdd3b51019b2467c8d30e6d4b52da4be17ae4cefc8993edf2d495fd9cb60e24d"
+   }
+  },
+  "repository_revision": "67e22d92b57e21330a2862e012fcd7f79b9e9b3b",
+  "note": "The lab is the project's working folder (work/, never committed); the SHA-256 of every lab file read identifies the version packed. The lab build code is in tools/manikin-build/pipeline/."
+ },
+ "sources": [
+  {
+   "what": "body mesh, UVs, shape targets, rig, weights",
+   "source": "MPFB2 2.0.18 data (MakeHuman hm08)",
+   "licence": "CC0-1.0",
+   "verified": "2026-11-24 by RA (RA/REPORT.md); CC0 header read in base.obj and weights.default.json by B1"
+  },
+  {
+   "what": "shape space (fit to ANSUR II measurements; no survey data in the package)",
+   "source": "RP (work/avatar-lab/RP), on Anny 0.6.2 phenotypes and MakeHuman targets",
+   "licence": "Apache-2.0 (Anny code), CC0-1.0 (targets)",
+   "verified": "see RP/REPORT.md"
+  },
+  {
+   "what": "style operator, eyeballs",
+   "source": "pipeline/abstract.py (this project)",
+   "licence": "the project's own work"
+  },
+  {
+   "what": "last",
+   "source": "pipeline/props.py, prop_model.py (B6, this project)",
+   "licence": "the project's own work"
+  },
+  {
+   "what": "motion clips",
+   "source": "../clips/f/PROVENANCE.json",
+   "licence": "CMU motion capture terms"
+  }
+ ],
+ "credits": "../CREDITS.md",
+ "built": {
+  "lab_commands": [
+   "$PY -I pipeline/build_body.py",
+   "$PY -I pipeline/motion.py build --package packages/body-clay-f",
+   "$PY -I pipeline/abstract.py --sex f"
+  ],
+  "pack": "bun tools/manikin-build/pack.ts --only clay-f",
+  "tools": {
+   "@gltf-transform/core": "4.5.1",
+   "@gltf-transform/functions": "4.5.1",
+   "@gltf-transform/extensions": "4.5.1",
+   "meshoptimizer": "1.1.1",
+   "toktx": ""
+  },
+  "settings": {
+   "geometry.position_grid_bits": 16,
+   "geometry.normal_grid_bits": 12,
+   "geometry.baked_normal_grid_bits": 8,
+   "geometry.uv_grid_bits": 16,
+   "geometry.weight_grid_bits": 12,
+   "geometry.weight4_grid_bits": 10,
+   "geometry.dqs_grid_bits": 8,
+   "geometry.color_grid_bits": 10,
+   "geometry.morph_position_grid_bits": 15,
+   "geometry.morph_normal_grid_bits": 10,
+   "shape.delta_step": 0.02,
+   "shape.wear_delta_step": 0.04,
+   "shape.base_grid_bits": 16,
+   "clips.rotation_bits": 16,
+   "clips.translation_bits": 20,
+   "texture.etc1s_quality": 255,
+   "texture.etc1s_level": 4,
+   "texture.uastc_quality": 2,
+   "texture.uastc_rdo_lambda": 2,
+   "texture.zstd_level": 19
+  },
+  "textures": [],
+  "log": [
+   "vertices of 4 meshes in fetch order (opaque triangles in vertex-cache order)",
+   "clay-f.shape.bin: 12704832 -> 2448609 bytes; worst delta rounding 0.00001 m per unit weight; GLB positions within 7.6e-6 m of the base"
+  ]
+ },
+ "validator": {
+  "accepted": [],
+  "lab": [],
+  "note": "Khronos glTF validator 2.0.0-dev.3.10 errors and warnings (less 'cannot read meshopt / KTX2'). The lab GLB has the same ones (eyeballs: a base-colour texture the eye recipe maps itself, without TEXCOORD_0; normal maps without tangents, which three.js generates); `bun run check` fails on any other."
+ },
+ "files": {
+  "clay-f.shape.bin": {
+   "bytes": 2448609,
+   "sha256": "f6fa7cedcb1c8053bafa3dc55f164c34aaba04850f7ef67645ea20c0d01dbd36"
+  },
+  "poses.json": {
+   "bytes": 91381,
+   "sha256": "dde0214fbb2aaf42aad78a3a84825b7fe3d58083123fdcf5ae10f72702b403d4"
+  },
+  "clay-f.glb": {
+   "bytes": 2697892,
+   "sha256": "6068a04e0cbe54ca9d5b781b50d22b42c68bea2b8fcb7ed926a6c54e597d1a34"
+  },
+  "clay-f.avatar.json": {
+   "bytes": 267984,
+   "sha256": "2f1a85bde29f581447b54be2973e57876e310f68bbcf91da8ae620ea8a02b8a4"
+  }
+ },
+ "budget": {
+  "transfer_bytes": 5202530,
+  "core_bytes": 5505866,
+  "core": [
+   {
+    "path": "clay-f.avatar.json",
+    "bytes": 267984,
+    "sha256": "2f1a85bde29f581447b54be2973e57876e310f68bbcf91da8ae620ea8a02b8a4"
+   },
+   {
+    "path": "clay-f.glb",
+    "bytes": 2697892,
+    "sha256": "6068a04e0cbe54ca9d5b781b50d22b42c68bea2b8fcb7ed926a6c54e597d1a34"
+   },
+   {
+    "path": "clay-f.shape.bin",
+    "bytes": 2448609,
+    "sha256": "f6fa7cedcb1c8053bafa3dc55f164c34aaba04850f7ef67645ea20c0d01dbd36"
+   },
+   {
+    "path": "poses.json",
+    "bytes": 91381,
+    "sha256": "dde0214fbb2aaf42aad78a3a84825b7fe3d58083123fdcf5ae10f72702b403d4"
+   }
+  ],
+  "tones": {},
+  "styles": {
+   "clay": {
+    "triangles": 112736,
+    "drawCalls": 4,
+    "meshes": [
+     "body",
+     "eyeball_l",
+     "eyeball_r",
+     "shoe_last"
+    ],
+    "gpuTextureBytes": 0
+   }
+  },
+  "totals": {
+   "triangles": 112736,
+   "primitives": 4,
+   "joints": 102,
+   "textures": 0,
+   "extensionsUsed": [
+    "EXT_meshopt_compression"
+   ],
+   "extensionsRequired": [
+    "EXT_meshopt_compression"
+   ]
+  },
+  "limits": {
+   "bytes": 10000000,
+   "tone": 2000000,
+   "tris": 120000,
+   "calls": 12,
+   "gpu": 128000000
+  },
+  "problems": []
+ }
+}
