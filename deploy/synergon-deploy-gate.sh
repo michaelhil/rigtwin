@@ -1,16 +1,16 @@
 #!/bin/bash
-# rigtwin deploy gate: the forced command for every SSH key of the `rigtwin-deploy` account on the
-# production host (installed as /usr/local/bin/rigtwin-deploy-gate; see
+# synergon deploy gate: the forced command for every SSH key of the `synergon-deploy` account on the
+# production host (installed as /usr/local/bin/synergon-deploy-gate; see
 # wiki/50-implementation/deployment.md). sshd runs this script instead of whatever the client asked
 # for; the request is in SSH_ORIGINAL_COMMAND. Only the exact command shapes that tools/deploy.ts
-# sends are allowed, each confined to /srv/rigtwin. Anything else is refused and logged.
+# sends are allowed, each confined to /srv/synergon. Anything else is refused and logged.
 #
 # The patterns are anchored at both ends and built only from fixed text and narrow character
 # classes, so an allowed request cannot carry extra shell syntax.
 
 set -u
 cmd="${SSH_ORIGINAL_COMMAND:-}"
-R=/srv/rigtwin
+R=/srv/synergon
 REL='[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9_+-][A-Za-z0-9._+-]*'
 P="$R/releases/$REL"
 # rsync's server side, as started by GNU rsync (CI runner) or openrsync (macOS): options are single
@@ -29,11 +29,11 @@ allowed=(
   "^rsync --server$RSYNC_OPTS \. $P/?\$"
 )
 
-refuse() { logger -t rigtwin-deploy-gate "REFUSED ($1): $cmd"; echo "rigtwin-deploy-gate: $1" >&2; exit 126; }
+refuse() { logger -t synergon-deploy-gate "REFUSED ($1): $cmd"; echo "synergon-deploy-gate: $1" >&2; exit 126; }
 
 for re in "${allowed[@]}"; do
   [[ "$cmd" =~ $re ]] || continue
-  logger -t rigtwin-deploy-gate "allowed: $cmd"
+  logger -t synergon-deploy-gate "allowed: $cmd"
   # A release must never contain symbolic links: the web server would follow one to any readable file
   # on the host. Uploads are cleaned of links right after rsync finishes, and a release that still
   # contains one cannot be switched live.
@@ -51,6 +51,6 @@ for re in "${allowed[@]}"; do
   exec /bin/sh -c "$cmd"
 done
 
-logger -t rigtwin-deploy-gate "REFUSED: $cmd"
-echo "rigtwin-deploy-gate: command not allowed for this key: $cmd" >&2
+logger -t synergon-deploy-gate "REFUSED: $cmd"
+echo "synergon-deploy-gate: command not allowed for this key: $cmd" >&2
 exit 126

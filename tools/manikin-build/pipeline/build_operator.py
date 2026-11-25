@@ -1816,7 +1816,7 @@ def build(sex="m", tone="light", out=None, name=None, pick=None, colours=None, c
     for m_ in outfit:                                                 # round 11: no mesh without the eight-influence set
         if m_.weights is not None and not all(k in (m_.attrs or {}) for k in SKIN8): put8(m_, dense8(m_, nbj)); log("eight-influence set from its four:", m_.name)
     path = os.path.join(out, name + ".glb")
-    stats = glb.write_glb(path, outfit, skel, mats, generator="rigtwin avatar-lab pipeline/build_operator.py (MakeHuman / MPFB2 data; see CREDITS.md)")
+    stats = glb.write_glb(path, outfit, skel, mats, generator="synergon avatar-lab pipeline/build_operator.py (MakeHuman / MPFB2 data; see CREDITS.md)")
     if DROP_HIDDEN_BODY:
         # round 13 (coordinator): the body's triangles whose three corners lie deep under the shirt, trousers and shoes (more than the
         # setback, the mask's ramp and 20 mm inside every option of those always-filled slots) can never be seen in the dressed style:

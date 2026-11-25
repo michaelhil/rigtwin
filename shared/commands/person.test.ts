@@ -1,8 +1,7 @@
-// bun test shared/commands — the person's commands (person.ts) and the scene format rigtwin-scene/2 (doc.ts): person.set,
+// bun test shared/commands — the person's commands (person.ts) and the scene format synergon-scene/1 (doc.ts): person.set,
 // person.pose and person.clear as edits (validation, refusals, the stale check with the person as one key, undo by version and
 // by request), the intent tool `person`, person.report and measure {person} computed without a browser (shared/person-model.ts),
-// look's eye from the person in the seat with the stature ratio as the fallback, and the migration of a rigtwin-scene/1
-// document with its history.
+// look's eye from the person in the seat with the stature ratio as the fallback, and upgradeDoc (scene-upgrade.ts), the one-off conversion of a stored earlier-format document.
 import { test, expect, describe } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +10,7 @@ import "./intent.ts";
 import { list, validate, type AssetInfo } from "./registry.ts";
 import { newDoc, parseDoc, SCENE_FORMAT, type Actor, type SceneDoc } from "./doc.ts";
 import { defaultPerson } from "./person.ts";
+import { upgradeDoc } from "./scene-upgrade.ts";
 import { ownWords } from "./intent.ts";
 import { mask } from "../../server/trace.ts";
 import { readPackage, type PersonPackage } from "../person-model.ts";
@@ -274,31 +274,39 @@ describe("look's eye from the person in the seat", () => {
   });
 });
 
-describe("rigtwin-scene/2 and the migration from /1", () => {
-  test("a /1 document with history keeps its pose, version and history, and gets the given person", () => {
-    // a copy of a /1 document as the step-1 server wrote it: three changes, one of them undone
+describe("synergon-scene/1 and upgradeDoc", () => {
+  test("a document of an earlier format keeps its pose, version and history, and gets the given person", () => {
+    // an earlier-format copy as an older server wrote it: three changes, one of them undone, no person
     const s1 = fresh(bare);
     ok(run(s1, agent, { id: "pose.set", args: { joints: { J_mon_height: -0.03 } }, group: "lower-monitor" }));
     ok(run(s1, page, { id: "pose.set", args: { joints: { J_mon_tilt: 4 } } }));
     ok(run(s1, agent, { id: "history.undo", args: { version: 2 } }));
-    const v1 = JSON.parse(JSON.stringify({ ...s1.doc, schema: "rigtwin-scene/1" }));
-    delete v1.person;
-    const copy = structuredClone(v1);
-    const d = parseDoc(v1, { person: asset.people!.defaultPerson });
-    expect(v1).toEqual(copy);                                                                   // the input is not changed
-    expect(d.schema).toBe("rigtwin-scene/2");
+    const old = JSON.parse(JSON.stringify({ ...s1.doc, schema: "earlier-scene/1" }));
+    delete old.person;
+    const copy = structuredClone(old);
+    const from = ["earlier-scene/1"];
+    const d = upgradeDoc(old, { from, person: asset.people!.defaultPerson });
+    expect(old).toEqual(copy);                                                                  // the input is not changed
+    expect(d.schema).toBe("synergon-scene/1");
     expect(d.version).toBe(3); expect(d.pose).toEqual(copy.pose); expect(d.history).toEqual(copy.history);
     expect(d.person).toEqual(asset.people!.defaultPerson);
-    expect(parseDoc(structuredClone(copy)).person).toBeNull();                                  // no person given: nobody
-    // the migrated document works: undo of an old request, then the person changed and undone
+    expect(upgradeDoc(structuredClone(copy), { from }).person).toBeNull();                      // no person given: nobody
+    expect(upgradeDoc({ ...structuredClone(copy), person: null }, { from, person: asset.people!.defaultPerson }).person).toBeNull();  // a stored person is kept
+    expect(() => upgradeDoc(structuredClone(d), { from })).toThrow("earlier format");           // already current
+    // the upgraded document works: undo of an old request, then the person changed and undone
     const s = { doc: d, asset };
     ok(run(s, agent, { id: "history.undo", args: { group: "lower-monitor" } }));
     expect(s.doc.pose.J_mon_height).toBe(0);
     ok(run(s, agent, { id: "person.set", args: { preset: "P5 woman" } }));
     ok(run(s, agent, { id: "undo", args: {} }));
     expect(s.doc.person).toEqual(asset.people!.defaultPerson);
+  });
+  test("parseDoc reads the current format only", () => {
+    const d = fresh(bare).doc;
+    expect(parseDoc(structuredClone(d)).schema).toBe("synergon-scene/1");
+    expect(() => parseDoc({ ...structuredClone(d), schema: "earlier-scene/1" })).toThrow();
     expect(() => parseDoc({ ...structuredClone(d), person: { sex: 1 } })).toThrow("person");
-    expect(() => parseDoc({ ...structuredClone(d), schema: "rigtwin-scene/3" })).toThrow();
+    expect(() => parseDoc({ ...structuredClone(d), schema: "synergon-scene/2" })).toThrow();
   });
 });
 

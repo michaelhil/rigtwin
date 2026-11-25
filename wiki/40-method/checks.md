@@ -28,7 +28,7 @@ machine), except T10 (C-31), which is as of 2026-11-24. The platform's checks (C
 ## How a check run behaves
 
 - It always does a **full** build first (never `--only`), into the default build folder or, with
-  `--workspace <name>`, into that workspace.
+  `--build <name>`, into that build folder.
 - A failure in the type check or tests is reported and the run continues; a failure while loading
   parameters or building stops the run, because nothing after it would mean anything.
 - `ok`, `warn` and `FAIL` lines; only `FAIL` changes the exit code. When everything passes, 18
@@ -144,8 +144,8 @@ again before every page.
 
 | Id | Verifies, and how | The failure it exists to catch | Result |
 |---|---|---|---|
-| C-21 | Refuses a partial build or one with missing components. Then serves `dist/` under the sub-path `/rigtwin/` and loads it once in headless Chromium: no request outside the sub-path, no request mentioning `private` or `work/`, no console error, more than zero triangles drawn | The viewer is deployed under a sub-path, so one absolute URL breaks it. The local server also serves private photo cameras; a deployed copy must never ask for them | ok: 5 files, 1.68 MB; 5 requests; 28,106 triangles drawn (the model's 28,042 plus the 64 of the ground disc) (round 2) |
-| C-83 | Since step 1: bundles `server/server.ts` into `dist/server/server.js` and refuses a bundle that takes code from anywhere but `server/` and `shared/` or imports anything Bun does not provide itself. The verify step then starts the built server (local mode, free port, empty temporary data folder) and answers `/rigtwin/api/*` from it as Caddy does: `api/health` must report the release's revision and scene format, `api/live` must deliver a `snapshot` within 5 s, and `server/server.js`, `server/` and `server` must answer 404 | The viewer asks `api/health` on a release with a server, so a verify without one would fail on its own request; viewer code or an npm package slipping into the server; the server's code being served | ok (2026-11-24): server bundle 65,471 bytes from 10 modules; health and live channel answered through `/rigtwin/api/`; `server/` refused; 155 requests answered, 0 failed |
+| C-21 | Refuses a partial build or one with missing components. Then serves `dist/` at the site root and loads it once in headless Chromium: no request outside the site, no request mentioning `private` or `work/`, no console error, more than zero triangles drawn | The viewer is deployed under a sub-path, so one absolute URL breaks it. The local server also serves private photo cameras; a deployed copy must never ask for them | ok: 5 files, 1.68 MB; 5 requests; 28,106 triangles drawn (the model's 28,042 plus the 64 of the ground disc) (round 2) |
+| C-83 | Since step 1: bundles `server/server.ts` into `dist/server/server.js` and refuses a bundle that takes code from anywhere but `server/` and `shared/` or imports anything Bun does not provide itself. The verify step then starts the built server (local mode, free port, empty temporary data folder) and answers `/api/*` from it as Caddy does: `api/health` must report the release's revision and scene format, `api/live` must deliver a `snapshot` within 5 s, and `server/server.js`, `server/` and `server` must answer 404 | The viewer asks `api/health` on a release with a server, so a verify without one would fail on its own request; viewer code or an npm package slipping into the server; the server's code being served | ok (2026-11-24): server bundle 65,471 bytes from 10 modules; health and live channel answered through `/Synergon/api/`; `server/` refused; 155 requests answered, 0 failed |
 
 ## Checks of the viewer page (`bun tools/ui-accept.ts`)
 

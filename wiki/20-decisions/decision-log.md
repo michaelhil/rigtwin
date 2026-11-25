@@ -1,8 +1,8 @@
 ---
 title: Decision log
-tldr: 55 decisions, D-01 to D-55, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
+tldr: 56 decisions, D-01 to D-56, each with context, alternatives, reason, who decided, status and consequences. D-01 to D-20 come from the approved plan, D-21 to D-37 from the first build, D-38 to D-46 from platform step 1 and D-47 to D-55 from agent interface v2 (all 2026-11-23 and 24).
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [decisions, log, platform]
 ---
 
@@ -16,6 +16,7 @@ tags: [decisions, log, platform]
 - Four plan decisions were changed in execution: human gates (D-14 → D-22), masking (D-18 → D-21), serial modelling (→ D-26) and locked assumed motions in the viewer (D-10 → D-31).
 - Platform step 1 (2026-11-24) added D-38 to D-46: the platform plan approved ([D-38](#d-38)); server-sent events plus POST commands ([D-39](#d-39)); undo by entry or request ([D-40](#d-40)); server-made author ids ([D-41](#d-41)); no release split ([D-42](#d-42)); the 800 kB budget for every script ([D-43](#d-43)); no manikin on the public site until approved ([D-44](#d-44)); port 4190 ([D-45](#d-45)); the stream byte budget ([D-46](#d-46)).
 - Agent interface v2 (2026-11-24, "step 1.5") added D-47 to D-52: built here and deployed on the owner's word ([D-47](#d-47)); intent commands in plain words ([D-48](#d-48)); assumed adjustments moved and marked ([D-49](#d-49)); MCP served by the server itself ([D-50](#d-50)); pictures from the browser and views to every local page ([D-51](#d-51)); the meaning of each adjustment next to the page's words ([D-52](#d-52)); a trace of every request in the browser ([D-53](#d-53)); the camera anywhere, a person's eye by stature, and Follow ([D-54](#d-54)); a consent question in the browser ([D-55](#d-55)).
+- The name Synergon, its own subdomain and the wiki at `/wiki` are D-56 (2026-11-25).
 - New decisions get the next free number. To retire one, mark it "superseded by D-xx"; never delete or renumber.
 
 ## How to read an entry
@@ -193,10 +194,10 @@ tags: [decisions, log, platform]
 - **Reason:** the owner asked for a complete result in one go, checked by "a separate ruthless agent".
 - **Consequences:** acceptance rests on a ruthless reviewer agent plus the coordinator's verification in the browser. No acceptance-author agent was used. No hold-out points clicked by a person exist.
 
-### D-23 — The project is called `rigtwin`
+### D-23 — The project's first name
 
-- **Decided by / status:** owner; in force.
-- **Context:** the owner rejected the plan's shortlist ("all bad. keep it simpler. no german or norwegian").
+- **Decided by / status:** owner; replaced by [D-56](#d-56) on 2026-11-25.
+- **Context:** the owner rejected the plan's shortlist ("all bad. keep it simpler. no german or norwegian") and chose a first name from a later list of plain English names. The owner retired it on 2026-11-25 and renamed the project Synergon: [D-56](#d-56).
 - **Consequences:** folder in the owner's Documents folder, which is not cloud-synced on this machine.
 
 ### D-24 — Photo values are modelled where they conflict with the owner's scale figures
@@ -255,7 +256,7 @@ tags: [decisions, log, platform]
 ### D-32 — Public addresses and deployment by one command
 
 - **Decided by / status:** owner (addresses), coordinator (pipeline); in force.
-- **What:** viewer at `mightwork.ai/rigtwin`, wiki at `mightwork.ai/rigtwin/wiki`. One deploy command builds, checks, packages, copies a dated release to the server, switches a link and verifies the live pages.
+- **What:** viewer and wiki on the owner's production server, the wiki as a subfolder of the viewer. One deploy command builds, checks, packages, copies a dated release to the server, switches a link and verifies the live pages.
 - **Alternatives:** deployment from GitHub's automation; offered as a follow-up, because it needs a new access key on the server and no credentials are created unasked. The owner chose it afterwards: [D-37](#d-37).
 
 ### D-33 — The repository is private, and version control starts only at the end
@@ -282,9 +283,9 @@ tags: [decisions, log, platform]
 ### D-37 — Every push to main deploys automatically, through a restricted account
 
 - **Decided by / status:** owner (automatic deployment, 2026-11-23, answering "Should a push to GitHub deploy to mightwork.ai automatically?" with "Yes, set it up"); coordinator (how); in force.
-- **What:** a GitHub Actions workflow runs `bun run deploy --no-images` on every push to `main`. GitHub holds a new SSH key that the server accepts only for the unprivileged account `rigtwin-deploy`, and only for the exact commands of the deploy script inside `/srv/rigtwin` (a forced-command gate); the server's host key is pinned in the repository. Manual deploys use the same account and gate.
+- **What:** a GitHub Actions workflow runs `bun run deploy --no-images` on every push to `main`. GitHub holds a new SSH key that the server accepts only for the unprivileged account `synergon-deploy`, and only for the exact commands of the deploy script inside `/srv/synergon` (a forced-command gate); the server's host key is pinned in the repository. Manual deploys use the same account and gate.
 - **Alternatives:** the existing root login as the deploy key (rejected: a leaked secret would give full control of a server that hosts other sites); a deploy user with an ordinary shell (rejected: a leaked secret would allow any command as that user); building on the server from a pull (rejected: the server would need Bun, Chrome and the repository credentials).
-- **Reason:** the owner asked for "a pipeline so that future updates will be pushed to prod"; least privilege keeps a leaked GitHub secret from reaching anything but the `/rigtwin/` release folders.
+- **Reason:** the owner asked for "a pipeline so that future updates will be pushed to prod"; least privilege keeps a leaked GitHub secret from reaching anything but the `/` release folders.
 - **Consequences:** images that need the private photo cameras are not regenerated on the runner; after a model change they are regenerated locally and committed. Details: [deployment](../50-implementation/deployment.md#continuous-deployment-from-github).
 
 ## Decisions of platform step 1 (2026-11-24)
@@ -298,7 +299,7 @@ project's working files.
 ### D-38 — The platform plan (version 7) is approved, starting with step 1
 
 - **Decided by / status:** owner (2026-11-24, "approved to proceed", with an independent simplicity monitor); in force.
-- **What:** rigtwin becomes a working platform in five steps that can each be stopped after: agent control, honest numbers, assessment, an agent in the app, the control room. Step 1 is started; steps 2 to 5 are decided after the owner has tried it.
+- **What:** Synergon becomes a working platform in five steps that can each be stopped after: agent control, honest numbers, assessment, an agent in the app, the control room. Step 1 is started; steps 2 to 5 are decided after the owner has tried it.
 - **Consequences:** every change to the scene becomes a command that buttons, Claude Code and later an agent in the app all use. Details: [the platform plan](../30-plan/platform-plan.md).
 
 <a id="d-39"></a>
@@ -330,7 +331,7 @@ project's working files.
 ### D-42 — No release split: the server travels in today's release folder, never served
 
 - **Decided by / status:** simplicity monitor (blocking objection 3), accepted by the coordinator; supersedes the plan's release split; in force.
-- **What:** `server/server.js` is part of each release next to the viewer. Caddy answers 404 for `/rigtwin/server/*` (installed by the setup script before any release with a server), the deploy checks that 404, and a rollback refuses a release without a server once the host runs one. The deploy account's gate is unchanged.
+- **What:** `server/server.js` is part of each release next to the viewer. Caddy answers 404 for `/server/*` (installed by the setup script before any release with a server), the deploy checks that 404, and a rollback refuses a release without a server once the host runs one. The deploy account's gate is unchanged.
 - **Alternatives:** separate `site/` and `server/` folders per release (rejected: two new gate patterns, a reinstall of the gate as root, a rollback floor for the whole site, and most of the security review's release risks).
 - **Consequences:** the order of the first rollout matters: the Caddy rule must be on the host before a release with `server/` reaches `main` ([order of the first rollout](../50-implementation/server-and-host-setup.md#order-of-the-first-rollout)); it was installed on 2026-11-24.
 
@@ -351,7 +352,7 @@ project's working files.
 - **Consequences:** the engine keeps only the two extension points the live client uses (before and after a reset of the page); the reference-frame reader `shared/kinematics.ts` stays because `measure.distance` uses it. The manikin is documented by its own pass when it is approved.
 
 <a id="d-45"></a>
-### D-45 — The rigtwin server listens on 127.0.0.1:4190
+### D-45 — The Synergon server listens on 127.0.0.1:4190
 
 - **Decided by / status:** coordinator (2026-11-24); in force.
 - **What:** the plan's port 4180 is already used by another service on the production host (found by the setup script's read-only check); the unit, the Caddy route, the setup script and its test use 4190.
@@ -390,12 +391,12 @@ project's working files.
 - **Reason:** five of the seat's adjustments are assumed, so almost every seat request hit the refusal and a round trip to the owner, although the owner had named the adjustment. The honesty rule needs the words, not the stop.
 
 <a id="d-50"></a>
-### D-50 — MCP served by the rigtwin server itself, tools only; two entries in `.mcp.json`
+### D-50 — MCP served by the Synergon server itself, tools only; two entries in `.mcp.json`
 
 - **Decided by / status:** owner, on the proposal (2026-11-24); in force.
-- **What:** `POST api/mcp` (Streamable HTTP, JSON answers, no server-initiated stream) offers the five intent commands as tools, on the laptop and on mightwork.ai, through the same path and guards as `api/command`. Tool schemas and descriptions come from the registry; the server's instructions (at most 4,096 characters) carry the rules and one line per adjustment. `.mcp.json` names `rigtwin` (local) and `rigtwin-public` with `alwaysLoad`, so the tool name says which scene an agent acts on and the tools are in context from the first turn.
+- **What:** `POST api/mcp` (Streamable HTTP, JSON answers, no server-initiated stream) offers the five intent commands as tools, on the laptop and on mightwork.ai, through the same path and guards as `api/command`. Tool schemas and descriptions come from the registry; the server's instructions (at most 4,096 characters) carry the rules and one line per adjustment. `.mcp.json` names Synergon (local) and `synergon-public` with `alwaysLoad`, so the tool name says which scene an agent acts on and the tools are in context from the first turn.
 - **Alternatives:** a stdio wrapper around `bun run rig` (rejected: the Claude API's MCP connector, the route for the step-4 agent in the app, takes only remote HTTP servers); one entry with a target argument (rejected: the target would again be decided per call).
-- **Consequences:** no host change: Caddy already routes `/rigtwin/api/*`. After the security review of 2026-11-24: one JSON-RPC message per request (batches would let one rate-limited request carry hundreds of calls and megabytes of reply), a content type of exactly `application/json`, and only the server's own `Origin` (locally `http://<Host>`, so another local dev server's page cannot drive the scene). The caller is "Claude Code · <id>", with the id made from the MCP session.
+- **Consequences:** no host change: Caddy already routes `/api/*`. After the security review of 2026-11-24: one JSON-RPC message per request (batches would let one rate-limited request carry hundreds of calls and megabytes of reply), a content type of exactly `application/json`, and only the server's own `Origin` (locally `http://<Host>`, so another local dev server's page cannot drive the scene). The caller is "Claude Code · <id>", with the id made from the MCP session.
 
 <a id="d-51"></a>
 ### D-51 — Pictures from the browser on request; views to every page of a local server
@@ -416,7 +417,7 @@ project's working files.
 
 - **Decided by / status:** owner ("would be nice for inspectability ... and also get some timing information ... it could be somewhat simplified here", 2026-11-24); in force.
 - **What:** the server makes one record per request (an MCP tool call, a command from the command line or a script, a page's save, an MCP connect): who, how (MCP, command line, page), the command, what happened in the server's words, ok or refused with its code, the server's time, the time since that caller's previous reply (for an agent its own time between two tool calls, which is where most of the time goes), a picture's size and the page's time to draw it, and the request and the reply as the caller sent and saw them. It goes to every open page as the live-channel event `trace` and is kept in memory only (the last 100; `GET api/trace`). The activity line names the latest request by someone else with a line of times; its Trace button opens the list: one block per caller's run, a row per request with its offset, and each row opens to the request, the reply and an Undo.
-- **Alternatives:** Leitbild's Prompt & Generation Inspector (stored turns and model calls in SQLite, tabs for instructions and messages, swim lanes, costs; rejected as more than this needs: rigtwin sees no model calls, only tool calls, so the gap between two calls stands in for the model's time); showing only edits (the step-1 activity line; rejected: queries, views, refusals and timing were invisible).
+- **Alternatives:** Leitbild's Prompt & Generation Inspector (stored turns and model calls in SQLite, tabs for instructions and messages, swim lanes, costs; rejected as more than this needs: Synergon sees no model calls, only tool calls, so the gap between two calls stands in for the model's time); showing only edits (the step-1 activity line; rejected: queries, views, refusals and timing were invisible).
 - **Consequences:** on the public sandbox a record carries no text a caller wrote: arguments are shown as ids, numbers and words of the model's own vocabulary ("backrest", "upright", "-3 cm"), anything else as ‹text›; a refusal by its code and hint; only request names the server made. At most 8 records a second are sent there (the rest are counted). Nothing is written to disk.
 
 <a id="d-54"></a>
@@ -435,3 +436,11 @@ project's working files.
 - **Alternatives:** a blocking modal dialog (rejected: a question from a stranger's agent must not block the page); asking only pages that were active lately (rejected: no reliable signal); per-agent stored consent (rejected for now: an agent's id lasts one Claude Code session, so a stored per-agent yes would rarely be used again).
 - **Consequences:** a stranger's agent can put a question on every open page, so questions are limited to 4 a minute per agent, are non-blocking notices, say only the server's own words, and No silences that agent. "Always allow" lets any agent's views in, strangers' included, and says so in its tooltip. A picture from an allowing page waits up to 25 s for the answer and is marked unverified. A refused `look` (`needs_viewer`) now means that no page is open or the agent asked too often.
 
+<a id="d-56"></a>
+### D-56 — The project is named Synergon (2026-11-25)
+
+- **Decided by / status:** owner (2026-11-25); in force.
+- **What:** the project is named Synergon. The viewer, its API and the agent endpoint are to be served at `https://synergon.mightwork.ai/`, and the wiki at `https://synergon.mightwork.ai/wiki/`, from the first Synergon release (no date yet). The project has its own subdomain and no longer lives in a sub-folder of another address. The agent endpoint is planned per workspace, at `https://synergon.mightwork.ai/api/workspaces/<id>/mcp`; the shared workspaces are being built.
+- **Reason:** the owner wanted a new name, a subdomain of its own, and the wiki at `/wiki` on that subdomain. Every current file, address, format identifier and setting uses the new name, so nothing in the repository refers to an earlier one.
+- **Alternatives:** none recorded.
+- **Consequences:** git history keeps its older commits unchanged (rewriting history is destructive); the check scans every current file for the earlier name so it cannot come back. In the code, the old tool meaning of "workspace" (a modelling output folder) is now called a build folder (`--build`, `SYNERGON_BUILD_DIR`); "workspace" now means the shared, public workspaces.

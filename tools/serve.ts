@@ -1,12 +1,12 @@
-// bun run serve [--port 4173] [--workspace <name>] [--viewer <dir>] [--data <dir> | --no-api]
-// Static server for the viewer, laid out exactly like the deployed dist/, with the rigtwin server
+// bun run serve [--port 4173] [--build <name>] [--viewer <dir>] [--data <dir> | --no-api]
+// Static server for the viewer, laid out exactly like the deployed dist/, with the synergon server
 // (server/server.ts, local mode) mounted on the same port under /api/: the shared Playground is kept in
-// <data>/playground/doc.json, by default ../rigtwin-projects/ next to the repository. `bun run rig` talks
+// <data>/playground/doc.json, by default ../synergon-projects/ next to the repository. `bun run rig` talks
 // to it. render and ui-accept start it with an empty temporary data folder (data: "temp"), so no pose of
 // the Playground reaches a published picture. The served files:
 //   /            the bundled viewer (index.html, viewer.css, viewer.js), rebuilt in memory whenever
 //                a file under viewer/ or shared/ has changed; no manual bundling step
-//   /asset/      assets/rig-b/build/   (or work/<workspace>/build/); /asset/manikin/ is assets/manikin/ (the person's packages)
+//   /asset/      assets/rig-b/build/   (or work/<build folder>/build/); /asset/manikin/ is assets/manikin/ (the person's packages)
 //   /libs/basis/ three's KTX2 transcoder (basis_transcoder.js, .wasm) from node_modules
 //   /wiki/       dist/wiki/ if `bun run wiki build` has been run (so the viewer's Documentation link works locally)
 //   /version.json  what dist/version.json would say for the working copy
@@ -64,21 +64,21 @@ export function personEntry(dir: string): { person?: { package: string } } {
   return existsSync(join(dir, PERSON_PACKAGE)) ? { person: { package: `asset/manikin/${PERSON_PACKAGE}` } } : {};
 }
 
-export function buildDir(workspace?: string, asset = "rig-b") { return workspace ? join(ROOT, "work", workspace, "build") : join(ROOT, "assets", asset, "build"); }
+export function buildDir(buildFolder?: string, asset = "rig-b") { return buildFolder ? join(ROOT, "work", buildFolder, "build") : join(ROOT, "assets", asset, "build"); }
 
 /** Where the Playground of `bun run serve` lives: <data>/playground/doc.json. */
-export const DEFAULT_DATA = join(ROOT, "..", "rigtwin-projects");
+export const DEFAULT_DATA = join(ROOT, "..", "synergon-projects");
 
-/** The viewer and (unless `data` is false) the rigtwin server on one port. `data: "temp"` gives the server an empty
+/** The viewer and (unless `data` is false) the synergon server on one port. `data: "temp"` gives the server an empty
  *  temporary data folder, removed by stop(); `reset()` empties the Playground again (tools only). */
-export async function startServer(opts: { port?: number; workspace?: string; asset?: string; photos?: string; requests?: string[]; data?: string | false } = {}) {
+export async function startServer(opts: { port?: number; buildFolder?: string; asset?: string; photos?: string; requests?: string[]; data?: string | false } = {}) {
   let bundle: ViewerBundle = await bundleViewer();
-  const temp = opts.data === "temp" ? mkdtempSync(join(tmpdir(), "rigtwin-scene-")) : null;
-  const api = opts.data === false ? null : createApi({ dataDir: temp ?? opts.data ?? DEFAULT_DATA, assetDir: buildDir(opts.workspace, opts.asset), mode: "local", revision: sourceRevision().revision });
+  const temp = opts.data === "temp" ? mkdtempSync(join(tmpdir(), "synergon-scene-")) : null;
+  const api = opts.data === false ? null : createApi({ dataDir: temp ?? opts.data ?? DEFAULT_DATA, assetDir: buildDir(opts.buildFolder, opts.asset), mode: "local", revision: sourceRevision().revision });
   const mounts: [string, string][] = [
     ["/asset/manikin/", join(ROOT, "assets", "manikin")],          // the person's packages (MP), as dist/asset/manikin/
     ["/libs/basis/", join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis")],   // three's KTX2 transcoder, as dist/libs/basis/
-    ["/asset/", buildDir(opts.workspace, opts.asset)],
+    ["/asset/", buildDir(opts.buildFolder, opts.asset)],
     ...(opts.photos ? [["/_photos/", opts.photos] as [string, string]] : [["/private/", join(ROOT, "private")] as [string, string]]),
     ["/work/", join(ROOT, "work")],
     ["/wiki/", join(ROOT, "dist", "wiki")],
@@ -99,7 +99,7 @@ export async function startServer(opts: { port?: number; workspace?: string; ass
       opts.requests?.push(path);
       if (path.endsWith("/")) path += "index.html";
       // the viewer looks for the live channel only when version.json says there is a server (no failed request otherwise)
-      if (path === "/version.json") return Response.json({ ...currentVersion({ buildDir: buildDir(opts.workspace, opts.asset), asset: opts.asset, label: "working copy" }), ...(api ? { server: { format: SCENE_FORMAT } } : {}), ...personEntry(join(ROOT, "assets", "manikin")) }, { headers: { "cache-control": "no-store" } });
+      if (path === "/version.json") return Response.json({ ...currentVersion({ buildDir: buildDir(opts.buildFolder, opts.asset), asset: opts.asset, label: "working copy" }), ...(api ? { server: { format: SCENE_FORMAT } } : {}), ...personEntry(join(ROOT, "assets", "manikin")) }, { headers: { "cache-control": "no-store" } });
       if (opts.photos && path === CAMERAS) return masked ? new Response(masked, { headers: { "content-type": "application/json", "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
       // On a machine without the private camera file (a CI runner, a fresh clone) answer with an empty set
       // instead of a 404, which the viewer would log as a console error and the check would count.
@@ -110,7 +110,7 @@ export async function startServer(opts: { port?: number; workspace?: string; ass
       }
       const own = bundle.files[path.slice(1)];
       // the dev marker lets the viewer look for private/evidence/cameras.json; the deployed page never asks for it
-      if (own && path === "/index.html") return new Response(own.body.replace("</head>", '<meta name="rigtwin-dev" content="1">\n</head>'), { headers: { "content-type": own.type, "cache-control": "no-store" } });
+      if (own && path === "/index.html") return new Response(own.body.replace("</head>", '<meta name="synergon-dev" content="1">\n</head>'), { headers: { "content-type": own.type, "cache-control": "no-store" } });
       if (own) return new Response(own.body, { headers: { "content-type": own.type, "cache-control": "no-store" } });
       for (const [prefix, dir] of mounts) {
         if (!path.startsWith(prefix)) continue;
@@ -130,9 +130,9 @@ export async function startServer(opts: { port?: number; workspace?: string; ass
 
 if (import.meta.main) {
   const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-  if (opt("--viewer")) process.env.RIGTWIN_VIEWER_DIR = opt("--viewer");   // viewer source directory (default "viewer")
+  if (opt("--viewer")) process.env.SYNERGON_VIEWER_DIR = opt("--viewer");   // viewer source directory (default "viewer")
   const data = args.includes("--no-api") ? false : opt("--data") ? resolve(opt("--data")!) : DEFAULT_DATA;
-  const server = await startServer({ port: Number(opt("--port") ?? 4173), workspace: opt("--workspace") ?? process.env.RIGTWIN_WORKSPACE, data });
-  console.log(`viewer: http://127.0.0.1:${server.port}/   (asset from ${buildDir(opt("--workspace") ?? process.env.RIGTWIN_WORKSPACE)})`);
+  const server = await startServer({ port: Number(opt("--port") ?? 4173), buildFolder: opt("--build") ?? process.env.SYNERGON_BUILD_DIR, data });
+  console.log(`viewer: http://127.0.0.1:${server.port}/   (asset from ${buildDir(opt("--build") ?? process.env.SYNERGON_BUILD_DIR)})`);
   console.log(data === false ? "no shared scene (--no-api)" : `shared scene: ${join(data, "playground", "doc.json")}; bun run rig talks to it`);
 }

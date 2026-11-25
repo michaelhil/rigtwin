@@ -7,8 +7,8 @@ import type { BunPlugin } from "bun";
 import { validateRuntime, stripRuntime } from "../shared/runtime-params.ts";
 import { ROOT } from "./timeline.ts";
 
-/** Viewer source directory, relative to the repository root: "viewer" unless RIGTWIN_VIEWER_DIR (or `--viewer <dir>` of serve / render) names another one. */
-export const viewerDir = () => join(ROOT, process.env.RIGTWIN_VIEWER_DIR || "viewer");
+/** Viewer source directory, relative to the repository root: "viewer" unless SYNERGON_VIEWER_DIR (or `--viewer <dir>` of serve / render) names another one. */
+export const viewerDir = () => join(ROOT, process.env.SYNERGON_VIEWER_DIR || "viewer");
 const watch = () => { const VIEWER = viewerDir(); return [join(VIEWER, "src"), join(ROOT, "shared"), join(VIEWER, "index.html"), join(VIEWER, "viewer.css"), ...(existsSync(join(ROOT, "assets", "manikin", "params")) ? [join(ROOT, "assets", "manikin", "params")] : [])]; };
 
 function newest(path: string): number {

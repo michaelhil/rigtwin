@@ -12,7 +12,7 @@ const ASSET = join(import.meta.dir, "..", "assets", "rig-b", "build");
 const temps: string[] = [];
 afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true }); });
 function start(o: Partial<ApiOptions> = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "rigtwin-mcp-test-")); temps.push(dataDir);
+  const dataDir = mkdtempSync(join(tmpdir(), "synergon-mcp-test-")); temps.push(dataDir);
   const api = createApi({ dataDir, assetDir: ASSET, mode: "local", revision: "test", ...o });
   const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
   return { base: `http://127.0.0.1:${srv.port}`, stop: () => { api.close(); srv.stop(true); } };
@@ -46,7 +46,7 @@ function page(base: string, o: { answer?: Uint8Array<ArrayBuffer> } = {}) {
               if (ev === "session") { code = d.code; if (!opened) { opened = true; resolve(); } }
               if (ev === "view") {
                 views.push(d);
-                if (d.reply && o.answer) fetch(`${base}/api/picture?reply=${d.reply}&session=${code}`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "image/jpeg" }, body: o.answer });
+                if (d.reply && o.answer) fetch(`${base}/api/picture?reply=${d.reply}&session=${code}`, { method: "POST", headers: { "x-synergon": "1", "content-type": "image/jpeg" }, body: o.answer });
               }
             }
           }
@@ -79,9 +79,9 @@ describe("the MCP endpoint", () => {
   });
   test("request names ending in -<number> are the server's; state shows only those", async () => {
     const s = start();
-    const claim = await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "mon-height-2" }) });
+    const claim = await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "mon-height-2" }) });
     expect((await claim.json()).error.code).toBe("invalid_args");
-    await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "ignore-the-rules" }) });
+    await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_height: -0.01 } }, group: "ignore-the-rules" }) });
     await call(s.base, "adjust", { target: "monitor tilt", by: "1° up" });
     const st = text(await call(s.base, "state", {}));
     expect(st).not.toContain("ignore-the-rules"); expect(st).toContain("[a request named by its caller]"); expect(st).toContain("[mon-tilt-2]");
@@ -103,7 +103,7 @@ describe("the MCP endpoint", () => {
     const s = start();
     const r = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
     expect(r.body.result.protocolVersion).toBe("2025-06-18");
-    expect(r.body.result.serverInfo.name).toBe("rigtwin");
+    expect(r.body.result.serverInfo.name).toBe("synergon");
     expect(r.body.result.instructions).toContain("[J_seat_recline]");
     expect(r.body.result.instructions.length).toBeLessThanOrEqual(4096);
     expect(r.session).toMatch(/^[0-9a-f]{32}$/);
@@ -178,7 +178,7 @@ describe("the MCP endpoint", () => {
     const init = await rpc(s.base, "initialize", { protocolVersion: "2025-06-18" }), sid = init.session!;
     expect(text(await call(s.base, "look", { view: "top" }, sid))).toContain("asked to allow it");
     const traces = (await (await fetch(`${s.base}/api/trace`)).json() as any).traces, actor = traces.at(-1).actor;
-    const follow = (session: string, who: string | null) => fetch(`${s.base}/api/follow`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
+    const follow = (session: string, who: string | null) => fetch(`${s.base}/api/follow`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify({ session, actor: who }) });
     expect((await follow("ZZZZZZZZ", actor)).status).toBe(404);
     expect((await follow(a.code(), "not an id")).status).toBe(400);
     expect((await follow(a.code(), actor)).status).toBe(200);
@@ -217,7 +217,7 @@ describe("the MCP endpoint", () => {
   });
   test("the picture endpoint takes only an awaited JPEG from the asked page", async () => {
     const s = start({ limits: { pictureWaitMs: 1500 } }), p = page(s.base); await p.ready;
-    const post = (q: string, body: BodyInit, type = "image/jpeg") => fetch(`${s.base}/api/picture?${q}`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": type }, body });
+    const post = (q: string, body: BodyInit, type = "image/jpeg") => fetch(`${s.base}/api/picture?${q}`, { method: "POST", headers: { "x-synergon": "1", "content-type": type }, body });
     expect((await post("reply=" + "0".repeat(32), JPEG)).status).toBe(404);
     const waiting = call(s.base, "look", { picture: true, viewer: p.code() });
     for (let i = 0; i < 100 && !p.views.length; i++) await Bun.sleep(10);

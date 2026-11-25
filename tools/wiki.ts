@@ -519,14 +519,14 @@ ${html}</div>`, p, ctx);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>${esc(p.title)} · rigtwin wiki</title>
+<title>${esc(p.title)} · Synergon wiki</title>
 <meta name="description" content="${esc(p.tldr)}">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="${root}assets/wiki.css">
 </head>
 <body data-root="${root}">
 <a class="skip" href="#content">Skip to the page</a>
-<div class="top"><button id="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">Menu</button><a class="brand" href="${root}index.html">rigtwin wiki</a><span class="grow"></span><a class="viewer" href="${root}../">Open the 3D viewer</a></div>
+<div class="top"><button id="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">Menu</button><a class="brand" href="${root}index.html">Synergon wiki</a><span class="grow"></span><a class="viewer" href="${root}../">Open the 3D viewer</a></div>
 <div class="layout">
 <nav id="nav" aria-label="Wiki pages">
 <input id="q" type="search" placeholder="Search titles and summaries" aria-label="Search the wiki" autocomplete="off">
@@ -536,12 +536,12 @@ ${nav.join("\n")}
 </nav>
 <main id="content">
 <article>
-<header><p class="crumb">${esc(p.rel === "index.md" ? "rigtwin" : p.section)}</p><h1${titleId ? ` id="${esc(titleId)}"` : ""}>${esc(p.title)}</h1>
+<header><p class="crumb">${esc(p.rel === "index.md" ? "Synergon" : p.section)}</p><h1${titleId ? ` id="${esc(titleId)}"` : ""}>${esc(p.title)}</h1>
 <p class="meta">${status}${p.updated ? `<span>Last updated <time datetime="${esc(p.updated)}">${esc(p.updated)}</time></span>` : ""}${p.tags.length ? `<span>${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(" ")}</span>` : ""}</p></header>
 ${article}
 ${pager}
 </article>
-<p class="foot">rigtwin wiki · version ${esc(ctx.version.short)} · generated from the Markdown pages in the repository's <code>wiki/</code> folder · <a href="${root}../">3D viewer</a></p>
+<p class="foot">Synergon wiki · version ${esc(ctx.version.short)} · generated from the Markdown pages in the repository's <code>wiki/</code> folder · <a href="${root}../">3D viewer</a></p>
 </main>
 </div>
 <script src="${root}assets/wiki.js"></script>

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "rigtwin-manikin-build",
+      "name": "synergon-manikin-build",
       "devDependencies": {
         "@gltf-transform/core": "4.5.1",
         "@gltf-transform/extensions": "4.5.1",

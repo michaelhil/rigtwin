@@ -1,8 +1,8 @@
 ---
 title: Requirements and system features
-tldr: The owner's requests broken down into 69 numbered requirements (R-01 to R-69) in thirteen groups, each with the owner's own words, plus the 25 concrete system features (SF-01 to SF-25) that follow from them.
+tldr: The owner's requests broken down into 71 numbered requirements (R-01 to R-71) in fourteen groups, each with the owner's own words, plus the 25 concrete system features (SF-01 to SF-25) that follow from them.
 status: stable
-updated: 2026-11-23
+updated: 2026-11-25
 tags: [request, requirements, features]
 ---
 
@@ -10,9 +10,9 @@ tags: [request, requirements, features]
 
 ## TL;DR
 
-- 69 requirements, `R-01` to `R-69`, each one sentence, each traced to a short quote from [original-request.md](original-request.md). Typing errors in quotes are the owner's.
-- They fall into thirteen groups: purpose; the asset; sources and gap filling; tooling; the agent process; the Skill; the viewer; project set-up; the planning process; the implementation; the wiki; GitHub and deployment; later requests.
-- Requirements R-01 to R-47 come from the first request and the two messages during the investigation. R-48 to R-65 come from the approval message. R-66 to R-69 came during the build.
+- 71 requirements, `R-01` to `R-71`, each one sentence, each traced to a short quote from [original-request.md](original-request.md). Typing errors in quotes are the owner's.
+- They fall into fourteen groups: purpose; the asset; sources and gap filling; tooling; the agent process; the Skill; the viewer; project set-up; the planning process; the implementation; the wiki; GitHub and deployment; later requests; the new name and workspaces.
+- Requirements R-01 to R-47 come from the first request and the two messages during the investigation. R-48 to R-65 come from the approval message. R-66 to R-69 came during the build. R-70 and R-71 came with the new name on 2026-11-25.
 - Whether each requirement was met is not stated here. The status column points to [../70-results/goal-assessment.md](../70-results/goal-assessment.md), which is the only place that judges it.
 - 25 system features, `SF-01` to `SF-25`, say what the system must contain to meet the requirements. (`F-` IDs are reserved for failures, hence `SF-`.)
 
@@ -146,17 +146,24 @@ Every row's status is: see [goal assessment](../70-results/goal-assessment.md).
 |---|---|---|---|
 | R-62 | When everything is complete and verified, push the project to GitHub as a private repository. | "push it to github as a private repo" | [see goal assessment](../70-results/goal-assessment.md) |
 | R-63 | Keep the rig maker's name out of the repository. | "Do not mention the name \"[rig maker]\" in the repo." | [see goal assessment](../70-results/goal-assessment.md) |
-| R-64 | Deploy the viewer to the owner's production server at `mightwork.ai/rigtwin`, with a pipeline so that later updates are pushed the same way. | "deploy a version of the viewer to my prod box mightwork.ai, building a pipeline so that future updates will be pushed to prod" … "use mightwork.ai/rigtwin for the live viewer" | [see goal assessment](../70-results/goal-assessment.md) |
-| R-65 | Publish the wiki on the production server as a subfolder, at `mightwork.ai/rigtwin/wiki`. | "also have the wiki on prod as a subfolder" … "mightwork.ai/rigtwin/wiki for the wiki" | [see goal assessment](../70-results/goal-assessment.md) |
+| R-64 | Deploy the viewer to the owner's production server at `synergon.mightwork.ai`, with a pipeline so that later updates are pushed the same way. | "deploy a version of the viewer to my prod box mightwork.ai, building a pipeline so that future updates will be pushed to prod" … "i have set up the subdomain synergon.mightwork.ai" | [see goal assessment](../70-results/goal-assessment.md) |
+| R-65 | Publish the wiki on the production server as a subfolder, at `synergon.mightwork.ai/wiki`. | "also have the wiki on prod as a subfolder" … "I want the wiki under synergon.mightwork.ai/wiki" | [see goal assessment](../70-results/goal-assessment.md) |
 
 ## M. Later requests, during the build
 
 | ID | Requirement | The owner's words | Status |
 |---|---|---|---|
-| R-66 | Use a simple project name that is neither German nor Norwegian. (The owner then chose `rigtwin`.) | "all bad. keep it simpler. no german or norwegian" | [see goal assessment](../70-results/goal-assessment.md) |
+| R-66 | Use a simple project name that is neither German nor Norwegian. (The owner then chose a first name; it was retired on 2026-11-25, see R-70.) | "all bad. keep it simpler. no german or norwegian" | [see goal assessment](../70-results/goal-assessment.md) |
 | R-67 | Write the viewer in TypeScript, not JavaScript. (Asked as a question; read as a requirement.) | "why is viewer.js a js and not ts" | [see goal assessment](../70-results/goal-assessment.md) |
 | R-68 | Simplify the viewer's interface after a review by independent interface-design agents, above all the controls for a single component. | "it is overcomplicated and takes a lot of time. do a pass with an indpendent UI/UX agents and find simplifiactions, especially simplifying controls for a single componet" | [see goal assessment](../70-results/goal-assessment.md) |
 | R-69 | Let the user adjust the seat; do not show a lock the user cannot open. | "why cant i adjust the seat? the lock is confusing for users unless there is a way to unlock" | [see goal assessment](../70-results/goal-assessment.md) |
+
+## N. The new name and workspaces (2026-11-25)
+
+| ID | Requirement | The owner's words | Status |
+|---|---|---|---|
+| R-70 | Rename the project Synergon, served at `synergon.mightwork.ai`; the first name and its address are retired, and no reference to either remains. | "i decided to rename the project to synergon" … "and mightwork.ai/[first name] are completely retired; remove all references to it" | [see goal assessment](../70-results/goal-assessment.md) |
+| R-71 | Give the deployed site simple workspaces, modelled on Leitbild's. | "In the deploy, I also want a simple workspace functionality like in Leitbild" | [see goal assessment](../70-results/goal-assessment.md) |
 
 ## Readings that were made explicit
 

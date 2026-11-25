@@ -83,7 +83,7 @@ the hold-out check, the independent review, the model card.
 | Q3 | Model Rig B, borrowing from the control-room rigs with each borrowed value tagged? | Not answered separately; approved with the plan |
 | Q4 | Can someone go back with a tape; will the owner send the client the measurement sheet and ask for a side photo and drawings? | Not answered; three scale figures were given instead |
 | Q5 | Will the owner photograph and tape a second object for stage E? | Not answered |
-| Q6 | Name, folder, GitHub account, licence | Name `rigtwin` chosen later; private repository |
+| Q6 | Name, folder, GitHub account, licence | Name Synergon chosen later; private repository |
 | Q7 | A different limit than 18 agent-hours for stages A and B? | Not answered |
 | Q8 | Which assessments first (reach, vision, posture, clearance)? | Not answered |
 

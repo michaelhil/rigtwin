@@ -1,4 +1,4 @@
-// Limits of the rigtwin server, in one place. The guards apply in deployed mode only (step-1 design,
+// Limits of the synergon server, in one place. The guards apply in deployed mode only (step-1 design,
 // "D1 guards in step 1"); a local server has none. Values from PLAN-v7 D1 unless noted.
 export const LIMITS = {
   /** PLAN-v7 D1 "Request size": a command body is at most 64 kB (Caddy enforces the same with request_body). */

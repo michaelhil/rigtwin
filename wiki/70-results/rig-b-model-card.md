@@ -26,7 +26,7 @@ Numbers on this page come from the final build of 2026-11-23 (`bun run build`, d
 | Item | Value |
 |---|---|
 | Asset id and title | `rig-b`, "Rig B" |
-| Build | GLB SHA-256 `0b6d8248b63f2234dcf791b81845dd0e70622b3ad1cdd43441ac341366f86f0a`, 719,872 bytes; description file 219,993 bytes; schema `rigtwin-manifest/1` |
+| Build | GLB SHA-256 `0b6d8248b63f2234dcf791b81845dd0e70622b3ad1cdd43441ac341366f86f0a`, 719,872 bytes; description file 219,993 bytes; schema `synergon-manifest/1` |
 | Source (the only editable files) | `assets/rig-b/params/*.toml` (305 records), `assets/rig-b/spec/rig.toml` (tree, joints, frames, expected motion), `assets/rig-b/src/*.ts` (one function per component) |
 | Generated files (never edited by hand) | `assets/rig-b/build/rig-b.glb`, `assets/rig-b/build/rig-b.manifest.json` |
 | Conventions | metres and radians; Z up, X forward from the operator toward the main display, Y to the operator's left; origin at the centre of the platform deck's top surface; one Z-up to Y-up rotation on the GLB root |

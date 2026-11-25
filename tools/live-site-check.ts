@@ -1,4 +1,4 @@
-// bun tools/live-site-check.ts <url>      e.g. https://mightwork.ai/rigtwin
+// bun tools/live-site-check.ts <url>      e.g. https://synergon.mightwork.ai
 // The two-browser acceptance of the shared scene on a deployed site (tools/live-accept.ts is the same for a local
 // server, with more cases). Two headless Chromium pages on the given address and the real command line:
 //   1. a small pose.set from the command line (the monitor's turn, 1°, in a group) appears in both pages, with
@@ -15,7 +15,7 @@ import { call } from "./rig.ts";
 import { sleep, DEG, until, joint, live, rig, heightSlider, press, release, clickText } from "./live-helpers.ts";
 
 const base = (process.argv[2] ?? "").replace(/\/+$/, "");
-if (!/^https?:\/\//.test(base)) { console.error("usage: bun tools/live-site-check.ts <url>   (e.g. https://mightwork.ai/rigtwin)"); process.exit(2); }
+if (!/^https?:\/\//.test(base)) { console.error("usage: bun tools/live-site-check.ts <url>   (e.g. https://synergon.mightwork.ai)"); process.exit(2); }
 let failures = 0;
 const check = (ok: boolean, what: string, detail = "") => { if (!ok) failures++; console.log(`${ok ? "ok  " : "FAIL"} ${what}${detail ? `: ${detail}` : ""}`); };
 const PAN = "J_mon_pan", HEIGHT = "J_mon_height", group = `site-check-${Math.random().toString(16).slice(2, 8)}`;

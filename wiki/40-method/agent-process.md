@@ -11,7 +11,7 @@ tags: [method, agents, process, review]
 ## TL;DR
 
 - One **coordinator** (the main session) wrote the briefs, made rulings on conflicts, assembled and checked results, and looked at the viewer itself. It modelled nothing.
-- Work was split by **file ownership**: infrastructure, measurement, three modellers (seat; pods; platform + stand + pedals), each in its own workspace. Parallel modelling took 41 min of wall clock for 104 agent-minutes.
+- Work was split by **file ownership**: infrastructure, measurement, three modellers (seat; pods; platform + stand + pedals), each in its own build folder. Parallel modelling took 41 min of wall clock for 104 agent-minutes.
 - A **reviewer that reads no builder notes** made its own renders and its own geometry checks and returned a verdict per component. Round 1: 28 accepted, 9 accepted with minor fixes, 8 rejected; the model was not accepted.
 - The scripts caught invalid meshes and wrong keys in seconds; the reviewer caught what no script looks for: parts of the wrong *kind*, and parts that fail when moved.
 - Human gates, the owner's clicks, a locked acceptance spec and a planted-error test of the reviewer were **not** exercised. The owner asked for a fully autonomous run.
@@ -67,9 +67,9 @@ reviewer; then round 2 and the implementer.
 
 1. **Folder ownership**, written in the brief: each path has one owner; nobody edits another
    agent's files; a needed change elsewhere goes into the final reply.
-2. **Workspaces.** `--workspace <name>` (or `RIGTWIN_WORKSPACE`) sends build output to
+2. **Build folders.** `--build <name>` (or `SYNERGON_BUILD_DIR`) sends build output to
    `work/<name>/build/` and renders to `work/<name>/renders/`, so three agents building at once do
-   not overwrite each other's GLB. `RIGTWIN_AGENT` labels each agent's timeline lines.
+   not overwrite each other's GLB. `SYNERGON_AGENT` labels each agent's timeline lines.
 3. **Partial builds.** `bun run build --only <group>` imports only that group's module, so a
    half-edited source file elsewhere cannot break the loop. The frame tree is still complete.
 4. **Targeted edits of the shared spec.** Each modeller changes only the entries of its own nodes,
@@ -197,7 +197,7 @@ A role brief (here: the modeller instructions) adds:
 |---|---|
 | Read first, in order | the common brief, the tool notes, the measurement outputs |
 | Rulings | decisions the coordinator has made since the common brief, which override it (which deck size, which seat height, which touchscreen size) |
-| How to work without colliding | workspace name, files owned, how to touch shared files |
+| How to work without colliding | build folder name, files owned, how to touch shared files |
 | What "done" means | observable criteria for this role |
 | Verification the agent must do itself | run the full check; look at its own renders beside the photo crops; keep one milestone image set; append timings to the timeline |
 | Final reply | a word limit and a fixed list: what was built, what is still wrong and why, counts, iterations and time, changes to shared files, conflicts found, paths of images; "be honest about weaknesses: the reviewer will find them anyway" |

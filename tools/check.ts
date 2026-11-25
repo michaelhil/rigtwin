@@ -1,4 +1,4 @@
-// bun run check [--fast] [--workspace <name>]
+// bun run check [--fast] [--build <name>]
 // Runs every check of the build brief (section 10) and exits non-zero if one fails.
 // --fast skips the checks that need the headless browser (projection self-test, frame rate, the live viewer).
 import { spawnSync } from "node:child_process";
@@ -15,7 +15,7 @@ import { matFromQuat } from "../shared/math.ts";
 import type { Manifest } from "../shared/manifest.ts";
 
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-const fast = args.includes("--fast"), workspace = opt("--workspace") ?? process.env.RIGTWIN_WORKSPACE, asset = "rig-b";
+const fast = args.includes("--fast"), buildFolder = opt("--build") ?? process.env.SYNERGON_BUILD_DIR, asset = "rig-b";
 const BUDGET = { triangles: 150000, bytes: 4_000_000, primitives: 80, fps: 55 };
 const t0 = performance.now();
 let failures = 0, warnings = 0;
@@ -57,7 +57,7 @@ const glob = (pattern: string) => new RegExp("^" + pattern.replace(/[.+?^${}()|[
 let manifest: Manifest, glbPath: string, sha: string;
 const spec = loadSpec(join(ROOT, "assets", asset, "spec"));
 try {
-  const res = await build({ asset, workspace, quiet: true });
+  const res = await build({ asset, buildFolder, quiet: true });
   if (!res.ok) { report(false, "build", "component errors", res.messages); process.exit(1); }
   manifest = res.manifest; glbPath = res.glbPath; sha = res.sha256;
   const cc = manifest.parameter_class_counts;
@@ -84,12 +84,12 @@ for (const [name, dir, what] of [
 // the agent interface v2 documents are generated (tools/agent-docs.ts): the Skill's reference and the wiki page must match the code
 {
   const r = spawnSync("bun", [join(ROOT, "tools", "agent-docs.ts"), "--check"], { encoding: "utf8", cwd: ROOT });
-  report(r.status === 0, "agent docs", (r.stdout + r.stderr).trim().split("\n").at(-1) + " (.claude/skills/operating-rigtwin/reference.md, wiki/80-reference/agent-interface.md)");
+  report(r.status === 0, "agent docs", (r.stdout + r.stderr).trim().split("\n").at(-1) + " (.claude/skills/operating-synergon/reference.md, wiki/80-reference/agent-interface.md)");
 }
 
 // ---- 3. determinism: a second build in a separate process must give the same bytes -------------------
 {
-  const dir = mkdtempSync(join(tmpdir(), "rigtwin-check-"));
+  const dir = mkdtempSync(join(tmpdir(), "synergon-check-"));
   const r = spawnSync("bun", [join(ROOT, "generator", "build.ts"), "--asset", asset, "--out", dir, "--quiet", "--no-timeline"], { encoding: "utf8" });
   const sha2 = r.status === 0 ? createHash("sha256").update(readFileSync(join(dir, `${asset}.glb`))).digest("hex") : "";
   const m2 = r.status === 0 ? readFileSync(join(dir, `${asset}.manifest.json`), "utf8") : "", m1 = readFileSync(join(glbPath, "..", `${asset}.manifest.json`), "utf8");
@@ -105,7 +105,7 @@ for (const j of manifest.joints) {
     ? [j.neutral, (j.neutral as number[]).map((n, i) => n + [j.upper, j.lower, j.upper * 0.5][i]), (j.neutral as number[]).map((n, i) => n + [j.lower * 0.3, j.upper * 0.7, j.lower][i])]
     : [j.lower, j.upper, j.neutral, mid(j.lower, j.upper, 0.37), mid(j.lower, j.upper, 0.81)];
 }
-const posesFile = join(tmpdir(), `rigtwin-poses-${process.pid}.json`);
+const posesFile = join(tmpdir(), `synergon-poses-${process.pid}.json`);
 writeFileSync(posesFile, JSON.stringify(testPoses));
 const py = spawnSync("python3", ["-I", join(ROOT, "tools", "glb_inspect.py"), glbPath, "--poses", posesFile], { encoding: "utf8", maxBuffer: 1 << 28 });
 rmSync(posesFile, { force: true });
@@ -302,7 +302,7 @@ for (const r of await (await import("./manikin-check.ts")).manikinChecks(ROOT)) 
 if (!fast) {
   try {
     const { openViewer } = await import("./render.ts");
-    const v = await openViewer({ workspace });
+    const v = await openViewer({ buildFolder });
     const st = await v.page.evaluate("viewer.selfTest()");
     report(st.pass, "projection self-test", `${st.checked} known points over ${st.cameras.length} camera(s): worst ${Number(st.worst_px).toFixed(3)} px (tolerance ${st.tolerance_px} px)`, st.pass ? [] : st.results.filter((r: any) => r.error || r.error_px > 1).map((r: any) => JSON.stringify(r)));
     await v.page.viewport(1600, 1000);
@@ -321,7 +321,7 @@ if (!fast) {
   // the person in the default view (the rig's budgets above are the rig's alone): it loads, and the frame rate while it idles
   if (existsSync(join(ROOT, "assets", "manikin", "operator-m", "operator-m.avatar.json"))) try {
     const { openViewer } = await import("./render.ts");
-    const v = await openViewer({ workspace, person: true });
+    const v = await openViewer({ buildFolder, person: true });
     await v.page.viewport(1600, 1000);
     await v.page.evaluate("viewer.apply({ ui: '0', view: 'three_quarter' })");
     const st = await v.page.evaluate("viewer.person.state()"), ci = Boolean(process.env.CI);
@@ -350,5 +350,5 @@ if (!fast) {
 
 const seconds = (performance.now() - t0) / 1000;
 console.log(`${failures ? "CHECK FAILED" : "all checks passed"}: ${failures} failure(s), ${warnings} warning(s), ${seconds.toFixed(1)} s`);
-timeline(failures ? "check failed" : "check", seconds, `${failures} failures, ${warnings} warnings${fast ? ", fast" : ""}${workspace ? `, workspace ${workspace}` : ""}`);
+timeline(failures ? "check failed" : "check", seconds, `${failures} failures, ${warnings} warnings${fast ? ", fast" : ""}${buildFolder ? `, build folder ${buildFolder}` : ""}`);
 process.exit(failures ? 1 : 0);

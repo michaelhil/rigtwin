@@ -88,7 +88,7 @@ export function writeGlb(root: OutNode, palette: Record<string, Material>, textu
 
   const images = texNames.map((t) => ({ name: t, mimeType: "image/png", bufferView: pushView(textures[t].png) }));
   const json: any = {
-    asset: { version: "2.0", generator: "rigtwin generator", extras: assetExtras },
+    asset: { version: "2.0", generator: "synergon generator", extras: assetExtras },
     scene: 0,
     scenes: [{ name: "scene", nodes: [0] }],
     nodes,

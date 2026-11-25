@@ -1,7 +1,7 @@
 {
-  "_about": "Read by `bun run deploy` (tools/deploy.ts). host: SSH alias of the restricted deploy account on the production host (locally in ~/.ssh/config; in GitHub Actions written by the workflow); every command it sends is checked by deploy/rigtwin-deploy-gate.sh on the server. remoteRoot: folder on the server holding releases/ and the symlink current; publicUrl: where the web server serves remoteRoot/current (with the trailing slash); keepReleases: release folders kept on the server. See wiki/50-implementation/deployment.md.",
-  "host": "rigtwin-deploy",
-  "remoteRoot": "/srv/rigtwin",
-  "publicUrl": "https://mightwork.ai/rigtwin/",
+  "_about": "Read by `bun run deploy` (tools/deploy.ts). host: SSH alias of the restricted deploy account on the production host (locally in ~/.ssh/config; in GitHub Actions written by the workflow); every command it sends is checked by deploy/synergon-deploy-gate.sh on the server. remoteRoot: folder on the server holding releases/ and the symlink current; publicUrl: where the web server serves remoteRoot/current (with the trailing slash); keepReleases: release folders kept on the server. See wiki/50-implementation/deployment.md.",
+  "host": "synergon-deploy",
+  "remoteRoot": "/srv/synergon",
+  "publicUrl": "https://synergon.mightwork.ai/",
   "keepReleases": 5
 }

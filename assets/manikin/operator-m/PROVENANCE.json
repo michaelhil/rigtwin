@@ -531,12 +531,12 @@
    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
   },
   "operator-m.avatar.json": {
-   "bytes": 294131,
-   "sha256": "2bd90d596df1b225b3b7772d244ffd4687a390aabc1af594a41821fe98b7a1b6"
+   "bytes": 294132,
+   "sha256": "922323fc9a6f752c12778cde82ea1f7e056e7418295b712f29f0aeb243e6abaf"
   },
   "operator-m.glb": {
    "bytes": 6312212,
-   "sha256": "d205f2eb5b059f1a4b117f11131a51e45799e5e087d9b1a1ea4c3c94d654cae7"
+   "sha256": "7967023bdccd67df9dbb67ab77abf636bbd93978634acbd4164d61e6ec72ca74"
   },
   "operator-m.wear.shape.bin": {
    "bytes": 1437310,

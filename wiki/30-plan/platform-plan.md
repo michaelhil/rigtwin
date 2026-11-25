@@ -1,6 +1,6 @@
 ---
 title: The platform plan (version 7)
-tldr: The second plan, approved by the owner on 2026-11-24, in plain words. It turns rigtwin from one model into a working platform in five steps that can each be stopped after - agent control, honest numbers, assessment, an agent in the app, a control room - with an independent simplicity monitor. Step 1 is built; what it changed from the plan is listed here.
+tldr: The second plan, approved by the owner on 2026-11-24, in plain words. It turns Synergon from one model into a working platform in five steps that can each be stopped after - agent control, honest numbers, assessment, an agent in the app, a control room - with an independent simplicity monitor. Step 1 is built; what it changed from the plan is listed here.
 status: living
 updated: 2026-11-24
 tags: [plan, platform, agents, server, process]
@@ -109,7 +109,7 @@ the load test H14); the merge to `main` deployed the same evening, and the two-b
 | Server | `server/server.ts`: health, catalogue, commands, a live event stream with heartbeat and resume ([D-39](../20-decisions/decision-log.md#d-39)); the same program locally (inside `bun run serve`) and on the host |
 | Viewer | a live client for every pose change: one line saying who changed what with its Undo, the session code and a statement about the sandbox under More; a link with a different pose opens as a preview with Apply ([viewer](../50-implementation/viewer.md)) |
 | Command line | `bun run rig <command> '<json>'` with `--server`, `--viewer`, `--group`, `--expected-version` ([tools](../80-reference/tools.md)) |
-| Skill | the operating Skill v0, `.claude/skills/operating-rigtwin/` ([skills and agents](../80-reference/skills-and-agents.md)) |
+| Skill | the operating Skill v0, `.claude/skills/operating-synergon/` ([skills and agents](../80-reference/skills-and-agents.md)) |
 | Host | a hardened unit, a Caddy route, a setup script with `--check`, `--apply`, `--probe`, `--undo` and fourteen host checks ([the server and its host setup](../50-implementation/server-and-host-setup.md)); deploy and dist checks for the server |
 | Checks | about 170 new automatic test cases (commands 26, server 19, reconnect rules 6, setup script 74, deploy 16 and 33 with rollback, two real browsers 14) ([checks](../40-method/checks.md)) |
 
@@ -143,10 +143,10 @@ deployed at once ([D-47](../20-decisions/decision-log.md#d-47)).
 |---|---|
 | Meaning of every adjustment | what 0 is, the two direction words, everyday names; in `shared/words.ts`, next to the page's words ([D-52](../20-decisions/decision-log.md#d-52)); a test fails when a joint lacks them |
 | Intent commands | `adjust`, `look`, `measure`, `undo`, `state` in `shared/commands/intent.ts`: plain-word targets with an ambiguity rule, amounts with units and directions, relative changes worked out on the server, server-made request names, replies that are their own check ([D-48](../20-decisions/decision-log.md#d-48)); assumed adjustments moved and marked ([D-49](../20-decisions/decision-log.md#d-49)) |
-| MCP | `POST api/mcp` in the server, tools only, the same locally and deployed; `.mcp.json` with `rigtwin` and `rigtwin-public`, loaded from the first turn; the instructions carry the rules and the catalogue ([D-50](../20-decisions/decision-log.md#d-50)) |
+| MCP | `POST api/mcp` in the server, tools only, the same locally and deployed; `.mcp.json` with Synergon and `synergon-public`, loaded from the first turn; the instructions carry the rules and the catalogue ([D-50](../20-decisions/decision-log.md#d-50)) |
 | Eyes | `look {picture: true}`: the page sends back a JPEG of its view (at most 60 kB); views without a code go to every local page ([D-51](../20-decisions/decision-log.md#d-51)) |
 | Generated documents | the Skill's `reference.md` and the wiki page [agent interface](../80-reference/agent-interface.md), from the registry and the catalogue; `bun run check` fails when they are out of date |
-| Skill | `operating-rigtwin` v2: the tools, how to report, the honesty words, when to ask; 147 lines became about 80 |
+| Skill | `operating-synergon` v2: the tools, how to report, the honesty words, when to ask; 147 lines became about 80 |
 | Benchmark | `bun tools/agent-eval.ts`: ten owner requests, each given to a fresh headless Claude Code against a temporary scene with one page open, scored from the scene (pose, view, asked or not, words), with tool calls, time and cost; the step-1 interface as the baseline |
 
 The same request now takes one call: `adjust {"target": "backrest", "to": "upright"}`, answered with

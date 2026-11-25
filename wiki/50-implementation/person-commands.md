@@ -1,6 +1,6 @@
 ---
 title: The person's commands
-tldr: The person in the seat is part of the shared scene (rigtwin-scene/2): person.set, person.pose and person.clear change it with undo and the stale check, and the server measures it without a browser (eye, sight lines with a gaze cone, reach, clearances, each with unit and source); with a person shown, look's operator view uses its solved eye.
+tldr: The person in the seat is part of the shared scene (synergon-scene/1): person.set, person.pose and person.clear change it with undo and the stale check, and the server measures it without a browser (eye, sight lines with a gaze cone, reach, clearances, each with unit and source); with a person shown, look's operator view uses its solved eye.
 status: draft
 updated: 2026-11-25
 tags: [commands, agents, manikin, server, ergonomics, implementation]
@@ -24,7 +24,7 @@ tags: [commands, agents, manikin, server, ergonomics, implementation]
 
   Every number has its unit and its source.
 - **No browser needed.** The server reads the person's packages: the manifests, and the skeleton from each GLB's JSON chunk. It then runs the person's own solver and the rig binding, the code the page runs. Its eye matches the eye the page draws in a still view. Only the drawn person (meshes, skin, idle motion, mesh-level contact) is the browser's.
-- **Format.** `rigtwin-scene/2` adds `person` to the document. The server migrates a stored `/1` document at start: pose, version and history stay, and the default person is added.
+- **Format.** `synergon-scene/1` holds `person` in the document. Scene data from before the rename is converted once, at the server cutover, by a one-off script that keeps pose, version and history and adds the default person; the server itself reads only the current format.
 - **Not shown:** that any of it is right. The numbers rest on the rig's photo-estimated sizes and the survey's body. The gaze cone is a reporting convention quoted from memory, not an assessment.
 
 ## The commands
@@ -122,7 +122,7 @@ All are plain TypeScript and TOML, with no three.js at run time. The release car
 
 ## The scene format
 
-`rigtwin-scene/2` adds `person` to the document: `null`, or a `PersonState` with these fields:
+`synergon-scene/1` holds `person` in the document: `null`, or a `PersonState` with these fields:
 - `style`, `sex`, `tone`, `glasses`, `headset`, `preset`;
 - `body`: stature and mass always, any other control only when it is not at its default of 0 SD;
 - `posture`: `operating`, or the library pose's name.
@@ -133,7 +133,7 @@ An entry that changes the person carries `person: {before, after}`.
 
 - **Tests.** `shared/commands/person.test.ts` migrates a copy of a `/1` document with history. `server/server.test.ts` starts a server on a stored one, undoes an old request and restarts it.
 - **The page** applies `doc.person` and `entry.person` through `viewer.person` (`viewer/src/live.ts`) and accepts `/1` and `/2` servers.
-- **version.json** says `server.format: "rigtwin-scene/2"`.
+- **version.json** says `server.format: "synergon-scene/1"`.
 
 ## Files
 
@@ -142,7 +142,7 @@ An entry that changes the person carries `person: {before, after}`.
 | `shared/commands/person.ts` | the commands, the intent tool, the solve cache, `personEye` for look |
 | `shared/commands/person-words.ts` | presets, postures, the person in words (no imports) |
 | `shared/person-model.ts` | packages, bodies, the seated solve, the ergonomic numbers |
-| `shared/commands/doc.ts` | `rigtwin-scene/2`, `PersonState`, the person in the stale check, undo and the migration |
+| `shared/commands/doc.ts` | `synergon-scene/1`, `PersonState`, the person in the stale check, undo and the migration |
 | `assets/manikin/params/runtime-queries.toml` | the gaze cone, the head sphere, the cache size |
 | `server/server.ts` | `loadPeople` (once per folder), the default person, the migration at start |
 | `viewer/src/live.ts`, `viewer/src/engine.ts` | the person on the page, `viewer.command`, the eye point of the operator's view |

@@ -1,4 +1,4 @@
-// The scene document: the pose of the open asset, the person in the seat (rigtwin-scene/2, manikin v1) and the last
+// The scene document: the pose of the open asset, the person in the seat (synergon-scene/1, manikin v1) and the last
 // changes. One document ("Playground") per server. Values are SI (metres, radians; a three-angle mount is [roll,
 // pitch, yaw]); the commands (core.ts) take and give degrees and metres. Pure: no files, no clock
 // other than the entry time, no network. The server stores it as doc.json; the viewer reads the same
@@ -15,16 +15,14 @@
 //   stale if an entry outside the group changed one of those joints after the group first did.
 // - reconcile(): when the asset was rebuilt, joints that no longer exist are dropped and values outside
 //   the new limits are clamped, recorded as one entry by the actor `system`.
-// - The person (rigtwin-scene/2): `person` is the whole person as one value (null: nobody in the seat). An entry that changes
+// - The person (synergon-scene/1): `person` is the whole person as one value (null: nobody in the seat). An entry that changes
 //   it carries `person: {before, after}`; for the stale check and for undo the person is one key, "person", like a joint.
-// - parseDoc() reads a rigtwin-scene/1 document too (the format before manikin v1) and migrates it: the same pose and
-//   history, and the person the server gives (the default person when the release carries the person's packages).
+// - parseDoc() reads only the current format. Documents of an earlier format are converted once, outside the server, with
+//   upgradeDoc() (shared/commands/scene-upgrade.ts).
 import { limitViolation, type JointKinematics, type JointValue } from "../pose.ts";
 import { Refusal } from "./schema.ts";
 
-export const SCENE_FORMAT = "rigtwin-scene/2";
-/** The format before the person (step 1 and agent interface v2); parseDoc migrates it. */
-export const SCENE_FORMAT_V1 = "rigtwin-scene/1";
+export const SCENE_FORMAT = "synergon-scene/1";
 /** The person's key in the stale check and in undo (no joint has this name: joint ids start with J_). */
 export const PERSON_KEY = "person";
 /** Entries kept in the document's history (step-1 design: the last 200 changes). */
@@ -60,11 +58,9 @@ export function newDoc(asset: { name: string; sha256: string }, person: PersonSt
   return { schema: SCENE_FORMAT, version: 0, asset: { name: asset.name, sha256: asset.sha256 }, pose: {}, person: person ? structuredClone(person) : null, history: [] };
 }
 
-/** A document read from disk or the wire, checked for shape; throws with a reason. A rigtwin-scene/1 document is migrated:
- *  its pose, version and history stay as they are, and the person is `opts.person` (null when not given). */
-export function parseDoc(raw: unknown, opts: { person?: PersonState | null } = {}): SceneDoc {
-  let d = raw as SceneDoc;
-  if (d && (d as any).schema === SCENE_FORMAT_V1) d = { ...(d as any), schema: SCENE_FORMAT, person: opts.person ? structuredClone(opts.person) : null };
+/** A document read from disk or the wire, checked for shape; throws with a reason. */
+export function parseDoc(raw: unknown): SceneDoc {
+  const d = raw as SceneDoc;
   if (!d || d.schema !== SCENE_FORMAT) throw new Error(`not a ${SCENE_FORMAT} document`);
   if (!Number.isInteger(d.version) || d.version < 0 || !d.asset?.name || !d.pose || typeof d.pose !== "object" || !Array.isArray(d.history)) throw new Error("the document is incomplete");
   if (d.person === undefined || (d.person !== null && (typeof d.person !== "object" || typeof d.person.sex !== "string" || !d.person.body || typeof d.person.posture !== "string"))) throw new Error("the document's person is malformed");

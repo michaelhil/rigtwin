@@ -29,7 +29,7 @@ tags: [lessons, patterns, process, review, measurement, agents]
 | P-07 | Detectability table | verifying placement by overlay | same run |
 | P-08 | Honest classes and ranges | any number enters the model | built into the parameter loader |
 | P-09 | Complete blockout before form | starting an asset | 46 min including all tooling |
-| P-10 | Spec-driven parallel modellers with workspaces | more than one modeller | 27–41 min per group, in parallel |
+| P-10 | Spec-driven parallel modellers with build folders | more than one modeller | 27–41 min per group, in parallel |
 | P-11 | One renderer for agents and people | agents must judge pictures | none extra |
 | P-12 | Photo-matched outline overlays | comparing a model with a photo | 1.6–9 s per set |
 | P-13 | Failure-born checks | after any failure | 4 s per check run |
@@ -151,12 +151,12 @@ tags: [lessons, patterns, process, review, measurement, agents]
 - **Found here.** 48 meshes, 20 joints, 11,162 triangles, 0.33 MB. No form round afterwards broke structure, names or motion.
 
 <a id="p-10"></a>
-### P-10 — Spec-driven parallel modellers with workspaces
+### P-10 — Spec-driven parallel modellers with build folders
 
 - **When.** Several modellers work on one model.
-- **How.** One spec file holds the tree, mounts and joints. Each group has its own source module and parameter file, owned by one modeller. `build --only <group>` builds all frames and only that group's meshes. Each modeller renders into its own workspace. Shared files get small targeted edits only.
+- **How.** One spec file holds the tree, mounts and joints. Each group has its own source module and parameter file, owned by one modeller. `build --only <group>` builds all frames and only that group's meshes. Each modeller renders into its own build folder. Shared files get small targeted edits only.
 - **Cost here.** Round 1: 26.7, 36.1 and 41.3 minutes in parallel (41 minutes elapsed for 104 agent-minutes). Round 2: 13.2, 14.2 and 14.5 minutes.
-- **Found here.** It works, with friction: 11 failed builds from files caught mid-edit before workspaces were in use (F-17).
+- **Found here.** It works, with friction: 11 failed builds from files caught mid-edit before build folders were in use (F-17).
 
 <a id="p-11"></a>
 ### P-11 — One renderer for agents and people

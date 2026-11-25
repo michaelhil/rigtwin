@@ -20,7 +20,7 @@ const args = process.argv.slice(2), opt = (n: string, d: number) => { const i = 
 const str = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
 const SECONDS = opt("--seconds", 60), STREAMS = opt("--streams", 300), EDITS = opt("--edits", 50), LIMIT_MB = opt("--limit-mb", 150);
 const BUDGET = opt("--budget-kb", 512) * 1024, ONE_EVENT = 16 * 1024;     // a full-pose applied event is about 2 kB; 16 kB is generous
-const ROOT = join(import.meta.dir, "..", ".."), data = mkdtempSync(join(tmpdir(), "rigtwin-load-"));
+const ROOT = join(import.meta.dir, "..", ".."), data = mkdtempSync(join(tmpdir(), "synergon-load-"));
 // the server under test: the repository's source, or (on the host, host check H14) a release's bundle and asset
 const ASSET = str("--asset") ?? join(ROOT, "assets", "rig-b", "build");
 const srv = Bun.spawn([process.execPath, str("--bundle") ?? join(ROOT, "server", "server.ts"), "--mode", "deployed", "--port", "0", "--data", data, "--asset", ASSET, "--revision", "load"], { stdout: "pipe", stderr: "inherit" });
@@ -80,7 +80,7 @@ const tick = setInterval(async () => {
   for (let e = 0; e < EDITS / 10; e++) {
     k++; sent++;
     const joints = Object.fromEntries(movable.map((j: any) => { const f = (k % 7) / 7, v = j.lower + f * (j.upper - j.lower); return [j.id, j.type === "prismatic" ? v : (v * 180) / Math.PI]; }));
-    fetch(`http://127.0.0.1:${port}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.set", args: { joints, allowAssumed: true } }) })
+    fetch(`http://127.0.0.1:${port}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.set", args: { joints, allowAssumed: true } }) })
       .then((r) => r.json()).then((r) => { if (r.ok) ok++; else refusals[r.error?.code] = (refusals[r.error?.code] ?? 0) + 1; }).catch(() => {});
   }
 }, 100);

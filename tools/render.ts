@@ -1,8 +1,8 @@
 // bun run render [--set ortho|sheet|ids|groups|matched|focus|ui|selftest|wiki|all] [--only <group or id>[,…]] [--out <dir>]
-//                [--workspace <name>] [--pose J_x:val,...] [--cam <name>] [--fit <group or id>[,…]] [--mode ids|class] [--viewer <dir>]
+//                [--build <name>] [--pose J_x:val,...] [--cam <name>] [--fit <group or id>[,…]] [--mode ids|class] [--viewer <dir>]
 //                [--photos <dir>]
 // Drives the real viewer page in headless Chromium (same renderer the user sees) and writes PNGs.
-// Output: work/renders/<set>/…  (or work/<workspace>/renders/<set>/…). Anything containing photo pixels
+// Output: work/renders/<set>/…  (or work/<build folder>/renders/<set>/…). Anything containing photo pixels
 // (matched side-by-side and outline images) goes to private/renders/matched/ instead.
 //
 // Publishable photo comparisons:  bun run render --set matched --photos wiki/img/photos [--out wiki/img/matched]
@@ -26,7 +26,7 @@ import { startServer, buildDir } from "./serve.ts";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function findChrome(): string {
-  if (process.env.RIGTWIN_CHROME) return process.env.RIGTWIN_CHROME;
+  if (process.env.SYNERGON_CHROME) return process.env.SYNERGON_CHROME;
   const cache = join(homedir(), "Library", "Caches", "ms-playwright");
   const dirs = existsSync(cache) ? readdirSync(cache).sort().reverse() : [];
   for (const d of dirs.filter((x) => x.startsWith("chromium_headless_shell-"))) {
@@ -36,7 +36,7 @@ function findChrome(): string {
     for (const sub of readdirSync(join(cache, d))) { const p = join(cache, d, sub, "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"); if (existsSync(p)) return p; }
   }
   for (const p of ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser"]) if (existsSync(p)) return p;   // Linux, e.g. the CI runner
-  throw new Error("no Chromium found (Playwright cache under ~/Library/Caches/ms-playwright, or /usr/bin/google-chrome); set RIGTWIN_CHROME to a Chromium binary");
+  throw new Error("no Chromium found (Playwright cache under ~/Library/Caches/ms-playwright, or /usr/bin/google-chrome); set SYNERGON_CHROME to a Chromium binary");
 }
 
 export class Page {
@@ -93,7 +93,7 @@ export class Page {
       }
       return { blocks: blocks.size, max };
     })()`).catch(() => ({ blocks: 1e9, max: 255 }));
-    if (process.env.RIGTWIN_DEBUG_SAME) console.log(`samePicture: ${r.blocks} block(s) differ, by up to ${r.max} levels`);
+    if (process.env.SYNERGON_DEBUG_SAME) console.log(`samePicture: ${r.blocks} block(s) differ, by up to ${r.max} levels`);
     return r.blocks <= 16 && r.max <= 12;
   }
   async waitFor(expr: string, what: string, ms = 20000) {
@@ -106,11 +106,11 @@ export class Page {
 export class Browser {
   private constructor(private child: any, private profile: string, public port: number) {}
   static async launch(): Promise<Browser> {
-    const profile = mkdtempSync(join(tmpdir(), "rigtwin-render-"));
+    const profile = mkdtempSync(join(tmpdir(), "synergon-render-"));
     // Graphics: Metal on macOS (the development machine); on Linux (the CI runner, no GPU) WebGL runs on
-    // SwiftShader, which Chrome only allows with --enable-unsafe-swiftshader. Extra flags: RIGTWIN_CHROME_FLAGS.
+    // SwiftShader, which Chrome only allows with --enable-unsafe-swiftshader. Extra flags: SYNERGON_CHROME_FLAGS.
     const gfx = process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-dev-shm-usage"];
-    const extra = (process.env.RIGTWIN_CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
+    const extra = (process.env.SYNERGON_CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
     const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", ...gfx, "--disable-background-timer-throttling", "--disable-renderer-backgrounding", ...extra, "about:blank"], { stdio: "ignore" });
     let port = 0;
     // A warm start takes well under a second; a cold start on a fresh CI runner can take several (a 5 s
@@ -133,9 +133,9 @@ export class Browser {
 /** One viewer session: server + browser + page with the viewer loaded and its UI hidden. */
 /** The viewer in headless Chromium on a throwaway server. The rig's pictures are of the rig alone: the person is left out
  *  (person=0) unless `person` is given (then the page loads the default person and waits for it). */
-export async function openViewer(opts: { workspace?: string; photos?: string; requests?: string[]; person?: boolean } = {}) {
+export async function openViewer(opts: { buildFolder?: string; photos?: string; requests?: string[]; person?: boolean } = {}) {
   // an empty temporary Playground: no pose of the shared scene reaches a picture
-  const server = await startServer({ port: 0, workspace: opts.workspace, photos: opts.photos, requests: opts.requests, data: "temp" });
+  const server = await startServer({ port: 0, buildFolder: opts.buildFolder, photos: opts.photos, requests: opts.requests, data: "temp" });
   const origin = `http://127.0.0.1:${server.port}`;
   const browser = await Browser.launch();
   const page = await browser.page(`${origin}/?ui=0${opts.person ? "" : "&person=0"}`);
@@ -201,17 +201,17 @@ const ORTHO: [string, string][] = [["front", "Front (from the display side)"], [
 
 if (import.meta.main) {
   const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-  const workspace = opt("--workspace") ?? process.env.RIGTWIN_WORKSPACE;
-  if (opt("--viewer")) process.env.RIGTWIN_VIEWER_DIR = opt("--viewer");   // viewer source directory (default "viewer")
+  const buildFolder = opt("--build") ?? process.env.SYNERGON_BUILD_DIR;
+  if (opt("--viewer")) process.env.SYNERGON_VIEWER_DIR = opt("--viewer");   // viewer source directory (default "viewer")
   const sets = (opt("--set") ?? "sheet").split(",").flatMap((s) => (s === "all" ? ["ortho", "sheet", "ids", "groups", "matched"] : [s]));
   const only = opt("--only"), pose = opt("--pose"), asset = "rig-b";
   // masked photo copies: given with --photos, and always for the documentation set
   const photos = opt("--photos") ? resolve(ROOT, opt("--photos")!) : sets.includes("wiki") ? join(ROOT, "wiki", "img", "photos") : undefined;
   if (photos && !existsSync(photos)) { console.error(`error: no folder ${photos} (masked photo copies photo-<n>.jpg are expected there)`); process.exit(1); }
   const served: string[] = [];
-  const outBase = opt("--out") ?? (workspace ? join(ROOT, "work", workspace, "renders") : join(ROOT, "work", "renders"));
-  const privBase = join(ROOT, "private", "renders", ...(workspace ? [workspace] : []));
-  const manifestPath = join(buildDir(workspace), "rig-b.manifest.json");
+  const outBase = opt("--out") ?? (buildFolder ? join(ROOT, "work", buildFolder, "renders") : join(ROOT, "work", "renders"));
+  const privBase = join(ROOT, "private", "renders", ...(buildFolder ? [buildFolder] : []));
+  const manifestPath = join(buildDir(buildFolder), "rig-b.manifest.json");
   if (!existsSync(manifestPath)) { console.error(`error: no build found at ${manifestPath}. Run "bun run build" first.`); process.exit(1); }
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const common: Record<string, unknown> = { ...(only ? { only } : {}), ...(pose ? { pose } : {}) };
@@ -223,7 +223,7 @@ if (import.meta.main) {
   ];
   const tStart = performance.now();
   let v: Awaited<ReturnType<typeof openViewer>>;
-  try { v = await openViewer({ workspace, photos, requests: served }); } catch (e: any) { console.error("error: " + e.message); process.exit(1); }
+  try { v = await openViewer({ buildFolder, photos, requests: served }); } catch (e: any) { console.error("error: " + e.message); process.exit(1); }
   const launch = (performance.now() - tStart) / 1000;
   let failed = false;
   /** Photo comparisons that may be published: the photo layer is the masked copy, never the original. */
@@ -360,7 +360,7 @@ if (import.meta.main) {
       const sec = (performance.now() - t0) / 1000, kept = Page.kept; Page.kept = 0;
       const folders = [...new Set(files.map((f) => relative(ROOT, join(f, ".."))))];
       console.log(`${set}: ${files.length} image(s) in ${sec.toFixed(2)} s${files.length ? " → " + (files.length > 1 ? folders.map((d) => `${d}/ (${files.filter((f) => relative(ROOT, join(f, "..")) === d).length})`).join(", ") : relative(ROOT, files[0])) : ""}${kept ? `; ${kept} showed the same picture as before and were left untouched` : ""}`);
-      timeline(`render ${set}`, sec, `${files.length} images${kept ? ` (${kept} unchanged)` : ""}${only ? `, only ${only}` : ""}${workspace ? `, workspace ${workspace}` : ""}`);
+      timeline(`render ${set}`, sec, `${files.length} images${kept ? ` (${kept} unchanged)` : ""}${only ? `, only ${only}` : ""}${buildFolder ? `, build folder ${buildFolder}` : ""}`);
     }
     if (v.page.errors.length) { console.error("page errors:\n  " + [...new Set(v.page.errors)].join("\n  ")); }
   } catch (e: any) {

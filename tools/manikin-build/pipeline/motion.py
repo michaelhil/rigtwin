@@ -677,7 +677,7 @@ def write_clip(path, body, name, q, pelvis_local, root=None, extras=None, skip=(
         if np.abs(q[:, j] - q0[j]).max() > 1e-6 or n in MAPPED: track(j, "rotation", q[:, j], "VEC4")
     track(body["pelvis"], "translation", pelvis_local, "VEC3")
     if root is not None: track(body["root"], "translation", root + t0[body["root"]], "VEC3")
-    g = {"asset": {"version": "2.0", "generator": "rigtwin avatar-lab pipeline/motion.py", "extras": extras or {}}, "scene": 0,
+    g = {"asset": {"version": "2.0", "generator": "synergon avatar-lab pipeline/motion.py", "extras": extras or {}}, "scene": 0,
          "scenes": [{"nodes": [i for i, p in enumerate(body.parent) if p < 0]}], "nodes": nodes,
          "animations": [{"name": name, "samplers": samplers, "channels": channels}], "buffers": [{"byteLength": len(blob)}], "bufferViews": views, "accessors": accs}
     js = json.dumps(g, separators=(",", ":")).encode(); js += b" " * ((-len(js)) % 4); blob += b"\0" * ((-len(blob)) % 4)

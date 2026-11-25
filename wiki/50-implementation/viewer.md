@@ -15,7 +15,7 @@ tags: [viewer, ux, implementation, typescript]
 - A **separate implementer**, working in a copy so the agents' renders were not disturbed, rebuilt the page: **16 controls, model 82.8 % of the window, 53 of 53 acceptance checks passed** (*tested*; one of the 53 was skipped, see below).
 - Assumed adjustments (the seat) are **usable**, tagged "assumed range", with an amber notice on the picture while one is in use; the description file still records them as assumed. Lit whites came down from 244–249 to 221–231 of 255.
 - The viewer is **TypeScript**, bundled by Bun, and shares one pose function with the generator. Agents drive it by URL parameters; that interface did not change in the redesign.
-- **Platform step 1** ([below](#the-shared-scene-platform-step-1)): when the page's server has the rigtwin server, the page joins one shared scene. Every pose change (slider, pad, drag, keys, Reset all) is saved as one command; changes by others, including Claude Code, appear at once with an **activity line** and its **Undo**; More shows the page's **session code** and a statement about the sandbox. Without a server nothing changes and no request is made. The page loads one script of 733 kB and is ready in about 210 ms (*measured* 2026-11-24).
+- **Platform step 1** ([below](#the-shared-scene-platform-step-1)): when the page's server has the Synergon server, the page joins one shared scene. Every pose change (slider, pad, drag, keys, Reset all) is saved as one command; changes by others, including Claude Code, appear at once with an **activity line** and its **Undo**; More shows the page's **session code** and a statement about the sandbox. Without a server nothing changes and no request is made. The page loads one script of 733 kB and is ready in about 210 ms (*measured* 2026-11-24).
 
 Commands and every URL parameter are in the [tool reference](../80-reference/tools.md#the-viewers-url-interface).
 Decisions: [D-13](../20-decisions/decision-log.md#d-13), [D-29](../20-decisions/decision-log.md#d-29),
@@ -268,7 +268,7 @@ which agent the browser follows.
 **Consent** ([D-55](../20-decisions/decision-log.md#d-55)). On the public sandbox a view an agent asks for without
 naming a browser, while no browser follows it, comes to every page as an amber question with Allow, Always allow
 and No; the view moves only after Allow. Always allow is stored in this browser (`localStorage`,
-`rigtwin.agentViews`) and shown under More → Shared scene as "Views an agent asks for: ask me first / always allow /
+`synergon.agentViews`) and shown under More → Shared scene as "Views an agent asks for: ask me first / always allow /
 never". While the question is open the activity line does not repeat the request.
 
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):

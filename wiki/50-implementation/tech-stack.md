@@ -27,13 +27,13 @@ Commands are in the [tool reference](../80-reference/tools.md).
 
 | Component | Version | Used for | Where it comes from |
 |---|---|---|---|
-| Bun | 1.4.0 | runs TypeScript directly; package manager; bundler for the viewer and (`bun build --target bun`) for the server; test runner; since step 1 also the server's HTTP server (`Bun.serve`), locally and on the host | installed on the machine; the only runtime the project asks for. On the production host: `/opt/rigtwin/runtime/bun`, from the official 1.4.0 release zip, checked against a pinned SHA-256 by `deploy/setup-server.sh`; GitHub Actions checks `bun --revision` is `1.4.0+34cbb9a40` |
+| Bun | 1.4.0 | runs TypeScript directly; package manager; bundler for the viewer and (`bun build --target bun`) for the server; test runner; since step 1 also the server's HTTP server (`Bun.serve`), locally and on the host | installed on the machine; the only runtime the project asks for. On the production host: `/opt/Synergon/runtime/bun`, from the official 1.4.0 release zip, checked against a pinned SHA-256 by `deploy/setup-server.sh`; GitHub Actions checks `bun --revision` is `1.4.0+34cbb9a40` |
 | TypeScript | 5.9.3 | type checking only (`tsc --noEmit`, part of `bun run check`); Bun runs the sources without a compile step | npm, pinned |
 | three.js | 0.187.0 | generator: vectors, matrices and the GLB writer path; viewer: rendering, controls, loading | npm, pinned |
 | Khronos glTF validator | 2.0.0-dev.3.10 | the file-format check on every `bun run check` | npm, pinned |
 | marked | 18.2.1 | Markdown to HTML for the wiki site (`bun run wiki build`) | npm, pinned; no dependencies of its own |
 | Python | 3.11.1 | `tools/glb_inspect.py`, the independent model reader: standard library only | system |
-| Chromium headless shell | build 1248 | every render (`bun run render`), the projection and frame-rate checks, the viewer acceptance script, the distribution check | the machine's Playwright browser cache; `RIGTWIN_CHROME` can point elsewhere |
+| Chromium headless shell | build 1248 | every render (`bun run render`), the projection and frame-rate checks, the viewer acceptance script, the distribution check | the machine's Playwright browser cache; `SYNERGON_CHROME` can point elsewhere |
 | uv | 0.11.28 | created the throwaway Python environments of the measurement and photo-masking agents | system |
 
 **Python environments outside the repository** (in the agents' working folders, not committed):
@@ -74,7 +74,7 @@ directly.
 
 | Part | What | Where |
 |---|---|---|
-| HTTP server | `Bun.serve`: `GET api/health`, `GET api/commands`, `POST api/command` (JSON, header `X-Rigtwin: 1`), `GET api/live` (server-sent events: session, snapshot or the missed changes, heartbeat every 15 s); the guards of the open server in deployed mode only | `server/server.ts`, `server/limits.ts` |
+| HTTP server | `Bun.serve`: `GET api/health`, `GET api/commands`, `POST api/command` (JSON, header `X-Synergon: 1`), `GET api/live` (server-sent events: session, snapshot or the missed changes, heartbeat every 15 s); the guards of the open server in deployed mode only | `server/server.ts`, `server/limits.ts` |
 | Command layer | a registry of commands (`scene.summary`, `scene.find`, `pose.set`, `history.undo`, `measure.distance`, and the view commands `view.set`, `view.show`, `view.select`); the scene document (pose, last 200 changes, per-joint stale check, undo by entry or group); a validator of about 80 lines for the part of JSON Schema it needs, written for it instead of a package | `shared/commands/` |
 | Words | the plain-language names of parts and adjustments, moved from `viewer/src/words.ts` to `shared/words.ts` so the viewer, the commands and the command line say the same thing | `shared/words.ts` |
 | Kinematics | reads the GLB's node tree and poses it; used by `measure.distance` on the server | `shared/kinematics.ts` |
@@ -95,13 +95,13 @@ Nothing here added an npm package: `package.json` gained only the `rig` script.
 | `generator/` | parameter loader, expression evaluator, geometry kit and faceted cage, assembler, GLB writer, materials, generated screen images, build command, kit tests, developer note | yes |
 | `shared/` | code used by the generator, the viewer and the server: the pose function, the description-file types, math, the plain-language words (`words.ts`, moved from the viewer in step 1), the node-tree kinematics (`kinematics.ts`) | yes |
 | `shared/commands/` | the command layer (step 1): schema validator, registry, scene document, the commands, their unit tests | yes |
-| `server/` | the rigtwin server (step 1): `server.ts`, `limits.ts`, the integration test `server.test.ts` | yes |
+| `server/` | the Synergon server (step 1): `server.ts`, `limits.ts`, the integration test `server.test.ts` | yes |
 | `viewer/` | the viewer page: `index.html`, `viewer.css`, `src/*.ts` (since step 1 also `live.ts` and `live-connection.ts` with its test) | yes |
 | `tools/` | check, render driver, local static server (with the server mounted under `/api/` since step 1), bundler, distribution, deploy, wiki, timeline, version, viewer acceptance script, the Python model reader, the contact-sheet page; new in step 1: `rig.ts` (the command line), `live-accept.ts` (two browsers and the command line on one server), `live-idle-test.ts` (the live channel idle through Caddy), `banned.ts` (the banned names, shared by the check and `rig`), `claude-sandbox-settings.json` (a prepared Claude Code setting for work against the public sandbox, not active) | yes (`tools/.venv/` excluded) |
 | `tools/deploy-tests/` | tests of the deploy and the host setup against local stand-ins: the setup script's harness (with the fixture of the site file live before the setup), the deploy's live checks, rollback, idle test, stream load (host check H14) | yes |
 | `wiki/` | this wiki, with its images under `wiki/img/` (masked photos and renders only) | yes |
-| `.claude/skills/`, `.claude/agents/` | the Agent Skills (modelling, and since step 1 `operating-rigtwin`) and the three agent definitions ([Skills and agents](../80-reference/skills-and-agents.md)) | yes |
-| `deploy/` | the production server's files: the Caddy site file, the deploy gate and pinned host key, and since step 1 the server's unit `rigtwin-server.service`, the one-time `setup-server.sh` and the host checklist `HOST-CHECKS.md` ([deployment](deployment.md)) | yes |
+| `.claude/skills/`, `.claude/agents/` | the Agent Skills (modelling, and since step 1 `operating-synergon`) and the three agent definitions ([Skills and agents](../80-reference/skills-and-agents.md)) | yes |
+| `deploy/` | the production server's files: the Caddy site file, the deploy gate and pinned host key, and since step 1 the server's unit `synergon-server.service`, the one-time `setup-server.sh` and the host checklist `HOST-CHECKS.md` ([deployment](deployment.md)) | yes |
 | `CLAUDE.md` | entry instructions for AI agents: read the wiki first; commands; rules that are easy to break | yes |
 | `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig.json`, `deploy.config.json`, `LICENSE` (MIT), `.gitignore` | project files | yes |
 | `private/` | original photos, solved cameras, measurement evidence, renders containing photo pixels, the planning records (which name the client) | **never** |
@@ -150,7 +150,7 @@ which the project uses but does not install.
 |---|---|---|
 | The measurement scripts and the dimension table are not in the repository (they are in `work/`) | re-measuring after new photos means re-implementing the scripts from the [method page](../40-method/measuring-from-photos.md); the values and their evidence are in the parameter files | open |
 | The geometry kit is hand-written | its correctness rests on 5 known-answer tests and the checks; no solid-modelling kernel stands behind it | accepted |
-| Chromium comes from a cache that another tool installed | a fresh machine needs a Chromium binary (`RIGTWIN_CHROME`) before it can render or run the browser checks | open |
+| Chromium comes from a cache that another tool installed | a fresh machine needs a Chromium binary (`SYNERGON_CHROME`) before it can render or run the browser checks | open |
 | Only `build` takes `--asset`; `check`, `render`, `serve` and `dist` assume the first asset's id | a second asset needs those tools generalised | open (noted in the Skill) |
 | Parameter files and the spec are shared between parallel agents | one agent's syntax error stops another agent's build; about ten such failures in two rounds | open; the remedy is one working copy per agent |
 | Frame rate and exposure measured only in headless Chromium on one Apple M2 | no data for weaker laptops or phones | [I-15](../60-lessons/ideas.md#i-15) |

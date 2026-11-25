@@ -21,7 +21,7 @@ First version, written after the first asset was built, from what was actually d
 |---|---|
 | evidence set, cameras on gauge features, scale closure, dimension table | hold-out points clicked by a person; scoring a frozen table against tape values |
 | decomposition spec, whole-object blockout, the checks, photo-matched views | a checkpoint where the person reviews the tree; a locked acceptance spec by a separate author |
-| three modellers in parallel with workspaces and file ownership | the `component-modeller` and `asset-measurer` definitions as files (the agents ran from prose briefs) |
+| three modellers in parallel with build folders and file ownership | the `component-modeller` and `asset-measurer` definitions as files (the agents ran from prose briefs) |
 | independent review, two rounds, by general agents with shell access | the read-only `asset-reviewer` definition; enforced isolation; the planted-error test |
 | a retrospective (this Skill) | drills as a formal step; a model card produced by following this Skill; resume by a cold session |
 | | human gates; a second object; a second repository; the tools with any asset id but the first |

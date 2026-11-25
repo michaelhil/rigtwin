@@ -1,5 +1,5 @@
 {
-  "name": "rigtwin-manikin-build",
+  "name": "synergon-manikin-build",
   "private": true,
   "type": "module",
   "description": "Mac-only build tools that pack the avatar lab's manikin into assets/manikin/ (see README.md). Not installed by the repository root, never on the deployment machine.",

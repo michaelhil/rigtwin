@@ -13,7 +13,7 @@
 // person_tone=<id>; person_wear=glasses:none,headset:none; person_shape=<preset name>; person_idle=0; person_look=0 (the person's own key,
 // crease shading and skin saturation off).
 // Script interface: window.viewer.person (state, definition, show, set, place, anchor, pickAt, depthAt, shells, object, still, bench, ready); every
-// change is announced as the window event 'rigtwin:person' with the state as its detail.
+// change is announced as the window event 'synergon:person' with the state as its detail.
 import * as THREE from "three";
 import { S, Q, scene, renderer, invalidate, on, hooks, keyLight, w2m, m2w, viewerApi, $, el, drawNow, DEG, frameSize, currentCamera, refollowEye, type Opts } from "../engine.ts";
 import { SCRIPTS } from "./operator.ts";
@@ -222,7 +222,7 @@ async function set(o: PersonSet) {
   return state();
 }
 /** After every change, whoever made it (a person on the page, another browser through the live channel, an agent, a URL parameter). */
-function changedSignal() { window.dispatchEvent(new CustomEvent("rigtwin:person", { detail: state() })); }
+function changedSignal() { window.dispatchEvent(new CustomEvent("synergon:person", { detail: state() })); }
 function state() {
   if (!av?.ready || !av.manifest) return { loaded: false, loading: !!av && !loadError, shown: false, error: loadError };   // before a package exists (the panel asks early)
   const op = av.state("operator"), ey = av.state("eyes");

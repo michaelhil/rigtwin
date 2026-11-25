@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "rigtwin",
+      "name": "synergon",
       "dependencies": {
         "gltf-validator": "2.0.0-dev.3.10",
         "three": "0.187.0",

@@ -6,8 +6,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dec = (s: string) => Buffer.from(s, "base64").toString("utf8");
-/** never, in any spelling */
-export const NEVER = ["aGl2ZQ==", "ZmVpcmluZw=="].map(dec);
+/** never, in any spelling, in any file or file name (binary files included) */
+export const NEVER = ["aGl2ZQ==", "ZmVpcmluZw==", "cmlndHdpbg=="].map(dec);   // the third: the project's retired name (renamed 2026-11-25)
 /** device makers: only in parameter evidence */
 export const VENDORS = ["ZmFuYXRlYw==", "c2Ftc3VuZw==", "bG9naXRlY2g=", "ZWxv"].map(dec);
 /** a word that contains a NEVER word harmlessly */

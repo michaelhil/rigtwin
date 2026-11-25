@@ -1,4 +1,4 @@
-# rigtwin
+# Synergon
 
 A proof of concept for building **credible, modular, parametric 3D models of operator workstations
 from a handful of photographs**, made by AI agents and checked by independent reviewers, for later
@@ -24,7 +24,7 @@ component, and move the seat, monitor, armrests, joysticks and pedals.*
 | Build a new asset | the Agent Skill in [.claude/skills/modeling-3d-assets-from-references](.claude/skills/modeling-3d-assets-from-references/SKILL.md) and [wiki/40-method/pipeline.md](wiki/40-method/pipeline.md) |
 | Run the tools | [wiki/80-reference/tools.md](wiki/80-reference/tools.md) |
 
-Live: the viewer at <https://mightwork.ai/rigtwin/> and this wiki at <https://mightwork.ai/rigtwin/wiki/>.
+Public site (from the first Synergon release): the viewer at <https://synergon.mightwork.ai/> and this wiki at <https://synergon.mightwork.ai/wiki/>.
 
 ## In one paragraph
 

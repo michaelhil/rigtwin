@@ -23,7 +23,7 @@ import { call } from "./rig.ts";
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
 const variants = (opt("--variant") ?? "both") === "both" ? ["baseline", "v2"] : [opt("--variant")!];
 const model = opt("--model") ?? "sonnet", runs = Number(opt("--runs") ?? 1);
-const baselineDir = opt("--baseline-dir") ?? join(tmpdir(), "rigtwin-baseline");
+const baselineDir = opt("--baseline-dir") ?? join(tmpdir(), "synergon-baseline");
 const only = opt("--cases")?.split(",");
 type Case = { id: string; prompt: string; preset?: Record<string, number>; expect: { pose?: Record<string, number>; view?: string; asks?: boolean; says?: string[]; person?: Record<string, unknown> | null } };
 const cases: Case[] = JSON.parse(readFileSync(join(ROOT, "tools", "agent-eval", "cases.json"), "utf8")).cases.filter((c: Case) => !only || only.includes(c.id));
@@ -41,7 +41,7 @@ const CLAUDE = claudeBin();
 if (variants.includes("baseline") && !existsSync(join(baselineDir, "tools", "rig.ts"))) throw new Error(`no baseline checkout at ${baselineDir}: git worktree add --detach ${baselineDir} 8898e66 && (cd ${baselineDir} && bun install && bun run build)`);
 
 const DEG = Math.PI / 180;
-const data = mkdtempSync(join(tmpdir(), "rigtwin-agent-eval-"));
+const data = mkdtempSync(join(tmpdir(), "synergon-agent-eval-"));
 const server = await startServer({ port: 0, data });
 const browser = await Browser.launch();
 const page: Page = await browser.page("about:blank");
@@ -56,7 +56,7 @@ const joints = new Map<string, any>(manifest.joints.map((j: any) => [j.id, j]));
 const units = (id: string, v: number) => (joints.get(id).type === "prismatic" ? v : v / DEG);
 
 const mcpConfig = join(data, "mcp.json");
-writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { rigtwin: { type: "http", url: `${server.url}/api/mcp` } } }));
+writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { synergon: { type: "http", url: `${server.url}/api/mcp` } } }));
 const emptyMcp = join(data, "mcp-empty.json");
 writeFileSync(emptyMcp, JSON.stringify({ mcpServers: {} }));
 
@@ -65,10 +65,10 @@ async function runCase(c: Case, variant: string) {
   await page.evaluate("viewer.apply({})");
   if (c.preset) await call("pose.set", { joints: c.preset, allowAssumed: true }, { server: server.url, client: "script" });
   const before = (await call("scene.summary", {}, { server: server.url })).result;
-  const prompt = `${c.prompt.replace("{code}", code)}\n\n(The rigtwin shared scene of this repository is running locally; act on it.)`;
+  const prompt = `${c.prompt.replace("{code}", code)}\n\n(The synergon shared scene of this repository is running locally; act on it.)`;
   const common = ["-p", prompt, "--model", model, "--output-format", "stream-json", "--verbose", "--max-turns", "12", "--permission-mode", "dontAsk"];
   const argv = variant === "v2"
-    ? [...common, "--strict-mcp-config", "--mcp-config", mcpConfig, "--tools", "", "--allowedTools", "mcp__rigtwin__*"]
+    ? [...common, "--strict-mcp-config", "--mcp-config", mcpConfig, "--tools", "", "--allowedTools", "mcp__synergon__*"]
     : [...common, "--strict-mcp-config", "--mcp-config", emptyMcp, "--allowedTools", "Bash(bun run rig:*)", "Bash(bun tools/rig.ts:*)", "Read", "Grep", "Glob", "Skill"];
   const t0 = performance.now();
   const p = spawn([CLAUDE, ...argv], { cwd: variant === "v2" ? ROOT : baselineDir, env: { ...process.env, RIG_URL: server.url }, stdout: "pipe", stderr: "pipe" });

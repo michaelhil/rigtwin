@@ -1,8 +1,8 @@
 ---
 title: Deployment
-tldr: Every push to main deploys automatically; bun run deploy does the same by hand. It checks everything, builds the viewer, model, wiki and (since platform step 1) the server into one release, uploads it through a restricted account, switches the site atomically, checks it over HTTPS and switches back on failure. The server's own service and its one-time host setup (done on 2026-11-24) are on a page of their own.
+tldr: Every push to main deploys automatically; bun run deploy does the same by hand. It checks everything, builds the viewer, model, wiki and server into one release, uploads it through a restricted account, switches the site atomically, checks it over HTTPS at synergon.mightwork.ai and switches back on failure. The host's one-time setup, its service and the cutover from the earlier address are on a page of their own.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [deployment, implementation, wiki, viewer, server]
 ---
 
@@ -10,14 +10,14 @@ tags: [deployment, implementation, wiki, viewer, server]
 
 ## TL;DR
 
-- **`bun run deploy`** publishes the viewer at `mightwork.ai/rigtwin/` and this wiki at `mightwork.ai/rigtwin/wiki/` ([R-64](../10-request/requirements.md#r-64), [R-65](../10-request/requirements.md#r-65), [SF-25](../10-request/requirements.md#sf-25), decision [D-32](../20-decisions/decision-log.md#d-32)). Always run **`bun run deploy --dry-run`** first: it does every local step and prints the exact server commands without running them.
+- **`bun run deploy`** publishes the viewer at `synergon.mightwork.ai/` and this wiki at `synergon.mightwork.ai/wiki/` ([R-64](../10-request/requirements.md#r-64), [R-65](../10-request/requirements.md#r-65), [SF-25](../10-request/requirements.md#sf-25), decision [D-32](../20-decisions/decision-log.md#d-32)). Always run **`bun run deploy --dry-run`** first: it does every local step and prints the exact server commands without running them.
 - It refuses to publish when `bun run check` fails, when `bun run wiki lint` finds an error, or when the git working tree has uncommitted changes. What goes live is therefore always a commit that passed every check.
 - Each deployment is a **complete new folder** on the server; the live site is a symbolic link switched in one step. A failed check after the switch puts the link back automatically; **`bun run deploy --rollback`** goes back one release by hand.
 - The distribution is about **21.3 MB in 151 files** (*measured* on 2026-11-24 with 37 wiki pages; 17 MB in 129 files on 2026-11-23): viewer 0.75 MB, server 65 kB, model 0.94 MB with its description, wiki 19.6 MB, almost all of it images. No file under `private/` or `work/` is ever copied, and every photograph in it is a masked copy.
-- **Every push to `main` deploys automatically** (GitHub Actions, [workflow](#continuous-deployment-from-github)). The key GitHub holds can log in only as the unprivileged account `rigtwin-deploy` and run only the deploy script's own commands inside `/srv/rigtwin`; the owner approved this on 2026-11-23. Since step 1 the workflow first runs every local step without the key, and the key is written only for the upload ([details](#continuous-deployment-from-github)).
-- **Platform step 1 (2026-11-24)** adds a small server to the release: `server/server.js`, the live channel and the commands behind `mightwork.ai/rigtwin/api/` ([the platform plan](../30-plan/platform-plan.md)). On the host it is one service, `rigtwin-server`, on `127.0.0.1:4190`, reached through one new Caddy route; its own code is never served ([the server and its host setup](server-and-host-setup.md)). The release keeps today's layout: no split into a served and an unserved folder ([D-42](../20-decisions/decision-log.md#d-42)).
-- **Order of the first rollout:** the host's setup (`deploy/setup-server.sh --apply`) must run **before** the first release with `server/` reaches `main`; the deploy refuses otherwise. Status on 2026-11-24: the setup ran on the host with the owner's yes, then the merge; the first release with the server (commit `ff90f30`) is live and passed its checks ([order and status](server-and-host-setup.md#order-of-the-first-rollout)).
-- **The public site gets the platform without the person.** The manikin appears on mightwork.ai only after the owner approves the new manikin ([D-44](../20-decisions/decision-log.md#d-44)).
+- **Every push to `main` deploys automatically** (GitHub Actions, [workflow](#continuous-deployment-from-github)). The key GitHub holds can log in only as the unprivileged account `synergon-deploy` and run only the deploy script's own commands inside `/srv/synergon`; the owner approved this design on 2026-11-23, and approves the new account at the cutover. Since step 1 the workflow first runs every local step without the key, and the key is written only for the upload ([details](#continuous-deployment-from-github)).
+- **The server** is part of the release: `server/server.js`, the live channel and the commands behind `synergon.mightwork.ai/api/` ([the platform plan](../30-plan/platform-plan.md)). On the host it is one service, `synergon-server`, on `127.0.0.1:4191`, reached through one Caddy route; its own code is never served ([the server and its host setup](server-and-host-setup.md)). The release keeps today's layout: no split into a served and an unserved folder ([D-42](../20-decisions/decision-log.md#d-42)).
+- **Order of the first rollout:** the host's setup (`deploy/setup-server.sh --apply`) must run **before** the first release reaches `main`; the deploy refuses otherwise. **Status on 2026-11-25: prepared, not yet run.** The files, the setup script and its tests are in the repository; the owner approves the commands as one batch ([order and status](server-and-host-setup.md#order-of-the-first-rollout)).
+- **The address.** Synergon is served at `synergon.mightwork.ai` (the viewer at `/`, the wiki at `/wiki/`, the server at `/api/`). The bare domain `mightwork.ai` serves nothing: it answers 404 for every address.
 
 The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the viewer itself works is on the
 [viewer page](viewer.md), the checks it runs are on the [checks page](../40-method/checks.md).
@@ -25,26 +25,26 @@ The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the view
 ## What is published
 
 `bun run dist` assembles one self-contained folder, `dist/`. All addresses inside it are relative, so it
-works from any sub-path; it is tested from `/rigtwin/` on every build.
+works from any sub-path; it is tested from the root `/` (where it is served) on every build.
 
 | Path in `dist/` | What | Size (*measured*, 2026-11-24) |
 |---|---|---|
 | `index.html`, `viewer.css`, `viewer.js` | the viewer, bundled with three.js; no other file is loaded from anywhere. Since step 1 it includes the live client (about 6 kB), which talks to the server when there is one | 2.7 kB, 16 kB, 732,720 bytes (726 kB on 2026-11-23) |
 | `asset/rig-b.glb` | the model | 720 kB |
 | `asset/rig-b.manifest.json` | the model's description: parts, joints, where every number comes from | 220 kB |
-| `server/server.js` | **new in step 1:** the rigtwin server bundled into one file for Bun (`bun build --target bun` of `server/server.ts`). `bun run dist` refuses a bundle that takes code from anywhere but `server/` and `shared/` (no viewer code, no npm package) or imports anything Bun does not provide itself. Never served: Caddy answers 404 for `/rigtwin/server/*` | 65,471 bytes |
-| `version.json` | build time, source revision, model hash and triangle count; shown in the viewer's More menu and the wiki's footer. With the server it also says `server: {format: "rigtwin-scene/2"}`, the scene format the server stores (`/2` since manikin v1 adds the person in the seat; the server migrates a stored `/1` document at start, see [the person's commands](person-commands.md#the-scene-format)); the viewer looks for a server only when this entry is there | under 1 kB |
+| `server/server.js` | **new in step 1:** the Synergon server bundled into one file for Bun (`bun build --target bun` of `server/server.ts`). `bun run dist` refuses a bundle that takes code from anywhere but `server/` and `shared/` (no viewer code, no npm package) or imports anything Bun does not provide itself. Never served: Caddy answers 404 for `/server/*` | 65,471 bytes |
+| `version.json` | build time, source revision, model hash and triangle count; shown in the viewer's More menu and the wiki's footer. With the server it also says `server: {format: "synergon-scene/1"}`, the scene format the server stores (it holds the person in the seat, see [the person's commands](person-commands.md#the-scene-format)); the viewer looks for a server only when this entry is there | under 1 kB |
 | `wiki/` | this wiki as a static site: one HTML page per Markdown page, one stylesheet, one small search script, the images | 19.6 MB in 144 files, 37 pages (15.5 MB, 29 pages on 2026-11-23) |
 | `deploy-receipt.json` | written after a deployment (or dry run): what was published, where, the result of every check, and the server's state (`server`, and `rollbackServer` after a switch back) | — |
 
 **The verify step of `bun run dist`** now also starts the built `server/server.js` (local mode, a free
 port, an empty temporary data folder, the release's own `asset/`) behind the throwaway static server,
-which forwards `/rigtwin/api/*` to it the way Caddy does and refuses `/rigtwin/server/*`. It requires:
+which forwards `/api/*` to it the way Caddy does, gives the viewer page for `/workspaces/*`, and refuses `/server/*`. It requires:
 `api/health` answers with the scene format, mode and the revision of `version.json`; `api/live` is an
 event stream that delivers a snapshot within 5 s; `server/server.js`, `server/` and `server` answer 404;
 the server is still running at the end. The viewer's own health request and live channel are therefore
 part of the headless-Chromium check, which fails on any failed request or console error. *Measured*
-2026-11-24: "server … answered health and streamed session, snapshot through /rigtwin/api/; /rigtwin/server/
+2026-11-24: "server … answered health and streamed session, snapshot through /api/; /server/
 refused; 155 requests answered, 0 failed".
 
 The wiki site has navigation by section, a table of contents per page, the TL;DR highlighted, a status
@@ -83,9 +83,9 @@ Settings, in `deploy.config.json` (committed):
 
 ```json
 {
-  "host": "rigtwin-deploy",
-  "remoteRoot": "/srv/rigtwin",
-  "publicUrl": "https://mightwork.ai/rigtwin/",
+  "host": "synergon-deploy",
+  "remoteRoot": "/srv/synergon",
+  "publicUrl": "https://synergon.mightwork.ai/",
   "keepReleases": 5
 }
 ```
@@ -105,13 +105,13 @@ stored in the repository.
    bun run render --set wiki   # the wiki's images: 10 s (--no-images skips it)
    bun run wiki index          # the generated index: 0.01 s
    bun run wiki build          # the wiki site: 0.15 s
-   bun run dist                # dist/, tested from /rigtwin/: 1.5 s
+   bun run dist                # dist/, tested from /: 1.5 s
    ```
 
    If these steps changed a committed file (a regenerated image, the index), the site would not match
    the commit, and the deployment stops with the list of files: commit them and run it again.
 3. **Ask the server's route first** (new in step 1; only for a release whose `version.json` has a
-   `server` entry): with the old release still live, `GET https://mightwork.ai/rigtwin/api/health`. A 404
+   `server` entry): with the old release still live, `GET https://synergon.mightwork.ai/api/health`. A 404
    means the web server has no route for the API, hence no 404 rule for `server/` either, and the new
    release would make `server/server.js` public; no answer means the rule cannot be confirmed. Either
    way the deploy stops here, before anything is uploaded, and prints the [order of the first
@@ -121,16 +121,16 @@ stored in the repository.
    `20261123T204500Z-3f2c1ab`:
 
    ```sh
-   ssh rigtwin-deploy 'mkdir -p /srv/rigtwin/releases'
-   rsync -az --delete dist/ rigtwin-deploy:/srv/rigtwin/releases/20261123T204500Z-3f2c1ab/
-   ssh rigtwin-deploy 'chmod -R u+rwX,go+rX,go-w /srv/rigtwin/releases/20261123T204500Z-3f2c1ab'
+   ssh synergon-deploy 'mkdir -p /srv/synergon/releases'
+   rsync -az --delete dist/ synergon-deploy:/srv/synergon/releases/20261123T204500Z-3f2c1ab/
+   ssh synergon-deploy 'chmod -R u+rwX,go+rX,go-w /srv/synergon/releases/20261123T204500Z-3f2c1ab'
    ```
 
    A release folder that already exists is never overwritten.
 5. **Switch** the live link in one step (the web server sees either the old or the new release, never a mix):
 
    ```sh
-   ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/20261123T204500Z-3f2c1ab /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
+   ssh synergon-deploy 'ln -sfn /srv/synergon/releases/20261123T204500Z-3f2c1ab /srv/synergon/current.tmp && mv -T /srv/synergon/current.tmp /srv/synergon/current'
    ```
 
 6. **Check the live site over HTTPS**: the viewer page answers 200 with HTML; `version.json` is exactly
@@ -141,7 +141,7 @@ stored in the repository.
    another revision after 20 s, is a failure). Each check is tried three times a second apart. If one
    fails, the link goes back to the previous release, that release is checked, and the command ends with
    an error; the failed release stays on the server to be looked at. Three more things are reported as
-   warnings only: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/wiki` redirects to `/rigtwin/wiki/`, and
+   warnings only: `/wiki` redirects to `/wiki/`, the address of a workspace (`/workspaces/<id>`) gives the viewer page, and
    the `X-Robots-Tag: noindex` header is sent.
 7. **Tidy up** (only after the checks passed): release folders beyond the five newest are deleted, never
    the live one or the one before it.
@@ -169,10 +169,10 @@ bun run deploy --rollback             # live link to the release before the curr
 
 It does not build anything and does not delete anything. If the older release fails its checks, the link
 returns to where it was. By hand, the same is one command (list the releases with
-`ssh rigtwin-deploy 'ls -1 /srv/rigtwin/releases'`):
+`ssh synergon-deploy 'ls -1 /srv/synergon/releases'`):
 
 ```sh
-ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/<release> /srv/rigtwin/current.tmp && mv -T /srv/rigtwin/current.tmp /srv/rigtwin/current'
+ssh synergon-deploy 'ln -sfn /srv/synergon/releases/<release> /srv/synergon/current.tmp && mv -T /srv/synergon/current.tmp /srv/synergon/current'
 ```
 
 **Rollback rules since step 1.**
@@ -193,43 +193,46 @@ ssh rigtwin-deploy 'ln -sfn /srv/rigtwin/releases/<release> /srv/rigtwin/current
 
 The deploy script never reads or changes the web server's configuration. It expects:
 
-- an SSH alias `rigtwin-deploy` (the `host` in `deploy.config.json`) that logs in as the unprivileged
-  account `rigtwin-deploy`, which owns `/srv/rigtwin`; `rsync` and the GNU core utilities (for
+- an SSH alias `synergon-deploy` (the `host` in `deploy.config.json`) that logs in as the unprivileged
+  account `synergon-deploy`, which owns `/srv/synergon`; `rsync` and the GNU core utilities (for
   `mv -T`) on the server. Locally the alias is in `~/.ssh/config`; in GitHub Actions the workflow
   writes it;
-- on the server, the gate `/usr/local/bin/rigtwin-deploy-gate` (source: `deploy/rigtwin-deploy-gate.sh`)
+- on the server, the gate `/usr/local/bin/synergon-deploy-gate` (source: `deploy/synergon-deploy-gate.sh`)
   as the forced command of every key of that account (next section);
-- a static file server that serves the folder `/srv/rigtwin/current` (following the link, looked up on
-  every request) at the address path `/rigtwin/`, serves `index.html` for a folder, redirects a folder
-  asked for without its trailing slash, and redirects `/rigtwin` to `/rigtwin/`;
+- a static file server that serves the folder `/srv/synergon/current` (following the link, looked up on
+  every request) at the address path `/` (the root of `synergon.mightwork.ai`), serves `index.html` for a folder,
+  redirects a folder asked for without its trailing slash, serves the viewer page for `/workspaces/*`, and
+  answers 404 for `/server/*`;
 - preferably the header `X-Robots-Tag: noindex` (every page also carries the same instruction as a meta tag).
 
-The site block installed on the production server is `deploy/mightwork-apex.caddy` in this repository
-(Caddy; one file per site under `/etc/caddy/managed-sites/`). It serves only the bare domain
-`mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` comes from `/srv/rigtwin/current`
-with `X-Robots-Tag: noindex` and `Cache-Control: no-cache` on pages and data, and every other address
-returns 404. The version in the repository since step 1 adds the server's route
-([the Caddy route](server-and-host-setup.md#the-caddy-route)); the setup script installed it on the host on 2026-11-24; a deploy never changes it.
+The site block for the production server is `deploy/synergon.caddy` in this repository (Caddy; one file per
+site under `/etc/caddy/managed-sites/`). It serves the host name `synergon.mightwork.ai`: the viewer at `/`, the
+wiki at `/wiki/` and everything else in the release from `/srv/synergon/current`, with `X-Robots-Tag: noindex` and
+`Cache-Control: no-cache` on pages and data; `/api/*` goes to the server, `/server/*` answers 404, and
+`/workspaces/*` gives the viewer page ([the Caddy route](server-and-host-setup.md#the-caddy-route)). Caddy obtains
+the HTTPS certificate by itself. The setup script installs the file on the host; a deploy never changes it.
+The bare domain `mightwork.ai` has its own file, `deploy/mightwork-apex.caddy`, which answers 404 for every address: nothing
+is served from it any more.
 
-`handle_path` removes `/rigtwin` from the address before looking for the file, so
-`/rigtwin/wiki/index.html` is read from `/srv/rigtwin/current/wiki/index.html`.
+The site is served from the root, so a file such as `/srv/synergon/current/wiki/index.html` is the address
+`/wiki/index.html`; no prefix is removed.
 
 ### The restricted deploy account
 
-Set up on 2026-11-23 after the owner chose automatic deployment.
+Created on the host by `deploy/setup-server.sh --apply` ([the setup](server-and-host-setup.md#the-setup-script-and-the-host-checks)); the account, gate and folders have the same design as the first deployment account of this project, which the owner approved on 2026-11-23.
 
 | Part | What it is |
 |---|---|
-| Account | `rigtwin-deploy`, a system user with no password and no sudo; owns `/srv/rigtwin` and nothing else |
-| Keys | `/var/lib/rigtwin-deploy/.ssh/authorized_keys`, owned by root so the account cannot add keys; two keys, the GitHub Actions key and the owner's own key for manual deploys, both with `restrict,command="/usr/local/bin/rigtwin-deploy-gate"`: no shell, no terminal, no port or agent forwarding |
-| Gate | `deploy/rigtwin-deploy-gate.sh`, installed as `/usr/local/bin/rigtwin-deploy-gate`. It compares the requested command with nine anchored patterns, one per command the deploy script sends (make the release folder, read the live link, list releases, test for a release, upload with rsync, set permissions and confirm two files, switch the link, read a release's `version.json`, delete old releases), all confined to `/srv/rigtwin`. Anything else is refused with exit code 126 |
+| Account | `synergon-deploy`, a system user with no password and no sudo; owns `/srv/synergon` and nothing else |
+| Keys | `/var/lib/synergon-deploy/.ssh/authorized_keys`, owned by root so the account cannot add keys; written by the setup script from a file of public keys: the GitHub Actions key and the owner's own key for manual deploys, both with `restrict,command="/usr/local/bin/synergon-deploy-gate"`: no shell, no terminal, no port or agent forwarding |
+| Gate | `deploy/synergon-deploy-gate.sh`, installed as `/usr/local/bin/synergon-deploy-gate`. It compares the requested command with nine anchored patterns, one per command the deploy script sends (make the release folder, read the live link, list releases, test for a release, upload with rsync, set permissions and confirm two files, switch the link, read a release's `version.json`, delete old releases), all confined to `/srv/synergon`. Anything else is refused with exit code 126 |
 | No links | after every upload the gate deletes symbolic links in that release, and it refuses to switch to a release that contains one, because the web server would follow a link to any readable file on the host |
-| Log | every allowed and refused command goes to the system log with the tag `rigtwin-deploy-gate` (`journalctl -t rigtwin-deploy-gate`) |
+| Log | every allowed and refused command goes to the system log with the tag `synergon-deploy-gate` (`journalctl -t synergon-deploy-gate`) |
 | Host key | the server's host key is pinned in `deploy/known_hosts` (checked against the key already trusted for the server's address); the workflow refuses any other |
-| Tested | allowed: every deploy command, both the GNU rsync form (GitHub runner) and the macOS openrsync form; refused: `id`, `cat /etc/passwd`, an interactive login, port forwarding, and in a local pattern test 12 injection and escape attempts (extra commands after `;` or `&&`, `$(…)`, paths outside `/srv/rigtwin`, `..`, links to `/etc`) |
+| Tested | allowed: every deploy command, both the GNU rsync form (GitHub runner) and the macOS openrsync form; refused: `id`, `cat /etc/passwd`, an interactive login, port forwarding, and in a local pattern test 12 injection and escape attempts (extra commands after `;` or `&&`, `$(…)`, paths outside `/srv/synergon`, `..`, links to `/etc`) |
 
 To revoke GitHub's access: delete the first line of the server's `authorized_keys` (or the repository
-secret `DEPLOY_SSH_KEY`). To change what the deploy may do, change `tools/deploy.ts` and the gate together.
+secret `SYNERGON_DEPLOY_SSH_KEY`). To change what the deploy may do, change `tools/deploy.ts` and the gate together.
 
 ## Updating production after a change
 
@@ -246,7 +249,7 @@ for a commit. To publish a wiki fix without regenerating the images, add `--no-i
 
 ## Continuous deployment from GitHub
 
-Set up on 2026-11-23 at the owner's request; workflow `.github/workflows/deploy.yml`.
+Workflow `.github/workflows/deploy.yml`, first set up on 2026-11-23 at the owner's request and moved to the new account for Synergon.
 
 1. **Trigger**: every push to `main`, or by hand from the repository's Actions tab. Runs never overlap
    (one deploy at a time) and a run that is already deploying is never cancelled.
@@ -255,7 +258,7 @@ Set up on 2026-11-23 at the owner's request; workflow `.github/workflows/deploy.
 3. **Check and build, without the key** (since step 1): `bun run deploy --dry-run --no-images`, the same
    refusal rules as a manual deploy: every check, wiki lint, clean commit, build, wiki site, distribution
    with its own browser check (and the built server behind it).
-4. **Key**: only then is `DEPLOY_SSH_KEY` written to a file; the SSH settings pin the server's host key from
+4. **Key**: only then is `SYNERGON_DEPLOY_SSH_KEY` written to a file; the SSH settings pin the server's host key from
    `deploy/known_hosts`.
 5. **Upload, switch and check**: `bun run deploy --prepared` (the route probe, upload, switch, the live
    checks including the server's health, automatic switch-back on failure); the key is removed in the next
@@ -272,8 +275,11 @@ Set up on 2026-11-23 at the owner's request; workflow `.github/workflows/deploy.
 - `setup-bun` downloads Bun without a pinned checksum, and this Bun builds the `server.js` that runs on
   the host, so the job stops unless `bun --revision` is `1.4.0+34cbb9a40` (the official 1.4.0 build; a
   weak check, not a checksum).
-- **For the owner** (settings only the owner can change): move `DEPLOY_SSH_KEY` from the repository's
-  secrets into the environment `production`, limited to the branch `main`, and protect `main`.
+- **For the owner** (settings only the owner can change): the one secret the workflow reads is
+  `SYNERGON_DEPLOY_SSH_KEY`, the private half of the key whose public half is on the server for the account
+  `synergon-deploy`. Create it in the environment `production` (not as a repository secret), limited to the
+  branch `main`, and protect `main`. The workflow writes the SSH alias `synergon-deploy` itself (host name
+  `synergon.mightwork.ai`, the host key from `deploy/known_hosts`).
 
 What the runner cannot do, and how it is handled:
 
@@ -285,9 +291,8 @@ What the runner cannot do, and how it is handled:
 - **No GPU.** The frame-rate check runs in software rendering and reports a warning, not a failure,
   below 55 frames per second; the real figure is the one measured on a development machine.
 
-A manual deploy from a working copy (`bun run deploy`) still works and goes through the same restricted
-account and gate (*tested* on 2026-11-23: release `20261123T222830Z-ac78fc6`, 14.8 s, every server
-command allowed by the gate, including the macOS rsync form).
+A manual deploy from a working copy (`bun run deploy`) goes through the same restricted account and gate
+(*tested* on the earlier address on 2026-11-23: 14.8 s, every server command allowed by the gate, including the macOS rsync form).
 
 The model file built on the runner is not byte-identical to one built on macOS (floating-point functions
 differ slightly between platforms; each platform is deterministic on its own), so the live model's
@@ -302,21 +307,21 @@ log shows every server command of that run allowed, including GNU rsync's upload
 
 ## Production state
 
-Verified by the coordinator on 2026-11-23 after the first deployment.
+**Not live yet** (2026-11-25): the cutover to `synergon.mightwork.ai` is prepared and waits for the owner's approval.
+What is decided and what will be true afterwards:
 
 | Item | Value |
 |---|---|
-| Addresses | viewer <https://mightwork.ai/rigtwin/>, wiki <https://mightwork.ai/rigtwin/wiki/> |
-| Server | the production host, reached through the restricted alias `rigtwin-deploy` (see above); Caddy 2.11.4 serving ports 80 and 443 for several sites |
-| Site block as installed | `deploy/mightwork-apex.caddy` in this repository, copied to `/etc/caddy/managed-sites/mightwork-apex.caddy` (the main Caddyfile imports that folder). It serves only the bare domain `mightwork.ai`: `/rigtwin` redirects to `/rigtwin/`, `/rigtwin/*` is served from `/srv/rigtwin/current`, anything else returns 404; `X-Robots-Tag: noindex`. The full configuration was validated with `caddy validate` before `systemctl reload caddy`; a Let's Encrypt certificate for `mightwork.ai` was obtained automatically within seconds |
-| Other sites on the host | checked before and after the change: every one answered with the same status as before (303, 303, 200, 302, 200) |
-| First deployment | 2026-11-23 21:21 UTC, release `20261123T212137Z-5d673d1`, version line `2026-11-23 21:21 UTC · 5d673d1 · model 0b6d8248` |
-| HTTPS checks | all nine passed: viewer page, `version.json` identical to the build, model file size and SHA-256, wiki start page and two wiki pages, `/rigtwin` and `/rigtwin/wiki` redirects, `X-Robots-Tag` |
-| Not served (checked) | `private/…`, `work/`, parameter sources, `.git/config`, Markdown sources: all 404. The release folder contains only `index.html`, `viewer.js`, `viewer.css`, `version.json`, `asset/` and `wiki/` (21 MB) |
-| Time of a full deployment | 70 s from GitHub Actions (runner, software rendering); 15–25 s from the development machine, including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
-| Release history | see `ssh <host> 'ls -1 /srv/rigtwin/releases'`; the deploy keeps the newest 5 |
-| Coordinator's browser check of the live site | viewer loads the model with no console errors (narrow layout in a small window); wiki index and gallery render; navigation and viewer link work |
-| The rigtwin server (2026-11-24) | set up on the host with the owner's yes (`--check`, `--apply`, `--probe`, load test H14) and live since the release of commit `ff90f30`: `api/health` reports that revision, `server/server.js` answers 404, the service is active, and the two-browser check on the live site passed ([order and status](server-and-host-setup.md#order-of-the-first-rollout)) |
+| Addresses | viewer <https://synergon.mightwork.ai/>, wiki <https://synergon.mightwork.ai/wiki/>, API `https://synergon.mightwork.ai/api/` |
+| Host | the production host that already runs the owner's other sites (Caddy on ports 80 and 443); `synergon.mightwork.ai` resolves to it (checked 2026-11-25, the same address as `mightwork.ai`) |
+| Account and folders | the account `synergon-deploy` and its restricted alias; `/srv/synergon` (releases), `/opt/synergon/runtime/bun`, `/var/lib/synergon` (the server's data); all created by the setup script |
+| Site block | `deploy/synergon.caddy` as `/etc/caddy/managed-sites/synergon.caddy`; the certificate comes from Caddy by itself |
+| The bare domain | `deploy/mightwork-apex.caddy`, installed by `setup-server.sh --retire-apex` after the first deploy: 404 for every address, no route left. The earlier address and its service, account and folders are removed in the cutover, after an archive of the old data is copied to the owner's laptop |
+| First deployment | `bun run deploy` from the laptop once the setup has run; its receipt goes to `dist/deploy-receipt.json` |
+| Time of a full deployment (measured on the earlier address) | 70 s from GitHub Actions (runner, software rendering); 15–25 s from the development machine, including check, build, documentation images, wiki build, distribution with its own browser verification, upload and live checks; a dry run takes about 17 s |
+| Release history | see `ssh synergon-deploy 'ls -1 /srv/synergon/releases'`; the deploy keeps the newest 5 |
+
+This table is filled in with the measured state after the cutover.
 
 ### Updating production
 

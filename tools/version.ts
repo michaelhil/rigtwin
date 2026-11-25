@@ -37,5 +37,5 @@ export function currentVersion(opts: { buildDir?: string; asset?: string; built?
   const built = (opts.built ?? new Date()).toISOString().replace(/\.\d+Z$/, "Z");
   const rev = revision + (dirty ? "+changes" : "");
   const short = [opts.label ?? `${built.slice(0, 10)} ${built.slice(11, 16)} UTC`, rev, ...(model ? [`model ${model.sha256.slice(0, 8)}`] : [])].join(" · ");
-  return { name: "rigtwin", built, revision, dirty, model, short };
+  return { name: "synergon", built, revision, dirty, model, short };
 }

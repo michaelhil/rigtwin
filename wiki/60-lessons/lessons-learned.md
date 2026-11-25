@@ -278,7 +278,7 @@ tags: [lessons, measurement, modelling, review, agents, viewer, planning]
 **L-34. Parallel agents need isolation at the file level.**
 
 - At least 11 of 16 failed builds came from another agent's file being mid-edit (F-17).
-- Now: each modeller owns its source and parameter files, builds with `--only`, renders into its own workspace, and touches the shared spec only with small edits ([P-10](patterns.md#p-10)).
+- Now: each modeller owns its source and parameter files, builds with `--only`, renders into its own build folder, and touches the shared spec only with small edits ([P-10](patterns.md#p-10)).
 
 <a id="l-35"></a>
 **L-35. Agents cannot tell the time; let the tools write the durations.**

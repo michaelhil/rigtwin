@@ -678,7 +678,7 @@ def build(sex="m", out=None, subdiv=True, preview=False):
     mats = {mat: {"pbrMetallicRoughness": {"baseColorFactor": al + [1.0], "metallicFactor": 0.0, "roughnessFactor": P["roughness"]}}}
     k0 = e.skeleton; skel = glb.Skeleton(list(k0.names), np.asarray(k0.parent).copy(), np.asarray(k0.head) + lift, k0.rot)
     gp = os.path.join(out, name + ".glb")
-    stats = glb.write_glb(gp, meshes, skel, mats, generator="rigtwin avatar-lab pipeline/abstract.py (MPFB2 2.0.18 data, CC0)")
+    stats = glb.write_glb(gp, meshes, skel, mats, generator="synergon avatar-lab pipeline/abstract.py (MPFB2 2.0.18 data, CC0)")
     problems = glb.validate(gp)
     print(name, json.dumps(stats)); print("  validate:", problems or "clean")
     # ---- manifest: the shared body package's own, with the style's additions (same shape model, rig, poses, packet, motion)

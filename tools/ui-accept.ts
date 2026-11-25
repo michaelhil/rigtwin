@@ -2,7 +2,7 @@
 // Acceptance tests of the viewer page, driven like a person would: headless Chromium, real pointer,
 // wheel and key events through the DevTools protocol, a fresh page per test. Combines the checklists
 // of the two interaction reviews (work/ux/review-A.md section 5, review-B.md section 7).
-//   --viewer    viewer source directory to serve (default: RIGTWIN_VIEWER_DIR or "viewer")
+//   --viewer    viewer source directory to serve (default: SYNERGON_VIEWER_DIR or "viewer")
 //   --origin    test an already running server instead of starting one
 //   --baseline  a second running server with the previous viewer: machine-interface pictures are compared with it
 //   --shots     where the screenshots go (default work/renders/ui-accept)
@@ -14,7 +14,7 @@ import { ROOT, timeline } from "./timeline.ts";
 import { Browser, Page } from "./render.ts";
 
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-if (opt("--viewer")) process.env.RIGTWIN_VIEWER_DIR = opt("--viewer");
+if (opt("--viewer")) process.env.SYNERGON_VIEWER_DIR = opt("--viewer");
 const SHOTS = opt("--shots") ? join(ROOT, opt("--shots")!) : join(ROOT, "work", "renders", "ui-accept");
 const ONLY = opt("--only")?.split(",");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -916,7 +916,7 @@ await test("T50", "page errors and warnings during the whole run", async () => {
 await browser.close(); server?.stop(true);
 const failed = results.filter((r) => !r.pass), seconds = (performance.now() - t0) / 1000;
 const out = opt("--json") ? join(ROOT, opt("--json")!) : join(SHOTS, "ui-accept.json");
-writeFileSync(out, JSON.stringify({ origin: ORIGIN, viewer: process.env.RIGTWIN_VIEWER_DIR || "viewer", seconds, results }, null, 1));
+writeFileSync(out, JSON.stringify({ origin: ORIGIN, viewer: process.env.SYNERGON_VIEWER_DIR || "viewer", seconds, results }, null, 1));
 console.log(`${failed.length ? "UI ACCEPTANCE FAILED" : "ui acceptance passed"}: ${results.length - failed.length} of ${results.length} checks, ${seconds.toFixed(1)} s → ${out}`);
-timeline(failed.length ? "ui-accept failed" : "ui-accept", seconds, `${results.length - failed.length}/${results.length} checks passed, viewer ${process.env.RIGTWIN_VIEWER_DIR || "viewer"}`);
+timeline(failed.length ? "ui-accept failed" : "ui-accept", seconds, `${results.length - failed.length}/${results.length} checks passed, viewer ${process.env.SYNERGON_VIEWER_DIR || "viewer"}`);
 process.exit(failed.length ? 1 : 0);

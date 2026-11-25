@@ -6,19 +6,18 @@
 //   dist/asset/manikin/                        the person's packages (assets/manikin/, copied whole); version.json names the default
 //   dist/libs/basis/                           three's KTX2 transcoder (basis_transcoder.js, .wasm), loaded by the person chunk
 //   dist/wiki/                                 the wiki as a static site (built here, from wiki/*.md and wiki/img/)
-//   dist/server/server.js                      the rigtwin server bundled into one file for Bun (from server/server.ts;
+//   dist/server/server.js                      the Synergon server bundled into one file for Bun (from server/server.ts;
 //                                              only code from server/ and shared/, and the person's solver, rig binding and
 //                                              body fit from viewer/src/person/ with their numbers; no npm package). Never served:
-//                                              Caddy answers 404 for /rigtwin/server/* (deploy/mightwork-apex.caddy)
+//                                              Caddy answers 404 for /server/* (deploy/synergon.caddy)
 //   dist/version.json                          build time, source revision, model hash and triangle count; with the
 //                                              server, also server: {format} (the scene format it stores)
 // Nothing from private/ or work/ is copied. All URLs are relative, so the folder works from any
-// sub-path. Unless --no-verify is given, the result is served from the sub-path /rigtwin/ by a
-// throwaway local server and loaded in headless Chromium: the viewer, its link to the documentation,
-// and several wiki pages. Every request must succeed and no page may log an error. Like Caddy, the
-// throwaway server answers /rigtwin/api/* from the built server (started on a free port with an empty
-// temporary data folder, the prefix /rigtwin removed, answers streamed so the live channel works) and
-// refuses /rigtwin/server/*.
+// sub-path. Unless --no-verify is given, the result is served from the root / by a throwaway local server
+// and loaded in headless Chromium: the viewer, its link to the documentation, and several wiki pages. Every
+// request must succeed and no page may log an error. Like Caddy (deploy/synergon.caddy), the throwaway server
+// answers /api/* from the built server (started on a free port with an empty temporary data folder, answers
+// streamed so the live channel works), gives the viewer page for /workspaces/*, and refuses /server/*.
 import { mkdirSync, rmSync, writeFileSync, copyFileSync, cpSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -33,34 +32,34 @@ import { personEntry } from "./serve.ts";
 
 const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
 
-/** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/mightwork-apex.caddy): index.html for a folder, a
- *  redirect when the folder's slash is missing, 404 otherwise; 404 for the server's folder `server/`; and, given `api` (the origin of a running rigtwin
+/** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/synergon.caddy): index.html for a folder, a
+ *  redirect when the folder's slash is missing, 404 otherwise; the viewer page (index.html) for `<base>workspaces/*`; 404 for the server's folder `server/`; and, given `api` (the origin of a running Synergon
  *  server), `<base>api/*` forwarded to it as `/api/*`, the answer streamed as it arrives. Every answer is logged; requests carrying the header
- *  `x-rigtwin-probe` (deliberate checks) are marked as probes. */
-export function serveFolder(dir: string, base = "/rigtwin/", opts: { api?: string; idleTimeout?: number } = {}) {
+ *  `x-synergon-probe` (deliberate checks) are marked as probes. */
+export function serveFolder(dir: string, base = "/", opts: { api?: string; idleTimeout?: number } = {}) {
   const log: { path: string; status: number; probe: boolean }[] = [];
   // with a server behind it, a quiet live stream must outlast the heartbeat: the server's own idle timeout (server/limits.ts), not Bun's 10 s
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", ...(opts.idleTimeout !== undefined ? { idleTimeout: opts.idleTimeout } : {}), async fetch(req, srv) {
-    const url = new URL(req.url), path = decodeURIComponent(url.pathname), probe = req.headers.has("x-rigtwin-probe");
+    const url = new URL(req.url), path = decodeURIComponent(url.pathname), probe = req.headers.has("x-synergon-probe");
     const answer = (status: number, body: BodyInit | null, headers: Record<string, string> = {}) => { log.push({ path, status, probe }); return new Response(body, { status, headers }); };
     if (path + "/" === base) return answer(301, null, { location: base });
     if (!path.startsWith(base)) return answer(404, "outside the sub-path");
     const rest = path.slice(base.length);
     if (rest === "server" || rest.startsWith("server/")) return answer(404, "not found");
     if (rest.startsWith("api/")) {
-      if (!opts.api) return answer(404, "no rigtwin server");
+      if (!opts.api) return answer(404, "no Synergon server");
       const headers = new Headers(req.headers);
       for (const h of ["host", "connection", "accept-encoding", "content-length"]) headers.delete(h);
       headers.set("x-forwarded-for", srv.requestIP(req)?.address ?? "127.0.0.1");
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
       const up = await fetch(opts.api + url.pathname.slice(base.length - 1) + url.search, { method: req.method, headers, body, redirect: "manual", signal: req.signal }).catch(() => null);
-      if (!up) return answer(502, "the rigtwin server did not answer");
+      if (!up) return answer(502, "the Synergon server did not answer");
       const out = new Headers(up.headers);
       for (const h of ["content-encoding", "content-length", "connection", "transfer-encoding"]) out.delete(h);
       log.push({ path, status: up.status, probe });
       return new Response(up.body, { status: up.status, headers: out });
     }
-    let file = normalize(join(dir, path.slice(base.length)));
+    let file = normalize(join(dir, rest.startsWith("workspaces/") ? "index.html" : path.slice(base.length)));   // a workspace's address is a page of the viewer
     if (file !== dir && !file.startsWith(dir + sep)) return answer(404, "not found");
     if (existsSync(file) && statSync(file).isDirectory()) {
       if (!path.endsWith("/")) return answer(301, null, { location: path + "/" });
@@ -75,7 +74,7 @@ export function serveFolder(dir: string, base = "/rigtwin/", opts: { api?: strin
 /** Bundles server/server.ts into `<out>/server/server.js` (one file, for Bun). Refuses a bundle that takes code from anywhere but server/ and shared/
  *  (no viewer code, no npm package) or that keeps an import the Bun runtime does not provide itself (bun, bun:*, Node's built-in modules). */
 export function buildServer(out: string, entry = "server/server.ts"): { file: string; bytes: number; modules: number } {
-  const file = join(out, "server", "server.js"), tmp = mkdtempSync(join(tmpdir(), "rigtwin-dist-")), meta = join(tmp, "meta.json");
+  const file = join(out, "server", "server.js"), tmp = mkdtempSync(join(tmpdir(), "synergon-dist-")), meta = join(tmp, "meta.json");
   try {
     const r = spawnSync(process.execPath, ["build", entry, "--target=bun", `--outfile=${file}`, `--metafile=${meta}`], { cwd: ROOT, encoding: "utf8" });
     if (r.status !== 0) throw new Error(`bun build ${entry} failed:\n${(r.stderr || r.stdout).trim()}`);
@@ -99,7 +98,7 @@ export function buildServer(out: string, entry = "server/server.ts"): { file: st
  *  folder; resolves once it prints its {"listening": port} line. */
 async function startBuiltServer(out: string) {
   const free = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response() }), port = free.port; free.stop(true);
-  const data = mkdtempSync(join(tmpdir(), "rigtwin-dist-data-"));
+  const data = mkdtempSync(join(tmpdir(), "synergon-dist-data-"));
   const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", "local", "--port", String(port), "--host", "127.0.0.1", "--data", data, "--asset", join(out, "asset")], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
   let said = "";
   const collect = async (s: ReadableStream<Uint8Array>, onText?: (t: string) => void) => { const d = new TextDecoder(), r = s.getReader(); for (;;) { const { done, value } = await r.read(); if (done) return; const t = d.decode(value, { stream: true }); said += t; onText?.(t); } };
@@ -161,7 +160,7 @@ if (import.meta.main) {
   if (hasServer) {
     try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
     console.log(`server: bundled server/server.ts into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
-  } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /rigtwin/api/)");
+  } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /api/)");
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
   // the person: MP's packages (assets/manikin/, whole) and three's KTX2 transcoder, which the person chunk loads after the page is ready
   const manikin = join(ROOT, "assets", "manikin"), basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
@@ -206,12 +205,12 @@ if (import.meta.main) {
       try { api = await startBuiltServer(out); } catch (e: any) { fail(`server: ${e.message}`); }
     }
     const idleTimeout = api ? (await import("../server/limits.ts")).LIMITS.idleTimeoutS : undefined;
-    const { server, log, origin, base } = serveFolder(out, "/rigtwin/", { api: api?.origin, idleTimeout });
+    const { server, log, origin, base } = serveFolder(out, "/", { api: api?.origin, idleTimeout });
     const errors: string[] = [];
     // the server, through the sub-path as the viewer reaches it: health, the live channel, and its own code not served
     if (api) {
       try {
-        const probe = { headers: { "x-rigtwin-probe": "1" } };
+        const probe = { headers: { "x-synergon-probe": "1" } };
         const h = await fetch(`${origin}${base}api/health`, { signal: AbortSignal.timeout(10000) }), health: any = h.ok ? await h.json() : null;
         if (!health?.ok) errors.push(`server: ${base}api/health answered HTTP ${h.status}${health ? " without ok: true" : ""}`);
         else if (health.format !== sceneFormat) errors.push(`server: health reports format ${health.format}, version.json says ${sceneFormat}`);
@@ -259,7 +258,7 @@ if (import.meta.main) {
       const sample = [...new Set(["", ...has(/summary\.html$/), ...has(/deployment\.html$/), ...(withFigure ? [withFigure] : []), longest, "README.html", ...wiki.pageUrls.slice(1, 3)])].slice(0, 8);
       let images = 0, clicked = "";
       for (const u of sample) {
-        const p = await browser.page(`${origin}${base}wiki${u === "" ? "" : "/" + u}`);   // "" asks for /rigtwin/wiki and must be redirected to /rigtwin/wiki/
+        const p = await browser.page(`${origin}${base}wiki${u === "" ? "" : "/" + u}`);   // "" asks for /wiki and must be redirected to /wiki/
         await p.viewport(1280, 900);
         await p.waitFor("document.readyState === 'complete'", `wiki page ${u || "index"}`);
         const r = await p.evaluate(`(async () => {
@@ -272,7 +271,7 @@ if (import.meta.main) {
         })()`);
         images += r.images;
         const name = `wiki/${u || "(index, asked for without the trailing slash)"}`;
-        if (!r.h1 || !r.title.includes("rigtwin wiki")) errors.push(`${name}: no title`);
+        if (!r.h1 || !/synergon wiki/i.test(r.title)) errors.push(`${name}: no title`);
         if (!r.styled) errors.push(`${name}: stylesheet not applied`);
         if (!r.robots.includes("noindex")) errors.push(`${name}: no noindex`);
         if (r.broken.length) errors.push(`${name}: image(s) not loaded: ${r.broken.join(", ")}`);

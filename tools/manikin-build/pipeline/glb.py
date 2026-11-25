@@ -65,7 +65,7 @@ def _qrot(q, v):
     return v + 2 * np.cross(u, np.cross(u, v) + w * v)
 
 
-def write_glb(path, meshes, skeleton, materials, animations=None, generator="rigtwin avatar-lab pipeline/glb.py", extras=None):
+def write_glb(path, meshes, skeleton, materials, animations=None, generator="synergon avatar-lab pipeline/glb.py", extras=None):
     B = _Buf(); nodes = []; gl_meshes = []; gl_mats = []; mat_ix = {}; images = []; textures = []; tex_of = {}; stats = {"meshes": []}
     scene_nodes = []; skins = []
     # ---- skeleton

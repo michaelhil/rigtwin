@@ -1,9 +1,9 @@
-# rigtwin server: the live channel and the commands of the public sandbox behind
-# https://mightwork.ai/rigtwin/api/ (Caddy maps /rigtwin/api/* to 127.0.0.1:4190 with /rigtwin removed;
-# see deploy/mightwork-apex.caddy). Installed as /etc/systemd/system/rigtwin-server.service by
+# Synergon server: the live channel and the commands of the public workspaces behind
+# https://synergon.mightwork.ai/api/ (Caddy maps /api/* to 127.0.0.1:4191;
+# see deploy/synergon.caddy). Installed as /etc/systemd/system/synergon-server.service by
 # deploy/setup-server.sh (wiki/50-implementation/deployment.md).
 #
-# The program is the bundled server of the live release (/srv/rigtwin/current/server/server.js, one
+# The program is the bundled server of the live release (/srv/synergon/current/server/server.js, one
 # file, built by `bun run dist`). The server watches the link `current` and exits when a deploy switches
 # it to another release; systemd then starts it again from the new release. Until a release with
 # server/ is live the start fails; without a start limit systemd keeps trying every 2 s, so the first
@@ -11,17 +11,17 @@
 # No back-off (RestartSteps): the deploy checks api/health within 20 s of the switch.
 
 [Unit]
-Description=rigtwin server (public sandbox: live channel and commands)
+Description=Synergon server (public workspaces: live channel and commands)
 After=network.target
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=rigtwin
-Group=rigtwin
-ExecStart=/opt/rigtwin/runtime/bun /srv/rigtwin/current/server/server.js --mode deployed --port 4190 --host 127.0.0.1 --data /var/lib/rigtwin
+User=synergon
+Group=synergon
+ExecStart=/opt/synergon/runtime/bun /srv/synergon/current/server/server.js --mode deployed --port 4191 --host 127.0.0.1 --data /var/lib/synergon
 Environment=NODE_ENV=production BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
-WorkingDirectory=/var/lib/rigtwin
+WorkingDirectory=/var/lib/synergon
 Restart=always
 RestartSec=2
 TimeoutStopSec=10
@@ -32,16 +32,16 @@ LogRateLimitBurst=200
 
 # Files: the whole file system read-only, writes only to the data folder. Whatever else the host runs stays out
 # of reach by one rule that names nothing (setup check H10): each of /srv, /opt and /var/lib is replaced by an empty
-# read-only folder that holds only rigtwin's own part: the releases, the runtime, and the data folder (the one
+# read-only folder that holds only synergon's own part: the releases, the runtime, and the data folder (the one
 # writable place: BindPaths= makes a writable bind mount, systemd.exec(5), so no ReadWritePaths= is needed).
-# `setup-server.sh --probe` checks all of it on the host: the three folders list only "rigtwin", and a write succeeds.
+# `setup-server.sh --probe` checks all of it on the host: the three folders list only "synergon", and a write succeeds.
 ProtectSystem=strict
 TemporaryFileSystem=/srv:ro
-BindReadOnlyPaths=/srv/rigtwin
+BindReadOnlyPaths=/srv/synergon
 TemporaryFileSystem=/opt:ro
-BindReadOnlyPaths=/opt/rigtwin
+BindReadOnlyPaths=/opt/synergon
 TemporaryFileSystem=/var/lib:ro
-BindPaths=/var/lib/rigtwin
+BindPaths=/var/lib/synergon
 ProtectHome=yes
 # the host's Caddy settings, web root and backups (security review S5; the "-" lets a missing path pass). Other
 # programs' settings under /etc are not named here: they are guarded by their own file permissions (this service
@@ -71,7 +71,7 @@ SystemCallErrorNumber=EPERM
 # Not set on purpose: MemoryDenyWriteExecute (Bun's JavaScript engine compiles code at run time) and
 # ProcSubset=pid (the engine may read /proc/meminfo or /proc/sys; untested on the host).
 
-# Network: none in step 1 except loopback (Caddy connects to 127.0.0.1:4190).
+# Network: none in step 1 except loopback (Caddy connects to 127.0.0.1:4191).
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 IPAddressDeny=any
 IPAddressAllow=localhost

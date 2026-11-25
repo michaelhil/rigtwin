@@ -40,7 +40,7 @@ The heading line says where the body stands, for example "Median man (P50) · Dr
 3. A slider follows the pointer at once, with one update in flight at a time. The change is recorded once, when the slider is let go, or after a short pause for arrow keys. So one Undo takes back one drag.
 4. **Undo** is `history.undo {group}` of the page's latest change. In the scene a change and its own undo cancel each other, so Undo after Undo works newest first. A refusal then means someone else changed the person since, and the panel says so.
 5. A refusal (stale, out of range, a package that does not load) is said plainly in the panel. The person goes back to the shared state.
-6. Changes from elsewhere (another browser through live.ts, an agent, a link) reach the panel through MV-core's `rigtwin:person` event, so the panel shows them the same way.
+6. Changes from elsewhere (another browser through live.ts, an agent, a link) reach the panel through MV-core's `synergon:person` event, so the panel shows them the same way.
 
 Without a server, or with one that does not know `person.set` (it answers `unknown_command`), the page keeps its own undo list and nothing is shared.
 

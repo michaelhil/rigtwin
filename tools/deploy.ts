@@ -12,12 +12,13 @@
 //   (a) refuse unless: `bun run check` passes; `bun run wiki lint` passes (or --allow-lint); the git working tree has no
 //       uncommitted change (or --allow-dirty; a folder that is not a git repository yet counts as uncommitted)
 //   (b) bun run build; bun run render --set wiki (skipped with --no-images); bun run wiki index; bun run wiki build;
-//       bun run dist (which verifies the result from the sub-path /rigtwin/ in headless Chromium). If these steps changed a
+//       bun run dist (which verifies the result from the root / in headless Chromium). If these steps changed a
 //       committed file (regenerated images, the index), stop unless --allow-dirty: the site would not match the commit.
 //   (c) ssh <host> mkdir -p <remoteRoot>/releases; rsync -az --delete dist/ to <remoteRoot>/releases/<UTC time>-<revision>/
 //   (d) ln -sfn <release> <remoteRoot>/current.tmp && mv -T <remoteRoot>/current.tmp <remoteRoot>/current
-//   (e) over HTTPS: <publicUrl> is 200 and HTML; <publicUrl>version.json equals dist/version.json; the GLB under
-//       <publicUrl>asset/ has the local size and SHA-256; <publicUrl>wiki/ and two wiki pages are 200;
+//   (e) over HTTPS: <publicUrl> is 200 and HTML (https://synergon.mightwork.ai/); <publicUrl>version.json equals
+//       dist/version.json; the GLB under <publicUrl>asset/ has the local size and SHA-256; <publicUrl>wiki/ and two wiki
+//       pages are 200;
 //       <publicUrl>server/server.js does not answer 200 (the server's code is in the release but never served); and for
 //       a release with a server (version.json has a `server` entry) <publicUrl>api/health reports the deployed revision
 //       within 20 s, polled every second (any 404 or other answer after 20 s fails and switches back). Before the
@@ -38,11 +39,12 @@
 //   - `host` is an SSH alias (~/.ssh/config) that logs in without a password prompt and may write under remoteRoot;
 //     the server has rsync and GNU coreutils (mv -T).
 //   - a static file server serves the directory <remoteRoot>/current (following the symlink, resolved per request) at
-//     the URL path of publicUrl (/rigtwin/), answers /rigtwin with a redirect to /rigtwin/, serves index.html for a
-//     folder and redirects a folder without its trailing slash. Recommended: the header X-Robots-Tag: noindex.
-//   - for a release with a server: <publicUrl>server/* answers 404 and <publicUrl>api/* goes to the rigtwin server with
-//     the URL path of publicUrl removed; the service restarts from the new release by itself after the switch.
-//     The site block for Caddy is deploy/mightwork-apex.caddy; the service is set up by deploy/setup-server.sh.
+//     the URL path of publicUrl (the root /; a sub-path works too), serves index.html for a folder and redirects a
+//     folder without its trailing slash (and, under a sub-path, the sub-path without its slash). Recommended: the header
+//     X-Robots-Tag: noindex.
+//   - for a release with a server: <publicUrl>server/* answers 404 and <publicUrl>api/* goes to the Synergon server
+//     (the path is not changed); the service restarts from the new release by itself after the switch.
+//     The site block for Caddy is deploy/synergon.caddy; the host is set up by deploy/setup-server.sh.
 // Server layout:
 //   <remoteRoot>/releases/<YYYYMMDDTHHMMSSZ>-<revision>/   one folder per deployment, never changed after upload
 //   <remoteRoot>/current -> <remoteRoot>/releases/<…>      what the web server shows
@@ -80,7 +82,7 @@ function loadConfig(): Config {
   const c = JSON.parse(readFileSync(file, "utf8"));
   const bad: string[] = [];
   if (typeof c.host !== "string" || !/^[A-Za-z0-9._@-]+$/.test(c.host)) bad.push("host must be an SSH alias or user@host without spaces");
-  if (typeof c.remoteRoot !== "string" || !/^\/[A-Za-z0-9._/-]+[A-Za-z0-9._-]$/.test(c.remoteRoot) || c.remoteRoot.split("/").filter(Boolean).length < 2 || c.remoteRoot.includes("..")) bad.push("remoteRoot must be an absolute folder at least two levels deep, such as /srv/rigtwin");
+  if (typeof c.remoteRoot !== "string" || !/^\/[A-Za-z0-9._/-]+[A-Za-z0-9._-]$/.test(c.remoteRoot) || c.remoteRoot.split("/").filter(Boolean).length < 2 || c.remoteRoot.includes("..")) bad.push("remoteRoot must be an absolute folder at least two levels deep, such as /srv/synergon");
   if (typeof c.publicUrl !== "string" || !/^(https:\/\/[^/]+|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?)\/(.+\/)?$/.test(c.publicUrl)) bad.push("publicUrl must start with https:// (plain http only for a local test server) and end with /");
   if (!Number.isInteger(c.keepReleases) || c.keepReleases < 2) bad.push("keepReleases must be a whole number, at least 2");
   if (bad.length) stop("deploy.config.json: " + bad.join("; "));
@@ -128,7 +130,7 @@ function listReleases(cfg: Config, dry: string[]): string[] {
 // ------------------------------------------------------------------------------------------------ checking the live site
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function get(url: string, opts: { redirect?: RequestRedirect } = {}) {
-  return fetch(url, { redirect: opts.redirect ?? "follow", headers: { "cache-control": "no-cache", "user-agent": "rigtwin-deploy-check" }, signal: AbortSignal.timeout(30000) });
+  return fetch(url, { redirect: opts.redirect ?? "follow", headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" }, signal: AbortSignal.timeout(30000) });
 }
 /** Checks of the live site. `expect` says what version.json must be and how big the model is. */
 export async function verifySite(cfg: Config, expect: { version: any; glb: { path: string; bytes: number; sha256: string }; wikiPages: string[] }): Promise<Check[]> {
@@ -164,16 +166,26 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   await html("wiki start page", u + "wiki/");
   for (const p of expect.wikiPages) await html(`wiki page ${p}`, u + "wiki/" + p);
   // the server's code is in every release with a server, and the web server must never hand it out
-  await attempt("server code not served (server/server.js)", u + "server/server.js", true, async () => {
-    const r = await get(u + "server/server.js" + bust, { redirect: "manual" }); await r.arrayBuffer();
-    return r.status !== 200 ? true : "HTTP 200: the server's code is public; is the 404 rule for server/ in the web server's site block?";
+  await attempt("server code not served (server/server.js, server/, server)", u + "server/server.js", true, async () => {
+    for (const p of ["server/server.js", "server/", "server"]) {
+      const r = await get(u + p + bust, { redirect: "manual" }); await r.arrayBuffer();
+      if (r.status === 200) return `HTTP 200 for ${u + p}: the server's code is public; is the 404 rule for server/ in the web server's site block?`;
+    }
+    return true;
   });
   if (expect.version.server) out.push(await serverHealth(u, expect.version.revision));
   // server behaviour the site relies on; reported, but not a reason to roll back
   const base = u.replace(/\/$/, "");
-  await attempt(`${new URL(base).pathname} redirects to ${new URL(u).pathname}`, base, false, async () => {
-    const r = await get(base, { redirect: "manual" }), to = r.headers.get("location") ?? "";
-    return r.status >= 301 && r.status <= 308 && new URL(to, base).href === u ? true : `HTTP ${r.status}${to ? ` to ${to}` : ""}`;
+  if (new URL(u).pathname !== "/") {   // a site under a sub-path: the sub-path without its slash leads to the one with it
+    await attempt(`${new URL(base).pathname} redirects to ${new URL(u).pathname}`, base, false, async () => {
+      const r = await get(base, { redirect: "manual" }), to = r.headers.get("location") ?? "";
+      return r.status >= 301 && r.status <= 308 && new URL(to, base).href === u ? true : `HTTP ${r.status}${to ? ` to ${to}` : ""}`;
+    });
+  }
+  // a workspace's address is a page of the viewer (the web server hands out index.html for workspaces/*)
+  await attempt("workspaces/<id> gives the viewer page", u + "workspaces/deploy-check", false, async () => {
+    const r = await get(u + "workspaces/deploy-check"), type = r.headers.get("content-type") ?? "", body = await r.text();
+    return r.status === 200 && type.includes("text/html") && /<html/i.test(body) ? true : `HTTP ${r.status}${type ? `, ${type}` : ""}`;
   });
   await attempt("wiki without the trailing slash redirects to wiki/", u + "wiki", false, async () => {
     const r = await get(u + "wiki", { redirect: "manual" }), to = r.headers.get("location") ?? "";
@@ -183,19 +195,19 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   return out;
 }
 /** The order of the first rollout (design step 1): the host's route first, then a release with a server. */
-export const FIRST_ROLLOUT = "the web server has no /rigtwin/api/ route, so it has no 404 rule for /rigtwin/server/ either, and this release would make server/server.js public. Order of the first rollout: (1) on the host, deploy/setup-server.sh --apply (the Caddy route and the 404 rule, then the service); (2) then deploy a release with server/; (3) then the health check passes. Nothing was switched.";
+export const FIRST_ROLLOUT = "the web server has no /api/ route, so it has no 404 rule for /server/ either, and this release would make server/server.js public. Order of the first rollout: (1) on the host, deploy/setup-server.sh --apply (the Caddy route and the 404 rule, then the service); (2) then deploy a release with server/; (3) then the health check passes. Nothing was switched.";
 /** Before the switch (the old release still live): a release with a server needs the API route on the host. A 404 (no route) or no
  *  answer stops the deploy; 200 (an older server) or 502/503 (the route without a running service, as before the first server release) go on. */
 export async function routeProbe(cfg: Pick<Config, "publicUrl">): Promise<{ ok: boolean; status: number | null; detail: string }> {
   const url = cfg.publicUrl + "api/health";
   try {
-    const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "rigtwin-deploy-check" }, signal: AbortSignal.timeout(10000), redirect: "manual" });
+    const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" }, signal: AbortSignal.timeout(10000), redirect: "manual" });
     await r.arrayBuffer();
     if (r.status === 404) return { ok: false, status: 404, detail: `GET ${url} answered 404: ${FIRST_ROLLOUT}` };
     return { ok: true, status: r.status, detail: `GET ${url} answered ${r.status}: the route is there` };
   } catch (e: any) { return { ok: false, status: null, detail: `GET ${url} did not answer (${e?.message ?? e}); without it the 404 rule for server/ cannot be confirmed, so nothing was switched` }; }
 }
-/** The rigtwin server of a release: <publicUrl>api/health must report `revision` within 20 s (polled every second; the server of the release that was
+/** The Synergon server of a release: <publicUrl>api/health must report `revision` within 20 s (polled every second; the server of the release that was
  *  live before keeps answering until it notices the switch and systemd starts the new one). A 404 fails at once (the route has gone); anything else
  *  after 20 s (502, another revision) is a failure. */
 async function serverHealth(u: string, revision: string): Promise<Check> {
@@ -203,7 +215,7 @@ async function serverHealth(u: string, revision: string): Promise<Check> {
   let detail = "no answer";
   for (;;) {
     try {
-      const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "rigtwin-deploy-check" }, signal: AbortSignal.timeout(5000) }), body = await r.text();
+      const r = await fetch(url, { headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" }, signal: AbortSignal.timeout(5000) }), body = await r.text();
       if (r.status === 404) return { what, url, ok: false, detail: "HTTP 404: the web server has no route for the API", required: true };
       if (r.status === 200) {
         const live = (() => { try { return JSON.parse(body); } catch { return null; } })();
@@ -226,10 +238,10 @@ const printChecks = (checks: Check[]) => { for (const c of checks) say(`  ${c.ok
 const failedRequired = (checks: Check[]) => checks.filter((c) => !c.ok && c.required);
 function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json", server: { revision: string } | null | "if it has one" = null) {
   const u = cfg.publicUrl;
-  for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"]]) say(`  would check: GET ${url}  → ${what}`);
+  for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"], ["anything but 200 (also without the file name)", u + "server/"], ["anything but 200 (also without the slash)", u + "server"]]) say(`  would check: GET ${url}  → ${what}`);
   if (server) say(`  would check: GET ${u}api/health  → ${server === "if it has one" ? "for a release with a server: its revision" : `revision ${server.revision}`} within 20 s, asked every second (404 at once, or 502 or another revision after 20 s: a failure)`);
   else say(`  (no api/health check: ${source} has no server entry)`);
-  for (const [what, url] of [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);
+  for (const [what, url] of [...(new URL(u).pathname !== "/" ? [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")]] : []), ["the viewer page, 200 HTML (warning only)", u + "workspaces/deploy-check"], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);
 }
 
 // ------------------------------------------------------------------------------------------------ rollback

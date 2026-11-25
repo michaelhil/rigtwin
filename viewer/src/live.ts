@@ -24,7 +24,7 @@ import { addTrace, lastSeen, meta, onTraceUndo, setTraceOwner, toggleTrace, type
 import type { JointValue } from '../../shared/pose.ts';
 
 type Change = { joint: string; after: JointValue | null };
-/** the person in the seat (rigtwin-scene/2; shared/commands/doc.ts PersonState), null: nobody */
+/** the person in the seat (synergon-scene/1; shared/commands/doc.ts PersonState), null: nobody */
 type Person = { style: string; sex: string; tone: string; glasses: boolean; headset: boolean; body: Record<string, number>; posture: string } | null;
 type Entry = { version: number; actor: { id: string; label: string }; command: string; changes: Change[]; person?: { after: Person }; undoes?: number[] };
 type Note = { box: HTMLElement; text: HTMLElement; buttons: HTMLButtonElement[] };
@@ -83,7 +83,7 @@ function showFollow() {
 }
 async function setFollow(who: { actor: string; by: string } | null) {
   try {
-    const r = await (await fetch('api/follow', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json' }, body: JSON.stringify({ session: code, actor: who?.actor ?? null }) })).json();
+    const r = await (await fetch('api/follow', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json' }, body: JSON.stringify({ session: code, actor: who?.actor ?? null }) })).json();
     if (r?.ok) following = who; else if (who) tell(`Not followed: ${r?.error?.message ?? 'the server did not answer'}.`);
   } catch { /* no server */ }
   showFollow();
@@ -103,7 +103,7 @@ function setPreview(on: boolean) { preview = on; linkNote.box.hidden = !on; }
 async function send(body: object): Promise<any> {
   out++;
   let r: any = null;
-  try { r = await (await fetch('api/command', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json', 'x-rigtwin-client': 'person', 'x-rigtwin-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
+  try { r = await (await fetch('api/command', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { /* r stays null */ }
   if (typeof r?.recorded === 'number') mine.add(r.recorded);
   if (typeof r?.you?.id === 'string' && !myActor) { myActor = r.you.id; setTraceOwner(myActor); }
   if (--out === 0) { for (const e of later.splice(0)) if (!mine.has(e.version)) tell(say(e), e.version); for (const t of laterTraces.splice(0)) tellTrace(t); }
@@ -198,7 +198,7 @@ function applied(e: Entry) {
 // come without asking); Always allow is stored in this browser (any agent's views then come straight here); No stops
 // that agent's questions until the page is reloaded. The setting is also under More, Shared scene.
 type AgentViews = 'ask' | 'always' | 'never';
-const VIEWS_KEY = 'rigtwin.agentViews';
+const VIEWS_KEY = 'synergon.agentViews';
 let agentViews: AgentViews = (() => { try { const v = localStorage.getItem(VIEWS_KEY); return v === 'always' || v === 'never' ? v : 'ask'; } catch { return 'ask'; } })();
 const declined = new Set<string>();
 let consent: Note, consentTimer = 0, asked: { d: ViewEvent; who: { actor: string; by: string } } | null = null, viewsSelect: HTMLSelectElement;
@@ -245,7 +245,7 @@ async function sendPicture(reply: string) {
     drawNow();
     const b = await viewerApi.pictureJpeg(60 * 1024);
     if (!b) return;
-    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'image/jpeg', 'x-rigtwin-ms': String(Math.round(performance.now() - t0)) }, body: b });
+    await fetch(`api/picture?reply=${reply}&session=${code}`, { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'image/jpeg', 'x-synergon-ms': String(Math.round(performance.now() - t0)) }, body: b });
   } catch { /* the agent hears "no picture" when its wait ends */ }
 }
 const conn = createConnection({
@@ -270,7 +270,7 @@ export async function initLive() {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     if (!v?.server) return;
     const h = await fetch('api/health', { cache: 'no-store' });
-    if (!h.ok || !/^rigtwin-scene\/[12]$/.test((await h.json()).format)) return;
+    if (!h.ok || !/^synergon-scene\/1$/.test((await h.json()).format)) return;
   } catch { return; }
   linkNote = note([['Apply', () => { setPreview(false); save(); }], ['Dismiss', () => { setPreview(false); showShared(); }]]);
   linkNote.text.textContent = 'This link shows other adjustments than the shared scene.';

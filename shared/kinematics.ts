@@ -1,4 +1,4 @@
-// Read the node tree of a rigtwin GLB and pose it with joint values, giving the world frame (model frame:
+// Read the node tree of a synergon GLB and pose it with joint values, giving the world frame (model frame:
 // metres, Z up) of every node. Posing goes through shared/pose.ts, the single definition. Used in Bun by the
 // command measure.distance (shared/commands/core.ts) on the server; the viewer gets the same frames from its
 // own three.js scene.
@@ -7,7 +7,7 @@ import type { Quat, Vec3 } from "./math.ts";
 
 export interface KNode { name: string; parent: number; t: Vec3; q: Quat; joint?: JointKinematics & { locked: boolean } }
 
-/** Node tree of a rigtwin GLB, parents before children. The root's own rotation (the glTF Y-up conversion) is
+/** Node tree of a synergon GLB, parents before children. The root's own rotation (the glTF Y-up conversion) is
  *  dropped so that every frame is in the model frame, as the manifest's are. Translations and rotations are
  *  the stored JSON numbers (rounded to 1e-6 and 1e-7); quaternions are normalised on reading. */
 export function nodesFromGlb(bytes: Uint8Array): KNode[] {

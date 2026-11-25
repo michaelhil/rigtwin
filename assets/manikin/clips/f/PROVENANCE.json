@@ -31,211 +31,211 @@
  "files": {
   "clips/f/F05/demo30.glb": {
    "from": "packages/body-clay-f/clips/F05/demo30.glb",
-   "bytes": 114812,
-   "sha256": "48db9b76705cd5537630b98350b591369f65a8eff79554bb36301cc5f8807298",
+   "bytes": 114816,
+   "sha256": "98034605d4134b7477843156d609a4df43ce321ca465e6f9f9a38e86a7f4032f",
    "source_bytes": 892956,
-   "rotation_error": 0.000031,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.1e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F05/idle-stand.glb": {
    "from": "packages/body-clay-f/clips/F05/idle-stand.glb",
    "bytes": 59568,
-   "sha256": "cc278a24257da49c383464ad380f05076e10f6609e49a41b812a488bb5231a3b",
+   "sha256": "f83f8d85b981855a09f0bee5fe9e90d37c46f4d2847a93803cf128d6d0aeb34d",
    "source_bytes": 259280,
-   "rotation_error": 0.0000259,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.59e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F05/move-stand.glb": {
    "from": "packages/body-clay-f/clips/F05/move-stand.glb",
-   "bytes": 58796,
-   "sha256": "4aab3b7c4ca2584019bcf11ed74a6619aa49cc0fae104c8681e1d7075567c4e0",
+   "bytes": 58800,
+   "sha256": "6660b624ed1a90e56ea8a4b583cd260ca41805770627885e6ca865567e132f89",
    "source_bytes": 171068,
-   "rotation_error": 0.0000258,
-   "translation_error_m": 0.00000754
+   "rotation_error": 2.58e-05,
+   "translation_error_m": 7.54e-06
   },
   "clips/f/F05/operate8.glb": {
    "from": "packages/body-clay-f/clips/F05/operate8.glb",
    "bytes": 47416,
-   "sha256": "8d3e2484d694822db9dd97a38d69cbbc4d4fbe2b6b415b69e7e4e2236b86836e",
+   "sha256": "204072f2b5d70b560f4a4b096fa855a144e45b1a5b63d8d31455e445e10cf945",
    "source_bytes": 259276,
-   "rotation_error": 0.0000284,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 2.84e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F05/rom-a.glb": {
    "from": "packages/body-clay-f/clips/F05/rom-a.glb",
    "bytes": 147976,
-   "sha256": "35ed6ceb27b296fcd57c3442917944b15af87226525549e02f2522f3b5e7dff8",
+   "sha256": "60693119acee7d876f7d70675bf8df2fed088bc7b0969afe449ad3e7df76f011",
    "source_bytes": 544116,
-   "rotation_error": 0.000027,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.7e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F05/rom-b.glb": {
    "from": "packages/body-clay-f/clips/F05/rom-b.glb",
    "bytes": 123780,
-   "sha256": "9133c68da2dd36df824eafc9c33d7fc193944c1a50e544fbc5592de4d756f2f5",
+   "sha256": "1831fc2118e813d0bca9ad0dadd0eaf2056bc1295315543b9576e6c4e3bde2f3",
    "source_bytes": 450032,
-   "rotation_error": 0.0000278,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.78e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F05/seated-base.glb": {
    "from": "packages/body-clay-f/clips/F05/seated-base.glb",
    "bytes": 408424,
-   "sha256": "6303111dbcceb01d76ade72a7efc7d43dd899e69f8cad0bd476abc13ba1d45af",
+   "sha256": "7edcbc2e5e439cc0e198a0761ba00b755144e801e9df85c2c3eaf3135c5b58a6",
    "source_bytes": 1729872,
-   "rotation_error": 0.0000284,
-   "translation_error_m": 0.00000191
+   "rotation_error": 2.84e-05,
+   "translation_error_m": 1.91e-06
   },
   "clips/f/F05/sit-down-get-up.glb": {
    "from": "packages/body-clay-f/clips/F05/sit-down-get-up.glb",
    "bytes": 67056,
-   "sha256": "955f6a68697fccd2176ff8479dddd4a5bfa9f6a1833d56715c8de74d3fe0b52a",
+   "sha256": "1b83a82d4a1035965a191270c459089290c938412057a0d4a6cb90ba9cc0bc5e",
    "source_bytes": 208096,
-   "rotation_error": 0.000026,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.6e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F05/walk-loop.glb": {
    "from": "packages/body-clay-f/clips/F05/walk-loop.glb",
    "bytes": 33340,
-   "sha256": "ae544a13bc34e317d1c666a71249dfafa45ac3eb403bb2045028d43e75d454df",
+   "sha256": "593c0f5dbf8dee7de084e8f66e5c985d2b157c0f7f011debe099a51cbe509a93",
    "source_bytes": 60712,
-   "rotation_error": 0.0000258,
-   "translation_error_m": 0.00000191
+   "rotation_error": 2.58e-05,
+   "translation_error_m": 1.91e-06
   },
   "clips/f/F05/walk.glb": {
    "from": "packages/body-clay-f/clips/F05/walk.glb",
    "bytes": 43664,
-   "sha256": "31533b8558073372cf5781cf91d25e3c726203f659fd8570bd8f51a1d08aebf8",
+   "sha256": "beed6e2d84437b1c02d985ea1699174a176f81c046999ff945f587ae7f05ec7b",
    "source_bytes": 103352,
-   "rotation_error": 0.000026,
-   "translation_error_m": 0.00000381
+   "rotation_error": 2.6e-05,
+   "translation_error_m": 3.81e-06
   },
   "clips/f/F05_LONGARM/demo30.glb": {
    "from": "packages/body-clay-f/clips/F05_LONGARM/demo30.glb",
    "bytes": 95956,
-   "sha256": "08499fefbb5ecb46bcb873bf89354b25b7f92b02090d02f05f46a5cbd643c4d6",
+   "sha256": "57767c81e28e483b18344fffda245a461b0e5c0201e58b011ea67e3b0a8c5f28",
    "source_bytes": 892972,
-   "rotation_error": 0.0000314,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.14e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F05_LONGARM/idle-stand.glb": {
    "from": "packages/body-clay-f/clips/F05_LONGARM/idle-stand.glb",
    "bytes": 59456,
-   "sha256": "79c73efea78105afde0110f605ca2724501ca0c55abe9cb62971bedf404e3ff9",
+   "sha256": "3ebabd10cdd9c00fa9f35fc39b2bafaafc27c3210a7d47b6553361cb1b3695ee",
    "source_bytes": 259300,
-   "rotation_error": 0.0000259,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.59e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F05_LONGARM/move-stand.glb": {
    "from": "packages/body-clay-f/clips/F05_LONGARM/move-stand.glb",
    "bytes": 58824,
-   "sha256": "498883da1af80401a851b037723662858c561ede7d1173bfcf7f93dad1f0bb81",
+   "sha256": "44346505d5ec8fc7afe001e53f9d806f8aeb64af9ee7820c38290914211a07e0",
    "source_bytes": 171084,
-   "rotation_error": 0.0000258,
-   "translation_error_m": 0.00000763
+   "rotation_error": 2.58e-05,
+   "translation_error_m": 7.63e-06
   },
   "clips/f/F05_LONGARM/operate8.glb": {
    "from": "packages/body-clay-f/clips/F05_LONGARM/operate8.glb",
-   "bytes": 43496,
-   "sha256": "b800700f1ea4579559e58b0e34c0c8cd3bdefa715f23c87fb3ed875e5a88ce4d",
+   "bytes": 43500,
+   "sha256": "5c4968562dc3d739f7cbae2e5ccc5ab59b3179c88ba6ad0d32cb8a7dc65fce17",
    "source_bytes": 259292,
-   "rotation_error": 0.0000273,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 2.73e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_HEAVY/demo30.glb": {
    "from": "packages/body-clay-f/clips/F50_HEAVY/demo30.glb",
    "bytes": 95840,
-   "sha256": "8f46ecf05ffbe39edb181b1735da29de6193ca5cc3d98ab3683ba894a651e1b9",
+   "sha256": "88cb4d1fcfd6884620eadb2cd3b76e18784c65ef42f9246ac6a70187b904d7b3",
    "source_bytes": 892936,
-   "rotation_error": 0.0000306,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.06e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_HEAVY/idle-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_HEAVY/idle-stand.glb",
    "bytes": 59940,
-   "sha256": "acaa4b6397e9d9fc5b209e3d22d19fab3ed412e44da9731b5cb12d44a7aa4222",
+   "sha256": "5b529fcaff33c229678e11b4dc106e87f20a2b94fb70b2b50badf2dc652457cc",
    "source_bytes": 259268,
-   "rotation_error": 0.000026,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.6e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F50_HEAVY/move-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_HEAVY/move-stand.glb",
    "bytes": 58816,
-   "sha256": "2c480f49f96db58ebf485b3ef94bf3ef28ea76cff8f5d7b20317e94a9da80ae7",
+   "sha256": "84567c0570ece715bb8a60194524e9d410a33f45e8a34b4d84f14e3714628344",
    "source_bytes": 171048,
-   "rotation_error": 0.0000259,
-   "translation_error_m": 0.00000763
+   "rotation_error": 2.59e-05,
+   "translation_error_m": 7.63e-06
   },
   "clips/f/F50_HEAVY/operate8.glb": {
    "from": "packages/body-clay-f/clips/F50_HEAVY/operate8.glb",
    "bytes": 43464,
-   "sha256": "f58e0e02bfc83c63774be7db959b7d18b5946b0523404a79916cf289d44dd312",
+   "sha256": "6baa24fd4b0015ffceb1cbe5b31779b9c47a3a3fd38c06fc772155eddc994704",
    "source_bytes": 259252,
-   "rotation_error": 0.0000296,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 2.96e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_MID/demo30.glb": {
    "from": "packages/body-clay-f/clips/F50_MID/demo30.glb",
-   "bytes": 95788,
-   "sha256": "b6d50083ee504cab24be114f9a1956ea88875d096de41df24d0cc3b3cf3d77f1",
+   "bytes": 95792,
+   "sha256": "ec542aa5cfcffe218bf3ece1552c80f6b5c9aef688f507b3f40486d1eaa7bf3b",
    "source_bytes": 892948,
-   "rotation_error": 0.0000326,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.26e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_MID/idle-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_MID/idle-stand.glb",
    "bytes": 59420,
-   "sha256": "e1cbe5960a2bc02172d1bbd24f15e8707f6097816ee53a3b479932615aed474d",
+   "sha256": "07e8b6db34825e8ddf13d72119585aa0c9563d924f8f88a73860e7d2ab094c01",
    "source_bytes": 259284,
-   "rotation_error": 0.000026,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.6e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F50_MID/move-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_MID/move-stand.glb",
-   "bytes": 58748,
-   "sha256": "9c35e9aaa4bcc86a010bdb7d98f7e1da746c01a350d8406912730ecf14f49f28",
+   "bytes": 58752,
+   "sha256": "1c2049984fb1e13e832a66452391c0d2b8d49830a0a5db79969bdd3c76845cfe",
    "source_bytes": 171060,
-   "rotation_error": 0.0000258,
-   "translation_error_m": 0.00000763
+   "rotation_error": 2.58e-05,
+   "translation_error_m": 7.63e-06
   },
   "clips/f/F50_MID/operate8.glb": {
    "from": "packages/body-clay-f/clips/F50_MID/operate8.glb",
    "bytes": 43428,
-   "sha256": "0598053b57ec1056237c885f688a9c3c5e70ac6bfac74a6cde507f3167ac1cc9",
+   "sha256": "94e9c1b5c771094003b7aa2b01c04fb5a18e7f1e2cb08838c9fa072dc7b4d565",
    "source_bytes": 259268,
-   "rotation_error": 0.0000326,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.26e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_THIN/demo30.glb": {
    "from": "packages/body-clay-f/clips/F50_THIN/demo30.glb",
-   "bytes": 97180,
-   "sha256": "ae56c231a2aa1f192e9fccfaee5c7f9d96d4ca89c94248e903c91906c9f58a08",
+   "bytes": 97184,
+   "sha256": "0e42b08c60d59e857adc1e327c0cbcda8482d2bdf2af4fc7864f758273f8baf7",
    "source_bytes": 892948,
-   "rotation_error": 0.0000333,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 3.33e-05,
+   "translation_error_m": 9.52e-07
   },
   "clips/f/F50_THIN/idle-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_THIN/idle-stand.glb",
    "bytes": 59184,
-   "sha256": "688aaa99c5ff25ea8827a7113e1e3d6c653a39fcbc7b5d243ab6e345684412db",
+   "sha256": "e56e4a1ace239f862639611e280050bcb56fedebc34066bb4e2d08aa48250d86",
    "source_bytes": 259276,
-   "rotation_error": 0.000026,
-   "translation_error_m": 9.54e-7
+   "rotation_error": 2.6e-05,
+   "translation_error_m": 9.54e-07
   },
   "clips/f/F50_THIN/move-stand.glb": {
    "from": "packages/body-clay-f/clips/F50_THIN/move-stand.glb",
-   "bytes": 58748,
-   "sha256": "4182157f5d71a2476b81e0ff5f1a93c5459bd0ffbb4073c45e6d35cf2ef2d60b",
+   "bytes": 58752,
+   "sha256": "8b724e7e9007e8eff662533609aac87069b75d83d7ddfc8dfabaef59a28ed821",
    "source_bytes": 171060,
-   "rotation_error": 0.0000258,
-   "translation_error_m": 0.00000763
+   "rotation_error": 2.58e-05,
+   "translation_error_m": 7.63e-06
   },
   "clips/f/F50_THIN/operate8.glb": {
    "from": "packages/body-clay-f/clips/F50_THIN/operate8.glb",
    "bytes": 43408,
-   "sha256": "a440e0314d1fa9ec862c50d0ac7fc88f23ee295ee538b48650c50614ebb8a972",
+   "sha256": "a1ec3eb8fffa31d27881253e20ee1d4bed4c2b5d6522216d0edc12e599c4502c",
    "source_bytes": 259268,
-   "rotation_error": 0.0000293,
-   "translation_error_m": 9.52e-7
+   "rotation_error": 2.93e-05,
+   "translation_error_m": 9.52e-07
   }
  },
  "bytes": 2136528

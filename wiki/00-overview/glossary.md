@@ -1,6 +1,6 @@
 ---
 title: Glossary
-tldr: Plain-language meanings of every technical term this wiki uses - from asset contract, blockout and camera solve to tier, triangulate and workspace - in one alphabetical table, each with the page where it matters most.
+tldr: Plain-language meanings of every technical term this wiki uses - from asset contract, blockout and camera solve to tier, triangulate and build folder - in one alphabetical table, each with the page where it matters most.
 status: living
 updated: 2026-11-23
 tags: [overview, glossary, reference]
@@ -137,4 +137,4 @@ tags: [overview, glossary, reference]
 | Two-view | A basis: a point triangulated from two photos whose sight lines meet within a few pixels; the most reliable photo measurement | [filling gaps](../40-method/filling-gaps.md) |
 | Vendor | A class: a value from a maker's published data (monitor size, pedal pitch) | [filling gaps](../40-method/filling-gaps.md) |
 | Viewer | The web page that shows the model to people and makes every render for the agents | [viewer](../50-implementation/viewer.md) |
-| Workspace | A separate output folder per agent (`work/<name>/`) so parallel builds and renders do not overwrite each other; set with `--workspace` or `RIGTWIN_WORKSPACE` | [tool reference](../80-reference/tools.md#workspaces-and-environment-variables) |
+| Build folder | A separate output folder per agent (`work/<name>/`) so parallel builds and renders do not overwrite each other; set with `--build` or `SYNERGON_BUILD_DIR` | [tool reference](../80-reference/tools.md#build-folders-and-environment-variables) |

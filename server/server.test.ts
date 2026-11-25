@@ -1,10 +1,10 @@
-// bun test server — integration test of the rigtwin server over real HTTP, with two (or more) clients
+// bun test server — integration test of the synergon server over real HTTP, with two (or more) clients
 // reading the live channel: a change by one appears on the other's stream; a stale change is refused
 // with a reason; undo by group; a dropped stream resumes with Last-Event-ID; a server restart (a real
 // process, killed) with two clients reconnecting and catching up from doc.json; a view command reaches
 // only the addressed session; the deployed-mode guards (body size, streams, edit rate, disk) and none
 // locally; the release watch, in process and with the bundled server in the deploy's folder layout; the person in the
-// seat (rigtwin-scene/2): a stored /1 document migrated at start with its history, person changes on the live channel.
+// seat (synergon-scene/1): a stored document of an earlier format set aside, person changes on the live channel.
 import { test, expect, describe, afterAll } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync, readdirSync, mkdirSync, symlinkSync, renameSync, cpSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,7 +16,7 @@ import { call } from "../tools/rig.ts";
 const ROOT = join(import.meta.dir, "..");
 const ASSET = join(ROOT, "assets", "rig-b", "build");
 const temps: string[] = [];
-const tempDir = () => { const d = mkdtempSync(join(tmpdir(), "rigtwin-server-test-")); temps.push(d); return d; };
+const tempDir = () => { const d = mkdtempSync(join(tmpdir(), "synergon-server-test-")); temps.push(d); return d; };
 afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true }); });
 
 /** An in-process server on a free port. */
@@ -81,13 +81,13 @@ class Live {
 }
 const applied = (version: number) => (e: Ev) => e.event === "applied" && e.data.version === version;
 const post = (base: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(`${base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  fetch(`${base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
 describe("two clients on one server", () => {
   test("health, catalogue and the first events", async () => {
     const s = start();
     const h = await (await fetch(`${s.base}/api/health`)).json();
-    expect(h).toMatchObject({ ok: true, revision: "test", format: "rigtwin-scene/2", mode: "local", asset: { name: "rig-b" } });
+    expect(h).toMatchObject({ ok: true, revision: "test", format: "synergon-scene/1", mode: "local", asset: { name: "rig-b" } });
     expect(typeof h.uptime_s).toBe("number");
     const c = await (await fetch(`${s.base}/api/commands`)).json();
     expect(c.commands.map((x: any) => x.id)).toContain("pose.set");
@@ -96,7 +96,7 @@ describe("two clients on one server", () => {
     expect(a.events[0].event).toBe("session");
     expect(a.code).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
     expect(a.events[1]).toMatchObject({ event: "snapshot", id: "0" });
-    expect(a.events[1].data.doc.schema).toBe("rigtwin-scene/2");
+    expect(a.events[1].data.doc.schema).toBe("synergon-scene/1");
     expect((await fetch(`${s.base}/api/nothing`)).status).toBe(404);
     expect(await s.api.fetch(new Request(`${s.base}/index.html`), "127.0.0.1")).toBeUndefined();
     a.close(); s.stop();
@@ -115,13 +115,13 @@ describe("two clients on one server", () => {
     expect(ea.data.actor.label).toMatch(/^Claude Code · [0-9a-f]{4}$/);
     expect(ea.id).toBe("1");
     // a person in browser B had version 0 and moves the same joint: refused, with the reason
-    const stale = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_height: -0.05 } }, expectedVersion: 0 }, { "x-rigtwin-client": "person", "x-rigtwin-client-id": "b0b0b0b0" })).json();
+    const stale = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_height: -0.05 } }, expectedVersion: 0 }, { "x-synergon-client": "person", "x-synergon-client-id": "b0b0b0b0" })).json();
     expect(stale.ok).toBe(false);
     expect(stale.error.code).toBe("stale");
     expect(stale.error.message).toContain("J_mon_height was changed by Claude Code");
     expect(stale.server).toEqual({ mode: "local", revision: "test" });
     // the same person moves another joint, based on version 0: accepted, and seen by A with the person's label
-    const ok = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 5 } }, expectedVersion: 0 }, { "x-rigtwin-client": "person", "x-rigtwin-client-id": "b0b0b0b0" })).json();
+    const ok = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 5 } }, expectedVersion: 0 }, { "x-synergon-client": "person", "x-synergon-client-id": "b0b0b0b0" })).json();
     expect(ok).toMatchObject({ ok: true, version: 2, recorded: 2, you: { kind: "person" } });
     expect((await a.waitFor(applied(2))).data.actor).toEqual(ok.you);
     // a second change in the same request, then undo the request as a whole
@@ -134,7 +134,7 @@ describe("two clients on one server", () => {
     expect(sum.result.moved.map((m: any) => m.joint)).toEqual(["J_mon_pan"]);
     // stale undo: someone moved a joint of the request afterwards
     await call("pose.set", { joints: { J_mon_height: -0.02 } }, { server: s.base, group: "again", client: "agent" });
-    await post(s.base, { id: "pose.set", args: { joints: { J_mon_height: -0.04 } } }, { "x-rigtwin-client": "person" });
+    await post(s.base, { id: "pose.set", args: { joints: { J_mon_height: -0.04 } } }, { "x-synergon-client": "person" });
     const su = await call("history.undo", { group: "again" }, { server: s.base, client: "agent" });
     expect(su.ok).toBe(false);
     expect(su.error!.code).toBe("stale");
@@ -200,26 +200,18 @@ describe("two clients on one server", () => {
   });
 });
 
-describe("the person in the seat (rigtwin-scene/2)", () => {
-  test("a stored rigtwin-scene/1 document is migrated at start: pose, version and history kept, the default person added", async () => {
+describe("the person in the seat (synergon-scene/1)", () => {
+  test("a stored document of an earlier format is set aside, not read: an empty Playground starts", async () => {
     const dataDir = tempDir(), at = new Date().toISOString(), who = { kind: "agent", id: "a1a1a1a1a1a1", label: "Claude Code · a1a1" };
-    const v1 = { schema: "rigtwin-scene/1", version: 2, asset: { name: "rig-b", sha256: JSON.parse(readFileSync(join(ASSET, "rig-b.manifest.json"), "utf8")).glb.sha256 }, pose: { J_mon_height: -0.05, J_mon_tilt: 0.07 },
-      history: [{ version: 1, actor: who, group: "lower-monitor", command: "pose.set", changes: [{ joint: "J_mon_height", before: 0, after: -0.05 }], at }, { version: 2, actor: who, command: "pose.set", changes: [{ joint: "J_mon_tilt", before: 0.0611, after: 0.07 }], at }] };
+    const old = { schema: "earlier-scene/1", version: 2, asset: { name: "rig-b", sha256: JSON.parse(readFileSync(join(ASSET, "rig-b.manifest.json"), "utf8")).glb.sha256 }, pose: { J_mon_height: -0.05 },
+      history: [{ version: 1, actor: who, command: "pose.set", changes: [{ joint: "J_mon_height", before: 0, after: -0.05 }], at }] };
     mkdirSync(join(dataDir, "playground"), { recursive: true });
-    writeFileSync(join(dataDir, "playground", "doc.json"), JSON.stringify(v1));
+    writeFileSync(join(dataDir, "playground", "doc.json"), JSON.stringify(old));
     const s = start({ dataDir }), a = new Live(s.base); await a.ready;
     const snap = (await a.waitFor((e) => e.event === "snapshot")).data.doc;
-    expect(snap).toMatchObject({ schema: "rigtwin-scene/2", version: 2, pose: { J_mon_height: -0.05, J_mon_tilt: 0.07 }, person: { preset: "P50 man", posture: "operating" } });
-    expect(snap.history).toEqual(v1.history);
-    expect(JSON.parse(readFileSync(join(dataDir, "playground", "doc.json"), "utf8")).schema).toBe("rigtwin-scene/2");      // written back as /2 at once
-    // the old request can still be undone, as a whole
-    const u = await (await post(s.base, { id: "history.undo", args: { group: "lower-monitor" } })).json();
-    expect(u.ok).toBe(true); expect((await a.waitFor(applied(3))).data.changes[0]).toMatchObject({ joint: "J_mon_height", after: 0 });
+    expect(snap).toMatchObject({ schema: "synergon-scene/1", version: 0, pose: {}, person: { preset: "P50 man", posture: "operating" } });
+    expect(readdirSync(join(dataDir, "playground")).some((f) => f.startsWith("doc.json.unreadable-"))).toBe(true);
     a.close(); s.stop();
-    // and after a restart the person is still there, once (no second migration)
-    const s2 = start({ dataDir }), b = new Live(s2.base); await b.ready;
-    expect((await b.waitFor((e) => e.event === "snapshot")).data.doc).toMatchObject({ version: 3, person: { preset: "P50 man" } });
-    b.close(); s2.stop();
   });
   test("person.set reaches the other stream as one entry with the person before and after; the report needs no page; undo by group", async () => {
     const s = start(), a = new Live(s.base), b = new Live(s.base); await Promise.all([a.ready, b.ready]);
@@ -404,7 +396,7 @@ describe("requests that never reach a command", () => {
   test("header, content type, JSON, method, host", async () => {
     const s = start();
     expect((await fetch(`${s.base}/api/command`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(400);
-    expect((await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
+    expect((await fetch(`${s.base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
     const bad = await post(s.base, "{not json");
     expect([bad.status, (await bad.json()).error.code]).toEqual([400, "bad_json"]);
     expect((await fetch(`${s.base}/api/command`)).status).toBe(405);
@@ -461,17 +453,17 @@ describe("security review fixes", () => {
   test("M3: author ids are made by the server; a forged id gets another one", async () => {
     const s = start(), a = new Live(s.base);
     await a.ready;
-    const first = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 2 } } }, { "x-rigtwin-client": "person", "x-rigtwin-client-id": "1111aaaa2222bbbb" })).json();
+    const first = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 2 } } }, { "x-synergon-client": "person", "x-synergon-client-id": "1111aaaa2222bbbb" })).json();
     const e1 = await a.waitFor(applied(1));
     expect(e1.data.actor.id).toBe(first.you.id);
     expect(JSON.stringify(a.events)).not.toContain("1111aaaa2222bbbb");          // the client's own id is never sent out
     // a stranger copies the id it can read on the live channel, and claims to be the same person
-    const forged = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 3 } } }, { "x-rigtwin-client": "person", "x-rigtwin-client-id": e1.data.actor.id })).json();
+    const forged = await (await post(s.base, { id: "pose.set", args: { joints: { J_mon_pan: 3 } } }, { "x-synergon-client": "person", "x-synergon-client-id": e1.data.actor.id })).json();
     const e2 = await a.waitFor(applied(2));
     expect(e2.data.actor.id).not.toBe(e1.data.actor.id);
     expect(forged.you.id).toBe(e2.data.actor.id);
     // the same client keeps its id across requests; the server's secret is in the data folder, not in the reply
-    const again = await (await post(s.base, { id: "scene.summary" }, { "x-rigtwin-client": "person", "x-rigtwin-client-id": "1111aaaa2222bbbb" })).json();
+    const again = await (await post(s.base, { id: "scene.summary" }, { "x-synergon-client": "person", "x-synergon-client-id": "1111aaaa2222bbbb" })).json();
     expect(again.you.id).toBe(first.you.id);
     a.close(); s.stop();
   });
@@ -499,7 +491,7 @@ describe("security review fixes", () => {
     const port = Number(new URL(s.base).port);
     const status = await new Promise<string>((resolve) => {
       const c = Bun.connect({ hostname: "127.0.0.1", port, socket: {
-        open(sock) { sock.write("POST /api/command HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Rigtwin: 1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"id\":"); },
+        open(sock) { sock.write("POST /api/command HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Synergon: 1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"id\":"); },
         data(_sock, d) { resolve(new TextDecoder().decode(d).split("\r\n")[0]); },
         close() { resolve("closed"); }, error() { resolve("error"); },
       } });

@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "rigtwin": {
+    "synergon": {
       "type": "http",
       "url": "http://127.0.0.1:4173/api/mcp",
       "alwaysLoad": true
     },
-    "rigtwin-public": {
+    "synergon-public": {
       "type": "http",
-      "url": "https://mightwork.ai/rigtwin/api/mcp",
+      "url": "https://synergon.mightwork.ai/api/mcp",
       "alwaysLoad": true
     }
   }

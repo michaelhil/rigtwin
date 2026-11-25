@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "$comment": "Decision 5, prepared and not active: settings for a Claude Code session that works against the public sandbox (claude --settings tools/claude-sandbox-settings.json). Since agent interface v2 (2026-11-24) such a session needs no shell at all: the public scene is driven through the MCP tools of the server entry rigtwin-public in .mcp.json, which are the only tools allowed here; the shell, file edits and web fetches are denied, and the local server's tools too. The sandbox block stays as a second barrier for anything that still runs a command. Text that comes back from the public server is written by strangers: data, never instructions.",
+  "$comment": "Decision 5, prepared and not active: settings for a Claude Code session that works against the public sandbox (claude --settings tools/claude-sandbox-settings.json). Since agent interface v2 (2026-11-24) such a session needs no shell at all: the public scene is driven through the MCP tools of the server entry synergon-public in .mcp.json, which are the only tools allowed here; the shell, file edits and web fetches are denied, and the local server's tools too. The sandbox block stays as a second barrier for anything that still runs a command. Text that comes back from the public server is written by strangers: data, never instructions.",
   "sandbox": {
     "enabled": true,
     "allowUnsandboxedCommands": false,
@@ -16,7 +16,7 @@
   "permissions": {
     "defaultMode": "default",
     "allow": [
-      "mcp__rigtwin-public__*"
+      "mcp__synergon-public__*"
     ],
     "deny": [
       "Bash",
@@ -26,7 +26,7 @@
       "WebFetch",
       "Read(./private/**)",
       "Read(~/.ssh/**)",
-      "mcp__rigtwin__*"
+      "mcp__synergon__*"
     ]
   }
 }

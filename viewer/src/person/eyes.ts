@@ -1,7 +1,7 @@
 // Eye movement (ported from the lab's eyes.ts, owner B5): saccades, eye-head hand-over, vergence, fixational movement,
 // blinks, lids following the gaze, the corneal bulge travelling under the lids, and the lid-shadow planes of the eye
 // shader. Numbers: runtime-person.toml [eyes]. Runs in `late` (after the operator layer and the drivers, so the head pose
-// it reads is this frame's). Changes from the lab: no global (`globalThis.rigtwinEyes`): the person module hands the
+// it reads is this frame's). Changes from the lab: no global (`globalThis.synergonEyes`): the person module hands the
 // operator layer's gaze point in through `state.target`; no lil-gui panel.
 // A package without an "eyes" block (the clay style's sculpted eyes) is left alone.
 import { section } from "./params.ts";

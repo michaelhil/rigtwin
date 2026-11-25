@@ -1,8 +1,8 @@
 ---
 title: Goal assessment
-tldr: Of 69 requirements, 55 are met, 11 partly, none not met and 3 not yet done (GitHub and the production wiki). The run shows a credible, modular, parametric, articulated model built from casual photos by AI agents, with honest provenance; it does not show that the sizes are right or that the Skill transfers to another object.
+tldr: Of the first 69 requirements, 55 are met, 11 partly, none not met and 3 not yet done (GitHub and the production wiki). The run shows a credible, modular, parametric, articulated model built from casual photos by AI agents, with honest provenance; it does not show that the sizes are right or that the Skill transfers to another object.
 status: living
-updated: 2026-11-23
+updated: 2026-11-25
 tags: [results, assessment, requirements]
 ---
 
@@ -11,6 +11,7 @@ tags: [results, assessment, requirements]
 ## TL;DR
 
 - **Requirements R-01 to R-69: 55 met, 11 partly, 0 not met, 3 not yet.** The three "not yet" are the GitHub project and its private push, and the wiki on the production server; they come after this page. The deployment pipeline exists but has not yet published.
+- **R-70 and R-71 (2026-11-25), the new name and workspaces:** 1 partly, 1 not yet; see [their rows](#n-the-new-name-and-workspaces).
 - **Achieved, on the evidence:** a model of Rig B that two independent reviewer agents judged credible ("no longer a toy in any view"), modular (46 parts, any of them hideable), parametric (305 numbers with source and range, re-measurable without code changes), articulated (20 joints, collision-free at their limits), built from eleven casual photos by AI agents, viewable in a browser, by a method that is written down.
 - **Not achieved, or not shown:** that the sizes are right (nothing taped; the owner's three figures conflict with the photos); that the Skill works for another object; what the planned human controls (gates, hold-out clicks, a locked acceptance specification, a tested reviewer) would have found.
 - The partly met requirements cluster around **later use** (assessment, simulator, reach against seat position) and **reuse** (the Skill), not around the model itself.
@@ -109,8 +110,8 @@ decision (`D-`). How each piece is known is said where it matters: *tested* (run
 | ID | Verdict | Evidence |
 |---|---|---|
 | [R-38](../10-request/requirements.md#r-38) | not yet | The project is set up for GitHub (private by decision [D-33](../20-decisions/decision-log.md#d-33)); the push is the coordinator's last step. See [pending items](#pending-items) |
-| [R-39](../10-request/requirements.md#r-39) | met | Names suggested twice; the owner chose `rigtwin` ([D-23](../20-decisions/decision-log.md#d-23)) |
-| [R-40](../10-request/requirements.md#r-40) | met | `~/Documents/rigtwin`, not cloud-synced ([D-23](../20-decisions/decision-log.md#d-23)) |
+| [R-39](../10-request/requirements.md#r-39) | met | Names suggested twice; the owner chose a first name ([D-23](../20-decisions/decision-log.md#d-23)), replaced by Synergon on 2026-11-25 ([D-56](../20-decisions/decision-log.md#d-56)) |
+| [R-40](../10-request/requirements.md#r-40) | met | `~/Documents/synergon`, not cloud-synced ([D-23](../20-decisions/decision-log.md#d-23)) |
 
 ### I. The planning process itself
 
@@ -155,16 +156,23 @@ decision (`D-`). How each piece is known is said where it matters: *tested* (run
 | [R-62](../10-request/requirements.md#r-62) | not yet | Private repository decided ([D-33](../20-decisions/decision-log.md#d-33)); push pending. See [pending items](#pending-items) |
 | [R-63](../10-request/requirements.md#r-63) | met | Banned-word check C-15 on every run: 317 files scanned outside the private folders, names and image bytes included, none found (2026-11-23) |
 | [R-64](../10-request/requirements.md#r-64) | partly | Pipeline built: `bun run deploy` with dry run, checks, dated releases, atomic switch, live verification and rollback ([deployment](../50-implementation/deployment.md)); a dry run was made. Publishing to the production address is pending. See [pending items](#pending-items) |
-| [R-65](../10-request/requirements.md#r-65) | not yet | The deploy step builds the wiki into the same release under `/rigtwin/wiki`; not yet published. See [pending items](#pending-items) |
+| [R-65](../10-request/requirements.md#r-65) | not yet | The deploy step builds the wiki into the same release under `/wiki`; not yet published. See [pending items](#pending-items) |
 
 ### M. Later requests, during the build
 
 | ID | Verdict | Evidence |
 |---|---|---|
-| [R-66](../10-request/requirements.md#r-66) | met | `rigtwin`, chosen by the owner ([D-23](../20-decisions/decision-log.md#d-23)) |
+| [R-66](../10-request/requirements.md#r-66) | met | A first name chosen by the owner ([D-23](../20-decisions/decision-log.md#d-23)); replaced by Synergon on 2026-11-25 ([D-56](../20-decisions/decision-log.md#d-56)) |
 | [R-67](../10-request/requirements.md#r-67) | met | Viewer in TypeScript, pose code shared with the generator ([D-29](../20-decisions/decision-log.md#d-29)); type check C-01 on every run |
 | [R-68](../10-request/requirements.md#r-68) | met | Two independent UX reviews, a separate implementer; 103 controls → 16, model 58 % → 82.8 % of the window, one card per part ([viewer](../50-implementation/viewer.md#the-redesign)) |
 | [R-69](../10-request/requirements.md#r-69) | met | Seat adjustments usable, tagged "assumed range", with a notice and a way back; no lock ([D-31](../20-decisions/decision-log.md#d-31), acceptance checks T31–T37) |
+
+### N. The new name and workspaces
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| [R-70](../10-request/requirements.md#r-70) | partly | Every current file renamed, and `bun run check` scans for the first name so it cannot come back ([D-56](../20-decisions/decision-log.md#d-56)); the move on the server and the repository's new name are pending |
+| [R-71](../10-request/requirements.md#r-71) | not yet | Being built (phase 2 of the rename plan) |
 
 ### Tally
 
@@ -183,7 +191,8 @@ decision (`D-`). How each piece is known is said where it matters: *tested* (run
 | K. Wiki (R-57–R-61) | 4 | 1 | 0 | 0 |
 | L. GitHub and deployment (R-62–R-65) | 1 | 1 | 0 | 2 |
 | M. Later requests (R-66–R-69) | 4 | 0 | 0 | 0 |
-| **All 69** | **55** | **11** | **0** | **3** |
+| N. The new name and workspaces (R-70–R-71) | 0 | 1 | 0 | 1 |
+| **All 71** | **55** | **12** | **0** | **4** |
 
 ## System features
 
@@ -280,6 +289,6 @@ Completed by the coordinator on 2026-11-23. With these three items done, the row
 
 **Final browser verification** (coordinator, 2026-11-23, about 21:55 local time, the in-app Chromium browser at 1440 × 900, local server, build `0b6d8248b63f`): the model loads with no errors; rotate and zoom work; hiding the *Monitor stand* group hides its 7 parts and shows "7 parts hidden · Show all"; clicking the right joystick opens its card with one two-axis "Push the stick" pad; dragging the pad deflects the stick (14.6° forward, 9.7° sideways) and the address updates so the view can be shared. Earlier in the same session on the redesigned viewer: the monitor card (height slider and one turn-and-tilt pad) and sliding the seat 8.8 cm back with the "assumed range" notice. The deployed copy is checked again after deployment (below). Result: passed.
 
-**GitHub push**: private repository <https://github.com/michaelhil/rigtwin>, first commit `5d673d1` on `main`, 2026-11-23 about 22:20 local time; checked before pushing: nothing from `private/`, `work/` or `dist/`, no unmasked photograph, no personal path or address, banned-word check clean.
+**GitHub push**: private repository (named <https://github.com/michaelhil/synergon> from the cutover), first commit `5d673d1` on `main`, 2026-11-23 about 22:20 local time; checked before pushing: nothing from `private/`, `work/` or `dist/`, no unmasked photograph, no personal path or address, banned-word check clean.
 
-**Production deployment**: viewer <https://mightwork.ai/rigtwin/>, wiki <https://mightwork.ai/rigtwin/wiki/>, first release `20261123T212137Z-5d673d1`; all nine live checks passed (model size and SHA-256 included); private paths return 404; the coordinator loaded the live viewer and wiki in a browser with no errors. Details in [deployment](../50-implementation/deployment.md#production-state).
+**Production deployment**: the live site, viewer and wiki, first release `20261123T212137Z-5d673d1`; all nine live checks passed (model size and SHA-256 included); private paths return 404; the coordinator loaded the live viewer and wiki in a browser with no errors. Details in [deployment](../50-implementation/deployment.md#production-state).

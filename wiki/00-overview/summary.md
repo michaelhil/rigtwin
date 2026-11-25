@@ -115,9 +115,9 @@ As of 2026-11-24 (the model's rows unchanged since 2026-11-23, about 22:00 local
 | Wiki | 39 pages on the platform branch (37 published on main); lint clean; published with the viewer |
 | Skill | version 0.1.0; not yet tested on a second object |
 | Tape measurements, seat make and model, which adjustments exist | requested, not received |
-| GitHub repository (private) | <https://github.com/michaelhil/rigtwin> |
-| Live viewer | <https://mightwork.ai/rigtwin/>; every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
-| Live wiki | <https://mightwork.ai/rigtwin/wiki/> |
-| Platform step 1 (agent control) | live on <https://mightwork.ai/rigtwin/> since 2026-11-24 (commit `ff90f30`): the server's health check reports the deployed revision, the checks on the host after the release passed, and the two-browser check on the live site passed and left the public scene as it found it. Open: the result of the ten-minute idle test, the owner's own trial, the re-forecast of the later steps ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
-| Agent interface v2 | live on <https://mightwork.ai/rigtwin/api/mcp> and in every local `bun run serve` since 2026-11-24: five MCP tools, `.mcp.json` in the repository, pictures from the browser; the benchmark against the step-1 interface waits for a signed-in Claude Code command line ([agent interface](../80-reference/agent-interface.md)) |
+| GitHub repository (private) | <https://github.com/michaelhil/synergon> (the repository takes this name at the cutover) |
+| Public site | <https://synergon.mightwork.ai/>, from the first Synergon release (no date yet); every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
+| Public wiki | <https://synergon.mightwork.ai/wiki/>, from the same release |
+| Platform step 1 (agent control) | live on the public site since 2026-11-24 (commit `ff90f30`): the server's health check reports the deployed revision, the checks on the host after the release passed, and the two-browser check on the live site passed and left the public scene as it found it. Open: the result of the ten-minute idle test, the owner's own trial, the re-forecast of the later steps ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
+| Agent interface v2 | live on the public server and in every local `bun run serve` since 2026-11-24: now six MCP tools (adjust, look, measure, undo, state, person); the agent endpoint per workspace is being built (phase 2), `.mcp.json` in the repository, pictures from the browser; the benchmark against the step-1 interface waits for a signed-in Claude Code command line ([agent interface](../80-reference/agent-interface.md)) |
 | Manikin | built in a parallel session on its own branch; not on the public site until the owner approves the new one ([D-44](../20-decisions/decision-log.md#d-44)) |

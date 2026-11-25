@@ -108,8 +108,8 @@
  },
  "files": {
   "clay-m.avatar.json": {
-   "bytes": 270539,
-   "sha256": "4a97e59221ebd81af786321d24cb33d2bcf33de332ab8ee29c3e5e22a9a346ab"
+   "bytes": 270540,
+   "sha256": "a199a01c96666ef760e7b6bf06b24b064238f420c57bfdcaf9eb35dfac1cec7b"
   },
   "clay-m.shape.bin": {
    "bytes": 2455772,
@@ -121,7 +121,7 @@
   },
   "clay-m.glb": {
    "bytes": 2674824,
-   "sha256": "b071b7a9fc4b149cce6cfe1d74a26ac7a47924994d0b5fae7b18ba372e6c7c73"
+   "sha256": "5a08a82229459faa69304dfe8ecaefe3de8de62d97955576d43550bafa57b6ee"
   }
  },
  "budget": {

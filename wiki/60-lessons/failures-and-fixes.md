@@ -252,7 +252,7 @@ IDs are stable. Check names refer to the list printed by `bun run check` (see [.
 - **What happened.** Three modellers edited one model at the same time. Of the 16 failed builds in the timeline that were not deliberate tests, at least 11 were caused by another agent's file being in the middle of an edit: a renamed parameter (8 builds of the structure modeller stopped on a parameter the pods modeller had just renamed), a parameter file with a syntax error, a spec entry in the wrong order. One modeller's full check also failed on zero-area triangles in the other two groups.
 - **Found by.** The build and the checks, immediately and loudly.
 - **Cause.** Shared parameter and spec files with no isolation.
-- **Fix.** `--only <group>` builds the whole frame tree but only the named groups' meshes, and each modeller got a workspace (its own build and render folders). The shared spec file is changed only by small targeted edits.
+- **Fix.** `--only <group>` builds the whole frame tree but only the named groups' meshes, and each modeller got a build folder (its own build and render folders). The shared spec file is changed only by small targeted edits.
 - **Guard.** [P-10](patterns.md#p-10). Lesson [L-34](lessons-learned.md#l-34).
 - **Status.** Fixed. Cost: a few minutes; no wrong output was produced.
 

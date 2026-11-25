@@ -1,25 +1,11 @@
-# Caddy site for the bare domain mightwork.ai, serving rigtwin's release and its server.
-# Installed on the production host as /etc/caddy/managed-sites/mightwork-apex.caddy
-# (the main Caddyfile imports /etc/caddy/managed-sites/*.caddy) by deploy/setup-server.sh.
+# Caddy site for the bare domain mightwork.ai: nothing is served from it any more.
+# Installed on the production host as /etc/caddy/managed-sites/mightwork-apex.caddy (the main Caddyfile imports
+# /etc/caddy/managed-sites/*.caddy) by `deploy/setup-server.sh --retire-apex`, once Synergon is live at
+# https://synergon.mightwork.ai/. Every address on mightwork.ai answers 404: no route is left. The block keeps the
+# domain's certificate and its security headers, so a visitor sees a clean 404 over HTTPS and not a certificate error.
+# (The alternative, removing this file, would leave the name without any site: Caddy would then not answer it at all.)
 #
-#   /rigtwin            -> redirect to /rigtwin/
-#   /rigtwin/server/*   -> 404: the server's code is in the release folder but is never served
-#   /rigtwin/api/*      -> the rigtwin server on 127.0.0.1:4190 (deploy/rigtwin-server.service), which
-#                          sees /api/... (the prefix /rigtwin is removed); request bodies at most 64 KiB (as the server);
-#                          live events are passed on at once: Caddy flushes text/event-stream answers immediately
-#                          whatever flush_interval says (caddyserver.com, reverse_proxy, read 2026-11-24). No
-#                          `flush_interval -1`: in that mode Caddy keeps the request to the server open after the
-#                          visitor has gone, so a closed tab would hold one of its six live connections (review S1)
-#   /rigtwin/*          -> files from /srv/rigtwin/current (a symlink switched by `bun run deploy`)
-#                          the viewer is at /rigtwin/, the wiki at /rigtwin/wiki/
-#   anything else on mightwork.ai -> 404 (nothing else is served from the bare domain yet)
-#
-# Compression (encode) applies to the static files only, so it cannot hold back live events.
-# The handle blocks are mutually exclusive and Caddy tries the one with the longest path first. Keep
-# each one's matcher a single inline path: a named matcher (@name) would be sorted after /rigtwin/*.
-#
-# Other sites on the host (subdomains of mightwork.ai and other domains) have their own files
-# and are not affected by this one.
+# Synergon itself is at deploy/synergon.caddy. Other sites on the host have their own files and are not affected.
 
 mightwork.ai {
 	header {
@@ -30,35 +16,5 @@ mightwork.ai {
 		-Server
 	}
 
-	redir /rigtwin /rigtwin/ 308
-
-	handle /rigtwin/server/* {
-		respond "Not found" 404
-	}
-
-	handle /rigtwin/api/* {
-		uri strip_prefix /rigtwin
-		request_body {
-			max_size 64KiB
-		}
-		reverse_proxy 127.0.0.1:4190
-	}
-
-	handle_path /rigtwin/* {
-		encode zstd gzip
-		root * /srv/rigtwin/current
-		@html path *.html */
-		header @html Cache-Control "no-cache"
-		@data path *.glb *.json
-		header @data Cache-Control "no-cache"
-		file_server {
-			# second guard for the server's folder (also /rigtwin/server without the slash): by file
-			# name, after Caddy has cleaned the path
-			hide /srv/rigtwin/current/server
-		}
-	}
-
-	handle {
-		respond "Not found" 404
-	}
+	respond "Not found" 404
 }

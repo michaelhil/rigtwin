@@ -63,7 +63,7 @@ tags: [method, pipeline, performance]
  VIEWER              same page the renders come from; 53 acceptance checks of the page
     │
     ▼
- DISTRIBUTION BUILD  dist/ = viewer bundle + asset, verified from a sub-path   bun run dist   0.5 s
+ DISTRIBUTION BUILD  dist/ = viewer bundle + asset, verified when served   bun run dist   0.5 s
 ```
 
 ## Stages
@@ -89,7 +89,7 @@ the agent harness. They come from **one Apple M2 machine** and one run; treat th
 | 12 | Fixes | Findings | Next build | stage 7–10 again | modeller agents | see stage 7, round 2 |
 | 13 | Viewer review and redesign | Viewer page | Two interaction reviews; new viewer; acceptance script | — | two reviewer agents, one implementer agent | 15 and 17 min; 62 min |
 | 14 | Viewer acceptance | Viewer, build | 53 pass/fail results, screenshots | `bun tools/ui-accept.ts` | script | 114–125 s |
-| 15 | Distribution build | Full build, viewer source | `dist/` (5 files, 1.68 MB), loaded once from `/rigtwin/` in a headless browser | `bun run dist` | script | 0.5 s |
+| 15 | Distribution build | Full build, viewer source | `dist/` (5 files, 1.68 MB), loaded once from `/` in a headless browser | `bun run dist` | script | 0.5 s |
 
 Stages 1–5 are described in [Measuring from photos](measuring-from-photos.md); stage 7 in
 [Filling gaps](filling-gaps.md), [Decomposition](decomposition.md) and the

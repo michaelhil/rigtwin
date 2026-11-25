@@ -1,0 +1,71 @@
+# Caddy site for synergon.mightwork.ai: the Synergon viewer, its wiki and its server.
+# Installed on the production host as /etc/caddy/managed-sites/synergon.caddy (the main Caddyfile imports
+# /etc/caddy/managed-sites/*.caddy) by deploy/setup-server.sh. HTTPS: Caddy obtains and renews the certificate
+# for the host name by itself (the name must resolve to this host, and ports 80 and 443 must be reachable).
+#
+#   /server and /server/*  -> 404: the server's code is in the release folder but is never served
+#   /api/*                 -> the Synergon server on 127.0.0.1:4191 (deploy/synergon-server.service); the server
+#                             sees the same path /api/... (nothing is removed); request bodies at most 64 KiB (as the
+#                             server); live events are passed on at once: Caddy flushes text/event-stream answers
+#                             immediately whatever flush_interval says (caddyserver.com, reverse_proxy). No
+#                             `flush_interval -1`: in that mode Caddy keeps the request to the server open after the
+#                             visitor has gone, so a closed tab would hold one of its live connections (review S1)
+#   /workspaces/*          -> the viewer page (index.html) of the release: the address of a workspace is a page
+#                             of the viewer, which reads the workspace's id from the address
+#   everything else        -> files from /srv/synergon/current (a symlink switched by `bun run deploy`):
+#                             the viewer at /, the wiki at /wiki/, the model under /asset/
+#
+# Headers on every answer: HSTS, nosniff, no referrer, X-Robots-Tag noindex, no Server header. Pages (.html and
+# folders) and data (.glb, .json) are sent with Cache-Control: no-cache, so a deploy shows at once. The person's
+# files (.ktx2, .bin, .wasm) carry no such header, so browsers may keep them: their addresses carry the release's
+# revision, so a new release asks for new addresses.
+#
+# Compression (encode) applies to the static files only, so it cannot hold back live events.
+# The handle blocks are mutually exclusive and Caddy tries the one with the longest path first. Keep each
+# one's matcher a single inline path: a named matcher (@name) would be sorted after the shorter paths.
+#
+# Other sites on the host (mightwork.ai itself, other subdomains and other domains) have their own files and
+# are not affected by this one. mightwork.ai answers 404 for everything (deploy/mightwork-apex.caddy).
+
+synergon.mightwork.ai {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	handle /server/* {
+		respond "Not found" 404
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 64KiB
+		}
+		reverse_proxy 127.0.0.1:4191
+	}
+
+	handle /workspaces/* {
+		encode zstd gzip
+		root * /srv/synergon/current
+		rewrite * /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		encode zstd gzip
+		root * /srv/synergon/current
+		@html path *.html */
+		header @html Cache-Control "no-cache"
+		@data path *.glb *.json
+		header @data Cache-Control "no-cache"
+		file_server {
+			# second guard for the server's folder (also /server without the slash): by file name, after Caddy
+			# has cleaned the path
+			hide /srv/synergon/current/server
+		}
+	}
+}

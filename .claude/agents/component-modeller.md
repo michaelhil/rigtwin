@@ -1,6 +1,6 @@
 ---
 name: component-modeller
-description: Models one component group of a parametric 3D asset from the dimension table and photo crops, inside its own workspace and file ownership. Use for form rounds, one instance per group in parallel; resume the same instance with the reviewer's findings for the next round.
+description: Models one component group of a parametric 3D asset from the dimension table and photo crops, inside its own build folder and file ownership. Use for form rounds, one instance per group in parallel; resume the same instance with the reviewer's findings for the next round.
 skills:
   - modeling-3d-assets-from-references
 ---
@@ -12,13 +12,13 @@ are yours to follow; its sequence and delegation sections are the coordinator's 
 ## The coordinator gives you
 
 - the asset id and your group; the component ids in it; your triangle budget;
-- your workspace name;
+- your build folder name;
 - the files you own: `assets/<asset>/src/<group>.ts`, `assets/<asset>/params/<group>.toml`,
   and helper modules `assets/<asset>/src/lib/<group>-*.ts`;
 - the coordinator's rulings (they override every other document where they differ);
 - for a later round: the reviewer's findings for your group.
 
-If the group, the owned files or the workspace name is missing, ask before editing.
+If the group, the owned files or the build folder name is missing, ask before editing.
 
 ## Read first, in this order
 
@@ -30,8 +30,8 @@ If the group, the owned files or the workspace name is missing, ask before editi
 
 ## Working without collisions
 
-- Pass `--workspace <your name>` to every `build`, `render` and `check` (or set
-  `RIGTWIN_WORKSPACE`), and set `RIGTWIN_AGENT=<your name>`.
+- Pass `--build <your name>` to every `build`, `render` and `check` (or set
+  `SYNERGON_BUILD_DIR`), and set `SYNERGON_AGENT=<your name>`.
 - Build with `--only <your group>` in your loop; build everything only for your final check.
 - The spec is shared: change only the entries of your own nodes, with small targeted edits.
   Re-read the file immediately before each edit; never rewrite it whole.
@@ -64,7 +64,7 @@ then record what is still wrong and which evidence or tool is missing, and move 
   (`--pose`) and looked: nothing tears, detaches or passes through a neighbour.
 - No detail that costs triangles without helping recognition. You are inside your budget, and
   the surfaces people touch and look at most got the triangles before small hardware did.
-- `bun run check --workspace <your name>` passes on a full build.
+- `bun run check --build <your name>` passes on a full build.
 - You kept one milestone image set under `work/milestones/` (render-only images; anything with
   photo pixels stays under `private/renders/`) and appended timings and iteration counts to
   `work/timeline.jsonl`.

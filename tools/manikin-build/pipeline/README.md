@@ -62,7 +62,7 @@ A copy of this section is in `B1/core-readme.md`.
 | **Round 4: sole height** | | **`rest.soleHeight`** (metres added to y above bare soles; 0.0 in the clay bodies) is the one place: `viewer/src/eyes.ts`, `abstract.py` and `build_operator.py` already read or write that key. A dressed or abstract package writes its own value there |
 | **Round 4: motion** | `clips: []` | B4's `clips/manifest-block.json` is merged at build time (`clips`, `packet.clips`, `motion`) when the file is beside the package. **The clips there were baked on the round-3 bodies: B4 must bake again on v2** |
 | **Round 4: packet** | derived shot list | `packet-shots.json` and the `pose_*` angles are gone (the renderer reads `poses.json` by id); `packet.otherPackages` names the other sex's package, so mixed line-ups render |
-| **Round 3: format** | 0.2 | manifest says `rigtwin-avatar/0.3`. Per v0.3 section 2b the body keeps every triangle (garments bring `bodyMask` textures in the body's UV0, which is hm08's, unchanged); `body_mesh(hide=)` stays for variants that really delete |
+| **Round 3: format** | 0.2 | manifest says `synergon-avatar/0.3`. Per v0.3 section 2b the body keeps every triangle (garments bring `bodyMask` textures in the body's UV0, which is hm08's, unchanged); `body_mesh(hide=)` stays for variants that really delete |
 
 **Two ways to carry eight influences, and they exclude each other** (for RL and the coordinator to settle):
 
@@ -940,7 +940,7 @@ For slider bodies a run-time foot planter is needed (contacts are in the sidecar
   next joint touches the cylinder) and uses your `HAND_GRIP40` where the wrap cannot reach.
 - **B5, eyes**: `operator.ts` owns `neck_01`, `neck_02`, `head`; `eyes.ts` owns `eye_l`, `eye_r`, lids, blinks,
   saccades. Each frame the plug-in publishes the gaze point (world, metres) as `plugins.operator.state.gazeTarget`
-  and calls `globalThis.rigtwinEyes?.setGazeTarget(point)` if you register that object. Hand-over rule: the eyes go
+  and calls `globalThis.synergonEyes?.setGazeTarget(point)` if you register that object. Hand-over rule: the eyes go
   to the target at once; the head turns only for the part of the gaze angle beyond ±12° (plus 35 % of the part
   inside), critically damped (about 0.35 s), shared 25 / 30 / 45 % over `neck_01` / `neck_02` / `head`; so compute
   eye-in-head from the head's *current* pose every frame (run after the plug-in) and the eyes counter-rotate while
@@ -1152,7 +1152,7 @@ Materials: `eye_ball` with glTF `extras.b5eye = {kind: "shell", limbus, irisPlan
 class `eye`); lashes: manifest class `lashes` (`alphaTest`, `darken`); a lens that only reflects (no veil):
 `{"class": "cornea", "additive": true, "thinFilm": 0.5}`.
 
-Viewer (`eyes.ts`, registered in `plugins.ts`, runs in `late`): `globalThis.rigtwinEyes.setGazeTarget(point | null)`,
+Viewer (`eyes.ts`, registered in `plugins.ts`, runs in `late`): `globalThis.synergonEyes.setGazeTarget(point | null)`,
 `.setMode("portrait" | "screen" | "idle")`, `.blink()`; `lab.apply({ plugins: { eyes: { on, mode, seed, time, target,
 targetRel: {az, el, dist}, script, gaze: {yaw, pitch}, blink, iris, ownHead, restLids } } })`. It reads the block with the
 package's `rest.soleHeight` added, keeps every listed lid vertex above the eye surface for the current body shape, lid angle

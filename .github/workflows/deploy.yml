@@ -1,14 +1,14 @@
 # Every push to main: run every check, build the model, the viewer and the wiki, and deploy to
-# https://mightwork.ai/rigtwin/ with the same script as a manual deploy (`bun run deploy`), which
+# https://synergon.mightwork.ai/ with the same script as a manual deploy (`bun run deploy`), which
 # switches releases only after the upload, checks the live site and switches back if a check fails.
 #
-# Credentials: the secret DEPLOY_SSH_KEY is the private half of a key that the server accepts only for
-# the unprivileged account `rigtwin-deploy`, and only for the exact commands of the deploy script inside
-# /srv/rigtwin (deploy/rigtwin-deploy-gate.sh; no shell, no forwarding). The server's host key is pinned in
+# Credentials: the secret SYNERGON_DEPLOY_SSH_KEY is the private half of a key that the server accepts only for
+# the unprivileged account `synergon-deploy`, and only for the exact commands of the deploy script inside
+# /srv/synergon (deploy/synergon-deploy-gate.sh; no shell, no forwarding). The server's host key is pinned in
 # deploy/known_hosts. The key is written to disk only after every check and build has run (a dry run of
 # the deploy), for the upload, switch and live checks (`bun run deploy --prepared`), and removed at once.
-# Owner's settings (security review S9, R3b F2): keep DEPLOY_SSH_KEY in the environment `production`, limited
-# to the branch main, not as a repository secret; protect main.
+# Owner's settings (security review S9, R3b F2): keep SYNERGON_DEPLOY_SSH_KEY in the environment `production`,
+# limited to the branch main, not as a repository secret; protect main. It is the only secret this workflow reads.
 #
 # Images that need the private photo cameras are not regenerated here (--no-images); they are
 # committed. See wiki/50-implementation/deployment.md.
@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      RIGTWIN_AGENT: github-actions
-      RIGTWIN_CHROME: /usr/bin/google-chrome
+      SYNERGON_AGENT: github-actions
+      SYNERGON_CHROME: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -65,17 +65,17 @@ jobs:
 
       - name: Configure the deploy account
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SYNERGON_DEPLOY_SSH_KEY: ${{ secrets.SYNERGON_DEPLOY_SSH_KEY }}
         run: |
-          test -n "$DEPLOY_SSH_KEY" || { echo "the secret DEPLOY_SSH_KEY is not set (environment production)"; exit 1; }
+          test -n "$SYNERGON_DEPLOY_SSH_KEY" || { echo "the secret SYNERGON_DEPLOY_SSH_KEY is not set (environment production)"; exit 1; }
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/rigtwin_deploy
-          chmod 600 ~/.ssh/rigtwin_deploy
+          printf '%s\n' "$SYNERGON_DEPLOY_SSH_KEY" > ~/.ssh/synergon_deploy
+          chmod 600 ~/.ssh/synergon_deploy
           cat > ~/.ssh/config <<EOF
-          Host rigtwin-deploy
-            HostName mightwork.ai
-            User rigtwin-deploy
-            IdentityFile ~/.ssh/rigtwin_deploy
+          Host synergon-deploy
+            HostName synergon.mightwork.ai
+            User synergon-deploy
+            IdentityFile ~/.ssh/synergon_deploy
             IdentitiesOnly yes
             StrictHostKeyChecking yes
             UserKnownHostsFile $GITHUB_WORKSPACE/deploy/known_hosts
@@ -87,7 +87,7 @@ jobs:
 
       - name: Remove the key
         if: always()
-        run: rm -f ~/.ssh/rigtwin_deploy ~/.ssh/config
+        run: rm -f ~/.ssh/synergon_deploy ~/.ssh/config
 
       - name: Keep the deploy receipt
         if: always()

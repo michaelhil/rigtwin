@@ -16,7 +16,7 @@ import { readPackage, bodyOf } from "../shared/person-model.ts";
 import { MODEL_STATIONS as ST } from "../viewer/src/person/body-fit.ts";
 
 const args = process.argv.slice(2), opt = (n: string, d: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
-const LAB = opt("--lab", join(import.meta.dir, "..", "..", "rigtwin", "work", "avatar-lab", "packages"));
+const LAB = opt("--lab", join(import.meta.dir, "..", "..", "synergon", "work", "avatar-lab", "packages"));
 const SAMPLES = Number(opt("--samples", "320")), OUT = join(import.meta.dir, "..", "viewer", "src", "person", "body-capsules.json");
 const PRODUCT = join(import.meta.dir, "..", "assets", "manikin");
 

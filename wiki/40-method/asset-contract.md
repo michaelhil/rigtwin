@@ -14,7 +14,7 @@ tags: [contract, format, glb, manifest, parameters]
 - Metres and radians; right-handed; **Z up, X forward, Y to the operator's left**; origin at the centre of the deck's top surface. The GLB's root node converts to glTF's Y-up once.
 - Names follow `^(C|J|D|S)_[a-z0-9]+(_([a-z0-9]+|[LR]))*$` and are stable identifiers.
 - One definition of joint posing: `shared/pose.ts`. Consumers either import it or reproduce `rest · motion(neutral)⁻¹ · motion(value)`.
-- Schema identifiers are `rigtwin-manifest/1` and `rigtwin-glb/1`. Items marked **provisional** may change before version 2.
+- Schema identifiers are `synergon-manifest/1` and `synergon-glb/1`. Items marked **provisional** may change before version 2.
 - Sections 1 to 13 are the rig's rules and stay as they are. A **character asset** (the manikin, `assets/manikin/`) follows section 14 instead: glTF's Y-up, game joint names, skins and morphs, committed compressed binaries with checksums.
 
 This page is what tools and later phases bind to. It describes the code as it is (*verified by
@@ -217,7 +217,7 @@ as PNG. No logos, decals or text anywhere on the model.
 
 | Aspect | Convention |
 |---|---|
-| Container | binary glTF 2.0, one file, one buffer; `asset.generator = "rigtwin generator"`; `asset.extras = { asset, schema: "rigtwin-glb/1", frame }` |
+| Container | binary glTF 2.0, one file, one buffer; `asset.generator = "synergon generator"`; `asset.extras = { asset, schema: "synergon-glb/1", frame }` |
 | Scene | one scene, one root node (`C_rig`) |
 | Nodes | one node per component, assembly, joint frame, reference frame and surface; `name` = id; only `translation` and `rotation` are used (no scale, no matrix); zero translation and identity rotation are omitted |
 | Hierarchy | parent → joint frames (outermost first) → node. A joint is a node, not an animation or skin |
@@ -241,12 +241,12 @@ A consumer that reads only the GLB can therefore find and pose every joint witho
 
 ## 9. The description file (`<asset>.manifest.json`)
 
-Schema `rigtwin-manifest/1`. Types are in `shared/manifest.ts`. All positions, boxes and axes are in
+Schema `synergon-manifest/1`. Types are in `shared/manifest.ts`. All positions, boxes and axes are in
 the model frame at the neutral pose.
 
 | Field | Type | Content |
 |---|---|---|
-| `schema` | string | `"rigtwin-manifest/1"` |
+| `schema` | string | `"synergon-manifest/1"` |
 | `asset`, `title` | string | asset id (`rig-b`) and display title |
 | `conventions` | object of strings | plain-language statements of `units`, `frame`, `gltf`, `names`, `joints`, `positions`, `classes` |
 | `build` | `{ partial, only }` | `partial` is true for an `--only` build; `only` lists the groups built |

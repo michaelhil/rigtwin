@@ -1,6 +1,6 @@
 // bun tools/live-idle-test.ts --url <base> [--minutes 10] [--joint J_mon_tilt]
 //
-// Does the live channel survive a long quiet spell on a real route (the laptop, or https://mightwork.ai/rigtwin
+// Does the live channel survive a long quiet spell on a real route (the laptop, or https://synergon.mightwork.ai
 // through Caddy)? Opens <base>/api/live, keeps it open for the given minutes while counting the heartbeat comments,
 // then makes one small, harmless change (pose.set of one joint by 1 degree or 5 mm, in its own group) and undoes it
 // (history.undo of that group), and checks that both arrive on the same, still open stream. Exits 0 when all of that
@@ -12,7 +12,7 @@ import { call } from "./rig.ts";
 import { LIMITS } from "../server/limits.ts";
 
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-const usage = (m?: string): never => { if (m) console.error(`live-idle-test: ${m}`); console.error("usage: bun tools/live-idle-test.ts --url <base, e.g. https://mightwork.ai/rigtwin or http://127.0.0.1:4173> [--minutes 10] [--joint J_mon_tilt]"); process.exit(2); };
+const usage = (m?: string): never => { if (m) console.error(`live-idle-test: ${m}`); console.error("usage: bun tools/live-idle-test.ts --url <base, e.g. https://synergon.mightwork.ai or http://127.0.0.1:4173> [--minutes 10] [--joint J_mon_tilt]"); process.exit(2); };
 for (let i = 0; i < args.length; i += 2) if (!["--url", "--minutes", "--joint"].includes(args[i]) || args[i + 1] === undefined) usage(`unknown or incomplete option ${args[i]}`);
 const base = (opt("--url") ?? usage("--url is required")).replace(/\/+$/, "");
 if (!/^https?:\/\/[^/]+/.test(base)) usage("--url must start with http:// or https://");
@@ -68,7 +68,7 @@ function waitFor(test: (e: Event) => boolean, ms: number, what: string): Promise
 // ------------------------------------------------------------------------------------------------ 1. health and stream
 const health = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(15000) }).then(async (r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).catch((e) => fail(`${base}/api/health: ${e.message}`));
 if (!health?.ok) fail(`${base}/api/health did not answer ok: true`);
-say(`${base}: rigtwin server ${health.revision} (${health.mode}, ${health.format}), up ${health.uptime_s} s`);
+say(`${base}: synergon server ${health.revision} (${health.mode}, ${health.format}), up ${health.uptime_s} s`);
 const live = await fetch(`${base}/api/live`, { headers: { accept: "text/event-stream" } }).catch((e) => fail(`${base}/api/live: ${e.message}`));
 if (!live.ok || !(live.headers.get("content-type") ?? "").includes("text/event-stream")) fail(`${base}/api/live answered HTTP ${live.status} (${live.headers.get("content-type") ?? "no content-type"}), not an event stream`);
 const reading = readStream(live);

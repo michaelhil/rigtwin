@@ -14,7 +14,7 @@ tags: [decisions, options, stack, measurement, viewer, process, naming]
 - **Stack:** two hands-on trials each built a working articulated blockout in under half an hour. TypeScript with three.js was chosen over Blender-as-a-library for speed (0.07 s against 1.1 s per build), size (50 MB against 781 MB) and licence.
 - **Format:** one GLB model file plus one JSON description file. No ratified glTF extension carries joint limits, so a custom description is unavoidable.
 - **Process:** an independent reviewer and scripted checks were accepted; an agent watching the builder think was rejected. Human gates were accepted in the plan and replaced by reviewer rounds for this run.
-- **Name:** twelve candidates and a list of rejections; the owner rejected the shortlist and chose `rigtwin`.
+- **Name:** twelve candidates and a list of rejections; the owner rejected the shortlist and chose a first name from a later list; on 2026-11-25 the owner replaced it with Synergon ([D-56](decision-log.md#d-56)).
 
 ## How to read the tables
 
@@ -198,7 +198,7 @@ Collision checks (GitHub, npm, PyPI) were run on 2026-11-23. They are not a trad
 | operator-station-lab | Scope in three words | None | Not shortlisted: long |
 | Leitpult | German "control desk" | None | Not shortlisted: not a common word |
 | Styrepult | Norwegian "control console" | None | Not shortlisted: hard to say in English |
-| **rigtwin** (listed with ergorig) | Compact and typeable | None | Listed by the research as "generic"; **chosen by the owner** from a later list of plain English names |
+| **The first name** (listed with ergorig) | Compact and typeable | None | Listed by the research as "generic"; **chosen by the owner** from a later list of plain English names; retired on 2026-11-25 for Synergon ([D-56](decision-log.md#d-56)) |
 | Leitstand | German "control room" | An organisation with 10 repositories, an npm package and a tool of the same name | Rejected: taken |
 | Rigwright | — | npm and PyPI taken | Rejected: taken |
 | Anything with "cockpit" | — | A large existing project; npm and PyPI taken | Rejected: taken |
@@ -207,7 +207,7 @@ Collision checks (GitHub, npm, PyPI) were run on 2026-11-23. They are not a trad
 | Sikt | Norwegian "sight" | Name of a public agency (recalled, not searched) | Rejected |
 
 The owner's words on the shortlist: "all bad. keep it simpler. no german or norwegian". The later
-list of plain English names from which `rigtwin` was chosen is not preserved in the sources of this
+list of plain English names from which Synergon was chosen is not preserved in the sources of this
 page; only the choice is.
 
 ## Options that were deliberately deferred

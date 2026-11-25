@@ -53,8 +53,8 @@ a complete wiki, a private GitHub repository and deployment to the owner's serve
 ([D-22](20-decisions/decision-log.md#d-22), [deviations](30-plan/deviations.md)).
 
 **Time not recorded** — Project name: the owner rejected the suggested names ("keep it simpler. no
-german or norwegian") and chose **rigtwin**; public addresses `/rigtwin` for the viewer and
-`/rigtwin/wiki` for the wiki on the owner's server ([D-23](20-decisions/decision-log.md#d-23),
+german or norwegian") and chose **Synergon**; public addresses `/` for the viewer and
+`/wiki` for the wiki on the owner's server ([D-23](20-decisions/decision-log.md#d-23),
 [D-32](20-decisions/decision-log.md#d-32)).
 
 **18:15** — Implementation started with three agents in parallel: infrastructure (generator, viewer,
@@ -79,7 +79,7 @@ so the owner's figures conflict with the photos; the touchscreen is the 13.3-inc
 [D-34](20-decisions/decision-log.md#d-34).
 
 **19:05** — Round 1: three modellers in parallel (seat; pods; platform, stand and pedals), each in its
-own workspace ([D-26](20-decisions/decision-log.md#d-26)).
+own build folder ([D-26](20-decisions/decision-log.md#d-26)).
 
 **Before 19:21** — The owner: "in review, look at the UI. it is overcomplicated and takes a lot of
 time", asking for independent interface reviews and simpler controls for a single component
@@ -162,15 +162,15 @@ that nothing private, unmasked or personal was staged.
 validated, server reloaded; every other site on the host answered as before; certificate obtained.
 
 **22:21** — First release deployed with `bun run deploy` in 24.8 s; all nine live checks passed.
-Viewer at <https://mightwork.ai/rigtwin/>, wiki at <https://mightwork.ai/rigtwin/wiki/>.
+Viewer and wiki published on the owner's production server.
 [Deployment](50-implementation/deployment.md#production-state).
 
 **About 22:30** — Wiki updated with the production state, committed, pushed and redeployed through the
 same pipeline (second release; the script switched releases and re-checked the live site).
 
 **About 23:10** — The owner chose automatic deployment. Set up: an unprivileged server account
-`rigtwin-deploy` behind a forced-command gate that allows only the deploy script's commands inside
-`/srv/rigtwin`; a new key stored as a GitHub secret; the server's host key pinned; a GitHub Actions
+`synergon-deploy` behind a forced-command gate that allows only the deploy script's commands inside
+`/srv/synergon`; a new key stored as a GitHub secret; the server's host key pinned; a GitHub Actions
 workflow running `bun run deploy --no-images` on every push to `main`. A manual deploy through the new
 account worked (release `ac78fc6`). [D-37](20-decisions/decision-log.md#d-37),
 [deployment](50-implementation/deployment.md#continuous-deployment-from-github).
@@ -232,7 +232,7 @@ owner's yes, which the entries above leave out: `setup-server.sh --check` twice 
 the taken port, the second passed every host check), then `--apply` (the system user and data folder,
 Bun 1.4.0 with a matching checksum, the Caddy route installed with a backup while every other site on
 the host answered as before, the unit installed and retrying every 2 s), then `--probe` (passed: Bun
-serves on loopback under the unit's hardening, sees only rigtwin's folders, cannot reach the internet),
+serves on loopback under the unit's hardening, sees only Synergon's folders, cannot reach the internet),
 then the load test H14 (failed once, passed after the fix noted above). The service now waits for the
 first release that contains the server.
 [The server and its host setup](50-implementation/server-and-host-setup.md#order-of-the-first-rollout).
@@ -240,7 +240,7 @@ first release that contains the server.
 **Later the same day** — The simplicity monitor's review before the merge: approved with changes. The
 wiki still said the setup was waiting for the owner's yes; corrected on the deployment, viewer, summary,
 plan and next-steps pages, and the server's part of the deployment page became a page of its own. The
-unit no longer names other programs on the host: `/var/lib` is hidden whole except rigtwin's data
+unit no longer names other programs on the host: `/var/lib` is hidden whole except Synergon's data
 folder, like `/srv` and `/opt`, and the probe checks all three (the changed unit is installed and
 probed again before the merge). A stream that reaches its byte budget now ends with an `end` event, on
 which the page reconnects at once instead of after a second. What remains: the merge and push with the
@@ -417,7 +417,7 @@ demand (relaxed stand, walk); place, anchor, pick, definition and a change event
 - **Commands.** `person.set` (preset P5 woman, P50 man, P95 man, or a package preset; sex, style, tone, glasses, headset, body controls by id; the cap is always worn), `person.pose` (operating, relaxed stand, the pose library) and `person.clear`. They have the pose commands' conventions: validation, the stale check with the person as one key, undo by version and by request, the server-made author, the live channel.
 - **Agents.** One MCP tool, `person`, and `measure {"person": ...}`. The MCP instructions got one rule line: 4,079 of 4,096 characters on the public sandbox.
 - **Queries.** `person.report` gives eye (both eyes), sight lines with a gaze cone (`assets/manikin/params/runtime-queries.toml`), reach and clearances. The server computes them without a browser: it reads the packages' manifests and the GLBs' skeletons and runs the person's own solver and the rig binding. For the three presets the numbers agree with [Three people in Rig B](70-results/people-in-rig-b.md).
-- **Format.** The scene format is now `rigtwin-scene/2`, with the person; a stored `/1` document is migrated with its history.
+- **Format.** The scene format holds the person; scene data from before is converted with its history.
 - **look's eye.** With a person seated, the operator's view and a stature use the person's solved eye (`eye_point`, carried in `D_eye_median`'s frame on the page). The stature ratio is the fallback.
 - **Tests.** New tests in `shared/commands/person.test.ts`, `server/server.test.ts` and `server/mcp.test.ts`. `tools/live-accept.ts` step 10 compares the server's eye with the page's drawn eye (3 mm). Six person cases were added to the agent benchmark.
 
@@ -505,3 +505,7 @@ seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `wo
 - **Records.** Two quick changes in a row could have the second refused as stale, because the page's first change had not yet come back over the live channel. The panel now records its changes one at a time, each based on its own last recorded version too.
 
 [The person panel](50-implementation/person-panel.md).
+
+## 2026-11-25 (later)
+
+**Time not recorded** — The project is named Synergon: a new name, a subdomain of its own (`synergon.mightwork.ai`, live from the first Synergon release) and the wiki at `synergon.mightwork.ai/wiki`. Every current file, address, format identifier and setting was renamed; the old modelling "workspace" is now a "build folder", and "workspace" means the shared, public workspaces being built. [D-56](20-decisions/decision-log.md#d-56).

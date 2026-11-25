@@ -310,7 +310,7 @@ if __name__ == "__main__":
     meshes, mats, info = build(refs, names, which, lift=lift, pkg=name, body=body)      # in the package's own (lifted) frame
     for m in meshes: m.name += TEST_SUFFIX
     out = os.path.join(LAB, "packages/props", name + "-props.glb")
-    stats = glb.write_glb(out, meshes, skel, mats, generator="rigtwin avatar-lab pipeline/props.py (B6; modelled by script, no third-party asset)")
+    stats = glb.write_glb(out, meshes, skel, mats, generator="synergon avatar-lab pipeline/props.py (B6; modelled by script, no third-party asset)")
     info["validate"] = glb.validate(out); info["bytes"] = stats["bytes"]; info["package"] = name
     info["note"] = "test side GLB (mesh names end in _b6) in the package's own bind frame (bare soles at y = %.4f)" % lift
     info["viewer"] = os.path.relpath(view_package(name, info, which), LAB)

@@ -1,0 +1,34 @@
+# Stand-in for the apex site file that is live before the retirement: the bare domain with one route under a
+# sub-path, a route to a local service, and 404 for everything else. (The real file is the one the earlier project
+# name's setup installed; this fixture keeps only its shape, so that the test does not repeat the retired name.)
+#
+#   /legacy        -> redirect to /legacy/
+#   /legacy/api/*  -> a local service on 127.0.0.1:4190
+#   /legacy/*      -> files from /srv/legacy/current
+#   anything else  -> 404
+
+mightwork.ai {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	redir /legacy /legacy/ 308
+
+	handle /legacy/api/* {
+		uri strip_prefix /legacy
+		reverse_proxy 127.0.0.1:4190
+	}
+
+	handle_path /legacy/* {
+		root * /srv/legacy/current
+		file_server
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

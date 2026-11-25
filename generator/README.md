@@ -24,9 +24,9 @@ bun test generator                            # kit known-answer tests (also par
 ```
 
 **Working in parallel.** Several people building at once overwrite each other's
-`assets/rig-b/build/`. Give yourself a workspace: add `--workspace <name>` to `build`, `render`,
-`check` and `serve` (or `export RIGTWIN_WORKSPACE=<name>`). Build output then goes to
-`work/<name>/build/` and renders to `work/<name>/renders/<set>/`. Set `RIGTWIN_AGENT=<your role>`
+`assets/rig-b/build/`. Give yourself a build folder (a name): add `--build <name>` to `build`, `render`,
+`check` and `serve` (or `export SYNERGON_BUILD_DIR=<name>`). Build output then goes to
+`work/<name>/build/` and renders to `work/<name>/renders/<set>/`. Set `SYNERGON_AGENT=<your role>`
 so the automatic lines in `work/timeline.jsonl` carry your name.
 
 `--only <group>` builds the whole frame tree but only that group's meshes, and imports only that

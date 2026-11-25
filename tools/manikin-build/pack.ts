@@ -260,7 +260,7 @@ function remapVertexIndices(m: any, ranks: Map<string, Uint32Array>, log: string
 async function writeGlb(doc: Document) {
   doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
   if (doc.getRoot().listTextures().length) doc.createExtension(KHRTextureBasisu).setRequired(true);
-  doc.getRoot().getAsset().generator = `rigtwin manikin pack (glTF-Transform 4.5.1, meshoptimizer 1.1.1, ${toktxVersionCached})`;
+  doc.getRoot().getAsset().generator = `synergon manikin pack (glTF-Transform 4.5.1, meshoptimizer 1.1.1, ${toktxVersionCached})`;
   const enc = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.encoder": MeshoptEncoder });
   return enc.writeBinary(doc);
 }
@@ -270,7 +270,7 @@ async function writeGlb(doc: Document) {
 async function packClip(src: string): Promise<{ bytes: Uint8Array; rotErr: number; transErr: number }> {
   const doc = await io.read(src), accessors = doc.getRoot().listAccessors();
   doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.FILTER });
-  doc.getRoot().getAsset().generator = "rigtwin manikin pack (glTF-Transform 4.5.1, meshoptimizer 1.1.1)";
+  doc.getRoot().getAsset().generator = "synergon manikin pack (glTF-Transform 4.5.1, meshoptimizer 1.1.1)";
   const enc = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.encoder": MeshoptEncoder });
   const first = await enc.writeBinary(doc), { json, bin } = readGlb(first);
   if (json.accessors.length !== accessors.length) throw new Error(`${src}: accessor count changed on write`);

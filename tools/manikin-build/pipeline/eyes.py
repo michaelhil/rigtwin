@@ -674,7 +674,7 @@ def build_test(construction="shell", out=None, sex="m", tone="light", glasses=Tr
         "lens_glasses": {"pbrMetallicRoughness": {"baseColorFactor": [0.9, 0.95, 1.0, 0.1], "metallicFactor": 0.0, "roughnessFactor": 0.04}, "alphaMode": "BLEND", "doubleSided": True},
     }
     path = os.path.join(out, name + ".glb")
-    stats = glb.write_glb(path, meshes, rig["skeleton"], mats, generator="rigtwin avatar-lab pipeline/eyes.py (B5 eye test bust)")
+    stats = glb.write_glb(path, meshes, rig["skeleton"], mats, generator="synergon avatar-lab pipeline/eyes.py (B5 eye test bust)")
     problems = glb.validate(path)
     bname = "body-clay" + ("" if sex == "m" else "-f"); man = json.load(open(os.path.join(LAB, "packages", bname, bname + ".avatar.json")))
     man.get("shape", {}).pop("bake", None)                      # the body's CPU shape file does not fit a bust: the viewer then uses the morph targets

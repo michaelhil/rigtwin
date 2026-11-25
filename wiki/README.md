@@ -8,7 +8,7 @@ tags: [meta]
 
 # How this wiki works
 
-This wiki is the single source of truth for the rigtwin project: for the people who run it and
+This wiki is the single source of truth for the Synergon project: for the people who run it and
 for the AI agents that continue the work. If something here disagrees with a chat transcript, a
 commit message or an agent's memory, the wiki wins; if the wiki is wrong, fix the wiki.
 

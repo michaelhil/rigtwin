@@ -36,7 +36,7 @@ Three corrections were written by the agents themselves: the structure modeller'
 (169 s and about 600 s, really about 27 min; its start marker had been overwritten), the pods
 modeller's study time (first "about 25 min", corrected to about 15), and the round-1 reviewer's
 "total review about 45 min" (its own start and end stamps and the harness say 26–27 min). Lines from
-tools run without `RIGTWIN_AGENT` carry the name `unnamed` (14 lines).
+tools run without `SYNERGON_AGENT` carry the name `unnamed` (14 lines).
 
 ## Phases in order
 
@@ -165,7 +165,7 @@ measured by the tool itself. The [tool reference](../80-reference/tools.md) expl
 | `render --set selftest` | projection self-test | 5 | 0.04 s | 0.036–0.046 s | |
 | `render --set wiki` | 27 documentation images | 20 | 9.6 s | 9.4–10.4 s | |
 | `render` (all sets of a call, with browser start) | | 144 | 2.2 s | 0.5–16.3 s | 16.3 s for ortho, sheet, ids, groups and matched together; browser start 0.38 s (0.26–2.47) |
-| `dist` | deployable folder, verified from a sub-path | 6 without the wiki, 1 with | 0.54 s | 0.03–0.80 s; 1.3 s with the wiki (124 files, 17.0 MB) | 2 failed on broken wiki links |
+| `dist` | deployable folder, verified when served | 6 without the wiki, 1 with | 0.54 s | 0.03–0.80 s; 1.3 s with the wiki (124 files, 17.0 MB) | 2 failed on broken wiki links |
 | `ui-accept` (full) | 53 checks of the viewer page | 9 | 115 s | 111–125 s | 6 passed 53/53; 3 failed (43/52, 52/53, 48/53) while the page was being built; plus 7 partial runs of 3–46 s |
 | `wiki index` | | 6 | 0.010 s | 0.004–0.013 s | |
 | `wiki lint` | | 5 | 0.017 s | 0.009–0.022 s | all five failed: pages still being written |

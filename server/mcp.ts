@@ -1,6 +1,6 @@
-// The MCP endpoint of the rigtwin server (agent interface v2): POST /api/mcp, Model Context Protocol over Streamable HTTP,
+// The MCP endpoint of the synergon server (agent interface v2): POST /api/mcp, Model Context Protocol over Streamable HTTP,
 // tools only. The same five tools on the laptop (http://127.0.0.1:4173/api/mcp) and on the host
-// (https://mightwork.ai/rigtwin/api/mcp): adjust, look, measure, undo, state (shared/commands/intent.ts). Their schemas and
+// (https://synergon.mightwork.ai/api/mcp): adjust, look, measure, undo, state (shared/commands/intent.ts). Their schemas and
 // descriptions come from the command registry, the server's instructions (shown to the model at session start, at most
 // 4,096 characters in Claude Code) from the catalogue of adjustments, so nothing about them is written by hand.
 //
@@ -80,7 +80,7 @@ export function createMcp(o: McpOptions) {
         return rpc(m.id, {
           protocolVersion: PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "rigtwin", title: "rigtwin shared scene", version: o.revision },
+          serverInfo: { name: "synergon", title: "synergon shared scene", version: o.revision },
           instructions: o.instructions(),
         });
       }

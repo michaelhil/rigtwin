@@ -158,7 +158,7 @@ def body_mesh(c, hide=None, name="body", material="clay_body", morphs=None):
 
 
 def write_shape_bin(path, base, targets):
-    """RP's rigtwin-shape/0.1 layout, which the viewer's CPU bake reads (FORMAT.md v0.4, 2d): float32 base[N*3], then
+    """RP's synergon-shape/0.1 layout, which the viewer's CPU bake reads (FORMAT.md v0.4, 2d): float32 base[N*3], then
     int16 targets[K][N*3] with delta = int16 / 32767 * targetScale[k]. base (N,3) and targets {name: (N,3)} in the
     package frame, metres. Returns the manifest's `shape.bake` block without "meshes" and the largest rounding error."""
     names = list(targets); base = np.ascontiguousarray(base, dtype="<f4"); scales = []; err = 0.0
@@ -329,7 +329,7 @@ def build(out=None, sex="m", rig="rr", shape_root=None, shape_tag=SHAPE_TAG, n_s
     controls, model, measures, person, mesh_of, weights_of, info = shape_model(c)
     mats = {"clay_body": {"pbrMetallicRoughness": {"baseColorFactor": [0.5, 0.5, 0.5, 1.0], "metallicFactor": 0.0, "roughnessFactor": 0.9}}}
     gp = os.path.join(out, name + ".glb")
-    stats = glb.write_glb(gp, [body_mesh(c, hide)], c.skeleton, mats, generator="rigtwin avatar-lab pipeline/build_body.py (MPFB2 2.0.18 data, CC0)")
+    stats = glb.write_glb(gp, [body_mesh(c, hide)], c.skeleton, mats, generator="synergon avatar-lab pipeline/build_body.py (MPFB2 2.0.18 data, CC0)")
     problems = glb.validate(gp)
     bake = None; body_ix = np.nonzero(c.base.vgroups["body"])[0]
     assert (body_ix == np.arange(len(body_ix))).all()              # the body is hm08 vertices 0..13379: `_SRC` = hm08 index = file row
@@ -345,7 +345,7 @@ def build(out=None, sex="m", rig="rr", shape_root=None, shape_tag=SHAPE_TAG, n_s
     eyes = [c.skeleton.head[names.index(n)][1] for n in ("eye_l", "eye_r", "eye_L", "eye_R") if n in names]
     body = c.base.vgroups["body"]
     man = {
-        "format": "rigtwin-avatar/0.4", "name": name, "glb": name + ".glb",
+        "format": "synergon-avatar/0.4", "name": name, "glb": name + ".glb",
         "note": "Clay body (%s) for deformation and shape review: hm08 body without helper geometry; RP's measurement-driven shape space (%s, %d of %d components, baked on the CPU from the shape file); %s; B3's wrist-flexion correctives. No head kit, no clothes, no textures." % (
             "man" if sex == "m" else "woman", info["source"], info["kept"], info["components"],
             "RR's 82-joint rig, 4-influence least-squares weights, `_DQS` mask, a second 8-influence skin set" if rig == "rr" else "MPFB2 `default` rig as painted, truncated to 4 influences, no dofs"),

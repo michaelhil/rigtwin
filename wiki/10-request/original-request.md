@@ -2,7 +2,7 @@
 title: The owner's requests, verbatim
 tldr: Every request the project owner made, word for word and in order, from the first brief to the last remark during the build. Everything else in this wiki derives from these texts.
 status: stable
-updated: 2026-11-23
+updated: 2026-11-25
 tags: [request, source]
 ---
 
@@ -13,7 +13,7 @@ tags: [request, source]
 - The owner is a human factors and ergonomics researcher who wants an open, modular way to model, evaluate and live-test remote operating stations. The first step is a credible 3D model of one station ("the rig"), built from photographs only.
 - The first request asked for an investigation and a plan, made by a team of specialist AI agents and then attacked by a fresh review team. The second asked for a full test implementation, a wiki, a private GitHub repository and a deployment.
 - The texts below are verbatim. Typing errors are the owner's and are kept on purpose.
-- One substitution was made: where the owner named the maker of the rig, the name is replaced by `[rig maker]`, because the owner asked that the name not appear in the repository.
+- Two substitutions were made. Where the owner named the maker of the rig, the name is replaced by `[rig maker]`, because the owner asked that the name not appear in the repository. Where the owner wrote the project's first name, which the owner retired on 2026-11-25 with the instruction to remove every reference to it, it is replaced by `[first name]`.
 - The requests are broken down into numbered requirements in [requirements.md](requirements.md).
 
 ## How to read this page
@@ -118,11 +118,11 @@ Context: the owner's reaction to the list.
 
 > all bad. keep it simpler. no german or norwegian
 
-The owner then chose **rigtwin** from a list of plain English names.
+The owner then chose the project's first name (written here as `[first name]`) from a list of plain English names. On 2026-11-25 the owner retired it and renamed the project Synergon ([below](#2026-11-25-the-new-name-and-workspaces)).
 
 Context: sent after the name was chosen. It fixes the two public addresses.
 
-> use mightwork.ai/rigtwin for the live viewer and mightwork.ai/rigtwin/wiki for the wiki. now continue
+> use mightwork.ai/[first name] for the live viewer and mightwork.ai/[first name]/wiki for the wiki. now continue
 
 Context: asked on seeing the viewer's source file. It led to the viewer being rewritten in TypeScript.
 
@@ -136,6 +136,17 @@ Context: sent after trying the seat controls. In the first viewer, adjustments t
 to exist (such as the seat slide) were shown locked.
 
 > why cant i adjust the seat? the lock is confusing for users unless there is a way to unlock
+
+## 2026-11-25: the new name and workspaces
+
+Context: sent after the manikin was working in the product, before its first public release.
+
+> i decided to rename the project to synergon. i have set up the subdomain synergon.mightwork.ai, but it might take a while to be available. at a suitable time before deploy, set up an agent team to change the whole project up under that name. "[first name]" and mightwork.ai/[first name] are completely retired; remove all references to it. I want the wiki under synergon.mightwork.ai/wiki. In the deploy, I also want a simple workspace functionality like in Leitbild . check that out , make a good plan, set up an agent team to do it
+
+Context: the owner's answers to the plan's three questions. These are options the owner picked, not typed text:
+the team runs on Sonnet now; `synergon.mightwork.ai/` shows a workspaces landing, and the current shared scene
+becomes the workspace "Playground"; workspaces are public like Leitbild's (no accounts, unguessable links, anyone
+with a link can view, change, rename or delete; creation rate-limited; nothing deleted automatically).
 
 ## What is not on this page
 

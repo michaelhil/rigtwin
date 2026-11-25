@@ -72,7 +72,7 @@ pivots ([P-09](../60-lessons/patterns.md#p-09)). Result at 18:00: 48 components 
 
 ## Round 1, per group
 
-Three modellers worked in parallel from 18:05, each in its own workspace and owning its own files
+Three modellers worked in parallel from 18:05, each in its own build folder and owning its own files
 ([P-10](../60-lessons/patterns.md#p-10)). Iterations are build-render-compare cycles as the
 modellers logged them; durations are wall clock from the timeline and the agent harness.
 

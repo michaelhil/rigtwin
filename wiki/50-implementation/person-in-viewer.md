@@ -114,7 +114,7 @@ eye model's own method constants.
 `pickAt(x, y)`, `depthAt(x, y)`, `shells()` (how deep the drawn skin lies inside each pod's inner side, before and after the contact, mm,
 measured on the GPU: the CPU skinning has no contact), `look(on)` (the person's own look in the product's light, below; on by default),
 `object()`, `still(on)`, `bench(n, { idle })`. Every change raises the window event
-`rigtwin:person` with the state. A swap of package (sex, or the clay figure) keeps the tone, what is worn and the pose; another sex takes
+`synergon:person` with the state. A swap of package (sex, or the clay figure) keeps the tone, what is worn and the pose; another sex takes
 the new package's default body unless a shape comes in the same call. URL: `person=0` (no person code), `person=off` (loaded, not shown), `person=<manifest url>`, `person_style`,
 `person_sex=m|f`, `person_tone`, `person_wear=glasses:none,headset:none`, `person_shape=<preset>`, `person_idle=0`, `person_look=0`. The render tool and the rig's checks use
 `person=0`: the rig's documentation pictures stay pictures of the rig.

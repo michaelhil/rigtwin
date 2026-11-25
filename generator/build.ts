@@ -1,5 +1,6 @@
-// bun run build [--only <group>[,<group>]] [--workspace <name>] [--asset rig-b] [--out <dir>] [--quiet]
-// --workspace (or RIGTWIN_WORKSPACE) writes to work/<name>/build/ so parallel builds do not overwrite each other.
+// bun run build [--only <group>[,<group>]] [--build <name>] [--asset rig-b] [--out <dir>] [--quiet]
+// --build <name> (or SYNERGON_BUILD_DIR=<name>) names a build folder: the output goes to work/<name>/build/ instead of the
+// shared assets/<asset>/build/, so parallel builds do not overwrite each other.
 // params + spec + src  ->  assets/<asset>/build/<asset>.glb + <asset>.manifest.json
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,9 +14,9 @@ import { ROOT, timeline } from "../tools/timeline.ts";
 
 export interface BuildResult { ok: boolean; glbPath: string; manifestPath: string; sha256: string; seconds: number; manifest: any; messages: string[] }
 
-export async function build(opts: { asset?: string; only?: string[]; outDir?: string; workspace?: string; quiet?: boolean } = {}): Promise<BuildResult> {
+export async function build(opts: { asset?: string; only?: string[]; outDir?: string; buildFolder?: string; quiet?: boolean } = {}): Promise<BuildResult> {
   const t0 = performance.now();
-  const asset = opts.asset ?? "rig-b", dir = join(ROOT, "assets", asset), outDir = opts.outDir ?? (opts.workspace ? join(ROOT, "work", opts.workspace, "build") : join(dir, "build"));
+  const asset = opts.asset ?? "rig-b", dir = join(ROOT, "assets", asset), outDir = opts.outDir ?? (opts.buildFolder ? join(ROOT, "work", opts.buildFolder, "build") : join(dir, "build"));
   const say = (m: string) => { if (!opts.quiet) console.log(m); };
   const messages: string[] = [];
   const spec = loadSpec(join(dir, "spec"));
@@ -27,13 +28,13 @@ export async function build(opts: { asset?: string; only?: string[]; outDir?: st
   }
   const partial = !!opts.only?.length;
   const { bytes, stats } = writeGlb(asm.root, PALETTE, screenTextures(), {
-    asset, schema: "rigtwin-glb/1",
+    asset, schema: "synergon-glb/1",
     frame: "children of the root node use: metres, Z up, X forward (operator to main display), Y to the operator's left; origin at the centre of the deck top. The root node rotation converts to glTF Y-up.",
   });
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const unused = [...params.records.keys()].filter((k) => ![...params.usage.values()].some((s) => s.has(k)));
   const manifest = {
-    schema: "rigtwin-manifest/1",
+    schema: "synergon-manifest/1",
     asset, title: spec.title,
     conventions: {
       units: "metres, radians",
@@ -83,7 +84,7 @@ if (import.meta.main) {
   const opt = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
   try {
     const only = opt("--only")?.split(",").map((s) => s.trim()).filter(Boolean);
-    const res = await build({ asset: opt("--asset"), only, outDir: opt("--out"), workspace: opt("--workspace") ?? process.env.RIGTWIN_WORKSPACE, quiet: args.includes("--quiet") });
+    const res = await build({ asset: opt("--asset"), only, outDir: opt("--out"), buildFolder: opt("--build") ?? process.env.SYNERGON_BUILD_DIR, quiet: args.includes("--quiet") });
     if (!args.includes("--no-timeline")) timeline(res.ok ? "build" : "build failed", res.seconds, res.ok ? `${res.manifest.totals.triangles} tris, ${res.manifest.glb.bytes} bytes${only ? `, only ${only.join(",")}` : ""}` : res.messages.slice(0, 3).join(" | "));
     process.exit(res.ok ? 0 : 1);
   } catch (e: any) {

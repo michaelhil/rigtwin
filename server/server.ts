@@ -1,11 +1,11 @@
-// The rigtwin server: the command endpoint and the live channel for the scene document ("Playground",
+// The synergon server: the command endpoint and the live channel for the scene document ("Playground",
 // the pose and its last changes). The same code runs locally (mounted by tools/serve.ts next to the
 // viewer, or on its own) and on the host (bundled as server/server.js inside the release, run by
-// systemd behind Caddy, which maps /rigtwin/api/* to /api/*).
+// systemd behind Caddy, which maps /api/* to /api/*).
 //
 //   GET  /api/health    {ok, revision, format, mode, uptime_s, asset: {name, sha256}}
 //   GET  /api/commands  the command catalogue (shared/commands)
-//   POST /api/command   {id, args, expectedVersion?, group?, session?}, JSON, header X-Rigtwin: 1
+//   POST /api/command   {id, args, expectedVersion?, group?, session?}, JSON, header X-Synergon: 1
 //                       -> {ok: true, server, version, result} | {ok: false, server, version, error: {code, message, hint, schema?}}
 //                       (HTTP 200 whenever the command was looked at; 4xx/5xx only for requests that never got that far)
 //   GET  /api/live      server-sent events: "session" {code, ...} first, then "snapshot" {doc} or the "applied"
@@ -14,7 +14,7 @@
 //                       the last event of a stream the server ends by its byte budget (the page reconnects at once).
 //                       ?session=<code> keeps a browser's code across reconnects (when it is free).
 //   POST /api/mcp       the same commands for agents over MCP (Streamable HTTP, tools only: adjust, look, measure,
-//                       undo, state, person; server/mcp.ts); no X-Rigtwin header, a JSON content type and no foreign Origin
+//                       undo, state, person; server/mcp.ts); no X-Synergon header, a JSON content type and no foreign Origin
 //   POST /api/follow    {session, actor}: this page follows that caller's views (a look without a code reaches it); actor
 //                       null stops; one caller per page
 //   GET  /api/trace     ?after=<n>: the last 100 trace records (one per request: who, what, how it ended, how long; server/trace.ts),
@@ -22,9 +22,9 @@
 //   POST /api/picture   ?reply=<id>&session=<code>, image/jpeg: a browser's answer to `look {picture: true}`, only for a
 //                       picture that is being waited for (the id is in the view event), at most 60 kB
 //
-// Who: identify(req) gives the actor from the declared role (X-Rigtwin-Client: person | agent, otherwise a
+// Who: identify(req) gives the actor from the declared role (X-Synergon-Client: person | agent, otherwise a
 // script; the role is only claimed) and an id the server makes: an HMAC, with a secret kept in the data
-// folder, of the random id the client sends (X-Rigtwin-Client-Id; one per browser page or CLI run). The
+// folder, of the random id the client sends (X-Synergon-Client-Id; one per browser page or CLI run). The
 // client's own id is never stored or sent to anyone, so it cannot be read off the live channel and reused.
 // Every command reply names the caller's actor (`you`) and, for an edit, the version it recorded
 // (`recorded`): a browser knows its own changes by those versions. authorize() allows everything in step 1.
@@ -33,7 +33,7 @@
 // Run directly: bun server/server.ts [--port 4173] [--host 127.0.0.1] [--data <dir>] [--asset <dir>]
 //   [--mode local|deployed] [--revision <rev>] [--release <link>]; prints {"listening": <port>} when ready.
 //   In deployed mode the release is the real path of the folder above this file's folder (Bun gives a
-//   script its real path, so /srv/rigtwin/current/server/server.js arrives as .../releases/<name>/server/
+//   script its real path, so /srv/synergon/current/server/server.js arrives as .../releases/<name>/server/
 //   server.js); the asset is <release>/asset, the revision <release>/version.json. The link watched is
 //   --release, or else <root>/current when the release lies in <root>/releases/ (the deploy's layout); the
 //   server exits when that link points at another release, and at start when it already does.
@@ -58,7 +58,7 @@ import { createTrace, summarize } from "./trace.ts";
 
 export interface ApiOptions {
   dataDir: string; assetDir: string; mode: "local" | "deployed"; revision: string;
-  /** deployed: the release folder as started (`/srv/rigtwin/current`, a link); watched for a new release */
+  /** deployed: the release folder as started (`/srv/synergon/current`, a link); watched for a new release */
   releaseDir?: string;
   /** the person's packages (assets/manikin/ locally, <release>/asset/manikin/ deployed); default: the first of those two next to
    *  the asset folder that exists. null: no person. */
@@ -72,8 +72,8 @@ export interface ApiOptions {
 const KIND_LABEL = { person: "Person", agent: "Claude Code", script: "Script" } as const;
 /** The actor of a request: declared role and random id, label made by the server. */
 export function identify(req: Request, secret: Buffer): Actor {
-  const role = req.headers.get("x-rigtwin-client"), kind = role === "person" || role === "agent" ? role : "script";
-  const given = req.headers.get("x-rigtwin-client-id"), raw = given && /^[0-9a-f]{8,64}$/.test(given) ? given : randomBytes(16).toString("hex");
+  const role = req.headers.get("x-synergon-client"), kind = role === "person" || role === "agent" ? role : "script";
+  const given = req.headers.get("x-synergon-client-id"), raw = given && /^[0-9a-f]{8,64}$/.test(given) ? given : randomBytes(16).toString("hex");
   const id = createHmac("sha256", secret).update(raw).digest("hex").slice(0, 12);
   return { kind, id, label: `${KIND_LABEL[kind]} · ${id.slice(0, 4)}` };
 }
@@ -201,11 +201,11 @@ export function createApi(opts: ApiOptions) {
   loadAsset();
 
   // ---- the document
-  // a new Playground has the default person in the seat (when the person's packages are here); a rigtwin-scene/1 document
-  // (before manikin v1) is read with its pose and history as they were and the default person added, without a history entry
+  // a new Playground has the default person in the seat (when the person's packages are here); stored documents of an
+  // earlier format are converted once by the cutover script (shared/commands/scene-upgrade.ts), not here
   let doc: SceneDoc = newDoc(asset!, people?.defaultPerson ?? null);
   if (existsSync(docFile)) {
-    try { doc = parseDoc(JSON.parse(readFileSync(docFile, "utf8")), { person: people?.defaultPerson ?? null }); }
+    try { doc = parseDoc(JSON.parse(readFileSync(docFile, "utf8"))); }
     catch (e: any) { const aside = `${docFile}.unreadable-${Date.now()}`; renameSync(docFile, aside); console.error(`doc.json could not be read (${e.message}); kept as ${aside}, starting an empty Playground`); }
   }
   /** doc.json, written atomically: a temporary file, flushed to disk, renamed over the old one. */
@@ -309,7 +309,7 @@ export function createApi(opts: ApiOptions) {
   }
 
   async function command(req: Request, visitor: string): Promise<Response> {
-    if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "a command needs the header X-Rigtwin: 1", "send the header X-Rigtwin: 1 (bun run rig does)");
+    if (req.headers.get("x-synergon") !== "1") return fail(400, "bad_request", "a command needs the header X-Synergon: 1", "send the header X-Synergon: 1 (bun run rig does)");
     if (mime(req) !== "application/json") return fail(415, "bad_request", "a command is sent as JSON", "send Content-Type: application/json");
     const text = await readBody(req, deployed ? L.bodyBytes : Number.POSITIVE_INFINITY, L.bodyTimeoutMs);
     if (text === "too_large") return fail(413, "too_large", `a command is at most ${L.bodyBytes / 1024} kB`, "send a smaller command");
@@ -409,7 +409,7 @@ export function createApi(opts: ApiOptions) {
 
   // ---- a page follows a caller's views (agent interface v2): the views that caller sends without a code come to it
   async function follow(req: Request, visitor: string): Promise<Response> {
-    if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "this needs the header X-Rigtwin: 1", "the viewer sends it");
+    if (req.headers.get("x-synergon") !== "1") return fail(400, "bad_request", "this needs the header X-Synergon: 1", "the viewer sends it");
     if (mime(req) !== "application/json") return fail(415, "bad_request", "send JSON", "send Content-Type: application/json");
     if (deployed && !edits.hit(visitor)) return fail(429, "rate_limited", `at most ${L.editsPerMinutePerVisitor} changes a minute per visitor`, "wait a minute");
     const text = await readBody(req, 1024, L.bodyTimeoutMs);
@@ -429,7 +429,7 @@ export function createApi(opts: ApiOptions) {
 
   // ---- a browser's picture for a look that waits for it
   async function picture(req: Request, url: URL): Promise<Response> {
-    if (req.headers.get("x-rigtwin") !== "1") return fail(400, "bad_request", "a picture needs the header X-Rigtwin: 1", "the viewer sends it");
+    if (req.headers.get("x-synergon") !== "1") return fail(400, "bad_request", "a picture needs the header X-Synergon: 1", "the viewer sends it");
     if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("image/jpeg")) return fail(415, "bad_request", "a picture is sent as image/jpeg", "send Content-Type: image/jpeg");
     const id = url.searchParams.get("reply") ?? "", p = /^[0-9a-f]{32}$/.test(id) ? pending.get(id) : undefined;
     if (!p) return fail(404, "not_asked", "no picture is being waited for with this id", "a picture is sent only in answer to a look command, within a few seconds");
@@ -437,7 +437,7 @@ export function createApi(opts: ApiOptions) {
     const b = await readBytes(req, L.pictureBytes, L.bodyTimeoutMs);
     if (typeof b === "string") return fail(b === "too_large" ? 413 : 400, b === "too_large" ? "too_large" : "bad_request", b === "too_large" ? `a picture is at most ${L.pictureBytes / 1024} kB` : "the picture did not arrive", "send a smaller JPEG");
     if (b.byteLength < 4 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) return fail(400, "bad_picture", "the body is not a JPEG", "send the picture as image/jpeg");
-    const pageMs = Number(req.headers.get("x-rigtwin-ms"));
+    const pageMs = Number(req.headers.get("x-synergon-ms"));
     p.done(b, Number.isFinite(pageMs) && pageMs >= 0 && pageMs < 60_000 ? Math.round(pageMs) : undefined);
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
@@ -550,7 +550,7 @@ if (import.meta.main) {
   const assetDir = opt("--asset") ? resolve(opt("--asset")!) : mode === "deployed" || existsSync(join(release, "asset")) ? join(release, "asset") : join(release, "assets", "rig-b", "build");
   let revision = opt("--revision") ?? "working copy";
   if (!opt("--revision") && existsSync(join(release, "version.json"))) try { revision = JSON.parse(readFileSync(join(release, "version.json"), "utf8")).revision ?? revision; } catch { /* keep the default */ }
-  const dataDir = opt("--data") ? resolve(opt("--data")!) : mode === "local" ? join(dirname(release), "rigtwin-projects") : null;
+  const dataDir = opt("--data") ? resolve(opt("--data")!) : mode === "local" ? join(dirname(release), "synergon-projects") : null;
   if (!dataDir) { console.error("--data <dir> is required in deployed mode"); process.exit(2); }
   const api = createApi({ dataDir, assetDir, mode, revision, ...(mode === "deployed" ? { releaseDir } : {}) });
   const srv = Bun.serve({

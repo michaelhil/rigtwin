@@ -1,3 +1,4 @@
-# Pinned host key of the production host for mightwork.ai (ed25519), checked on 2026-11-23 against the
-# key already trusted for the host's IP address: SHA256:8OFUvgiFwCK1YumKbLzjRcm8yecsnUPDz1TWoRZuw1Q
-mightwork.ai ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAi7eS0nfwfHlHolFnIVr1Gnbae7AyH49dbptF2jqYMt
+# Pinned host key of the production host (ed25519), checked on 2026-11-23 against the key already trusted for the
+# host's IP address: SHA256:8OFUvgiFwCK1YumKbLzjRcm8yecsnUPDz1TWoRZuw1Q. synergon.mightwork.ai resolves to the same host
+# (checked 2026-11-25), so the same key is pinned under both names; the deploy connects to synergon.mightwork.ai.
+mightwork.ai,synergon.mightwork.ai ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAi7eS0nfwfHlHolFnIVr1Gnbae7AyH49dbptF2jqYMt

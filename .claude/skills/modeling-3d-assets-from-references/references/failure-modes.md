@@ -22,7 +22,7 @@ guard is an instruction in this Skill and depends on the agent following it.
 | A flexible cover tears when its lever moves; a part leaves the arm that carries it; a moving part passes through a fixed bar | The tree was right at rest and never tried in motion; a multi-link mechanism was one rigid mesh; a joint was left unlocked with a range its geometry could not follow | Procedure: pose every unlocked joint at both limits before review; the reviewer does it again. Not in place: a collision sweep. The expected-motion check does not catch any of these |
 | Generator, viewer and checker each pose a joint slightly differently | Three implementations of "joint value → transform" written separately in the trials | In place: one shared pose function used by generator and viewer; a conformance check against the independent reader on test poses |
 | A naming rule rejects names its own author wrote | The rule was written before the tree | Procedure: run the name check on the real blockout before a brief goes out |
-| Parallel builders overwrite each other's build output, or one half-edited file breaks everyone's build | Shared output folder and shared source tree | In place: `--workspace`, `--only <group>`. Procedure: file ownership table; shared spec edited only in one's own entries with small targeted edits; changes to shared kit code logged |
+| Parallel builders overwrite each other's build output, or one half-edited file breaks everyone's build | Shared output folder and shared source tree | In place: `--build`, `--only <group>`. Procedure: file ownership table; shared spec edited only in one's own entries with small targeted edits; changes to shared kit code logged |
 
 ## Measuring
 

@@ -12,7 +12,7 @@ const ASSET = join(import.meta.dir, "..", "assets", "rig-b", "build");
 const temps: string[] = [];
 afterAll(() => { for (const d of temps) rmSync(d, { recursive: true, force: true }); });
 function start(o: Partial<ApiOptions> = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "rigtwin-trace-test-")); temps.push(dataDir);
+  const dataDir = mkdtempSync(join(tmpdir(), "synergon-trace-test-")); temps.push(dataDir);
   const api = createApi({ dataDir, assetDir: ASSET, mode: "local", revision: "test", ...o });
   const srv = Bun.serve({ port: 0, hostname: "127.0.0.1", idleTimeout: 40, async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); } });
   return { base: `http://127.0.0.1:${srv.port}`, stop: () => { api.close(); srv.stop(true); } };
@@ -22,7 +22,7 @@ async function mcp(base: string, method: string, params: unknown, sid?: string) 
   const r = await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", ...(sid ? { "mcp-session-id": sid } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) });
   return { sid: r.headers.get("mcp-session-id")!, body: await r.json() as any };
 }
-const command = (base: string, body: unknown) => fetch(`${base}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+const command = (base: string, body: unknown) => fetch(`${base}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
 const traces = async (base: string) => ((await (await fetch(`${base}/api/trace`)).json()) as any).traces as any[];
 
 describe("the trace", () => {

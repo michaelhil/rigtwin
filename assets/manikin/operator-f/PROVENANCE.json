@@ -586,12 +586,12 @@
    "sha256": "43a61e98bd50d9fa40506ab6913d68040c1782559d85e4bf6e7184d0733bd556"
   },
   "operator-f.avatar.json": {
-   "bytes": 292170,
-   "sha256": "25e976891774c708f900fc8ef179d5634802136a4f19e3b2b583d4c645683393"
+   "bytes": 292171,
+   "sha256": "29e2cff99de9368b3373b0d591123cf1a788507c8100fecab4874e75b3dd1731"
   },
   "operator-f.glb": {
    "bytes": 6558048,
-   "sha256": "dd16dabb43226664c9c037a8cfa7d0ebd5f2733b3da48adc024f51a38721c4de"
+   "sha256": "aa9d30d289dbf97be425dc4c4723276c0d3cdfd66bab4bb3653eb39ec1e8be2b"
   },
   "poses.json": {
    "bytes": 39549,

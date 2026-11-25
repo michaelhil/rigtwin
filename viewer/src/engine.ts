@@ -231,7 +231,7 @@ export async function load() {
   }
   const floor = manifest.datums.find((d) => d.id === 'D_floor');
   ground.position.y = floor ? floor.origin[2] - 0.0005 : manifest.totals.bbox.min[2];
-  S.dev = !!document.querySelector('meta[name=rigtwin-dev]');
+  S.dev = !!document.querySelector('meta[name=synergon-dev]');
   if (S.dev) { // local dev server only; never requested by a deployed copy
     try { const r = await fetch(CAMERAS_URL, { cache: 'no-store' }); if (r.ok) S.cameras = (await r.json()).cameras ?? null; } catch { /* photo cameras are optional */ }
     // other people rebuild the model while this page is open: say so when the window is looked at again

@@ -71,7 +71,7 @@ for rk, (mesh_name, mat_name, col) in enumerate(REG):
     meshes.append({"name": mesh_name, "primitives": [prim], "weights": [0.0] * K, "extras": {"targetNames": TN}})
     nodes.append({"name": mesh_name, "mesh": len(meshes) - 1, "skin": 0}); scene_nodes.append(len(nodes) - 1)
     counts[mesh_name] = {"vertices": int(len(used)), "triangles": int(fm.sum())}
-gltf = {"asset": {"version": "2.0", "generator": "rigtwin avatar-lab RP/export.py (Anny 0.6.2 shape space)"}, "scene": 0, "scenes": [{"nodes": scene_nodes}], "nodes": nodes, "meshes": meshes,
+gltf = {"asset": {"version": "2.0", "generator": "synergon avatar-lab RP/export.py (Anny 0.6.2 shape space)"}, "scene": 0, "scenes": [{"nodes": scene_nodes}], "nodes": nodes, "meshes": meshes,
         "skins": [skin], "materials": materials, "accessors": accs, "bufferViews": views}
 blob = b"".join(bufs); gltf["buffers"] = [{"byteLength": len(blob)}]
 js = json.dumps(gltf, separators=(",", ":")).encode(); js += b" " * ((-len(js)) % 4)
@@ -133,7 +133,7 @@ def person(p):
     return preset("", g)["values"]
 persons = {k: person(p) for k, p in VDP.items() if p["sex"] == sex}
 manifest = {
-    "format": "rigtwin-avatar/0.1", "name": NAME, "glb": NAME + ".glb",
+    "format": "synergon-avatar/0.1", "name": NAME, "glb": NAME + ".glb",
     "note": "RP shape-space carrier: the surface is raw Anny in flat colours, BELOW the visual floor, not for the owner. It exists to prove sex-specific, measurement-driven shape on a shared topology.",
     "licence": [{"what": "mesh, skeleton, weights, shape targets", "source": "Anny 0.6.2 (NAVER LABS), MakeHuman-derived data; targets fitted by RP to ANSUR II", "licence": "Apache-2.0 (code), CC0-1.0 (data)", "verified": "2026-11-24 (github.com/naver/anny, read today)"}],
     "rest": {"pose": "A", "stature": round(float(m_base[0]), 4), "eyeHeight": round(float(J0[BI["eye.L"], 1]), 4)},
@@ -150,7 +150,7 @@ json.dump(manifest, open(OUT + NAME + ".avatar.json", "w"), separators=(",", ":"
 q = np.abs(dV).reshape(K, -1).max(1); i16 = np.round(dV / q[:, None, None] * 32767).astype("<i2")
 open(OUT + NAME + ".shape.bin", "wb").write(np.ascontiguousarray(Vb, dtype="<f4").tobytes() + i16.tobytes())
 ser = lambda s: {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in s.items()}
-full = {"format": "rigtwin-shape/0.1", "sex": sex, "frame": "Anny/Blender: +x the body's left, -y forward, +z up, metres; soles on z = 0, hip joints centred on x = y = 0",
+full = {"format": "synergon-shape/0.1", "sex": sex, "frame": "Anny/Blender: +x the body's left, -y forward, +z up, metres; soles on z = 0, hip joints centred on x = y = 0",
         "vertices": N, "targets": K, "dims": DIMS, "baseScale": SC, "extremes": {"stature": [round(pc("stature", 1) * 1000), round(pc("stature", 99) * 1000)], "mass": [round(pc("weightkg", 1), 1), round(pc("weightkg", 99), 1)]}, "persons": persons, "units": "metres; weightkg in kg",
         "bin": {"file": NAME + ".shape.bin", "layout": "float32 base[N*3], then int16 targets[K][N*3]; delta = int16 / 32767 * targetScale[k]", "targetScale": q.tolist()},
         "map": {"doc": "coef[k] = sum_d ((x[d] - mean[d]) / sd[d]) * W[d][k]; vertices = base + sum_k coef[k] * target[k]; joints = jointBase + sum_k coef[k] * jointTargets[k]",

@@ -28,8 +28,8 @@ commands are on the page [the server and its host setup](../50-implementation/se
 | 2 | `setup-server.sh --apply` on the host (the Caddy route and its 404 rule first, then the service), `--probe` (host check H7), the load test (H14) | agents, with the owner's yes | **done** 2026-11-24. The unit's file rules were made generic afterwards; it was installed and probed again (passed) before step 3 |
 | 3 | Merge `platform-step1-main` to `main` and push; the automatic deploy puts the first release with the server live and requires its health check | agents, with the owner's yes | **done** 2026-11-24. The first push was refused by the deploy's own check on the runner (two faults that only show on a fresh Linux checkout; nothing was uploaded); the second (`ff90f30`) deployed, and `api/health` reports that revision |
 | 4 | `setup-server.sh --check` again on the host (H8, H12) | agents | **done** 2026-11-24: the server's code answers 404 in seven spellings; the unit's exposure score is 1.4 with its limits in effect; the service is active |
-| 5 | `bun tools/live-idle-test.ts --url https://mightwork.ai/rigtwin` (10 minutes idle through Caddy, then one change and its undo) | agents | started after the deploy on 2026-11-24; its result is recorded in the [log](../log.md) |
-| 6 | The two-browser acceptance on the live site (`bun tools/live-site-check.ts https://mightwork.ai/rigtwin`) | agents | **done** 2026-11-24: all nine lines ok, and the public scene left as it was found |
+| 5 | `bun tools/live-idle-test.ts --url <public site address>` (10 minutes idle through Caddy, then one change and its undo) | agents | started after the deploy on 2026-11-24; its result is recorded in the [log](../log.md) |
+| 6 | The two-browser acceptance on the live site (`bun tools/live-site-check.ts <public site address>`) | agents | **done** 2026-11-24: all nine lines ok, and the public scene left as it was found |
 | 7 | The owner tries it: "lower the monitor 3 cm and show me the operator's view", watched on mightwork.ai, then undone | owner (about 15 minutes) | to do |
 | 8 | Re-forecast steps 2–5 with the real hours of step 1 | agents | to do |
 
@@ -214,7 +214,7 @@ ISO 15536-1 and -2 (requirements and verification for computer manikins, for the
 
 **Done on 2026-11-23** at the owner's request ([D-37](../20-decisions/decision-log.md#d-37)). Every
 push to `main` runs every check and deploys; the key GitHub holds can only run the deploy script's own
-commands inside `/srv/rigtwin` through the unprivileged account `rigtwin-deploy`. After a model change,
+commands inside `/srv/synergon` through the unprivileged account `synergon-deploy`. After a model change,
 regenerate the wiki's images locally (`bun run render --set wiki`) and commit them: the runner has no
 private photo cameras. Details: [deployment](../50-implementation/deployment.md#continuous-deployment-from-github).
 

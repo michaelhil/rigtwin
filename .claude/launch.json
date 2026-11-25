@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "rigtwin-viewer",
+      "name": "synergon-viewer",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["tools/serve.ts", "--port", "4180"],
       "port": 4180

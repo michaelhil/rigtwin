@@ -3,8 +3,8 @@
 //   bun run rig scene.find '{"text": "monitor height"}'
 //   bun run rig pose.set '{"joints": {"J_mon_height": -0.03}}' --group lower-monitor
 //   bun run rig view.set '{"view": "operator"}' --viewer K7Q2
-// Options: --server <url>  the rigtwin server (default $RIG_URL or http://127.0.0.1:4173; the deployed
-//                          sandbox is https://mightwork.ai/rigtwin)
+// Options: --server <url>  the synergon server (default $RIG_URL or http://127.0.0.1:4173; the deployed
+//                          sandbox is https://synergon.mightwork.ai)
 //          --viewer <code> the browser a view command is for (its code is in the viewer's More menu)
 //          --group <id>    names the request a change belongs to, so `history.undo {"group": ...}` undoes it whole
 //          --expected-version <n>  the scene version the change is based on (refused as stale if a joint it
@@ -42,7 +42,7 @@ export function markGroups(v: any, own?: string): any {
   for (const [k, x] of Object.entries(v)) { if (k === "group" && typeof x === "string" && x !== own) out.untrusted_group = x; else out[k] = markGroups(x, own); }
   return out;
 }
-const headers = (client: string) => ({ "x-rigtwin": "1", "content-type": "application/json", "x-rigtwin-client": client, "x-rigtwin-client-id": CLIENT_ID });
+const headers = (client: string) => ({ "x-synergon": "1", "content-type": "application/json", "x-synergon-client": client, "x-synergon-client-id": CLIENT_ID });
 
 async function request(base: string, path: string, init: RequestInit): Promise<Reply> {
   let res: Response;
@@ -51,16 +51,16 @@ async function request(base: string, path: string, init: RequestInit): Promise<R
     return { server: base, ok: false, error: { code: "unreachable", message: `no server answers at ${base} (${e?.message ?? e})`, hint: base === DEFAULT_SERVER ? "start the local server with `bun run serve` (or `bun server/server.ts`), or name another with --server <url>" : "check the address; leave out --server to use the local server" } };
   }
   let body: any = null;
-  try { body = await res.json(); } catch { /* not JSON: not a rigtwin server */ }
+  try { body = await res.json(); } catch { /* not JSON: not a synergon server */ }
   if (!body || typeof body !== "object" || typeof body.ok !== "boolean") {
-    return { server: base, ok: false, error: { code: "not_rigtwin", message: `${base}/api/${path} answered HTTP ${res.status} without a rigtwin reply`, hint: res.status === 404 ? "this address serves no rigtwin API (is it the viewer of an older release, or the wrong path?)" : "the server or the web server in front of it is not ready; try again shortly" } };
+    return { server: base, ok: false, error: { code: "not_synergon", message: `${base}/api/${path} answered HTTP ${res.status} without a synergon reply`, hint: res.status === 404 ? "this address serves no synergon API (is it the viewer of an older release, or the wrong path?)" : "the server or the web server in front of it is not ready; try again shortly" } };
   }
   const s = body.server ? `${base} (${body.server.mode}, revision ${body.server.revision})` : base;
   const { server: _s, ...rest } = body;
   return { server: s, ...rest };
 }
 
-/** Run one command on a rigtwin server. */
+/** Run one command on a synergon server. */
 export async function call(id: string, args: unknown = {}, o: CallOptions = {}): Promise<Reply> {
   const base = serverUrl(o.server);
   if (o.group && !isLocal(base)) {
@@ -74,7 +74,7 @@ export async function call(id: string, args: unknown = {}, o: CallOptions = {}):
 
 /** The command catalogue of a server (GET api/commands). */
 export async function catalogue(o: Pick<CallOptions, "server"> = {}): Promise<Reply> {
-  return request(serverUrl(o.server), "commands", { headers: { "x-rigtwin-client": "agent", "x-rigtwin-client-id": CLIENT_ID } });
+  return request(serverUrl(o.server), "commands", { headers: { "x-synergon-client": "agent", "x-synergon-client-id": CLIENT_ID } });
 }
 
 if (import.meta.main) {
@@ -88,7 +88,7 @@ if (import.meta.main) {
   }
   const out = (r: any, code: number) => {
     const pic = r?.result?.picture;
-    if (pic?.base64) { const file = flags.out || join(mkdtempSync(join(tmpdir(), "rigtwin-picture-")), "view.jpg"); writeFileSync(file, Buffer.from(pic.base64, "base64"), { flag: "wx" }); r.result.picture = { mime: pic.mime, bytes: pic.bytes, file }; if (r.result.text) r.result.text += ` Written to ${file}.`; }
+    if (pic?.base64) { const file = flags.out || join(mkdtempSync(join(tmpdir(), "synergon-picture-")), "view.jpg"); writeFileSync(file, Buffer.from(pic.base64, "base64"), { flag: "wx" }); r.result.picture = { mime: pic.mime, bytes: pic.bytes, file }; if (r.result.text) r.result.text += ` Written to ${file}.`; }
     if (flags.text) console.log(r?.ok ? r.result?.text ?? JSON.stringify(r.result, null, 2) : `Refused (${r?.error?.code}): ${r?.error?.message}\nWhat to do: ${r?.error?.hint}`);
     else console.log(JSON.stringify(r, null, 2));
     process.exit(code);
@@ -111,5 +111,5 @@ if (import.meta.main) {
   const ev = flags["expected-version"];
   if (ev !== undefined && !/^\d+$/.test(ev)) out({ server: serverUrl(flags.server), ok: false, error: { code: "bad_args", message: `--expected-version takes a whole number, not ${JSON.stringify(ev)}`, hint: "the version from scene.summary" } }, 2);
   const r = await call(cmd, args, { server: flags.server, viewer: flags.viewer, group: flags.group, client: "agent", ...(ev !== undefined ? { expectedVersion: Number(ev) } : {}) });
-  out(r, r.ok ? 0 : r.error?.code === "unreachable" || r.error?.code === "not_rigtwin" ? 2 : 1);
+  out(r, r.ok ? 0 : r.error?.code === "unreachable" || r.error?.code === "not_synergon" ? 2 : 1);
 }

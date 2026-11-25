@@ -118,8 +118,8 @@ Ask the person, in one message, and record the answers verbatim:
 12. **Retrospective [E, once].** Sort lessons into universal, asset-type and asset-specific
     (rule in `CHANGELOG.md`).
 
-**Delegating.** Give each agent a named workspace, the files it owns and the coordinator's
-rulings. Modellers build with `--workspace <name> --only <group>`, edit only their own nodes in
+**Delegating.** Give each agent a named build folder, the files it owns and the coordinator's
+rulings. Modellers build with `--build <name> --only <group>`, edit only their own nodes in
 the shared spec, and leave the toolkit and the checks alone. Resume the same modeller for the
 next round; start a new reviewer every round. Human gates (approving the spec, a first look,
 acceptance) belong to the design but were replaced by the reviewer on the first asset [N].
@@ -144,17 +144,17 @@ acceptance) belong to the design but were replaced by the reviewer on the first 
 
 ```bash
 bun install                                   # once
-bun run build [--only <group>[,<group>]] [--workspace <name>] [--asset <id>]
-bun run check [--fast] [--workspace <name>]   # --fast skips the two browser checks
+bun run build [--only <group>[,<group>]] [--build <name>] [--asset <id>]
+bun run check [--fast] [--build <name>]   # --fast skips the two browser checks
 bun run render --set sheet|ortho|ids|groups|matched|focus|ui|selftest|all \
     [--only <group or id>] [--fit <group or id>] [--cam <photo>] [--pose J_x:val,...] \
-    [--mode ids|class] [--workspace <name>] [--out <dir>]
-bun run serve [--port <n>] [--workspace <name>]   # the viewer, locally
+    [--mode ids|class] [--build <name>] [--out <dir>]
+bun run serve [--port <n>] [--build <name>]   # the viewer, locally
 bun run dist [--out <dir>] [--no-verify]          # self-contained deployable folder
 bash .claude/skills/modeling-3d-assets-from-references/scripts/check-vocabulary.sh
 ```
 
-Set `RIGTWIN_WORKSPACE=<name>` and `RIGTWIN_AGENT=<role>` when working in parallel. Images with
+Set `SYNERGON_BUILD_DIR=<name>` and `SYNERGON_AGENT=<role>` when working in parallel. Images with
 photo pixels are written under `private/renders/`. Every agent appends timings to
 `work/timeline.jsonl`. `generator/README.md` lists the kit operations. Only `build` takes
 `--asset`; `check`, `render`, `serve` and `dist` still hard-code the first asset's id [N].

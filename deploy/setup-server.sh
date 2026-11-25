@@ -1,65 +1,83 @@
 #!/bin/bash
-# deploy/setup-server.sh: one-time setup of the rigtwin server on the production host, and its undo.
+# deploy/setup-server.sh: one-time setup of Synergon on the production host, its undo, and the retirement of the
+# bare domain's old route.
 #
 #   setup-server.sh --check                change nothing; print the current state, the host checks (deploy/HOST-CHECKS.md)
 #                                          and what --apply would do
 #   setup-server.sh --apply                install; idempotent (a second run changes nothing)
 #   setup-server.sh --probe                after --apply: run Bun under the unit's hardening once on 127.0.0.1 (host check H7)
-#   setup-server.sh --undo [--purge-data]  remove the service, the route and the runtime; the data folder and the
-#                                          system user are kept unless --purge-data is given
+#   setup-server.sh --undo [--purge-data]  remove the service, the site, the gate and the runtime; the data folder, the
+#                                          releases and the system users are kept unless --purge-data is given
+#   setup-server.sh --retire-apex          after the first deploy: make mightwork.ai answer 404 for everything
+#                                          (installs deploy/mightwork-apex.caddy); refused unless Synergon is live
+#   setup-server.sh --restore-apex         put the apex site file back as it was before --retire-apex
 #
-# Runs as root on the production host only (the host that serves https://mightwork.ai/rigtwin/ from /srv/rigtwin
-# with /etc/caddy/managed-sites/mightwork-apex.caddy), and only with the owner's yes. It reads the two files it
-# installs from its own folder, so copy all three to the host and run it there:
-#   scp deploy/setup-server.sh deploy/mightwork-apex.caddy deploy/rigtwin-server.service <host>:rigtwin-setup/
+# Runs as root on the production host only (the host that serves https://mightwork.ai and will serve
+# https://synergon.mightwork.ai from /srv/synergon), and only with the owner's yes. It reads the files it installs
+# from its own folder, so copy them to the host and run it there:
+#   scp deploy/setup-server.sh deploy/synergon.caddy deploy/mightwork-apex.caddy deploy/synergon-server.service \
+#       deploy/synergon-deploy-gate.sh synergon-deploy.keys <host>:synergon-setup/
+# (synergon-deploy.keys: the public keys allowed to deploy, one per line, ssh-ed25519 ...; not part of the repository)
 #   then on the host, as root, inside tmux (so that a dropped connection does not end the script half-way):
-#     tmux new -s rigtwin-setup 'bash ~/rigtwin-setup/setup-server.sh --check 2>&1 | tee -a /root/rigtwin-setup.out'
-#   or without tmux:  systemd-run --scope --unit rigtwin-setup bash ~/rigtwin-setup/setup-server.sh --apply
-# Every run also appends its messages to /var/log/rigtwin-setup.log, and every change goes to the system log
-# (journalctl -t rigtwin-setup). If the script is cut off (hang-up, Ctrl-C, a closed output) while a new Caddy site
-# file is not yet confirmed, its exit trap puts the backup back and reloads Caddy before it writes anything.
-# Every Caddy reload (a restore is a second one) closes the upgraded and streaming connections of every site on the
-# host for a moment (Caddy's documentation); the sites themselves stay up.
+#     tmux new -s synergon-setup 'bash ~/synergon-setup/setup-server.sh --check 2>&1 | tee -a /root/synergon-setup.out'
+#   or without tmux:  systemd-run --scope --unit synergon-setup bash ~/synergon-setup/setup-server.sh --apply
+# Every run also appends its messages to /var/log/synergon-setup.log, and every change goes to the system log
+# (journalctl -t synergon-setup). If the script is cut off (hang-up, Ctrl-C, a closed output) while a Caddy site
+# file is not yet confirmed, its exit trap puts the backup back (or removes the new file) and reloads Caddy before it
+# writes anything. Every Caddy reload (a restore is a second one) closes the upgraded and streaming connections of
+# every site on the host for a moment (Caddy's documentation); the sites themselves stay up.
 #
-# --apply, in this order (the Caddy route and the 404 for /rigtwin/server/* go live before any release that contains
+# --apply, in this order (the Caddy route and the 404 for /server/* go live before any release that contains
 # server/, so the deploy's new checks pass from the first such release on):
-#   1. the system user rigtwin (no login, no home) and the data folder /var/lib/rigtwin (0700, owned by rigtwin)
-#   2. Bun 1.4.0 at /opt/rigtwin/runtime/bun, from the official release zip for this machine, checked against the
+#   1. the system user synergon (no login, no home) and the data folder /var/lib/synergon (0700, owned by synergon)
+#   2. the deploy account synergon-deploy (no password; its keys come from synergon-deploy.keys, each limited to the
+#      gate), the gate /usr/local/bin/synergon-deploy-gate and the folder /srv/synergon, owned by that account
+#   3. Bun 1.4.0 at /opt/synergon/runtime/bun, from the official release zip for this machine, checked against the
 #      SHA-256 pinned below before anything is installed
-#   3. the Caddy site file, under the host's Caddy lock: the new file validated on its own, a timestamped backup of
-#      the old one, the new one installed, `caddy validate` of the whole configuration, `systemctl reload caddy`;
-#      then /rigtwin/ must answer 200, /rigtwin/server/server.js 404, /rigtwin/api/health must reach the new route
-#      (502 until the service runs) and every other site must answer as before. On any failure the backup is put
-#      back and Caddy is reloaded.
-#   4. the unit rigtwin-server.service: checked with systemd-analyze, installed, enabled, started. Until a release
+#   4. the Caddy site file /etc/caddy/managed-sites/synergon.caddy, under the host's Caddy lock: the new file validated
+#      on its own, the whole configuration validated, `systemctl reload caddy`; then, once the certificate is there,
+#      / must answer 200 (404 until the first release), /server/server.js 404, /api/health must reach the new route
+#      (502 until the service runs) and every other site must answer as before. On any failure the file is removed
+#      again and Caddy is reloaded.
+#   5. the unit synergon-server.service: checked with systemd-analyze, installed, enabled, started. Until a release
 #      with server/ is live, each start fails and systemd tries again every 2 s; the first such release starts it.
+# --retire-apex changes the file of the bare domain only: a timestamped backup, the 404-everything file installed,
+# the whole configuration validated, Caddy reloaded; mightwork.ai must then answer 404 everywhere and every other site
+# (Synergon included) as before. It stops before any change unless Synergon answers 200 at / and /api/health.
 # Before and after, the status of every Caddy site (one request per host name in /etc/caddy/Caddyfile and
-# /etc/caddy/managed-sites/*.caddy) and of the services caddy and rigtwin-server is printed; a site or Caddy that
+# /etc/caddy/managed-sites/*.caddy) and of the services caddy and synergon-server is printed; a site or Caddy that
 # answers differently afterwards is reported loudly. Every change also goes to the system log
-# (journalctl -t rigtwin-setup).
+# (journalctl -t synergon-setup).
 
 if [ -z "${BASH_VERSION:-}" ]; then echo "setup-server.sh: run it with bash" >&2; exit 2; fi
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-NEW_SITE="$SCRIPT_DIR/mightwork-apex.caddy"
-NEW_UNIT="$SCRIPT_DIR/rigtwin-server.service"
+NEW_SITE="$SCRIPT_DIR/synergon.caddy"
+NEW_APEX="$SCRIPT_DIR/mightwork-apex.caddy"
+NEW_UNIT="$SCRIPT_DIR/synergon-server.service"
+NEW_GATE="$SCRIPT_DIR/synergon-deploy-gate.sh"
+KEYS_FILE="$SCRIPT_DIR/synergon-deploy.keys"      # public keys of the deploy account, one per line (not in the repository)
 
 CADDY_MAIN=/etc/caddy/Caddyfile
 CADDY_SITES=/etc/caddy/managed-sites
-SITE_FILE=/etc/caddy/managed-sites/mightwork-apex.caddy
+SITE_FILE=/etc/caddy/managed-sites/synergon.caddy       # new: it does not exist before the first --apply
+APEX_FILE=/etc/caddy/managed-sites/mightwork-apex.caddy  # the bare domain's file; changed only by --retire-apex
 CADDY_LOCK=/run/lock/caddy-config.lock        # taken by every tool on the host that changes Caddy's configuration
-BACKUP_DIR=/var/backups/rigtwin-setup
-FIRST_BACKUP=/var/backups/rigtwin-setup/mightwork-apex.caddy.before-setup   # the site file before the first --apply
-UNIT_NAME=rigtwin-server
-UNIT_FILE=/etc/systemd/system/rigtwin-server.service
-SVC_USER=rigtwin
-DATA_DIR=/var/lib/rigtwin
-SRV_DIR=/srv/rigtwin
-OPT_DIR=/opt/rigtwin
-RUNTIME_DIR=/opt/rigtwin/runtime
-PORT=4190
-PUBLIC=https://mightwork.ai/rigtwin
+BACKUP_DIR=/var/backups/synergon-setup
+FIRST_BACKUP=/var/backups/synergon-setup/mightwork-apex.caddy.before-retire   # the apex file before the first --retire-apex
+UNIT_NAME=synergon-server
+UNIT_FILE=/etc/systemd/system/synergon-server.service
+SVC_USER=synergon
+DEPLOY_USER=synergon-deploy
+DEPLOY_HOME=/var/lib/synergon-deploy
+GATE_FILE=/usr/local/bin/synergon-deploy-gate
+DATA_DIR=/var/lib/synergon
+SRV_DIR=/srv/synergon
+OPT_DIR=/opt/synergon
+RUNTIME_DIR=/opt/synergon/runtime
+PORT=4191
+PUBLIC=https://synergon.mightwork.ai
 
 BUN_VERSION=1.4.0
 BUN_URL_BASE=https://github.com/oven-sh/bun/releases/download/bun-v1.4.0
@@ -70,9 +88,10 @@ BUN_SHA256_X64=2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452
 BUN_SHA256_X64_BASELINE=184fb4595f0d401a217cf7c78c1bc430ba83314dab7a8b94805babbf7fa7097f
 BUN_SHA256_AARCH64=4b1a332ee861983eb93bcfe6f770fff94e3e31b2c388bdaea3c8ed35e58eed0e
 
-LOG=/var/log/rigtwin-setup.log
+LOG=/var/log/synergon-setup.log
 TMP=""
-CADDY_RESTORE=""   # the backup to put back if the script stops while a new site file is not yet confirmed
+CADDY_RESTORE=""        # the backup to put back if the script stops while a new site file is not yet confirmed; ABSENT: remove the file
+CADDY_RESTORE_FILE=""   # the site file that backup belongs to
 
 # ------------------------------------------------------------------------------------------------ output
 # Each message goes to the log file first and then to the output: a dead output (dropped session) loses nothing.
@@ -82,7 +101,7 @@ step() { log_line "== $*"; printf '\n== %s\n' "$*"; }
 BAR='!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 loud() { log_line "!!! $*"; printf '\n%s\n!!! %s\n%s\n' "$BAR" "$*" "$BAR"; }
 die() { loud "STOPPED: $*"; exit 1; }
-changed() { say "  changed: $*"; logger -t rigtwin-setup -- "$*" 2>/dev/null || true; }
+changed() { say "  changed: $*"; logger -t synergon-setup -- "$*" 2>/dev/null || true; }
 would() { say "  would: $*"; }
 indent() { sed 's/^/    /'; }
 
@@ -157,22 +176,22 @@ site_urls() {
     else echo "$scheme://$host/"; fi
   done | sort -u
 }
-# Writes the status of every site, of the two services and of rigtwin's own routes to the file $1 and prints it.
+# Writes the status of every site, of the two services and of synergon's own routes to the file $1 and prints it.
 snapshot() {
   local out=$1 url svc
   : >"$out"
   while read -r url; do printf 'site %s %s\n' "$url" "$(http_code "$url")" >>"$out"; done < <(site_urls)
   for svc in caddy "$UNIT_NAME"; do printf 'service %s %s\n' "$svc" "$(unit_state "$svc")" >>"$out"; done
-  for url in "$PUBLIC/" "$PUBLIC/api/health" "$PUBLIC/server/server.js"; do printf 'rigtwin %s %s\n' "$url" "$(http_code "$url")" >>"$out"; done
+  for url in "$PUBLIC/" "$PUBLIC/api/health" "$PUBLIC/server/server.js"; do printf 'synergon %s %s\n' "$url" "$(http_code "$url")" >>"$out"; done
   indent <"$out"
 }
-# Compares two snapshots. A site or Caddy that answers differently is reported loudly (status 1); the rigtwin
-# routes and the rigtwin service are expected to change and are listed.
+# Compares two snapshots. A site or Caddy that answers differently is reported loudly (status 1); the synergon
+# routes and the synergon service are expected to change and are listed.
 compare() {
   local d e
-  d=$(diff <(grep -E '^(site |service caddy )' "$1") <(grep -E '^(site |service caddy )' "$2") || true)
-  e=$(diff <(grep -E '^(rigtwin |service '"$UNIT_NAME"' )' "$1") <(grep -E '^(rigtwin |service '"$UNIT_NAME"' )' "$2") || true)
-  [[ -z "$e" ]] || { say "  rigtwin's own routes and service (expected to change):"; printf '%s\n' "$e" | grep -E '^[<>]' | indent; }
+  d=$(diff <(grep -E '^(site |service caddy )' "$1" | grep -v "^site $PUBLIC/ ") <(grep -E '^(site |service caddy )' "$2" | grep -v "^site $PUBLIC/ ") || true)
+  e=$(diff <(grep -E '^(synergon |service '"$UNIT_NAME"' )' "$1") <(grep -E '^(synergon |service '"$UNIT_NAME"' )' "$2") || true)
+  [[ -z "$e" ]] || { say "  synergon's own routes and service (expected to change):"; printf '%s\n' "$e" | grep -E '^[<>]' | indent; }
   if [[ -n "$d" ]]; then
     loud "DIFFERENCE: a site or Caddy itself does not answer as it did before (< before, > after)"
     printf '%s\n' "$d" | grep -E '^[<>]' | indent
@@ -205,43 +224,52 @@ unit_verify() {   # systemd-analyze verify of the new unit; before the runtime e
 # ------------------------------------------------------------------------------------------------ Caddy changes
 take_caddy_lock() { exec 9>"$CADDY_LOCK"; flock -w 60 9 || die "another tool holds $CADDY_LOCK; nothing was changed, try again later"; }
 drop_caddy_lock() { flock -u 9 || true; exec 9>&-; }
-# Replaces the site file with $1 under the lock; $2 is a check run after the reload (a function name). On any
-# failure the exit trap puts the backup back and reloads Caddy.
+# Puts the site file $1 in place of the content $2 (a file; REMOVE takes the site file away) under the lock; $3 is a check run
+# after the reload (a function name). A file that does not exist yet is removed again on failure. On any failure the exit
+# trap puts the backup back and reloads Caddy.
 switch_site_file() {
-  local from=$1 check=$2 backup
+  local file=$1 from=$2 check=$3 backup="" first=$4
   take_caddy_lock
   install -d -m 0700 "$BACKUP_DIR"
-  backup="$BACKUP_DIR/mightwork-apex.caddy.$(date -u +%Y%m%dT%H%M%SZ)-$$"
-  cp -p "$SITE_FILE" "$backup"
-  [[ -e "$FIRST_BACKUP" ]] || cp -p "$SITE_FILE" "$FIRST_BACKUP"
-  changed "backup of $SITE_FILE at $backup"
-  diff -u "$SITE_FILE" "$from" | indent || true
-  CADDY_RESTORE=$backup
-  # shellcheck disable=SC2046
-  install $(keep_owner_mode "$SITE_FILE") "$from" "$SITE_FILE"
-  changed "installed $SITE_FILE (sha256 $(sha256sum "$SITE_FILE" | cut -d' ' -f1))"
-  caddy_validate "$CADDY_MAIN" || die "the whole Caddy configuration does not validate with the new site file"
+  if [[ -e "$file" ]]; then
+    backup="$BACKUP_DIR/$(basename "$file").$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    cp -p "$file" "$backup"
+    [[ -z "$first" || -e "$first" ]] || cp -p "$file" "$first"
+    changed "backup of $file at $backup"
+    if [[ "$from" == REMOVE ]]; then diff -u "$file" /dev/null | indent || true; else diff -u "$file" "$from" | indent || true; fi
+  else
+    changed "there is no $file yet; it is removed again if anything below fails"
+    diff -u /dev/null "$from" | indent || true
+  fi
+  CADDY_RESTORE_FILE=$file; CADDY_RESTORE=${backup:-ABSENT}
+  if [[ "$from" == REMOVE ]]; then rm -f "$file"; changed "removed $file"
+  else
+    # shellcheck disable=SC2046
+    if [[ -e "$backup" ]]; then install $(keep_owner_mode "$backup") "$from" "$file"; else install -m 0644 "$from" "$file"; fi
+    changed "installed $file (sha256 $(sha256sum "$file" | cut -d' ' -f1))"
+  fi
+  caddy_validate "$CADDY_MAIN" || die "the whole Caddy configuration does not validate with this change of $file"
   systemctl reload caddy || die "systemctl reload caddy failed"
   changed "reloaded caddy"
   sleep 2
   "$check" || die "the site does not answer as expected after the reload"
   snapshot "$TMP/caddy-after" >/dev/null
   compare "$TMP/before" "$TMP/caddy-after" || die "another site answers differently after the reload"
-  CADDY_RESTORE=""
+  CADDY_RESTORE=""; CADDY_RESTORE_FILE=""
   drop_caddy_lock
 }
 # Runs in the exit trap with errexit off: first the copy and the reload, then (and only then) any output, each write
 # allowed to fail (the session may be gone). Security review M1.
 restore_site_file() {
   [[ -n "$CADDY_RESTORE" ]] || return 0
-  local from=$CADDY_RESTORE copied=0 reloaded=0
-  CADDY_RESTORE=""
-  cp -p "$from" "$SITE_FILE" && copied=1
+  local from=$CADDY_RESTORE file=$CADDY_RESTORE_FILE copied=0 reloaded=0
+  CADDY_RESTORE=""; CADDY_RESTORE_FILE=""
+  if [[ "$from" == ABSENT ]]; then rm -f "$file" && copied=1; else cp -p "$from" "$file" && copied=1; fi
   systemctl reload caddy >/dev/null 2>&1 && reloaded=1
-  logger -t rigtwin-setup -- "restored $SITE_FILE from $from after the script stopped (copied=$copied reloaded=$reloaded)" 2>/dev/null || true
-  loud "the script stopped while the new site file was not confirmed: the previous one was put back from $from and Caddy reloaded" || true
-  if [[ $copied == 1 ]]; then say "  restored: $SITE_FILE is the backup again" || true
-  else loud "COULD NOT PUT THE BACKUP BACK: copy $from to $SITE_FILE by hand now" || true; fi
+  logger -t synergon-setup -- "restored $file from $from after the script stopped (copied=$copied reloaded=$reloaded)" 2>/dev/null || true
+  loud "the script stopped while the change of $file was not confirmed: the previous state was put back (from $from) and Caddy reloaded" || true
+  if [[ $copied == 1 ]]; then say "  restored: $file is as it was before (backup: $from)" || true
+  else loud "COULD NOT PUT THE BACKUP BACK: restore $file from $from by hand now" || true; fi
   if [[ $reloaded == 1 ]]; then say "  restored: Caddy has reloaded it" || true
   else loud "Caddy did not reload: look at 'systemctl status caddy' now (a failed reload leaves Caddy running the configuration it had)" || true; fi
 }
@@ -249,19 +277,27 @@ expect_code() {   # $1 url, $2 allowed codes separated by "|"
   local c; c=$(http_code "$1")
   if [[ "|$2|" == *"|$c|"* ]]; then say "  ok: $1 answers $c"; else say "  FAIL: $1 answers $c, expected $2"; return 1; fi
 }
-check_new_route() {
+# A new host name gets its certificate a few seconds after the reload: wait (at most 60 s) until the site answers at all.
+wait_for_https() { local i; for i in $(seq 1 30); do [[ "$(http_code "$1")" != 000 ]] && return 0; sleep 2; done; return 1; }
+check_new_site() {
   local ok=0
-  expect_code "$PUBLIC/" 200 || ok=1
+  wait_for_https "$PUBLIC/api/health" || say "  no answer from $PUBLIC after 60 s (certificate not obtained yet? journalctl -u caddy)"
+  expect_code "$PUBLIC/" "200|404" || ok=1                  # 404 until the first release is live (no folder `current` yet)
   expect_code "$PUBLIC/server/server.js" 404 || ok=1
-  expect_code "$PUBLIC/api/health" "502|503|200" || ok=1   # 404 would mean the new route is not in effect
+  expect_code "$PUBLIC/api/health" "502|503|200" || ok=1   # 404 would mean the route is not in effect
   return $ok
 }
-check_old_route() {
+check_site_gone() {
   local ok=0
-  expect_code "$PUBLIC/" 200 || ok=1
-  expect_code "$PUBLIC/api/health" 404 || ok=1
+  expect_code "$PUBLIC/api/health" "404|000" || ok=1
   return $ok
 }
+check_apex_retired() {
+  local ok=0 u
+  for u in https://mightwork.ai/ https://mightwork.ai/anything https://mightwork.ai/api/health; do expect_code "$u" 404 || ok=1; done
+  return $ok
+}
+check_apex_restored() { local c; c=$(http_code https://mightwork.ai/); [[ "$c" != 000 ]] && say "  ok: https://mightwork.ai/ answers $c" || { say "  FAIL: https://mightwork.ai/ does not answer"; return 1; }; }
 
 # ------------------------------------------------------------------------------------------------ the steps
 preflight() {
@@ -270,10 +306,15 @@ preflight() {
   local c
   for c in systemctl systemd-analyze caddy curl sha256sum flock ss logger install; do command -v "$c" >/dev/null || die "the command $c is missing"; done
   [[ -f "$CADDY_MAIN" && -d "$CADDY_SITES" ]] || die "no Caddy configuration at $CADDY_MAIN with $CADDY_SITES/"
-  [[ -f "$SITE_FILE" && -d "$SRV_DIR" ]] || die "this is not the host that serves mightwork.ai/rigtwin ($SITE_FILE and $SRV_DIR are missing)"
+  [[ -f "$APEX_FILE" ]] || die "this is not the host that serves mightwork.ai ($APEX_FILE is missing)"
   grep -Eq "^[[:space:]]*import[[:space:]]+[^#]*managed-sites" "$CADDY_MAIN" || die "$CADDY_MAIN does not import $CADDY_SITES/, so the site file would not be used"
-  if [[ "$1" != --undo ]]; then
-    [[ -f "$NEW_SITE" && -f "$NEW_UNIT" ]] || die "mightwork-apex.caddy and rigtwin-server.service must be next to this script ($SCRIPT_DIR)"
+  if [[ "$1" == --retire-apex ]]; then
+    [[ -f "$NEW_APEX" ]] || die "mightwork-apex.caddy must be next to this script ($SCRIPT_DIR)"
+  elif [[ "$1" == --restore-apex ]]; then :
+  elif [[ "$1" != --undo ]]; then
+    [[ -f "$NEW_SITE" && -f "$NEW_UNIT" && -f "$NEW_GATE" ]] || die "synergon.caddy, synergon-server.service and synergon-deploy-gate.sh must be next to this script ($SCRIPT_DIR)"
+    check_keys_file
+    [[ "$1" != --apply || -f "$KEYS_FILE" || -f "$DEPLOY_HOME/.ssh/authorized_keys" ]] || die "synergon-deploy.keys (the public keys that may deploy, one per line) must be next to this script: the deploy account has no keys yet"
     bun_zip >/dev/null || die "no Bun build for this machine ($(uname -m)); x86_64 and aarch64 are supported"
     port_free_or_ours || die "port $PORT is in use by another program: $(port_listeners)"
   fi
@@ -283,11 +324,11 @@ preflight() {
 }
 
 header() {
-  say "rigtwin setup $1 on $(hostname) at $(date -u +%Y-%m-%dT%H:%M:%SZ), as $(id -un)"
-  say "  script folder $SCRIPT_DIR; messages also in $LOG, changes in journalctl -t rigtwin-setup"
+  say "synergon setup $1 on $(hostname) at $(date -u +%Y-%m-%dT%H:%M:%SZ), as $(id -un)"
+  say "  script folder $SCRIPT_DIR; messages also in $LOG, changes in journalctl -t synergon-setup"
   [[ -n "${TMUX:-}${INVOCATION_ID:-}" ]] || say "  (not inside tmux or systemd-run: if this session drops, the exit trap still restores Caddy, but run --apply inside tmux)"
   local f
-  for f in "${BASH_SOURCE[0]}" "$NEW_SITE" "$NEW_UNIT"; do [[ -f "$f" ]] && say "  $(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f")"; done
+  for f in "${BASH_SOURCE[0]}" "$NEW_SITE" "$NEW_APEX" "$NEW_UNIT" "$NEW_GATE"; do [[ -f "$f" ]] && say "  $(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f")"; done
   say "  $(caddy version 2>/dev/null | head -1 || true) · $(systemctl --version 2>/dev/null | head -1 || true)"
   step "status before"
   snapshot "$TMP/before"
@@ -302,11 +343,11 @@ host_checks() {
   { systemctl cat caddy 2>/dev/null | grep -E 'ExecStart|ExecReload'; grep -nE '^[[:space:]]*admin' "$CADDY_MAIN"; } 2>/dev/null | indent || true
   say "  H2 tools that take the Caddy lock (expect: the tools that change Caddy)"
   grep -rIl 'caddy-config.lock' /usr/local/bin /usr/local/sbin /etc /root 2>/dev/null | head -20 | indent || true
-  say "  H3 the live site file and the owners of the site files (expect: the hash of deploy/mightwork-apex.caddy in the main checkout)"
-  { file_sha256 "$SITE_FILE"; for f in "$CADDY_SITES"/*.caddy; do stat -c '%U:%G %a %n' "$f"; done; } 2>/dev/null | indent || true
-  say "  H4 the sites as this host sees them: the 'status before' lines above (expect: no 000; /rigtwin/ 200, api/health 404 before the setup, server/server.js 404)"
-  say "  H5 no proxy or CDN in front (expect: the A/AAAA records are among this host's addresses)"
-  { echo "A: $(dig +short A mightwork.ai 2>/dev/null | tr '\n' ' ')AAAA: $(dig +short AAAA mightwork.ai 2>/dev/null | tr '\n' ' ')"; ip -br addr 2>/dev/null; } | indent || true
+  say "  H3 the apex site file and the owners of the site files (expect: the hash the runbook names for the file live today; no synergon.caddy yet)"
+  { file_sha256 "$APEX_FILE"; for f in "$CADDY_SITES"/*.caddy; do stat -c '%U:%G %a %n' "$f"; done; } 2>/dev/null | indent || true
+  say "  H4 the sites as this host sees them: the 'status before' lines above (expect: no 000 for the existing sites; synergon.mightwork.ai has no site yet)"
+  say "  H5 no proxy or CDN in front (expect: the A/AAAA records of synergon.mightwork.ai are among this host's addresses)"
+  { echo "A: $(dig +short A synergon.mightwork.ai 2>/dev/null | tr '\n' ' ')AAAA: $(dig +short AAAA synergon.mightwork.ai 2>/dev/null | tr '\n' ' ')"; ip -br addr 2>/dev/null; } | indent || true
   say "  H6 systemd, kernel, cgroups, cores (expect: systemd >= 247, kernel >= 5.8, cgroup2fs, cores <= 32 for TasksMax=128)"
   echo "$(systemctl --version 2>/dev/null | head -1) · kernel $(uname -r 2>/dev/null) · $(stat -fc %T /sys/fs/cgroup 2>/dev/null || echo 'cgroup ?') · $(nproc 2>/dev/null || echo '?') cores" | indent || true
   say "  H7 Bun under the unit's hardening: after --apply, run --probe"
@@ -316,7 +357,7 @@ host_checks() {
   else say "  H8 (after the first release with server/)"; fi
   say "  H9 the journal's room for the start attempts before the first server release (expect: room, or the unit's LogRateLimit)"
   { journalctl --disk-usage 2>/dev/null; grep -hE '^(SystemMaxUse|RateLimit)' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf 2>/dev/null; } | indent || true
-  say "  H10 site roots outside /srv (expect: none, or only under /opt and /var/lib, which the unit hides whole except rigtwin's own folders; anything elsewhere: add it to the unit before --apply)"
+  say "  H10 site roots outside /srv (expect: none, or only under /opt and /var/lib, which the unit hides whole except synergon's own folders; anything elsewhere: add it to the unit before --apply)"
   grep -hE '^[[:space:]]*root\b' "$CADDY_MAIN" "$CADDY_SITES"/*.caddy 2>/dev/null | grep -v '/srv/' | indent || true
   say "  H11 data disk and access logs (expect: free space; whether Caddy keeps access logs: the page says addresses are not stored)"
   { df -h /var/lib 2>/dev/null | tail -1; grep -nE '^[[:space:]]*log\b' "$CADDY_MAIN" "$CADDY_SITES"/*.caddy 2>/dev/null; } | indent || true
@@ -331,7 +372,7 @@ host_checks() {
 # ------------------------------------------------------------------------------------------------ --probe (H7)
 # The unit's confinement, read from the unit file itself: every [Service] setting except how it is started and restarted.
 unit_properties() { awk '/^\[Service\]/{f=1; next} /^\[/{f=0} f && /^[A-Za-z]+=/' "$NEW_UNIT" | grep -vE '^(Type|ExecStart|Restart|RestartSec|TimeoutStopSec)='; }
-PROBE_JS='(async()=>{const fs=require("fs");const s=Bun.serve({port:4181,hostname:"127.0.0.1",development:false,fetch:()=>new Response("ok")});console.log("serve",await (await fetch("http://127.0.0.1:4181/")).text());console.log("srv",JSON.stringify(fs.readdirSync("/srv")));console.log("opt",JSON.stringify(fs.readdirSync("/opt")));console.log("varlib",JSON.stringify(fs.readdirSync("/var/lib")));fs.writeFileSync("/var/lib/rigtwin/.probe","x");console.log("write ok");try{await fetch("https://mightwork.ai/",{signal:AbortSignal.timeout(3000)});console.log("EGRESS OPEN")}catch{console.log("egress blocked")}s.stop(true)})()'
+PROBE_JS='(async()=>{const fs=require("fs");const s=Bun.serve({port:4181,hostname:"127.0.0.1",development:false,fetch:()=>new Response("ok")});console.log("serve",await (await fetch("http://127.0.0.1:4181/")).text());console.log("srv",JSON.stringify(fs.readdirSync("/srv")));console.log("opt",JSON.stringify(fs.readdirSync("/opt")));console.log("varlib",JSON.stringify(fs.readdirSync("/var/lib")));fs.writeFileSync("/var/lib/synergon/.probe","x");console.log("write ok");try{await fetch("https://mightwork.ai/",{signal:AbortSignal.timeout(3000)});console.log("EGRESS OPEN")}catch{console.log("egress blocked")}s.stop(true)})()'
 do_probe() {
   header --probe
   [[ -x "$RUNTIME_DIR/bun" ]] || die "Bun is not installed at $RUNTIME_DIR/bun: run --apply first"
@@ -342,9 +383,31 @@ do_probe() {
   out=$(systemd-run --wait --pipe --collect --quiet "${props[@]}" "$RUNTIME_DIR/bun" -e "$PROBE_JS" 2>&1 || true)
   printf '%s\n' "$out" | indent
   rm -f "$DATA_DIR/.probe"
-  if [[ "$out" == *"serve ok"* && "$out" == *'srv ["rigtwin"]'* && "$out" == *'opt ["rigtwin"]'* && "$out" == *'varlib ["rigtwin"]'* && "$out" == *"write ok"* && "$out" == *"egress blocked"* ]]; then say "probe passed: Bun serves on loopback, sees only rigtwin's own folders in /srv, /opt and /var/lib, writes its data folder, cannot reach the internet"
-  else loud "probe did not give 'serve ok', 'srv [\"rigtwin\"]', 'opt [\"rigtwin\"]', 'varlib [\"rigtwin\"]', 'write ok', 'egress blocked': the unit's hardening and Bun do not fit; do not merge yet"; return 1; fi
+  if [[ "$out" == *"serve ok"* && "$out" == *'srv ["synergon"]'* && "$out" == *'opt ["synergon"]'* && "$out" == *'varlib ["synergon"]'* && "$out" == *"write ok"* && "$out" == *"egress blocked"* ]]; then say "probe passed: Bun serves on loopback, sees only synergon's own folders in /srv, /opt and /var/lib, writes its data folder, cannot reach the internet"
+  else loud "probe did not give 'serve ok', 'srv [\"synergon\"]', 'opt [\"synergon\"]', 'varlib [\"synergon\"]', 'write ok', 'egress blocked': the unit's hardening and Bun do not fit; do not merge yet"; return 1; fi
 }
+
+# ------------------------------------------------------------------------------------------------ the deploy account
+# The keys the account accepts, as the lines of its authorized_keys: every public key of $KEYS_FILE, limited to the gate.
+KEY_RE='^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh\.com) [A-Za-z0-9+/=]+( [^"]*)?$'
+# stops before anything is changed when the key file has a line that is not a plain public key
+check_keys_file() {
+  local k
+  [[ -f "$KEYS_FILE" ]] || return 0
+  while IFS= read -r k || [[ -n "$k" ]]; do
+    [[ -z "$k" || "$k" == '#'* ]] && continue
+    [[ "$k" =~ $KEY_RE ]] || die "$(basename "$KEYS_FILE") has a line that is not a public key: ${k:0:40}"
+  done <"$KEYS_FILE"
+}
+wanted_keys() {
+  local k
+  [[ -f "$KEYS_FILE" ]] || return 0
+  while IFS= read -r k || [[ -n "$k" ]]; do
+    [[ -z "$k" || "$k" == '#'* ]] && continue
+    printf 'restrict,command="%s" %s\n' "$GATE_FILE" "$k"
+  done <"$KEYS_FILE"
+}
+keys_current() { local f=$DEPLOY_HOME/.ssh/authorized_keys; [[ -f "$f" ]] && wanted_keys | cmp -s - "$f"; }
 
 do_check() {
   header --check
@@ -355,7 +418,19 @@ do_check() {
   elif [[ "$(owner_mode "$DATA_DIR")" == "$SVC_USER:$SVC_USER 700" ]]; then say "  ok: $DATA_DIR exists, $SVC_USER:$SVC_USER 700"
   else would "set $DATA_DIR (now $(owner_mode "$DATA_DIR")) to $SVC_USER:$SVC_USER 700"; fi
 
-  step "2. Bun $BUN_VERSION at $RUNTIME_DIR/bun"
+  step "2. deploy account $DEPLOY_USER, gate $GATE_FILE and folder $SRV_DIR"
+  if id -u "$DEPLOY_USER" >/dev/null 2>&1; then say "  ok: $(id "$DEPLOY_USER")"; else would "create the system user $DEPLOY_USER (shell /bin/bash for the forced command, no password, home $DEPLOY_HOME)"; fi
+  if [[ -f "$KEYS_FILE" ]]; then
+    if keys_current; then say "  ok: $DEPLOY_HOME/.ssh/authorized_keys has the $(wc -l <"$KEYS_FILE" | tr -d ' ') key line(s) of $(basename "$KEYS_FILE"), each limited to the gate"
+    else would "write $DEPLOY_HOME/.ssh/authorized_keys (owned by root, so the account cannot add keys): $(wanted_keys | wc -l | tr -d ' ') key(s), each 'restrict,command=\"$GATE_FILE\"'"; fi
+  elif [[ -f "$DEPLOY_HOME/.ssh/authorized_keys" ]]; then say "  ok: keys already in $DEPLOY_HOME/.ssh/authorized_keys (no $(basename "$KEYS_FILE") given: kept)"
+  else say "  NOTE: no $(basename "$KEYS_FILE") next to this script and no authorized_keys yet: --apply would stop"; fi
+  if cmp -s "$NEW_GATE" "$GATE_FILE"; then say "  ok: gate installed"; else would "install the gate $GATE_FILE (0755, root)"; fi
+  if [[ ! -d "$SRV_DIR" ]]; then would "create $SRV_DIR (0755, owned by $DEPLOY_USER)"
+  elif [[ "$(owner_mode "$SRV_DIR")" == "$DEPLOY_USER:$DEPLOY_USER 755" ]]; then say "  ok: $SRV_DIR exists, $DEPLOY_USER:$DEPLOY_USER 755"
+  else would "set $SRV_DIR (now $(owner_mode "$SRV_DIR")) to $DEPLOY_USER:$DEPLOY_USER 755"; fi
+
+  step "3. Bun $BUN_VERSION at $RUNTIME_DIR/bun"
   local have name sha
   have=$(runtime_version); read -r name sha < <(bun_zip)
   if [[ "$have" == "$BUN_VERSION" ]]; then
@@ -363,16 +438,16 @@ do_check() {
     else loud "$RUNTIME_DIR/bun prints $BUN_VERSION but its SHA-256 is not the one recorded in $RUNTIME_DIR/bun.sha256: reinstall (--undo, then --apply)"; fi
   else would "download $BUN_URL_BASE/$name.zip, check SHA-256 $sha, install $RUNTIME_DIR/bun${have:+ (now $have)}"; fi
 
-  step "3. Caddy site $SITE_FILE"
+  step "4. Caddy site $SITE_FILE"
   if cmp -s "$NEW_SITE" "$SITE_FILE"; then say "  ok: already the new site file"
   else
-    would "back up the installed file to $BACKUP_DIR/, install the new one, validate the whole configuration, reload Caddy; the change:"
-    diff -u "$SITE_FILE" "$NEW_SITE" | indent || true
+    if [[ -e "$SITE_FILE" ]]; then would "back up the installed file to $BACKUP_DIR/, install the new one, validate the whole configuration, reload Caddy; the change:"; diff -u "$SITE_FILE" "$NEW_SITE" | indent || true
+    else would "install the new site file (there is none yet), validate the whole configuration, reload Caddy (the certificate for synergon.mightwork.ai is obtained by Caddy itself); the file:"; diff -u /dev/null "$NEW_SITE" | indent || true; fi
     caddy_validate "$NEW_SITE" || say "  (the new file does not validate on its own: --apply would stop here)"
   fi
   [[ -e "$CADDY_LOCK" ]] && say "  the Caddy lock $CADDY_LOCK exists (it is taken with flock while changing Caddy)"
 
-  step "4. service $UNIT_NAME"
+  step "5. service $UNIT_NAME"
   if cmp -s "$NEW_UNIT" "$UNIT_FILE"; then say "  ok: unit file installed"
   elif [[ -e "$UNIT_FILE" ]]; then would "replace $UNIT_FILE and restart the service; the change:"; diff -u "$UNIT_FILE" "$NEW_UNIT" | indent || true
   else would "install $UNIT_FILE, enable and start it"; fi
@@ -381,6 +456,10 @@ do_check() {
   if live_has_server; then say "  the live release contains server/: the service would start at once"
   else say "  the live release has no server/ yet: the service would retry every 2 s until a release with server/ is live"; fi
   if [[ -n "$(port_listeners)" ]]; then say "  port $PORT: $(port_listeners)"; else say "  port $PORT: free"; fi
+
+  step "later: --retire-apex"
+  if cmp -s "$NEW_APEX" "$APEX_FILE"; then say "  ok: the apex file already answers 404 for everything"
+  else say "  the apex file $APEX_FILE still has routes; after the first deploy, --retire-apex would install the file that answers 404 for everything; the change:"; diff -u "$APEX_FILE" "$NEW_APEX" | indent || true; fi
 
   say ""
   say "check finished: nothing was changed"
@@ -395,7 +474,30 @@ do_apply() {
   if [[ -d "$DATA_DIR" && "$(owner_mode "$DATA_DIR")" == "$SVC_USER:$SVC_USER 700" ]]; then say "  ok: $DATA_DIR exists, $SVC_USER:$SVC_USER 700"
   else mkdir -p "$DATA_DIR"; chown "$SVC_USER:$SVC_USER" "$DATA_DIR"; chmod 0700 "$DATA_DIR"; changed "$DATA_DIR is $SVC_USER:$SVC_USER 700"; fi
 
-  step "2. Bun $BUN_VERSION at $RUNTIME_DIR/bun"
+  step "2. deploy account $DEPLOY_USER, gate $GATE_FILE and folder $SRV_DIR"
+  if id -u "$DEPLOY_USER" >/dev/null 2>&1; then say "  ok: $(id "$DEPLOY_USER")"
+  else
+    # the forced command runs through the account's shell, so it needs a real one; no password, so no password login
+    useradd --system --user-group --no-create-home --home-dir "$DEPLOY_HOME" --shell /bin/bash "$DEPLOY_USER"
+    usermod -p '*' "$DEPLOY_USER"
+    changed "created the system user $DEPLOY_USER (no password; every key is limited to the gate)"
+  fi
+  install -d -m 0755 "$DEPLOY_HOME" "$DEPLOY_HOME/.ssh"          # owned by root: the account cannot add keys
+  if [[ -f "$KEYS_FILE" ]]; then
+    if keys_current; then say "  ok: authorized_keys has the keys of $(basename "$KEYS_FILE")"
+    else
+      wanted_keys >"$TMP/authorized_keys"
+      [[ -s "$TMP/authorized_keys" ]] || die "$KEYS_FILE has no key"
+      install -m 0644 "$TMP/authorized_keys" "$DEPLOY_HOME/.ssh/authorized_keys"
+      changed "wrote $DEPLOY_HOME/.ssh/authorized_keys ($(wc -l <"$TMP/authorized_keys" | tr -d ' ') key(s), root-owned, each limited to $GATE_FILE)"
+    fi
+  else say "  ok: keys kept as they are (no $(basename "$KEYS_FILE") given)"; fi
+  if cmp -s "$NEW_GATE" "$GATE_FILE"; then say "  ok: gate installed"
+  else install -d -m 0755 "$(dirname "$GATE_FILE")"; install -m 0755 "$NEW_GATE" "$GATE_FILE"; changed "installed the gate $GATE_FILE (sha256 $(file_sha256 "$GATE_FILE"))"; fi
+  if [[ -d "$SRV_DIR" && "$(owner_mode "$SRV_DIR")" == "$DEPLOY_USER:$DEPLOY_USER 755" ]]; then say "  ok: $SRV_DIR exists, $DEPLOY_USER:$DEPLOY_USER 755"
+  else mkdir -p "$SRV_DIR"; chown "$DEPLOY_USER:$DEPLOY_USER" "$SRV_DIR"; chmod 0755 "$SRV_DIR"; changed "$SRV_DIR is $DEPLOY_USER:$DEPLOY_USER 755"; fi
+
+  step "3. Bun $BUN_VERSION at $RUNTIME_DIR/bun"
   local name sha got v
   if [[ "$(runtime_version)" == "$BUN_VERSION" ]]; then say "  ok: installed"
   else
@@ -416,14 +518,14 @@ do_apply() {
     changed "installed Bun $BUN_VERSION at $RUNTIME_DIR/bun ($name.zip, SHA-256 $sha; recorded in $RUNTIME_DIR/bun.sha256)"
   fi
 
-  step "3. Caddy site $SITE_FILE"
+  step "4. Caddy site $SITE_FILE"
   if cmp -s "$NEW_SITE" "$SITE_FILE"; then say "  ok: already the new site file"
   else
     caddy_validate "$NEW_SITE" || die "the new site file does not validate on its own; nothing was changed in Caddy"
-    switch_site_file "$NEW_SITE" check_new_route
+    switch_site_file "$SITE_FILE" "$NEW_SITE" check_new_site ""
   fi
 
-  step "4. service $UNIT_NAME"
+  step "5. service $UNIT_NAME"
   local fresh=0 state
   if cmp -s "$NEW_UNIT" "$UNIT_FILE"; then say "  ok: unit file installed"
   else
@@ -469,15 +571,13 @@ do_undo() {
   else say "  ok: no unit file"; fi
 
   step "2. Caddy site $SITE_FILE"
-  if [[ ! -f "$FIRST_BACKUP" ]]; then say "  kept: there is no copy of the site file from before the first --apply ($FIRST_BACKUP)"
-  elif cmp -s "$FIRST_BACKUP" "$SITE_FILE"; then say "  ok: already as before the setup"
+  if [[ ! -e "$SITE_FILE" ]]; then say "  ok: no site file"
   elif ! cmp -s "$NEW_SITE" "$SITE_FILE"; then
-    loud "the installed site file is neither the one --apply installed nor the one from before the setup: someone has changed it since. It was left as it is; the difference to the setup's file:"
+    loud "the installed site file is not the one --apply installed: someone has changed it since. It was left as it is; the difference to the setup's file:"
     diff -u "$NEW_SITE" "$SITE_FILE" | indent || true
-    die "put back $FIRST_BACKUP by hand if that is right"
+    die "remove $SITE_FILE by hand if that is right"
   else
-    caddy_validate "$FIRST_BACKUP" || die "the site file from before the setup does not validate on its own"
-    switch_site_file "$FIRST_BACKUP" check_old_route
+    switch_site_file "$SITE_FILE" REMOVE check_site_gone ""
   fi
 
   step "3. Bun at $RUNTIME_DIR"
@@ -486,11 +586,18 @@ do_undo() {
     changed "removed $RUNTIME_DIR/bun"
   else say "  ok: not installed"; fi
 
-  step "4. data folder $DATA_DIR and system user $SVC_USER"
+  step "4. the gate and the deploy account's keys"
+  if [[ -e "$GATE_FILE" ]]; then rm -f "$GATE_FILE"; changed "removed the gate $GATE_FILE"; else say "  ok: no gate"; fi
+  if [[ -e "$DEPLOY_HOME/.ssh/authorized_keys" ]]; then rm -f "$DEPLOY_HOME/.ssh/authorized_keys"; changed "removed $DEPLOY_HOME/.ssh/authorized_keys (the account can no longer log in)"; else say "  ok: no keys"; fi
+
+  step "5. data folder $DATA_DIR, releases $SRV_DIR and the system users"
   if [[ "$purge" == 1 ]]; then
     if [[ -e "$DATA_DIR" ]]; then rm -rf "$DATA_DIR"; changed "deleted $DATA_DIR"; fi
-    if id -u "$SVC_USER" >/dev/null 2>&1; then userdel "$SVC_USER"; changed "deleted the system user $SVC_USER"; fi
-  else say "  kept (--purge-data deletes both)"; fi
+    if [[ -e "$SRV_DIR" ]]; then rm -rf "$SRV_DIR"; changed "deleted $SRV_DIR"; fi
+    if [[ -e "$DEPLOY_HOME" ]]; then rm -rf "$DEPLOY_HOME"; changed "deleted $DEPLOY_HOME"; fi
+    local u
+    for u in "$SVC_USER" "$DEPLOY_USER"; do if id -u "$u" >/dev/null 2>&1; then userdel "$u"; changed "deleted the system user $u"; fi; done
+  else say "  kept (--purge-data deletes all three folders and both users)"; fi
 
   step "status after"
   snapshot "$TMP/after"
@@ -499,8 +606,40 @@ do_undo() {
   say "undo finished"
 }
 
+# ------------------------------------------------------------------------------------------------ the bare domain
+do_retire_apex() {
+  header --retire-apex
+  step "Synergon must be live first"
+  local ok=0
+  expect_code "$PUBLIC/" 200 || ok=1
+  expect_code "$PUBLIC/api/health" 200 || ok=1
+  [[ $ok == 0 ]] || die "$PUBLIC does not answer 200 at / and /api/health: deploy a release first (bun run deploy). Nothing was changed."
+  step "Caddy site $APEX_FILE"
+  if cmp -s "$NEW_APEX" "$APEX_FILE"; then say "  ok: already the file that answers 404 for everything"
+  else
+    caddy_validate "$NEW_APEX" || die "the new apex file does not validate on its own; nothing was changed in Caddy"
+    switch_site_file "$APEX_FILE" "$NEW_APEX" check_apex_retired "$FIRST_BACKUP"
+  fi
+  step "status after"
+  snapshot "$TMP/after"
+  compare "$TMP/before" "$TMP/after" || die "see the difference above"
+  say ""
+  say "retire-apex finished: mightwork.ai answers 404 for everything. The file before is $FIRST_BACKUP; --restore-apex puts it back."
+}
+do_restore_apex() {
+  header --restore-apex
+  [[ -f "$FIRST_BACKUP" ]] || die "there is no copy of the apex file from before --retire-apex ($FIRST_BACKUP); nothing was changed"
+  if cmp -s "$FIRST_BACKUP" "$APEX_FILE"; then say "  ok: the apex file is already the one from before"
+  else
+    caddy_validate "$FIRST_BACKUP" || die "the apex file from before does not validate on its own"
+    switch_site_file "$APEX_FILE" "$FIRST_BACKUP" check_apex_restored ""
+  fi
+  say ""
+  say "restore-apex finished"
+}
+
 usage() {
-  sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit "${1:-2}"
 }
 on_exit() {
@@ -515,7 +654,7 @@ main() {
   local mode="" purge=0 a
   for a in "$@"; do
     case "$a" in
-      --check | --apply | --undo | --probe) [[ -z "$mode" ]] || usage; mode=$a ;;
+      --check | --apply | --undo | --probe | --retire-apex | --restore-apex) [[ -z "$mode" ]] || usage; mode=$a ;;
       --purge-data) purge=1 ;;
       -h | --help) usage 0 ;;
       *) usage ;;
@@ -536,6 +675,8 @@ main() {
     --apply) do_apply ;;
     --probe) do_probe ;;
     --undo) do_undo "$purge" ;;
+    --retire-apex) do_retire_apex ;;
+    --restore-apex) do_restore_apex ;;
   esac
 }
 

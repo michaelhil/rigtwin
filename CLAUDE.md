@@ -1,4 +1,4 @@
-# rigtwin — instructions for AI agents
+# Synergon — instructions for AI agents
 
 The wiki is the single source of truth for this project. Start there:
 

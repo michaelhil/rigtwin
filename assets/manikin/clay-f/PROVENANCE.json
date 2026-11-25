@@ -117,11 +117,11 @@
   },
   "clay-f.glb": {
    "bytes": 2697892,
-   "sha256": "6068a04e0cbe54ca9d5b781b50d22b42c68bea2b8fcb7ed926a6c54e597d1a34"
+   "sha256": "68780a4e18d2dd7f35bba4fa081a1b479a30ed7487641b0609694783cd3b0ff2"
   },
   "clay-f.avatar.json": {
-   "bytes": 267984,
-   "sha256": "2f1a85bde29f581447b54be2973e57876e310f68bbcf91da8ae620ea8a02b8a4"
+   "bytes": 267985,
+   "sha256": "0e7a1123095ecf2b8cebb277b3b3ab233274bf49a37a2194d9ff203349fdfb73"
   }
  },
  "budget": {

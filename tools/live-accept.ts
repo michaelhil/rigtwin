@@ -27,7 +27,7 @@ let failures = 0;
 const check = (ok: boolean, what: string, detail = "") => { if (!ok) failures++; console.log(`${ok ? "ok  " : "FAIL"} ${what}${detail ? `: ${detail}` : ""}`); };
 
 const t0 = performance.now();
-const dataDir = mkdtempSync(join(tmpdir(), "rigtwin-live-accept-"));
+const dataDir = mkdtempSync(join(tmpdir(), "synergon-live-accept-"));
 let server = await startServer({ port: 0, data: dataDir });
 const origin = server.url;
 const browser = await Browser.launch();
@@ -115,7 +115,7 @@ try {
   })();
   const idOfB = snap.history.find((e: any) => e.command === "history.undo" && e.actor.kind === "person")?.actor.id;
   const vB = (await live(B))!.version;
-  const forged = await (await fetch(`${origin}/api/command`, { method: "POST", headers: { "x-rigtwin": "1", "content-type": "application/json", "x-rigtwin-client": "person", "x-rigtwin-client-id": idOfB, host: "127.0.0.1" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_pan: 7 } } }) })).json();
+  const forged = await (await fetch(`${origin}/api/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-synergon-client": "person", "x-synergon-client-id": idOfB, host: "127.0.0.1" }, body: JSON.stringify({ id: "pose.set", args: { joints: { J_mon_pan: 7 } } }) })).json();
   const seenInB = await until<boolean>(B, `viewer.live().version > ${vB} && Math.abs(viewer.state().joints.J_mon_pan - 7 * ${DEG}) < 1e-9`);
   check(!!idOfB && forged.ok && !!seenInB && forged.you.id !== idOfB && /Person/.test((await live(B))!.activity ?? ""), "a change sent under B's public id is applied by B and shown as someone else's (ids are made by the server)", `B's id ${idOfB}; the forger was stored as ${forged.you.id}; B shows the change: ${!!seenInB}, activity "${(await live(B))!.activity}"`);
 

@@ -252,7 +252,7 @@ moves a joint or changes a body measurement, apart from the declared sole height
 ## Recommendations
 
 1. **Keep the open route:** the shared MakeHuman mesh, the survey shape space and the game-style rig. Adopt no commercial library; MetaHuman and Manny and Quinn stay benchmarks, linked, never downloaded.
-2. **The owner decides first:** show the passed abstract style to the owner with the designer's captions. Only after approval bring it into the rigtwin viewer, then the public site, and then add its pictures to this page.
+2. **The owner decides first:** show the passed abstract style to the owner with the designer's captions. Only after approval bring it into the Synergon viewer, then the public site, and then add its pictures to this page.
 3. **The dressed style:** show it to the owner with the designer's captions alongside the abstract style. Next-round items, none a condition: standing high-knee poses (hip 90–130°) still show a full trouser thigh; faces read about twenty against a brief of 35–45; a faint seam on the near cheek in close-ups.
 4. **Measurement validity:** correct the torso section shape (waist, buttock) with a sculpted target or test another base body; check the men's shoulder height; compare seated shapes with an independent reference (UMTRI HumanShape if its terms allow) and with tape measurements of real people.
 5. **Licence hygiene:** never any SMPL-family file; a licence record for every asset; credit CC-BY garment authors where the viewer credits assets; skip any asset whose own files disagree with its pack licence.

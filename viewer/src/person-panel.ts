@@ -10,7 +10,7 @@
 //               the page is connected to a server that knows the person commands it is recorded there as person.set, in the
 //               arguments MC fixed, so other browsers and agents see it; Undo is then history.undo of this page's group. Without
 //               such a server (or when it answers unknown_command) the page keeps its own undo list. One slider drag is one change.
-//   updates     the panel reads viewer.person.state() again after its own changes and on MV-core's `rigtwin:person` signal, so
+//   updates     the panel reads viewer.person.state() again after its own changes and on MV-core's `synergon:person` signal, so
 //               a change from another browser, an agent or a link shows here the same way.
 //   credits     the CC BY garments are credited on the 3D view whenever the dressed operator is shown, in saved pictures, and in
 //               full under More, Credits (assets/manikin/CREDITS.md, bundled into this chunk).
@@ -155,7 +155,7 @@ const ME = random() + random();
 async function post(body: object): Promise<any> {
   const send = (viewerApi as any).command;                       // live.ts's own sender (same author, its versions known as this page's)
   if (typeof send === 'function') return send(body);
-  try { return await (await fetch('api/command', { method: 'POST', headers: { 'x-rigtwin': '1', 'content-type': 'application/json', 'x-rigtwin-client': 'person', 'x-rigtwin-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { return null; }
+  try { return await (await fetch('api/command', { method: 'POST', headers: { 'x-synergon': '1', 'content-type': 'application/json', 'x-synergon-client': 'person', 'x-synergon-client-id': ME }, body: JSON.stringify(body) })).json(); } catch { return null; }
 }
 /** Record a change in the shared scene. {ok} when it is recorded or when the page has no shared person (then it is this page's only).
  *  One at a time, and based on the page's own last change as well as on the version it started from: the page's previous change may
@@ -536,7 +536,7 @@ export async function initPersonPanel() {
   canvas.addEventListener('pointermove', onPoint); canvas.addEventListener('pointerleave', () => clearTimeout(rest)); canvas.addEventListener('pointerdown', () => clearTimeout(rest));
   pictureCredits.push(() => (viewCredit.hidden ? null : CLOTHING.join('')));
   on((c) => { if (c === 'selection' && S.selected) closePanel(); });
-  addEventListener('rigtwin:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
+  addEventListener('synergon:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
   addEventListener('resize', fitSheet);
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey) return;
