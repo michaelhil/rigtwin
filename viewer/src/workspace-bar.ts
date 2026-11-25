@@ -97,7 +97,7 @@ export function renamed(w: Workspace) { if (w.id !== current.id || !bar) return;
 export function showGone() {
   if (gone || !current.id) return;
   gone = true; setMenu(false); forget(current.id);
-  document.getElementById('stage')?.setAttribute('inert', ''); document.getElementById('parts')?.setAttribute('inert', '');
+  document.getElementById('viewer-shell')?.setAttribute('inert', '');
   document.querySelectorAll('dialog[open]').forEach((d) => (d as HTMLDialogElement).close());
   const back = link('Back to workspaces', '/', 'btn primary');
   const box = h('div', 'gone', h('div', 'gone-card', h('h2', null, 'This workspace was deleted'), h('p', null, `“${current.name}” is gone for everyone who had its link. What you see here is no longer shared and nothing you change is saved.`), h('p', 'pg-actions', back)));
@@ -109,13 +109,13 @@ export const isGone = () => gone;
 // ---------------------------------------------------------------------------------------------- the bar
 export function initWorkspaceBar() {
   if (!current.id) return;                               // a page without a server has no workspace
-  const stage = document.getElementById('stage')!;
+  const header = document.getElementById('workspace-top')!;
   titleEl = h('span', 'ws-title'); trigger = h('button', 'ws-name'); trigger.type = 'button';
   trigger.setAttribute('aria-haspopup', 'true'); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'ws-menu');
   trigger.append(titleEl, h('i', 'ws-chev'));
   menu = h('div', 'ws-menu pop'); menu.id = 'ws-menu'; menu.hidden = true; menu.setAttribute('aria-label', 'Workspace menu');
   bar = h('div', 'ws-bar ui', trigger, menu); bar.id = 'ws-bar';
-  stage.append(bar);
+  header.append(bar);
   setName(current.name);
   trigger.addEventListener('click', (e) => { e.stopPropagation(); setMenu(!isOpen()); });
   document.addEventListener('pointerdown', (e) => { if (isOpen() && !bar.contains(e.target as Node)) setMenu(false); });

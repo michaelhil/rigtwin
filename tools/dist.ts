@@ -259,9 +259,9 @@ if (import.meta.main) {
       }
       if (!(st?.render.triangles > 0)) errors.push("viewer: nothing drawn");
       await page.evaluate("document.getElementById('more-btn').click()");
-      const shown = await page.waitFor("(() => { const v = document.querySelector('#more .about .version'); return v && v.textContent ? v.textContent : null; })()", "the version line in the More menu", 5000).catch(() => null);
+      const shown = await page.waitFor("(() => { const v = document.querySelector('#more .about .version'); return v && v.textContent ? v.textContent : null; })()", "the version line in Settings", 5000).catch(() => null);
       const docHref = await page.evaluate("document.querySelector('#more .about a')?.href ?? null");
-      if (shown !== `Version ${version.short}`) errors.push(`viewer: the More menu shows '${shown}', expected 'Version ${version.short}'`);
+      if (shown !== `Version ${version.short}`) errors.push(`viewer: Settings shows '${shown}', expected 'Version ${version.short}'`);
       if (docHref !== `${origin}${base}wiki/`) errors.push(`viewer: the Documentation link leads to ${docHref}`);
       errors.push(...page.errors.map((e) => "viewer console: " + e));
       await page.close();

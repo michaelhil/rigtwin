@@ -13,11 +13,13 @@
 //   updates     the panel reads viewer.person.state() again after its own changes and on MV-core's `synergon:person` signal, so
 //               a change from another browser, an agent or a link shows here the same way.
 //   credits     the CC BY garments are credited on the 3D view whenever the dressed operator is shown, in saved pictures, and in
-//               full under More, Credits (assets/manikin/CREDITS.md, bundled into this chunk).
+//               full under Settings, Credits (assets/manikin/CREDITS.md, bundled into this chunk).
 //   picking     a click on the person selects it (outlined like a selected part) and opens the panel; a click on the rig works
 //               as before (interact.ts asks hooks.click first).
 import * as THREE from 'three';
-import { S, $, el, on, hooks, scene, canvas, currentCamera, frameSize, layout, rescaleView, stageEl, select, setHover, outlineExtra, pickAt, drawNow, viewerApi } from './engine.ts';
+import { S, $, el, on, hooks, scene, canvas, currentCamera, stageEl, select, setHover, outlineExtra, pickAt, drawNow, viewerApi } from './engine.ts';
+import { dockButton, returnToViewer, showInspector } from './panels.ts';
+import { icons } from './icons.ts';
 import { pictureCredits } from './ui.ts';
 import { workspaceApi } from './workspace.ts';
 import { initPerson } from './person/index.ts';
@@ -72,7 +74,6 @@ const svg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" aria
 const EYE = svg('<path d="M1.8 10S4.8 4.6 10 4.6 18.2 10 18.2 10 15.2 15.4 10 15.4 1.8 10 1.8 10Z"/><circle cx="10" cy="10" r="2.5"/>');
 const EYE_OFF = svg('<path d="M3.6 6.9C2.4 8.2 1.8 10 1.8 10s3 5.4 8.2 5.4c1 0 2-.2 2.8-.5M7.7 4.9c.7-.2 1.5-.3 2.3-.3 5.2 0 8.2 5.4 8.2 5.4s-.7 1.3-2 2.7"/><path d="M3 3l14 14"/>');
 const button = (cls: string | null, text: string, fn: () => void) => { const b = el('button', cls, text) as HTMLButtonElement; b.type = 'button'; b.addEventListener('click', fn); return b; };
-const narrow = () => window.innerWidth < 900;
 const person = () => viewerApi.person as any;
 /** viewer.person.state(), or null while the person module cannot say yet (its package still loading) */
 function stateNow(): any { try { return person()?.state?.() ?? null; } catch { return null; } }
@@ -288,9 +289,10 @@ function buildBody() {
 }
 function buildPanel() {
   panel = el('aside', 'ui'); panel.id = 'person'; panel.hidden = true; panel.setAttribute('aria-labelledby', 'person-title');
-  const head = el('header'), h = el('h2', null, 'Person'), x = button('x', '×', () => closePanel(true));
-  h.id = 'person-title'; h.tabIndex = -1; x.setAttribute('aria-label', 'Close'); x.title = 'Close (Esc)';
-  head.append(h, x);
+  const head = el('header'), h = el('h2', null, 'Person'), x = button('icon-button x', '', () => closePanel(true));
+  const tools = el('div', 'inspector-tools'); tools.append(dockButton(), x);
+  h.id = 'person-title'; h.tabIndex = -1; x.innerHTML = icons.close; x.setAttribute('aria-label', 'Close controls'); x.title = 'Close controls (Esc)';
+  head.append(h, tools);
   whereEl = el('p', 'where'); statusEl = el('p', 'p-status'); statusEl.setAttribute('role', 'status'); statusEl.hidden = true;
   const acts = el('div', 'acts');
   hideBtn = button(null, 'Hide', () => void toggleShown()); hideBtn.title = 'Hide or show the person (this browser only)';
@@ -306,7 +308,7 @@ function buildPanel() {
   const wl = el('span', 'p-lbl', 'Wearing'); wearRow.append(wl, wear);
   lookBox.append(el('h3', null, 'Look'), choices('style', 'Style', STYLES, (v) => void commit({ style: v as Style })), toneRow, wearRow);
   panel.append(head, whereEl, statusEl, acts, who, bodyBox, lookBox);
-  $('stage').append(panel);
+  $('inspection').append(panel);
   buildBody();
 }
 function buildTone() {
@@ -367,14 +369,13 @@ function refresh() {
   undoBtn.disabled = !undoList.length || busy > 0;
   hideBtn.textContent = st.shown ? 'Hide' : 'Show';
   refreshBody();
-  fitSheet();
 }
 
 // --------------------------------------------------------------------------------------------- the row in the parts list, the credit on the view
 let row: { box: HTMLElement; eye: HTMLButtonElement; name: HTMLButtonElement; tag: HTMLElement } | null = null;
 function buildRow() {
   const group = el('div', 'group person-group'), box = el('div', 'row top person-row');
-  const eye = button('eye', '', () => void toggleShown()), name = button('name', '', () => (panel.hidden ? openPanel(name) : closePanel(true)));
+  const eye = button('eye', '', () => void toggleShown()), name = button('name', '', () => openPanel(name));
   const tag = el('span', 'count');
   name.append(el('span', 'label', 'Person'), tag); name.setAttribute('aria-controls', 'person'); name.setAttribute('aria-expanded', 'false');
   box.append(eye, name); group.append(box); $('tree').append(group);
@@ -400,27 +401,22 @@ async function toggleShown() { const st = stateNow(); if (!st?.loaded) return; a
 function openPanel(from: HTMLElement | null = null) {
   if (!panel) return;
   if (S.selected) select(null);                                  // the part card closes: one panel at a time
-  opener = from; panel.hidden = false; document.body.classList.add('has-person');
-  if (narrow()) { document.body.classList.remove('parts-open'); $('scrim').hidden = true; $('open-parts').setAttribute('aria-expanded', 'false'); }
+  opener = from; panel.hidden = false; showInspector(panel, true);
   outline(true); refresh();
   if (from) ($('person-title') as HTMLElement).focus();
 }
 function closePanel(restoreFocus = false) {
   if (!panel || panel.hidden) return;
   if (gesture) endGesture();
-  panel.hidden = true; document.body.classList.remove('has-person'); outline(false); fitSheet(); refresh();
-  if (restoreFocus && opener?.isConnected) opener.focus();
+  panel.hidden = true; showInspector(panel, false); outline(false); refresh();
+  if (restoreFocus) {
+    if (opener) $('components-toggle').focus();
+    else returnToViewer();
+  }
   opener = null;
 }
 const holder = (): THREE.Object3D | null => person()?.object?.() ?? scene.getObjectByName('person') ?? null;
 function outline(on: boolean) { const g = holder(); outlineExtra(on && g && stateNow()?.shown ? g : null); }
-/** On a narrow window the panel is a bottom sheet and the 3D view ends where it begins (as for the part card, ui.ts). */
-let sheet = 0;
-function fitSheet() {
-  const h = panel && !panel.hidden && narrow() && !document.body.classList.contains('no-ui') ? panel.offsetHeight : 0;
-  if (h === sheet) return;
-  const h0 = frameSize().h; sheet = h; stageEl.style.setProperty('--sheet', `${h}px`); layout(); rescaleView(frameSize().h / h0);
-}
 /** Distance from the camera to the person under a pixel of the 3D view (Infinity when there is none), on the posed meshes. */
 let pickMs = 0, stale = false;
 function personAt(x: number, y: number): number {
@@ -452,13 +448,13 @@ function onPoint(e: PointerEvent) {
     if (canvas.style.cursor === 'move' || personAt(x, y) >= rigAt(x, y)) return;
     const tip = $('tip'), st = stageEl.getBoundingClientRect();
     setHover(null); canvas.style.cursor = 'pointer';
-    tip.textContent = 'Person · adjustable'; tip.hidden = false;
+    tip.textContent = 'Person'; tip.hidden = false;
     tip.style.left = `${Math.max(4, Math.min(e.clientX - st.left + 14, st.width - tip.offsetWidth - 4))}px`;
     tip.style.top = `${Math.max(4, Math.min(e.clientY - st.top + 16, st.height - tip.offsetHeight - 4))}px`;
   }, 120);
 }
 
-// --------------------------------------------------------------------------------------------- More: Credits
+// --------------------------------------------------------------------------------------------- Settings: Credits
 /** CREDITS.md as a page: headings, paragraphs, quotes, and each table row as a short list (the tables are too wide for a panel). */
 function creditsPage(md: string): DocumentFragment {
   const f = document.createDocumentFragment(), lines = md.split('\n');
@@ -537,12 +533,9 @@ export async function initPersonPanel() {
   pictureCredits.push(() => (viewCredit.hidden ? null : CLOTHING.join('')));
   on((c) => { if (c === 'selection' && S.selected) closePanel(); });
   addEventListener('synergon:person', () => { stale = true; if (!mine) { lastShared = current(); void loadDef(); } refresh(); if (panel && !panel.hidden) outline(true); });
-  addEventListener('resize', fitSheet);
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || document.querySelector('dialog[open]')) return;
-    if (creditsBox && !creditsBox.hidden) { closeCredits(); e.stopImmediatePropagation(); return; }
-    if (panel.hidden || !$('more').hidden || document.body.classList.contains('parts-open')) return;
-    closePanel(true);
+    if (creditsBox && !creditsBox.hidden) { closeCredits(); e.stopImmediatePropagation(); }
   }, true);
   (viewerApi as any).personPanel = { open: () => openPanel(), close: () => closePanel(), credits: () => openCredits(null), covers: (x: number, y: number) => personAt(x, y) < rigAt(x, y), state: () => ({ open: !panel.hidden, shared, undo: undoList.length, busy, pick_ms: +pickMs.toFixed(2), credit: !viewCredit.hidden, spec: current() }) };
   const ok = await person().ready;

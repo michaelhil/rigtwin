@@ -130,7 +130,7 @@ Built in deployed mode only; a local server has none. The numbers are in `server
 | Request names | a name ending in `-<number>` is made by the server (intent commands) and refused from callers; `state` shows only those, so a name a stranger chose never reaches an agent's context as text |
 | Visitor | the address from `X-Forwarded-For`, believed only from loopback (IPv6 by its /64 block) |
 | Errors | `development: false`: no error page with code (a check in `bun run check` keeps it so) |
-| What is stored | each workspace's pose and its last 200 changes (in `workspaces/<id>/doc.json`; the list of workspaces and their names in `workspaces.sqlite`), each with a random author id made by the server; the only text written by a client is a request's group name ([D-41](../20-decisions/decision-log.md#d-41)). The page says so under More → "About this sandbox" |
+| What is stored | The registry keeps workspace names in `workspaces.sqlite`. Each `workspaces/<id>/doc.json` contains the rig pose, the person and the last 200 changes with their server-assigned author IDs. [Workspace storage](workspaces.md#what-is-stored), [D-41](../20-decisions/decision-log.md#d-41). |
 
 ## Order of the first rollout
 

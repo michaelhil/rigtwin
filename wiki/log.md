@@ -516,3 +516,5 @@ seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `wo
 
 
 **Time not recorded** — Added seated gaze, pointing, touch, resting hands and named foot positions on the `person-aims` branch. Existing workspaces retain their format. The shared solver follows the moved rig, and the command reports gaze alignment and gaps when the hand falls short. The three body presets were rendered from the right side of the rig and from the operator's eye. [D-58](20-decisions/decision-log.md#d-58), [the person's commands](50-implementation/person-commands.md#seated-targets).
+
+**Time not recorded** — Reworked the viewer around direct selection. The left panel holds the workspace selector and utility icons and snaps shut when dragged left. Camera presets, the operator’s eye and reset sit over the lower-right corner. Selecting a component or the seated person opens one right inspector with compact movements and a desktop pop-out. Components starts closed. Agent connection and request tools live under Settings. [The viewer](50-implementation/viewer.md), [the person panel](50-implementation/person-panel.md).

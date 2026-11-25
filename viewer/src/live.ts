@@ -76,7 +76,7 @@ function tell(text: string, undo = 0, line = '', caller: { actor: string; by: st
   activity.text.textContent = text; metaEl.textContent = line; undoOf = undo; activity.buttons[0].hidden = !undo;
   lastCaller = caller; showFollow(); activity.box.hidden = false;
 }
-/** the activity line's Follow button (for an agent or a script) and the line under More, Shared scene */
+/** the activity line's Follow button and the status under Settings, Agent access */
 function showFollow() {
   const b = activity.buttons[2], on = !!lastCaller && following?.actor === lastCaller.actor;
   b.hidden = !lastCaller; b.textContent = on ? 'Following' : 'Follow'; b.setAttribute('aria-pressed', String(on));
@@ -199,7 +199,7 @@ function applied(e: Entry) {
 // On the public sandbox a view an agent asks for without naming a browser, while no browser follows it, comes to every
 // page as a question (`ask`): this page shows it only if its owner allows it. Allow follows that agent (its next views
 // come without asking); Always allow is stored in this browser for this workspace (any agent's views then come straight here); No stops
-// that agent's questions until the page is reloaded. The setting is also under More, Shared scene.
+// that agent's questions until the page is reloaded. The setting is also under Settings, Agent access.
 // The stored choice belongs to one workspace (workspace.ts keeps `synergon.agentViews` as a table of workspace ids): "always" in one
 // workspace says nothing about another.
 let agentViews: AgentViews = 'ask';
@@ -287,7 +287,7 @@ function connectAgent(id: string): HTMLElement {
   const how = el('details', 'live-about'), cmd = el('code', null, `claude mcp add --transport http synergon ${url}`);
   how.append(el('summary', null, 'How to connect Claude Code'), el('p', null, 'Run this once in a terminal. The agent then works in this workspace only.'), cmd);
   const row = el('div', 'connect-row'); row.append(field, copy);
-  box.append(el('h3', null, 'Connect an agent'), el('p', 'live-code', 'Give an agent this address and it can change this workspace and show you views of it.'), row, how);
+  box.append(el('p', 'live-code', 'Anyone with this address can change this workspace.'), row, how);
   return box;
 }
 export async function initLive() {
@@ -304,7 +304,7 @@ export async function initLive() {
   consent = note([['Allow', () => answer('allow')], ['Always allow', () => answer('always')], ['No', () => answer('no')]]);
   consent.box.classList.add('amber', 'consent');
   consent.buttons[0].title = 'Show this view and the next ones this agent asks for, in this browser';
-  consent.buttons[1].title = 'Show the views any agent asks for in this workspace in this browser, without asking (stored in this browser; change it under More)';
+  consent.buttons[1].title = 'Show views from any agent in this workspace without asking. Change this under Settings, Agent access.';
   activity = note([['Undo', undo], ['Trace', () => toggleTrace()], ['Follow', () => void setFollow(following?.actor === lastCaller?.actor ? null : lastCaller)], ['×', () => { activity.box.hidden = true; }]]);
   activity.buttons[1].title = 'Every request to the shared scene: who, what, how long';
   activity.buttons[3].setAttribute('aria-label', 'Close');
@@ -313,17 +313,17 @@ export async function initLive() {
   followNote.append(stop); followNote.hidden = true;
   metaEl = el('span', 'note-meta'); activity.text.after(metaEl);
   onTraceUndo(async (v) => { const r = await send({ id: 'history.undo', args: { version: v } }); if (!r?.ok) tell(`Not undone: ${r?.error?.code === 'stale' ? 'it was changed again since' : r?.error?.message ?? 'the server did not answer'}.`); });
-  const traceBtn = el('button', 'trace-open', 'Show the requests (trace)') as HTMLButtonElement; traceBtn.type = 'button';
+  const traceBtn = el('button', 'trace-open', 'Show requests') as HTMLButtonElement; traceBtn.type = 'button';
   traceBtn.addEventListener('click', () => toggleTrace(true));
   const viewsRow = el('label', 'live-views'); viewsRow.append(document.createTextNode('Views an agent asks for: '));
   viewsSelect = el('select') as HTMLSelectElement;
   for (const [v, t] of [['ask', 'ask me first'], ['always', 'always allow'], ['never', 'never']] as const) { const o = el('option', null, t) as HTMLOptionElement; o.value = v; viewsSelect.append(o); }
   viewsSelect.value = agentViews; viewsSelect.addEventListener('change', () => setAgentViews(viewsSelect.value as AgentViews));
   viewsRow.append(viewsSelect);
-  $('live-more').querySelector('.live-code')!.after(traceBtn, followNote, viewsRow);
-  if (current.id) $('live-more').querySelector('.live-about')!.before(connectAgent(current.id));
-  const box = $('live-more'), more = $('more');
-  more.insertBefore(box, more.querySelector('.about')); box.hidden = false; $('live-code').textContent = code;
+  const box = $('live-more'), settings = $('settings-agent');
+  if (current.id) box.prepend(connectAgent(current.id));
+  box.append(viewsRow, followNote, traceBtn);
+  settings.append(box); settings.hidden = false; box.hidden = false; $('live-code').textContent = code;
   on((c) => { if (c !== 'joints' || remote || applying || version < 0) return; if (base === null) base = version; if (!preview) schedule(); });
   addEventListener('pointerdown', () => { down = true; }, true);
   for (const t of ['pointerup', 'pointercancel', 'blur']) addEventListener(t, () => { if (down) { down = false; schedule(); } }, true);

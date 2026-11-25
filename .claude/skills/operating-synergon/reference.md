@@ -389,7 +389,7 @@ One browser's view in one call: a named view (operator's eye, overview, front, b
     "viewer": {
       "type": "string",
       "pattern": "^[A-Za-z2-9]{8}$",
-      "description": "the browser's code (More → Shared scene); remembered for later calls. Locally it may be left out: then every open page."
+      "description": "browser code (Settings → Agent access), remembered for later calls. Locally, omit it to reach every open page."
     }
   }
 }

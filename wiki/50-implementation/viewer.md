@@ -1,8 +1,8 @@
 ---
 title: The viewer
-tldr: The browser viewer shows the rig, lets a person turn, zoom, hide and adjust its parts, and makes every render. Rebuilt after two interface reviews from 103 controls to 16, with 83 % of the window for the model and 53 acceptance checks passing. Since platform step 1 it is a live client of the shared scene: changes are saved for everyone, others' appear with who did what and an Undo.
+tldr: The rig fills the viewer. Click a component or the seated person to edit it in the right inspector. The workspace selector sits in a resizable left panel, with settings in its footer and camera controls on the view. Live adjustments are shared and can be undone.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [viewer, ux, implementation, typescript]
 ---
 
@@ -10,12 +10,11 @@ tags: [viewer, ux, implementation, typescript]
 
 ## TL;DR
 
-- One static web page loads the model file and its description file. A person can turn, zoom and pan, hide or show any part or group, click a part to get a **card** with only that part's adjustments, drag the selected part, look from the operator's eye, colour parts by how sure we are of their sizes, copy a link to the exact view, and save a picture.
-- The **first version** was rejected by the owner as overcomplicated. Two independent reviews measured it: 103 controls, the model 58 % of a 1440 × 900 window, 24 sliders in one list, two traps that hid the wrong thing, 35–40 wheel notches to zoom to a joystick, no reset and no link.
-- A **separate implementer**, working in a copy so the agents' renders were not disturbed, rebuilt the page: **16 controls, model 82.8 % of the window, 53 of 53 acceptance checks passed** (*tested*; one of the 53 was skipped, see below).
-- Assumed adjustments (the seat) are **usable**, tagged "assumed range", with an amber notice on the picture while one is in use; the description file still records them as assumed. Lit whites came down from 244–249 to 221–231 of 255.
-- The viewer is **TypeScript**, bundled by Bun, and shares one pose function with the generator. Agents drive it by URL parameters; that interface did not change in the redesign.
-- **Platform step 1** ([below](#the-shared-scene-platform-step-1)): when the page's server has the Synergon server, the page joins one shared scene. Every pose change (slider, pad, drag, keys, Reset all) is saved as one command; changes by others, including Claude Code, appear at once with an **activity line** and its **Undo**; More shows the page's **session code** and a statement about the sandbox. Without a server nothing changes and no request is made. The page loads one script of 733 kB and is ready in about 210 ms (*measured* 2026-11-24).
+- Orbit, zoom and pan the rig directly. Click a component or the seated person to open the inspector on the right. Expand **Components** to browse or select parts by name.
+- The workspace selector sits at the top of the left panel. Its footer has **Copy view link**, **Save picture** and **Settings**. Drag its right edge toward the left to collapse it. The translucent handle reopens it.
+- Camera presets, **Operator’s eye** and **Reset all** sit in the lower-right corner of the view. On a narrow screen, open **Views** for the direction presets.
+- A live workspace saves rig and person changes for everyone with its link. Changes by other people and agents appear with an activity line and Undo. The viewer also works as a standalone page.
+- The TypeScript viewer shares the pose function with the generator. URL parameters also drive the headless viewer used to render pictures.
 
 Commands and every URL parameter are in the [tool reference](../80-reference/tools.md#the-viewers-url-interface).
 Decisions: [D-13](../20-decisions/decision-log.md#d-13), [D-29](../20-decisions/decision-log.md#d-29),
@@ -26,26 +25,19 @@ Requirements: [R-36](../10-request/requirements.md), [R-51](../10-request/requir
 
 ## What the viewer does
 
-| Function | How | Known by |
-|---|---|---|
-| Turn, zoom, pan | drag, wheel (zooms toward the pointer), right-drag; double-click a part to zoom to it | acceptance checks T19, T22 |
-| Show and hide | an eye button per group (six rows) and per part; on a selected part: Hide, Show only this; keys H, I, A; "Show all" appears whenever something is hidden | T12–T16, T18 |
-| Adjust one part | its card shows only its own adjustments: a slider for one motion, a two-way pad for two rotations; "As photographed" undoes them | T24–T28 |
-| Drag the selected part | dragging it moves its main adjustment (monitor height, seat slide, armrest pad, joystick); dragging anything else still turns the view | T38–T42 |
-| Assumed adjustments | usable, tagged "assumed range", amber notice on the picture with "Back to as photographed" | T31–T37 |
-| How sure are we? | colours each part by its least certain size class, with a plain legend and counts | T29 |
-| Operator's eye | camera on the median eye point; drag to look around in place | T23 |
-| Copy link, Save picture, Reset all | the address always holds the view, hidden parts, selection and adjustments; the picture is the 3D view without panels | T27, T30 |
-| Narrow windows | at phone width the parts list becomes a drawer and the card a bottom sheet | T52 |
-| Agents | the same page, driven headless, makes every render the agents and reviewers judge ([P-11](../60-lessons/patterns.md#p-11), [L-30](../60-lessons/lessons-learned.md#l-30)) | all render sets |
+| Task | Where to do it |
+|---|---|
+| Orbit, zoom or pan | Drag to orbit, scroll to zoom toward the pointer, right-drag to pan. Double-click a part to frame it. |
+| Pick or find a part | Click it on the rig, or open **Components** on the right and choose a part. The list starts closed. Its eye controls show or hide groups and individual parts. |
+| Adjust or isolate a part | The inspector brings together Hide, Show only, Zoom to and the part’s movements. Named sliders show current offsets. The joystick retains a two-axis pad, and finer motions are under **Fine adjustments**. **As photographed** resets that component’s adjustments. |
+| Move controls out of the dock | On desktop, use **Pop out controls** in the inspector header, then **Dock controls** to return them. Use × or Escape to close the controls. The inspector uses a bottom sheet on narrow screens. |
+| Move a part in the view | Drag a selected adjustable component to move its primary joint. Other drags orbit the rig. |
+| Resize the workspace panel | Drag its divider, or focus the divider and use the arrow keys. Drag it toward the left edge to snap it shut, then use **Open workspace panel** to restore the previous width. On narrow screens the panel opens as a drawer. Layout choices apply to the open page. |
+| Change or reset the view | Use the preset icons in the lower-right corner. **Operator’s eye** switches to the seated viewpoint. **Reset all** returns the rig’s adjustments, visibility and camera to their defaults. |
+| Share a view or picture | Use **Copy view link** or **Save picture** in the left footer. Saved pictures include an estimated-adjustments caption when those adjustments are in use. |
+| Recover adjustments or visibility | When joints have moved or parts are hidden, the left panel offers **Reset adjustments** and **Show all components** as applicable. It notes when adjustments include estimated ranges. |
 
-Size and speed (*measured* by the acceptance script on the local server, one Apple M2; round 2):
-ready 198 ms after navigation; 1.69 MB in 7 requests, of which the viewer script is 726 kB
-(2026-11-24, with the live client: ready 210 ms; 1.70 MB in 9 requests; one script of 733 kB);
-61 fps while something changes every frame at 1440 × 900; an idle page draws no frames.
-
-![The redesigned viewer: six group rows on the left, the model filling the window, four buttons at the top right](../img/viewer/viewer-after-default.jpg)
-*The redesigned viewer as it opens (1440 × 900, round-2 model): six rows, four buttons, a hint line that disappears after the first drag.*
+**Settings** groups display and workspace utilities. **Colours** offers natural materials, part colours and evidence colours. In evidence mode, the legend shows the least certain size class for each component. **Agent access** holds the browser code, the workspace’s agent connection details and controls for agent views. On a local server with solved photos, **Compare with a photo** holds the photo choices. **Controls and shortcuts**, **Documentation** and **Credits** are available from the same menu.
 
 ## The first version, and why the owner rejected it
 
@@ -101,6 +93,11 @@ and a reviewer were rendering with the old viewer at the same time
 ([L-42](../60-lessons/lessons-learned.md#l-42)).
 
 ## The redesign
+
+The following pictures and measurements describe the 2026-11-23 interface.
+
+![The earlier redesigned viewer, with six group rows and four buttons above the model](../img/viewer/viewer-after-default.jpg)
+*The earlier viewer at 1440 × 900 with the round-2 model.*
 
 ![The monitor's card: a height slider and one pad for turn and tilt](../img/viewer/viewer-after-monitor-card.jpg)
 *The monitor selected and adjusted: its card holds Hide, Show only this, Zoom to, one height slider and one two-way pad for turn and tilt. The strip at the top says what has moved and offers the way back.*
@@ -215,9 +212,7 @@ and only if that answers with the scene format does it connect. Otherwise it sta
 no request under `api/`, nothing in the console, everything as before. `bun run serve` and the
 deployed site (once the server is set up) have a server; `bun run dist`'s folder opened on its own does not.
 
-**One rule for every pose change.** Sliders, ↺, double-click, the pads, the arrow keys, "As
-photographed", the notices, Reset all and dragging in the 3D view all end in the engine's own joint
-setters. The page treats any difference between what it shows and the shared pose as a local preview,
+**One rule for every rig pose change.** Sliders, pads, keyboard adjustments, drag and all rig adjustment resets use the engine’s joint setters. The page treats any difference between what it shows and the shared pose as a local preview,
 and saves it as one `pose.set` (based on the version the preview started from) when no pointer is down
 and nothing has changed for 300 ms. A change from the server for a joint this page is still changing
 waits; the save is then refused as stale, the page shows the shared pose again and says why ("Not saved:
@@ -233,11 +228,7 @@ and ×. Authors are labels the server makes ([D-41](../20-decisions/decision-log
 its own changes by the versions its requests recorded. The words are the same as in the cards and in
 `bun run rig` (`shared/words.ts`).
 
-**The session code** (eight letters and digits) is shown under More, "Shared scene", with "Give it to
-Claude Code to show views here". View commands (`view.set`, `view.show`, `view.select`) reach only the
-page with that code. Under it, "About this workspace" says what is stored: the workspace's name, the pose of the rig,
-the person in the seat and the last 200 changes, each with a random author id, no names of people and no other
-text; anyone with the link can change it, Undo puts a change back, and anyone with the link can rename or delete it.
+**Browser code** in **Settings → Agent access** identifies the open viewer to an agent. View commands that name the code reach that browser. The workspace’s own MCP address and Claude Code command are in the same section. [Workspace storage](workspaces.md#what-is-stored).
 
 **Agent interface v2** ([D-51](../20-decisions/decision-log.md#d-51)). The page also carries out `look`, the
 one-call view command of the intent layer: what it shows, the named view and the selection in one go. On a local
@@ -249,7 +240,7 @@ makes a JPEG of the picture "Save picture" would make, smaller and coarser until
 **The trace** ([D-53](../20-decisions/decision-log.md#d-53)). Since the trace, the activity line names the latest
 request by anyone else, not only changes: "Claude Code · a3f5 — Monitor: tilt as photographed → 4° down", with a line
 of times under it ("19:53:35 · adjust (MCP) · server 2 ms · 2.2 s since its last request"), Undo for a change, and
-**Trace**. Trace (also under More → Shared scene) opens a list on the right of the 3D view
+**Trace**. That button and **Show requests** under **Settings → Agent access** open the request history
 (`viewer/src/trace.ts`): one block per caller's run, headed with the number of requests, the time from first to last,
 the server's time and the agent's own time; a row per request with its offset, ✓ or ! (refused, amber), the command,
 the server's words and the server's time, and between two requests of an agent the time on its side. A row opens to
@@ -262,14 +253,11 @@ eye of a person of a given stature or sitting eye height (`eye`; the operator's 
 point on the line through the model's eye points, which rides with the seat) or anywhere (`camera`: position,
 target and field of view in the model frame, the same as the link's `camera=`). The link of such a view carries it
 (`view=operator&eye=0.819`). On the public sandbox, **Follow** on the activity line of an agent's request makes
-this browser show the views that agent asks for without a code; "Following" stops it, and More → Shared scene says
-which agent the browser follows.
+this browser show the views that agent asks for without a code. **Following** stops it. **Settings → Agent access** shows which agent the browser follows.
 
 **Consent** ([D-55](../20-decisions/decision-log.md#d-55)). On the public sandbox a view an agent asks for without
 naming a browser, while no browser follows it, comes to every page as an amber question with Allow, Always allow
-and No; the view moves only after Allow. Always allow is stored in this browser (`localStorage`,
-`synergon.agentViews`) and shown under More → Shared scene as "Views an agent asks for: ask me first / always allow /
-never". While the question is open the activity line does not repeat the request.
+and No. The browser stores its choice per workspace under `synergon.agentViews` in local storage. Change it under **Settings → Agent access**. While the question is open the activity line does not repeat the request.
 
 **Reconnecting** follows the rules of Leitbild, the owner's other project ([D-39](../20-decisions/decision-log.md#d-39)):
 after a drop, again after 1 s, then 2, 4, 8, 16 and at most 30 s; at once when the page becomes visible
@@ -280,9 +268,7 @@ once instead of waiting: it gets only the missed changes, no full snapshot, and 
 page (*tested* 2026-11-24 with the real page against a server with a 3 kB budget: two ends in 30
 changes, the page never fell behind, no console message, no failed request).
 
-**Tested** by `tools/live-accept.ts` (14 of 14, two real browsers and the command line on one local
-server) and by the 53 acceptance checks, which start every page on an empty temporary scene so that no
-pose of the shared scene reaches a test or a published picture ([checks](../40-method/checks.md)).
+The local acceptance suites exercise shared updates and opening states with temporary scene data. [Checks](../40-method/checks.md).
 
 ## The agent interface by URL
 
@@ -298,11 +284,7 @@ now puts the camera exactly on the median eye point, 6.8 cm further forward than
 
 ## The person (manikin v1)
 
-Since 2026-11-25, on the branch `manikin-v1` only: the viewer seats a person in the rig, the dressed operator by default. Its code is a
-separate script loaded after the page is ready, so the page's own load is unchanged (ready in 0.25 s, 748 kB of scripts); every shader
-change is confined to the person's materials, and with the person loaded but hidden the rig's pictures are identical to before. Detail,
-measurements and the URL parameters (`person=0`, `person=off`, `person_style=clay`, …): [the person in the viewer](person-in-viewer.md).
-Its controls are [the person panel](person-panel.md): a click on the person or on its row at the end of the parts list opens it. It holds presets, sex, body measures, the style, tone and wearing, with Undo. A credits line for the CC BY clothing stays on the view while the dressed operator is shown.
+The dressed operator is seated by default. The person’s separate script loads after the page is ready. Click the person in the view or choose **Person** under **Components** to open the shared inspector. It holds presets, body measures, appearance and Undo. The view credits the CC BY clothing while it is visible. [The person in the viewer](person-in-viewer.md), [person controls](person-panel.md).
 
 ## Workspaces on the page
 
@@ -312,11 +294,11 @@ The site's root page is a landing, and the viewer lives at `/workspaces/<id>`. A
 - **The landing is small.** Its first screen is the name, one sentence on what Synergon is for, one primary action (Continue in ‹name› when this browser has opened a workspace, else Create workspace) and a still picture of the rig with the person seated (`viewer/landing-rig.webp`, about 28 kB, made by `bun run render --set landing` from the real viewer). About 14 kB of script, ready at once; it does not download three.js, the rig or the person. It shows a line saying what a workspace is, "Continue in ‹name›" for the one opened last in this browser, New workspace (the name is optional), Recent in this browser (five at most), Browse workspaces (newest first, ten at a time with "Show more", a search box once there are seven or more) and a link to Manage. The viewer code is loaded only on a workspace address, after the server has said that the workspace exists, so a deleted or mistyped link gets a plain notice and no 3D download.
 - **The picture's credit.** The picture shows the dressed person, whose shirt and trousers are CC BY 4.0, so the credit line the person panel shows is printed under it too; both take it from one place, `viewer/src/credits.ts`.
 - **Recent in this browser** is kept in `localStorage` under `synergon.recentWorkspaces` (id, name, time; never a cookie; every access in try/catch, so a private window just forgets). A workspace the server no longer knows is dropped from the list.
-- **In the viewer** the workspace's name sits in the top bar. Its menu has Copy workspace link, Rename, New workspace, the recent ones, All workspaces and Delete (one question that names the workspace and says it is gone for everyone). A rename by anyone shows at once on every open page, and a delete by anyone shows a notice with a link back to the landing. The menu works with the keyboard (arrows, Escape) and on a phone the top bar takes its own row. "Copy link" in the toolbar still copies the link to this exact view.
-- **Connect an agent** (under More) shows this workspace's own agent address with a Copy button and the one command Claude Code needs.
+- **In the viewer** the workspace selector is at the top of the left panel. Its menu offers Copy workspace link, Rename, New workspace, recent workspaces, All workspaces and Delete. Renames appear in other open pages. A deletion shows a notice with a link to the landing page. **Copy view link** in the footer copies the current camera, selection and adjustments along with the workspace address.
+- **Settings → Agent access** has the browser code, the workspace’s agent address with a Copy button and the command for Claude Code.
 - **Agent views.** The choice "always allow" or "never" for views an agent asks for is stored per workspace under `synergon.agentViews`; an older single word stored there is not read.
 - **Manage** lists every workspace with a tick box, Select all shown and one delete with one confirmation that gives the count.
-- **Without a server** (a static preview, `serve --no-api`) `/` opens the viewer as before, with no workspace bar.
+- **Without a server** (a static preview, `serve --no-api`) `/` opens the standalone viewer without a workspace selector.
 - **Checks.** `tools/ui-accept.ts` tests the landing, creating, Recent, browsing and searching, rename and delete seen in a second page, Manage, an unknown id, the phone layout, that the landing loads no three.js, per-workspace consent and the agent address (tests W01 to W16). The script budget of 800 kB for the viewer page and the one-second ready time are unchanged (T10): the viewer page now loads 783 kB, of which the landing's part is 14 kB.
 
 ## Known rough edges
@@ -324,8 +306,7 @@ The site's root page is a landing, and the viewer lives at `/workspaces/<id>`. A
 | Rough edge | Status |
 |---|---|
 | Frame rate and exposure were measured only in headless Chromium on one Apple M2, capped at 60 fps | not verified on other devices ([I-15](../60-lessons/ideas.md#i-15)) |
-| Touch input was never driven in a test; narrow layouts were tested with mouse events | not verified |
-| The operator's-eye view needs two clicks (More, then Operator's eye); review B asked for one | accepted deviation |
+| Narrow layouts are checked in Chromium at phone widths | Physical phones and tablets have yet to be tested |
 | Until 2026-11-24 the operator's-eye view put the camera on the eye point **as photographed**, read once from the description file, so a moved seat (height, slide, swivel, tilt) left the camera where it was; found by the owner watching an agent's run | fixed: the camera sits on the median eye point and the screen centre where they are now, and rides with the eye when the seat moves while the view is on (`eyeAndScreenNow`, `followEye` in `viewer/src/engine.ts`) |
 | The eye points do not move with the backrest's recline: they are placed for the photographed recline (`assets/rig-b/params/seat.toml`), so reclining the backrest does not move the operator's view | open; a change to the asset (the eye riding with the torso line) |
 | Check T49 (comparison with the previous viewer) is skipped unless a second server is given | see above |

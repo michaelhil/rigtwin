@@ -1,6 +1,6 @@
 // The trace on the page: every request to the shared scene (an agent's MCP tool call, the command line, another page),
 // as the server reports it in the live channel's "trace" events (server/trace.ts). The activity line names the latest
-// one by someone else; its Trace button (or More → Shared scene) opens this list.
+// one by someone else. Trace and Settings → Agent access → Show requests open this list.
 //
 // One block per caller's run (its requests with less than five minutes between them), newest run first. Each row: the
 // offset from the run's first request, ok or refused, the command, what happened in the server's words, and the

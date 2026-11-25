@@ -43,7 +43,7 @@ before acting.
   else is moved. Don't call `state` before or after it unless the owner asks.
 - **Views on the public sandbox:** without a code, `look` asks every open browser to allow your views
   (the reply says so); the owner clicks **Allow** (or has chosen "always allow"), and from then on your views
-  go there. **Follow** on the activity line does the same. The browser's code (More, "Shared scene"), given
+  go there. **Follow** on the activity line does the same. The browser code (Settings → Agent access), given
   once as `viewer`, pairs exactly. If `look` is refused with `needs_viewer`, no browser is open, or you asked
   too often: ask the owner. Locally, `look` goes to every open page.
 - **Camera anywhere:** `eye` gives the operator's view of a person by stature (`stature_cm`, through an

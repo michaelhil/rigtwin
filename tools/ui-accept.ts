@@ -69,9 +69,9 @@ class Session {
   async reveal(js: string) { await this.ev(`(${js}).scrollIntoView({ block: 'center' })`); await sleep(120); }
   /** text typed into the focused field (it replaces a selection, like typing does) */
   async type(text: string) { await this.page.call("Input.insertText", { text }); this.actions++; await sleep(60); }
-  /** a key without a letter on it: Enter, Tab, the arrows */
-  async press(key: "Enter" | "Tab" | "ArrowDown" | "ArrowUp" | "Escape") {
-    const vk = { Enter: 13, Tab: 9, ArrowDown: 40, ArrowUp: 38, Escape: 27 }[key];
+  /** Send a named key with the native virtual key code. */
+  async press(key: "Enter" | "Tab" | "ArrowDown" | "ArrowUp" | "ArrowLeft" | "ArrowRight" | "Escape") {
+    const vk = { Enter: 13, Tab: 9, ArrowDown: 40, ArrowUp: 38, ArrowLeft: 37, ArrowRight: 39, Escape: 27 }[key];
     await this.page.call("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: vk, ...(key === "Enter" ? { text: "\r" } : {}) });
     await this.page.call("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: vk });
     this.actions++; await sleep(140);
@@ -81,8 +81,32 @@ class Session {
     return this.ev(`(() => { const e = ${js}; if (!e || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   }
   async clickEl(js: string, what: string) { const r = await this.rect(js); if (!r) throw new Error(`not on screen: ${what}`); await this.click(r.x + r.w / 2, r.y + r.h / 2, what); }
+  async tapEl(js: string, what: string) {
+    const r = await this.rect(js);
+    if (!r) throw new Error(`not on screen: ${what}`);
+    await this.page.call("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: r.x + r.w / 2, y: r.y + r.h / 2 }] });
+    await this.page.call("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    this.actions++; this.log.push(`tap ${what}`); await sleep(140);
+  }
   /** a visible button (or summary / label) by its exact text, optionally inside a container */
-  byText(text: string, inside = "document") { return `[...${inside}.querySelectorAll('button, summary, label')].find((b) => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)})`; }
+  byText(text: string, inside = "document") { return `[...${inside}.querySelectorAll('button, summary, label')].find((b) => b.getClientRects().length && (b.getAttribute('aria-label') ?? b.textContent.trim()) === ${JSON.stringify(text)})`; }
+  /** Open the component browser if the initial disclosure is still closed. */
+  async browseComponents() {
+    if (!(await this.ev<boolean>("document.getElementById('components').open"))) {
+      await this.clickEl("document.getElementById('components-toggle')", "Components");
+    }
+  }
+  async useEvidenceColours() {
+    const select = "document.getElementById('scene-colours')";
+    if (!(await this.rect(select))) throw new Error("the colour selector is hidden");
+    // Chromium's native option popup is outside its headless page. Deliver the option's DOM change event.
+    await this.ev(`(() => {
+      const field = ${select}, option = [...field.options].find((option) => option.label === 'Evidence colours');
+      field.value = option.value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await this.settle();
+  }
   /** drag a range input's thumb to a value in the slider's own units */
   async slide(js: string, value: number, what: string) {
     const r = await this.rect(js); if (!r) throw new Error(`slider not on screen: ${what}`);
@@ -127,7 +151,7 @@ const INVENTORY = `(() => {
     small: controls.map((e) => { const r = (e.closest('label') ?? e).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), (e.textContent || e.getAttribute('aria-label') || e.id || e.tagName).trim().slice(0, 30)]; }).filter((r) => r[0] < 24 || r[1] < 24),
     words: text ? text.split(' ').length : 0, text, titles,
     canvas: [Math.round(c.width), Math.round(c.height)], share: (c.width * c.height) / (innerWidth * innerHeight),
-    rows: [...document.querySelectorAll('#tree .row')].filter(vis).length, treeScrolls: tree ? tree.scrollHeight > tree.clientHeight + 1 : false,
+    rows: [...document.querySelectorAll('#tree .row')].filter(vis).length, treeScrolls: tree ? vis(tree) && tree.scrollHeight > tree.clientHeight + 1 : false,
     cut: [...document.querySelectorAll('#tree .label')].filter((e) => vis(e) && e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent),
     padlock: !!document.querySelector('[aria-label=locked], .locked'), cursor: getComputedStyle(document.getElementById('gl')).cursor };
 })()`;
@@ -200,10 +224,12 @@ await test("T01", "controls visible by default (1440×900)", async () => {
   const hits = JARGON.filter((re) => re.test(inv.text)).map(String);
   record("T03", "jargon terms visible by default", hits.length === 0, hits.length ? hits.join(" ") : 0, "0");
   record("T04", "sliders / disabled controls / padlocks by default", inv.sliders === 0 && inv.disabled === 0 && !inv.padlock, `${inv.sliders} / ${inv.disabled} / ${inv.padlock ? 1 : 0}`, "0 / 0 / 0");
-  record("T06", "parts-list rows by default; list scrolls", inv.rows <= 8 && !inv.treeScrolls, `${inv.rows} rows; scrolls: ${inv.treeScrolls}`, "≤ 8, no scroll");
+  record("T06", "component browser closed by default", inv.rows === 0 && !inv.treeScrolls, `${inv.rows} visible rows; scrolls: ${inv.treeScrolls}`, "0 visible rows");
   record("T08", "pointer targets smaller than 24×24 px", inv.small.length === 0, inv.small.length ? JSON.stringify(inv.small) : 0, "0; was 65");
   record("T09", "cursor over the 3D view", inv.cursor !== "auto", inv.cursor, "not auto");
-  record("T11", "row labels cut off", inv.cut.length === 0, inv.cut.length, "0");
+  await s.browseComponents();
+  const tree = await s.ev(INVENTORY);
+  record("T11", "component labels fit the expanded browser", tree.rows > 0 && tree.cut.length === 0, `${tree.rows} rows; cut-off labels: ${tree.cut.join(', ') || '0'}`, "0 cut-off labels");
   await close(s);
 });
 await test("T05", "share of the window given to the 3D view", async () => {
@@ -217,14 +243,19 @@ await test("T05", "share of the window given to the 3D view", async () => {
   }
   record("T05", "share of the window given to the 3D view", ok, out.join("; "), "≥ 80 % at 1440, ≥ 70 % at 1024, ≥ 55 % and ≥ 360 px wide at 390; was 58 / 41 / 0 %");
 });
-await test("T07", "hint line", async () => {
+await test("T07", "gesture help stays in Settings", async () => {
   const s = await open(1440, 900);
-  const before = await s.ev<string>("document.getElementById('hint').getClientRects().length ? document.getElementById('hint').textContent : ''");
-  const [ex, ey] = await s.empty(); await s.drag(ex, ey, ex + 60, ey + 20, "empty space"); await sleep(900);
-  const after = await s.ev<boolean>("!!document.getElementById('hint').getClientRects().length");
+  const before = await s.rect("document.getElementById('hint')");
+  await s.clickEl("document.getElementById('more-btn')", "Settings");
+  const help = s.byText("Controls and shortcuts", "document.getElementById('more')");
+  const collapsed = await s.ev<boolean>(`!(${help}).closest('details').open`);
+  await s.clickEl(help, "Controls and shortcuts");
+  const instructions = await s.ev<string>(`(${help}).closest('details').innerText`);
+  await s.key("Escape");
+  record("T07", "gesture help stays in Settings", !before && collapsed && /orbit/i.test(instructions) &&
+    /zoom/i.test(instructions) && !(await s.rect("document.getElementById('more')")),
+    `default overlay: ${!!before}; help collapsed: ${collapsed}; directions visible on request: ${/orbit/i.test(instructions) && /zoom/i.test(instructions)}`);
   await close(s);
-  const u = await open(1440, 900, "?ui=0"), noUi = await u.ev<boolean>("!!document.getElementById('hint').getClientRects().length"); await close(u);
-  record("T07", "hint line", /rotate/.test(before) && /zoom/.test(before) && !after && !noUi, `"${before}"; after one drag: ${after ? "still there" : "gone"}; with ui=0: ${noUi ? "shown" : "absent"}`);
 });
 await test("T10", "load", async () => {
   const s = await open(1440, 900);
@@ -269,15 +300,17 @@ await test("T12", "hide the monitor: click it, Hide", async () => {
 });
 await test("T13", "hide a whole group", async () => {
   const s = await open(1440, 900);
+  await s.browseComponents();
   await s.clickEl("document.querySelector('#tree .group:nth-child(5) .row.top .eye')", "eye of the fifth row");
   const st = await s.state(), label = await s.ev<string>("document.querySelector('#tree .group:nth-child(5) .label').textContent");
-  const showAll = await s.rect(s.byText("Show all"));
-  record("T13", "hide a whole group", s.actions === 1 && st.hidden.length > 0, `${s.actions} click on the eye of "${label}": ${st.hidden.length} items hidden`, "1 click, no scrolling");
+  const recover = s.byText("Show all components", "document.getElementById('scene-recovery')");
+  const showAll = await s.rect(recover);
+  record("T13", "hide a whole group", s.actions === 2 && st.hidden.length > 0, `${s.actions} clicks to open Components and hide "${label}": ${st.hidden.length} items hidden`, "2 clicks, no scrolling");
   await s.shot("after-05b-group-hidden-strip-1440");
-  await s.clickEl(s.byText("Show all"), "Show all");
+  await s.clickEl(recover, "Show all components");
   record("T14", "\"Show all\" on screen whenever something is hidden", !!showAll && (await s.state()).hidden.length === 0, `visible: ${!!showAll}; one click shows everything again: ${(await s.state()).hidden.length === 0}`);
   for (const sel of await s.ev<string[]>("[...document.querySelectorAll('#tree .row.top .eye')].map((e, i) => i)")) await s.clickEl(`document.querySelectorAll('#tree .row.top .eye')[${sel}]`, "eye");
-  const drawn = (await s.state()).render.triangles, sa = await s.rect(s.byText("Show all")), txt = await s.ev<string>("document.getElementById('empty').getClientRects().length ? document.getElementById('empty').textContent : ''");
+  const drawn = (await s.state()).render.triangles, sa = await s.rect("document.getElementById('empty-show')"), txt = await s.ev<string>("document.getElementById('empty').getClientRects().length ? document.getElementById('empty').textContent : ''");
   record("T14b", "empty stage always offers a way back", !!sa && /hidden/.test(txt), `everything hidden: message "${txt.trim()}", Show all visible: ${!!sa} (triangles drawn: ${drawn})`);
   await close(s);
 });
@@ -287,24 +320,25 @@ await test("T15", "a click on a screen picks the monitor / touchscreen, never it
   record("T15", "a click on a screen picks the monitor / touchscreen, never its picture surface", !got.some((g) => /→ S_|active area/.test(g)), got.join("; "));
   await close(s);
 });
-await test("T16", "show only the seat: click it, Show only this", async () => {
+await test("T16", "show only the seat: click it, Show only", async () => {
   const s = await open(1440, 900);
   const [x, y] = await s.find("C_seat_back_shell"); await s.click(x, y, "seat back");
-  await s.clickEl(s.byText("Show only this"), "Show only this");
+  await s.clickEl(s.byText("Show only"), "Show only");
   const st = await s.state(), m = await s.ev<any>("viewer.manifest()");
   const all = [...m.components, ...m.surfaces].filter((c: any) => c.triangles > 0), shown = all.filter((c: any) => !st.hidden.includes(c.id));
   const seat = all.filter((c: any) => c.group === "seat");
   await s.shot("after-10-show-only-seat-1440");
-  record("T16", "show only the seat: click it, Show only this", s.actions === 2 && shown.length === seat.length && shown.every((c: any) => c.group === "seat"), `${s.actions} actions; ${shown.length} of ${seat.length} seat parts shown, ${shown.filter((c: any) => c.group !== "seat").length} others`, "2 actions, all seat parts, nothing else; was 4–6 leaving one mesh");
+  record("T16", "show only the seat: click it, Show only", s.actions === 2 && shown.length === seat.length && shown.every((c: any) => c.group === "seat"), `${s.actions} actions; ${shown.length} of ${seat.length} seat parts shown, ${shown.filter((c: any) => c.group !== "seat").length} others`, "2 actions, all seat parts, nothing else; was 4–6 leaving one mesh");
   await close(s);
 });
 
 // ---- selection, keys, camera --------------------------------------------------------------------------
 await test("T17", "Esc clears the selection; clicking the selected part again does not", async () => {
   const s = await open(1440, 900);
-  const [x, y] = await s.find("C_stand_monitor", 4).catch(() => s.find("S_mon_screen")); await s.click(x, y, "monitor"); await sleep(500); await s.click(x, y, "monitor again");
+  const monitor = () => s.find("C_stand_monitor", 4).catch(() => s.find("S_mon_screen"));
+  await s.click(...await monitor(), "monitor"); await sleep(500); await s.click(...await monitor(), "monitor again");
   const again = (await s.state()).selected; await s.key("Escape"); const esc = (await s.state()).selected;
-  await s.click(x, y, "monitor"); const [ex, ey] = await s.empty(); await s.click(ex, ey, "empty space"); const emp = (await s.state()).selected;
+  await s.click(...await monitor(), "monitor"); const [ex, ey] = await s.empty(); await s.click(ex, ey, "empty space"); const emp = (await s.state()).selected;
   record("T17", "Esc clears the selection; clicking the selected part again does not", again === "C_stand_monitor" && esc === null && emp === null, `after second click: ${again}; after Esc: ${esc}; after a click on empty space: ${emp}`);
   await close(s);
 });
@@ -328,9 +362,10 @@ await test("T19", "double-click a part zooms to it", async () => {
 });
 await test("T20", "active view button stays readable under the pointer", async () => {
   const s = await open(1440, 900);
-  await s.clickEl(s.byText("More"), "More"); await s.clickEl(s.byText("Front"), "Front");
-  const c = await s.ev<string[]>(`(() => { const b = ${s.byText("Front")}, st = getComputedStyle(b); return [st.color, st.backgroundColor, String(b.matches(':hover'))]; })()`);
-  record("T20", "active view button stays readable under the pointer", c[0] !== c[1] && c[2] === "true", `text ${c[0]} on ${c[1]} while hovered`);
+  const front = "document.querySelector('#views [data-view=front]')";
+  await s.clickEl(front, "Front");
+  const c = await s.ev<string[]>(`(() => { const b = ${front}, st = getComputedStyle(b); return [st.color, st.backgroundColor, String(b.matches(':hover')), b.getAttribute("aria-label")]; })()`);
+  record("T20", "active view icon stays readable under the pointer", c[0] !== c[1] && c[2] === "true" && /front/i.test(c[3]) && (await s.state()).view === "front", `named "${c[3]}", foreground ${c[0]} on ${c[1]} while hovered`);
   await close(s);
 });
 await test("T22", "rotate fully with three drags; zoom to the right joystick with the wheel alone", async () => {
@@ -350,12 +385,12 @@ await test("T22", "rotate fully with three drags; zoom to the right joystick wit
 });
 await test("T23", "operator's-eye view: reach it, look around in place", async () => {
   const s = await open(1440, 900);
-  await s.clickEl(s.byText("More"), "More"); await s.clickEl("[...document.querySelectorAll('#more button')].find((b) => /Operator/.test(b.textContent))", "Operator's eye");
+  await s.clickEl("document.getElementById('operator-view')", "Operator's eye");
   const n = s.actions, c0 = (await s.state()).camera; await s.key("Escape");
   await s.shot("after-13-operators-eye-1440");
   const [ex, ey] = [700, 500]; await s.drag(ex, ey, ex + 160, ey, "look around"); await s.settle(600);
   const c1 = (await s.state()).camera;
-  record("T23", "operator's-eye view: reach it, look around in place", (await s.state()).view === "operator" && dist(c0.position, c1.position) < 0.02, `${n} clicks (More, Operator's eye); a 160 px drag moves the eye ${(dist(c0.position, c1.position) * 100).toFixed(1)} cm`, "review B asked 1 click, < 2 cm; was 1 click, 26 cm");
+  record("T23", "operator's-eye view: reach it, look around in place", n === 1 && (await s.state()).view === "operator" && dist(c0.position, c1.position) < 0.02, `${n} click (Operator's eye); a 160 px drag moves the eye ${(dist(c0.position, c1.position) * 100).toFixed(1)} cm`, "review B asked 1 click, < 2 cm; was 1 click, 26 cm");
   await close(s);
 });
 
@@ -365,7 +400,7 @@ await test("T24", "the monitor's card holds only the monitor's adjustments", asy
   const [x, y] = await s.find("S_mon_screen"); await s.click(x, y, "monitor");
   const inv = await s.ev(INVENTORY), card = await s.ev<any>("(() => { const c = document.getElementById('card'); return { text: c.innerText, sliders: c.querySelectorAll('input[type=range]').length, pads: c.querySelectorAll('.pad').length, labels: [...c.querySelectorAll('.adj label, .adj .lbl')].map((e) => e.textContent), ends: [...c.querySelectorAll('.adj .end')].map((e) => e.textContent) }; })()");
   const hits = JARGON.filter((re) => re.test(card.text)).map(String);
-  record("T24", "the monitor's card holds only the monitor's adjustments", card.sliders === 1 && card.pads === 1 && card.labels.includes("Height") && hits.length === 0 && inv.sliders <= 9, `${card.sliders} slider (${card.labels[0]}) + ${card.pads} two-way pad (${card.labels[1]}); ends: ${card.ends.join(" / ")}; jargon in the card: ${hits.length ? hits.join(" ") : 0}; ${inv.controls} controls on the page`, "review A asked 3 sliders; built as 1 slider + 1 pad on the owner's request; was 24 sliders in a global list");
+  record("T24", "the monitor's card holds only the monitor's adjustments", card.sliders === 3 && card.pads === 0 && ["Height", "Turn", "Tilt"].every((label) => card.labels.includes(label)) && hits.length === 0 && inv.sliders <= 9, `${card.sliders} sliders (${card.labels.join(", ")}), ${card.pads} pads; ends: ${card.ends.join(" / ")}; jargon in the card: ${hits.length ? hits.join(" ") : 0}; ${inv.controls} controls on the page`, "three independent sliders");
   await close(s);
 });
 await test("T25", "raise and tilt the monitor", async () => {
@@ -373,11 +408,11 @@ await test("T25", "raise and tilt the monitor", async () => {
   const [x, y] = await s.find("S_mon_screen"); await s.click(x, y, "monitor");
   const d = await defs(s), want = Math.round(d.J_mon_height.lower * 600) / 1000;       // 60 % of the way down (in metres); the limits belong to the model
   await s.slide(s.slider("Height"), want * 1000, "Height toward lower");
-  const pad = (await s.rect("document.querySelector('#card .pad')"))!;
-  await s.drag(pad.x + pad.w / 2, pad.y + pad.h / 2, pad.x + pad.w * 0.5, pad.y + pad.h * 0.8, "pad toward down");
-  const j = (await s.state()).joints, note = await s.ev<string>("[...document.querySelectorAll('#card .adj .muted')].map((e) => e.textContent).join(' ')");
+  const tilt = d.J_mon_tilt.neutral + (d.J_mon_tilt.lower - d.J_mon_tilt.neutral) * 0.6, wantTilt = Math.round(tilt * 360 / Math.PI) / 2;
+  await s.slide(s.slider("Tilt"), wantTilt, "Tilt toward down");
+  const j = (await s.state()).joints;
   await s.shot("after-03-monitor-adjusted-1440");
-  record("T25", `lower the monitor ${(-want * 100).toFixed(1)} cm and tilt it down: click, drag Height, drag the pad`, s.actions === 3 && near(j.J_mon_height, want, 0.004) && j.J_mon_tilt < d.J_mon_tilt.neutral - 0.05 && Math.abs(j.J_mon_pan - d.J_mon_pan.neutral) < 0.02, `${s.actions} actions; height ${(j.J_mon_height * 100).toFixed(1)} cm, tilt ${(j.J_mon_tilt * 57.2958).toFixed(1)}° (down is negative), turn ${(j.J_mon_pan * 57.2958).toFixed(1)}°; card says: "${note}"`, "≤ 3 actions, no scrolling, right direction on the first try; was 7");
+  record("T25", `lower the monitor ${(-want * 100).toFixed(1)} cm and tilt it down: click, drag Height, drag Tilt`, s.actions === 3 && near(j.J_mon_height, want, 0.004) && near(j.J_mon_tilt, wantTilt * Math.PI / 180, 0.04) && j.J_mon_pan === d.J_mon_pan.neutral, `${s.actions} actions; height ${(j.J_mon_height * 100).toFixed(1)} cm, tilt ${(j.J_mon_tilt * 57.2958).toFixed(1)}° (down is negative), turn ${(j.J_mon_pan * 57.2958).toFixed(1)}°`, "≤ 3 actions, no scrolling, right direction on the first try; was 7");
   const ap = await s.rect(s.byText("As photographed")); await s.clickEl(s.byText("As photographed"), "As photographed");
   const j2 = (await s.state()).joints;
   record("T26", "\"As photographed\" after an adjustment", !!ap && j2.J_mon_height === d.J_mon_height.neutral && j2.J_mon_tilt === d.J_mon_tilt.neutral, `visible without scrolling: ${!!ap}; one click returns height to ${j2.J_mon_height} m and tilt to ${(j2.J_mon_tilt * 57.2958).toFixed(1)}° (the photographed values)`, "was a hidden double-click per slider");
@@ -386,11 +421,15 @@ await test("T25", "raise and tilt the monitor", async () => {
 await test("T27", "one Reset puts everything back", async () => {
   const f = await open(1440, 900); const fresh = await f.state(); await close(f);
   const s = await open(1440, 900);
+  await s.browseComponents();
   await s.clickEl("document.querySelectorAll('#tree .row.top .eye')[2]", "hide a group");
-  await s.clickEl(s.byText("More"), "More"); await s.clickEl(s.byText("Left"), "Left"); await s.clickEl(s.byText("How sure are we?"), "colours"); await s.key("Escape");
+  await s.clickEl("document.querySelector('#views [data-view=left]')", "Left");
+  await s.clickEl("document.getElementById('more-btn')", "Settings");
+  await s.useEvidenceColours();
+  await s.key("Escape");
   await s.ev("viewer.setJoint('J_mon_pan', 0.3), viewer.setJoint('J_joy_R_pitch', 0.2), viewer.setJoint('J_seat_slide', -0.05, { force: true }), viewer.setJoint('J_pod_armrest_L', 0.03)");
   const [x, y] = await s.find("C_seat_back_shell"); await s.click(x, y, "seat");
-  await s.clickEl(s.byText("Reset all"), "Reset all"); await s.settle(900);
+  await s.clickEl("document.getElementById('reset')", "Reset all"); await s.settle(900);
   const st = await s.state(), strip = (k: any) => JSON.stringify({ ...k, fps: 0, frames_drawn: 0, render: 0 });
   const camOk = dist(st.camera.position, fresh.camera.position) < 1e-6 && dist(st.camera.target, fresh.camera.target) < 1e-6;
   record("T27", "one Reset puts everything back", strip(st) === strip(fresh) || (camOk && strip({ ...st, camera: 0 }) === strip({ ...fresh, camera: 0 })), strip(st) === strip(fresh) ? "state equals a fresh load (view, hidden parts, colours, selection, 4 adjustments)" : `differs: ${Object.keys(st).filter((k) => JSON.stringify(st[k]) !== JSON.stringify(fresh[k]) && !["fps", "frames_drawn", "render"].includes(k)).join(", ")}`, "1 click; was 10 actions, inexact");
@@ -412,15 +451,17 @@ await test("T28", "armrest pad back; right joystick forward", async () => {
 });
 await test("T29", "how sure are we: plain legend with counts", async () => {
   const s = await open(1440, 900);
-  await s.clickEl(s.byText("More"), "More"); await s.clickEl(s.byText("How sure are we?"), "How sure are we?"); const n = s.actions; await s.key("Escape");
-  const key = await s.ev<string>("document.getElementById('key').getClientRects().length ? document.getElementById('key').innerText : ''"), hits = JARGON.filter((re) => re.test(key)).map(String);
+  await s.clickEl("document.getElementById('more-btn')", "Settings"); await s.useEvidenceColours(); await s.key("Escape");
+  const key = await s.ev<string>("document.getElementById('key').getClientRects().length ? document.getElementById('key').innerText : ''");
+  const hits = JARGON.filter((re) => re.test(key.replace(/Evidence colours/i, ''))).map(String);
   await s.shot("after-09-how-sure-1440");
-  record("T29", "how sure are we: plain legend with counts", n === 2 && (await s.state()).mode === "class" && /\d+ parts?/.test(key) && hits.length === 0, `${n} clicks; legend: ${key.replace(/\s+/g, " ").slice(0, 150)}…; jargon: ${hits.length ? hits.join(" ") : 0}`, "≤ 2 actions");
+  record("T29", "how sure are we: plain legend with counts", (await s.state()).mode === "class" && /\d+ parts?/.test(key) && hits.length === 0, `legend: ${key.replace(/\s+/g, " ").slice(0, 150)}…; jargon: ${hits.length ? hits.join(" ") : 0}`);
   await close(s);
 });
 await test("T30", "copy link reproduces the view; save picture", async () => {
   const s = await open(1440, 900);
   const [ex, ey] = await s.empty(); await s.drag(ex, ey, ex + 140, ey + 50, "rotate"); await s.settle(600);
+  await s.browseComponents();
   await s.clickEl("document.querySelectorAll('#tree .row.top .eye')[5]", "hide a group");
   await s.ev("viewer.setJoint('J_mon_pan', 0.3), viewer.setJoint('J_seat_slide', -0.05, { force: true }), viewer.setJoint('J_ts_arm', [0.1, 0.5, 0])");
   const [x, y] = await s.find("S_mon_screen"); await s.click(x, y, "monitor");
@@ -451,19 +492,28 @@ await test("T31", "slide the seat back 5 cm and recline it to 20°", async () =>
   const j = (await s.state()).joints;
   await s.shot("after-06-seat-moved-assumed-notice-1440");
   record("T31", "slide the seat back 5 cm and recline it to 20°", two === 2 && j1.J_seat_slide !== 0 && s.actions === 3 && near(j.J_seat_slide, -0.05, 0.005) && near(j.J_seat_recline, 20 * Math.PI / 180, Math.PI / 180), `${two} actions to slide (${(j1.J_seat_slide * 100).toFixed(1)} cm), ${s.actions} in all; slide ${(j.J_seat_slide * 100).toFixed(1)} cm, recline ${(j.J_seat_recline * 57.2958).toFixed(1)}°`, "≤ 2 and ≤ 3 actions; ±0.5 cm, ±1°; was impossible");
-  record("T33", "the seat's card: five working sliders, each tagged, with the caution", card.name === "Seat" && card.sliders === 5 && card.tags === 5 && card.disabled === 0 && /not confirmed on the real rig/.test(card.text), `"${card.name}": ${card.sliders} sliders (${card.labels.join(", ")}), ${card.tags} tagged "assumed range", ${card.disabled} disabled; caution sentence present: ${/not confirmed on the real rig/.test(card.text)}`);
-  // the notice stays on the picture
-  const notice = () => s.ev<string>("(() => { const n = document.querySelector('#notices .amber'); return n && n.getClientRects().length ? n.innerText : ''; })()");
-  const n1 = await notice(); await s.key("Escape"); const n2 = await notice();
-  const [mx, my] = await s.find("S_mon_screen"); await s.click(mx, my, "monitor"); const n3 = await notice();
+  const clean = !/assumed range|measured from photo|how its size is known|details/i.test(card.text);
+  record("T33", "the seat has five working sliders and no repeated provenance", card.name === "Seat" && card.sliders === 5 && card.tags === 0 && card.disabled === 0 && clean,
+    `"${card.name}": ${card.sliders} sliders (${card.labels.join(", ")}), ${card.disabled} disabled, ${card.tags} tags; provenance copy absent: ${clean}`);
+  const recovery = "document.getElementById('scene-recovery')";
+  const reset = s.byText("Reset adjustments", recovery);
+  const uncovered = () => s.ev<string>(`(${recovery}).getClientRects().length ? (${recovery}).innerText : ''`);
+  const n1 = await uncovered(); await s.key("Escape"); const n2 = await uncovered();
+  const [mx, my] = await s.find("S_mon_screen"); await s.click(mx, my, "monitor"); const n3 = await uncovered();
+  const hasWarning = (t: string) => /assum|estimat|not confirmed/i.test(t);
+  record("T34", "one compact recovery area follows the moved seat across selections",
+    [n1, n2, n3].every((t) => /Reset adjustments/i.test(t) && hasWarning(t)) && !(await s.rect("document.querySelector('#notices .amber')")),
+    `after moving the seat: "${n1.replace(/\s+/g, " ")}"; still present after Escape: ${!!n2}; and while adjusting monitor: ${!!n3}`);
   await s.ev("viewer.setJoint('J_mon_pan', 0.2)");
-  const inStage = await s.ev<boolean>("document.getElementById('stage').contains(document.querySelector('#notices .amber'))");
-  await s.clickEl(s.byText("Back to as photographed", "document.querySelector('#notices .amber')"), "Back to as photographed");
-  const j3 = (await s.state()).joints, n4 = await notice(), grey = await s.ev<string>("[...document.querySelectorAll('#notices .note:not(.amber)')].filter((n) => n.getClientRects().length).map((n) => n.innerText).join(' | ')");
-  const ok34 = [n1, n2, n3].every((t) => /assumed range/.test(t) && /not confirmed on the real rig/.test(t)) && inStage;
-  record("T34", "amber notice stays on the picture while the seat is moved", ok34, `"${n1.replace(/\s+/g, " ")}"; after Esc: ${n2 ? "still there" : "GONE"}; with the monitor selected: ${n3 ? "still there" : "GONE"}; inside the picture area: ${inStage}`);
-  const d = await defs(s);
-  record("T35", "\"Back to as photographed\" on the notice returns the assumed adjustments only", j3.J_seat_slide === d.J_seat_slide.neutral && j3.J_seat_recline === d.J_seat_recline.neutral && j3.J_mon_pan === 0.2 && n4 === "" && !/assumed/.test(grey) && /Monitor moved/.test(grey), `seat slide ${j3.J_seat_slide}, recline ${(j3.J_seat_recline * 57.2958).toFixed(1)}° (photographed ${(d.J_seat_recline.neutral * 57.2958).toFixed(1)}°), monitor turn kept at ${j3.J_mon_pan}; amber notice gone; remaining strip: "${grey.replace(/\s+/g, " ")}"`);
+  await s.clickEl(s.byText("As photographed", "document.getElementById('card')"), "reset the monitor only");
+  const partReset = (await s.state()).joints, d = await defs(s);
+  await s.ev("viewer.setJoint('J_mon_pan', 0.2)");
+  await s.clickEl(reset, "Reset adjustments");
+  const j3 = (await s.state()).joints;
+  record("T35", "part and scene resets have different scopes", partReset.J_seat_slide === j.J_seat_slide && partReset.J_seat_recline === j.J_seat_recline &&
+    partReset.J_mon_pan === d.J_mon_pan.neutral && j3.J_seat_slide === d.J_seat_slide.neutral && j3.J_seat_recline === d.J_seat_recline.neutral &&
+    j3.J_mon_pan === d.J_mon_pan.neutral && !(await s.rect(reset)),
+    `after part reset: seat slide ${partReset.J_seat_slide} m, monitor turn ${partReset.J_mon_pan}; after scene reset: seat slide ${j3.J_seat_slide} m, recline ${j3.J_seat_recline}, monitor turn ${j3.J_mon_pan}`);
   await close(s);
 });
 await test("T32", "no disabled slider and no padlock in any state", async () => {
@@ -477,7 +527,8 @@ await test("T32", "no disabled slider and no padlock in any state", async () => 
   await close(s);
 });
 await test("T36", "the seat's sliders stop at the limits of the description file", async () => {
-  const s = await open(1440, 900); await s.clickEl("[...document.querySelectorAll('#tree .row.top .name')].find((b) => b.querySelector('.label').textContent === 'Seat')", "Seat in the list");
+  const s = await open(1440, 900); await s.browseComponents();
+  await s.clickEl("[...document.querySelectorAll('#tree .row.top .name')].find((b) => b.querySelector('.label').textContent === 'Seat')", "Seat in the list");
   const got: number[] = [], d = await defs(s), mid = async (label: string) => { const r = (await s.rect(s.slider(label)))!, i = await s.ev<any>(`(() => { const e = ${s.slider(label)}; return (e.value - e.min) / (e.max - e.min); })()`); return { r, x: r.x + 8 + i * (r.w - 16), y: r.y + r.h / 2 }; };
   let m = await mid("Forward / back"); await s.drag(m.x, m.y, m.r.x - 80, m.y, "slide past the back end"); got.push((await s.state()).joints.J_seat_slide);
   m = await mid("Forward / back"); await s.drag(m.x, m.y, m.r.x + m.r.w + 80, m.y, "slide past the forward end"); got.push((await s.state()).joints.J_seat_slide);
@@ -491,40 +542,43 @@ await test("T37", "for scripts nothing moved: lock, pose=, description file", as
   const s = await open(1440, 900, "?pose=J_seat_slide:-0.05");
   const thrown = await s.ev<string>("(() => { try { viewer.setJoint('J_seat_slide', 0.05); return ''; } catch (e) { return e.message; } })()");
   const st = await s.state(), locked = await s.ev<any[]>("viewer.manifest().joints.filter((j) => j.locked).map((j) => [j.id, j.evidence])");
-  const notice = await s.ev<string>("(() => { const n = document.querySelector('#notices .amber'); return n && n.getClientRects().length ? n.innerText : ''; })()");
+  const notice = await s.ev<string>("(() => { const n = document.getElementById('scene-recovery'); return n && n.getClientRects().length ? n.innerText : ''; })()");
   const pic = await s.ev<any>("(() => { const u = viewer.picture(), b = atob(u.slice(22, 66)); const n = (i) => (b.charCodeAt(i) << 24 | b.charCodeAt(i + 1) << 16 | b.charCodeAt(i + 2) << 8 | b.charCodeAt(i + 3)) >>> 0; return n(20) - document.getElementById('gl').height; })()");
-  record("T37", "for scripts nothing moved: lock, pose=, description file", /locked/.test(thrown) && st.joints.J_seat_slide === -0.05 && locked.length === 6 && locked.every((l) => l[1] === "assumed") && st.assumed_in_use.join() === "J_seat_slide" && /not confirmed/.test(notice) && pic > 0, `setJoint without force: "${thrown}"; pose= moved the seat to ${st.joints.J_seat_slide}; ${locked.length} joints still locked + assumed in the description file; state().assumed_in_use = [${st.assumed_in_use}]; a pose from the address shows the notice: ${!!notice}; saved picture carries the sentence (${pic} px band)`);
+  record("T37", "for scripts nothing moved: lock, pose=, description file", /locked/.test(thrown) && st.joints.J_seat_slide === -0.05 && locked.length === 6 && locked.every((l) => l[1] === "assumed") && st.assumed_in_use.join() === "J_seat_slide" && /assum|estimat|not confirmed/i.test(notice) && pic > 0, `setJoint without force: "${thrown}"; pose= moved the seat to ${st.joints.J_seat_slide}; ${locked.length} joints still locked + assumed in the description file; state().assumed_in_use = [${st.assumed_in_use}]; a pose from the address shows the notice: ${!!notice}; saved picture carries the sentence (${pic} px band)`);
   await close(s);
 });
 
 // ---- direct manipulation ------------------------------------------------------------------------------
 await test("T38", "drag the selected monitor down in the picture", async () => {
   const s = await open(1440, 900);
-  const [x, y] = await s.find("S_mon_screen"); await s.click(x, y, "monitor"); await s.move(x + 2, y + 2); await sleep(150);
-  const cur = await s.ev<string>("document.getElementById('gl').style.cursor"), tip = await s.ev<string>("document.getElementById('tip').hidden ? '' : document.getElementById('tip').textContent"), hint = await s.ev<string>("document.querySelector('#card .drag-hint')?.textContent ?? ''");
-  const d = await defs(s); await s.settle(500); const [gx, gy] = await s.find("S_mon_screen"); const cA = (await s.state()).camera; await s.drag(gx, gy, gx + 2, gy + 16, "monitor downward");
+  await s.click(...await s.find("S_mon_screen"), "monitor"); await s.settle(500);
+  const [gx, gy] = await s.find("S_mon_screen"); await s.move(gx, gy); await sleep(150);
+  const cur = await s.ev<string>("document.getElementById('gl').style.cursor"), tip = await s.ev<string>("document.getElementById('tip').hidden ? '' : document.getElementById('tip').textContent");
+  const d = await defs(s), cA = (await s.state()).camera; await s.drag(gx, gy, gx + 2, gy + 16, "monitor downward");
   const st = await s.state(), out = await s.ev<string>("document.querySelector('#card .adj output').textContent");
   const [lx, ly] = await s.find("S_mon_screen"); await s.drag(lx, ly, lx, ly + 600, "monitor far down"); const low = (await s.state()).joints.J_mon_height;
   await s.shot("after-15-monitor-dragged-to-its-lower-stop-1440");
   const [ux, uy] = await s.find("S_mon_screen"); await s.drag(ux, uy, ux, uy - 700, "monitor far up"); const high = (await s.state()).joints.J_mon_height;
-  record("T38", "drag the selected monitor down in the picture", st.joints.J_mon_height < -0.01 && st.joints.J_mon_height > d.J_mon_height.lower && st.joints.J_mon_tilt === d.J_mon_tilt.neutral && st.joints.J_mon_pan === d.J_mon_pan.neutral && moved(cA, st.camera) < 1e-9 && low === d.J_mon_height.lower && high === d.J_mon_height.upper && cur === "move" && /drag the part/.test(hint), `16 px drag: height ${(st.joints.J_mon_height * 100).toFixed(1)} cm (card shows "${out}"), tilt and turn untouched, camera moved ${moved(cA, st.camera).toFixed(6)} m; dragged past the ends: ${low} … ${high} m; cursor over the selected monitor "${cur}", pointer label "${tip}", card hint "${hint}"`, `limits ${d.J_mon_height.lower} … ${d.J_mon_height.upper} m`);
+  record("T38", "drag the selected monitor down in the picture", st.joints.J_mon_height < -0.01 && st.joints.J_mon_height > d.J_mon_height.lower && st.joints.J_mon_tilt === d.J_mon_tilt.neutral && st.joints.J_mon_pan === d.J_mon_pan.neutral && moved(cA, st.camera) < 1e-9 && low === d.J_mon_height.lower && high === d.J_mon_height.upper && cur === "move" && /drag to adjust/i.test(tip), `16 px drag: height ${(st.joints.J_mon_height * 100).toFixed(1)} cm (card shows "${out}"), tilt and turn untouched, camera moved ${moved(cA, st.camera).toFixed(6)} m; dragged past the ends: ${low} … ${high} m; cursor over the selected monitor "${cur}", pointer label "${tip}"`, `limits ${d.J_mon_height.lower} … ${d.J_mon_height.upper} m`);
   await close(s);
 });
 await test("T39", "drag the selected seat back; drag its backrest; drag the armrest pad", async () => {
   const s = await open(1440, 900, "?view=left"), d = await defs(s);     // seen from the operator's left: forward is to the left of the picture
   const [x0, y0] = await s.find("C_seat_pan", 3), cBefore = (await s.state()).camera; await s.click(x0, y0, "seat cushion"); await s.settle(700);
-  const slid = moved(cBefore, (await s.state()).camera) / 2, [x, y] = await s.find("C_seat_pan", 3);      // the view slides sideways once so the seat is not under the card
+  const slid = moved(cBefore, (await s.state()).camera) / 2, [x, y] = await s.find("C_seat_pan", 3);      // a docked inspector may change the viewport width before the drag
   const c0 = (await s.state()).camera, p0 = await s.ev<number[]>("viewer.project(viewer.worldPosition('D_seat_ref_live'))");
   await s.drag(x, y, x + 25, y + 2, "seat toward its back");
   const a = await s.state(), p1 = await s.ev<number[]>("viewer.project(viewer.worldPosition('D_seat_ref_live'))");
   const [bx, by] = await s.find("C_seat_headrest", 3); await s.drag(bx, by, bx + 45, by + 8, "headrest backward");
   const b = await s.state();
   await s.shot("after-16-seat-dragged-left-view-1440");
-  record("T39", "drag the selected seat back, then its headrest", a.joints.J_seat_slide < -0.01 && a.joints.J_seat_slide > d.J_seat_slide.lower && a.joints.J_seat_height === d.J_seat_height.neutral && near(p1[0] - p0[0], 25, 2) && b.joints.J_seat_recline > d.J_seat_recline.neutral + 0.05 && b.joints.J_seat_slide === a.joints.J_seat_slide && moved(c0, b.camera) < 1e-9, `on selecting it the view slid ${slid.toFixed(2)} m sideways to bring the seat out from under the card; cushion dragged 25 px: slide ${(a.joints.J_seat_slide * 100).toFixed(1)} cm (the seat moved ${(p1[0] - p0[0]).toFixed(1)} px on screen), height unchanged; headrest dragged 45 px: recline ${(b.joints.J_seat_recline * 57.2958).toFixed(1)}° (photographed ${(d.J_seat_recline.neutral * 57.2958).toFixed(1)}°), slide unchanged; camera moved ${moved(c0, b.camera).toFixed(6)} m`);
+  record("T39", "drag the selected seat back, then its headrest", a.joints.J_seat_slide < -0.01 && a.joints.J_seat_slide > d.J_seat_slide.lower && a.joints.J_seat_height === d.J_seat_height.neutral && near(p1[0] - p0[0], 25, 2) && b.joints.J_seat_recline > d.J_seat_recline.neutral + 0.05 && b.joints.J_seat_slide === a.joints.J_seat_slide && moved(c0, b.camera) < 1e-9, `selection moved camera by ${slid.toFixed(2)} m; cushion dragged 25 px: slide ${(a.joints.J_seat_slide * 100).toFixed(1)} cm (the seat moved ${(p1[0] - p0[0]).toFixed(1)} px on screen), height unchanged; headrest dragged 45 px: recline ${(b.joints.J_seat_recline * 57.2958).toFixed(1)}° (photographed ${(d.J_seat_recline.neutral * 57.2958).toFixed(1)}°), slide unchanged; camera moved ${moved(c0, b.camera).toFixed(6)} m`);
   await close(s);
   const t = await open(1440, 900, "?view=left");
-  const [px, py] = await t.find("C_pod_armrest_L", 3); await t.click(px, py, "left armrest pad"); await t.drag(px, py, px - 12, py, "pad forward");
-  const j = (await t.state()).joints.J_pod_armrest_L; await t.drag(px - 12, py, px - 400, py, "pad far forward"); const end = (await t.state()).joints.J_pod_armrest_L;
+  await t.click(...await t.find("C_pod_armrest_L", 3), "left armrest pad");
+  const [px, py] = await t.find("C_pod_armrest_L", 3); await t.drag(px, py, px - 12, py, "pad forward");
+  const j = (await t.state()).joints.J_pod_armrest_L, [fx, fy] = await t.find("C_pod_armrest_L", 3);
+  await t.drag(fx, fy, fx - 388, fy, "pad far forward"); const end = (await t.state()).joints.J_pod_armrest_L;
   const dd = await defs(t);
   record("T41", "drag the selected armrest pad", j > 0.01 && j < dd.J_pod_armrest_L.upper && end === dd.J_pod_armrest_L.upper, `12 px: ${(j * 100).toFixed(1)} cm forward; dragged past the end: ${end} m`, `limit ${dd.J_pod_armrest_L.upper} m`);
   await close(t);
@@ -555,26 +609,135 @@ await test("T42", "dragging an unselected part or empty space still rotates the 
   await close(s);
 });
 
-// ---- narrow window ------------------------------------------------------------------------------------
-await test("T52", "phone-width window: model first, parts as a drawer, card as a sheet", async () => {
+// ---- inspector and narrow window -----------------------------------------------------------------------
+await test("T54", "drag or keyboard-resize the workspace panel, snap closed and reopen", async () => {
+  const s = await open(1440, 900), rail = "document.getElementById('parts')", handle = "document.getElementById('rail-resize')";
+  const frame = () => s.rect("document.getElementById('gl')");
+  const a = (await s.rect(rail))!, canvasA = (await frame())!;
+  const d = (await s.rect(handle))!, x = d.x + d.w / 2, y = d.y + d.h / 2;
+  await s.drag(x, y, x + 64, y, "workspace divider wider");
+  const b = (await s.rect(rail))!, canvasB = (await frame())!;
+  await s.ev(`(${handle}).focus()`); await s.press("ArrowLeft");
+  const keyed = (await s.rect(rail))!;
+  const d2 = (await s.rect(handle))!;
+  await s.drag(d2.x + d2.w / 2, d2.y + d2.h / 2, 4, d2.y + d2.h / 2, "workspace divider past the minimum");
+  await s.move(100, 60);  // the opener is opaque while the pointer is on it
+  const collapsed = (await frame())!, opener = "document.getElementById('open-parts')";
+  const onTop = await s.rect(opener);
+  const keyboardAccess = await s.ev<boolean>(`(() => { const e = ${opener}; return e.tabIndex === 0 && !!e.getAttribute('aria-label'); })()`);
+  const translucent = await s.ev<boolean>(`getComputedStyle(${opener}).backgroundColor.startsWith('rgba')`);
+  const unreachable = await s.ev<boolean>("document.getElementById('parts').hidden || document.getElementById('parts').inert");
+  await s.shot("after-54-rail-collapsed");
+  await s.ev(`(${opener}).focus()`); await s.press("Enter");
+  const restored = (await s.rect(rail))!, canvasC = (await frame())!;
+  record("T54", "workspace panel resizes, snaps closed, and has a keyboard path back",
+    b.w > a.w + 20 && canvasB.w < canvasA.w - 20 && keyed.w < b.w && collapsed.w > canvasA.w + 20 &&
+    !!onTop && keyboardAccess && translucent && unreachable && near(restored.w, keyed.w, 1) && canvasC.w < collapsed.w - 20,
+    `rail ${Math.round(a.w)} → ${Math.round(b.w)} px by pointer → ${Math.round(keyed.w)} px by arrow; canvas after snap ${Math.round(collapsed.w)} px; translucent opener: ${translucent}; collapsed panel inert: ${unreachable}; rail restored by keyboard to ${Math.round(restored.w)} px`);
+  await close(s);
+});
+await test("T55", "one inspector docks, floats, and closes without losing an adjustment", async () => {
+  const s = await open(1440, 900);
+  const card = "document.getElementById('card')", size = async () => (await s.rect("document.getElementById('gl')"))!.w;
+  const rest = await size();
+  await s.click(...await s.find("S_mon_screen"), "monitor");
+  const dock = await s.ev<boolean>(`!!(${card}).closest('#inspection') && !document.getElementById('components').open`), dockWidth = await size();
+  await s.slide(s.slider("Height"), -35, "monitor height before popping out");
+  const height = (await s.state()).joints.J_mon_height;
+  await s.ev(`window.acceptanceCard = ${card}; window.acceptanceRange = ${s.slider("Height")}`);
+  await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Pop out controls"]')`, "Pop out controls");
+  const floats = await s.ev<boolean>(`(${card}).parentElement.id === "stage"`), floatWidth = await size();
+  await s.shot("after-55-monitor-floating");
+  await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Dock controls"]')`, "Dock controls");
+  const same = await s.ev<boolean>(`(${card}).closest('#inspection') && window.acceptanceCard === ${card} && window.acceptanceRange === ${s.slider("Height")}`);
+  const stillThere = (await s.state()).selected === "C_stand_monitor" && (await s.state()).joints.J_mon_height === height;
+  await s.clickEl("document.querySelector('#card .dock-toggle')", "Pop out controls again");
+  await s.clickEl(`document.querySelector('#card button[aria-label="Close controls"]')`, "Close floating controls");
+  record("T55", "inspector docks, pops out, re-docks, and closes with X",
+    dock && rest > dockWidth + 100 && floats && floatWidth > dockWidth + 100 && same && stillThere && near(height, -0.035, 0.005) &&
+    !(await s.rect(card)) && (await s.state()).selected === null,
+    `canvas ${Math.round(rest)} px empty, ${Math.round(dockWidth)} px docked and ${Math.round(floatWidth)} px floated; same controls after docking: ${same}; height ${height} m kept; selection cleared by X: ${(await s.state()).selected === null}`);
+  await close(s);
+});
+await test("T56", "keyboard opens Components and reaches an adjustment", async () => {
+  const s = await open(1440, 900);
+  const toggle = "document.getElementById('components-toggle')";
+  const group = "[...document.querySelectorAll('#tree .row.top .name')].find((b) => b.querySelector('.label').textContent === 'Seat')";
+  const opened = () => s.ev<boolean>("document.getElementById('components').open");
+  const baseline = await opened();
+  await s.ev(`(${toggle}).focus()`); await s.press("Enter");
+  const disclosed = await opened();
+  await s.ev(`(${group}).focus()`); await s.press("Enter");
+  const selected = (await s.state()).selected, closed = !(await opened());
+  const neutral = (await s.state()).joints.J_seat_slide;
+  const adjustment = s.slider("Forward / back");
+  await s.ev(`(${adjustment}).focus()`); await s.press("ArrowRight");
+  const movedByKey = (await s.state()).joints.J_seat_slide;
+  await s.press("Escape");
+  const after = (await s.state()).selected;
+  const restored = await s.ev<boolean>("document.activeElement.id === 'components-toggle'");
+  record("T56", "keyboard reaches Components, selects the seat and moves a slider",
+    !baseline && disclosed && selected === "seat" && closed && movedByKey !== neutral && after === null && restored,
+    `list initially closed: ${!baseline}; Enter opened list: ${disclosed}; Enter selected ${selected} and closed the list: ${closed}; ArrowRight moved the seat from ${neutral} to ${movedByKey} m; Escape cleared selection: ${after === null}; focus returned to Components: ${restored}`);
+  await close(s);
+});
+await test("T57", "workspace and camera actions sit at their respective bottom edges", async () => {
+  const s = await open(1440, 900);
+  const r = await s.ev(`(() => {
+    const box = (id) => document.getElementById(id).getBoundingClientRect();
+    const labelled = (id) => Boolean(document.getElementById(id).getAttribute('aria-label'));
+    const rail = box('parts'), workspace = box('ws-bar'), toolbar = box('toolbar'), settings = box('more-btn');
+    const stage = box('stage'), view = box('view-controls'), reset = box('reset');
+    const footerIcons = ['copy-link', 'save-picture', 'more-btn'].every((id) => labelled(id) && document.getElementById('toolbar').contains(document.getElementById(id)));
+    return {
+      workspaceFirst: workspace.top >= rail.top && workspace.top - rail.top <= 20 && !/Rig B/.test(document.getElementById('parts').innerText),
+      footerIcons, footerAtBottom: near(toolbar.bottom, rail.bottom, 2), settingsAtRight: near(settings.right, toolbar.right, 12),
+      viewAtCorner: near(view.right, stage.right, 20) && view.bottom <= stage.bottom && stage.bottom - view.bottom <= 60,
+      resetLast: labelled('reset') && near(reset.right, view.right, 6),
+    };
+    function near(a, b, margin) { return Math.abs(a - b) <= margin; }
+  })()`);
+  record("T57", "workspace at the top, tools at the workspace footer, and camera controls at the viewer corner",
+    Object.values(r).every(Boolean), Object.entries(r).map(([name, pass]) => `${name} ${pass}`).join(', '));
+  await close(s);
+});
+await test("T52", "phone-width window: model first, one inspector sheet", async () => {
   const s = await open(390, 800);
-  const inv = await s.ev(INVENTORY), hidden = await s.ev<boolean>("document.getElementById('parts').getBoundingClientRect().right <= 0");
-  await s.clickEl(s.byText("Parts"), "Parts"); await sleep(350); await s.shot("after-08b-narrow-parts-drawer-390");
-  const open1 = await s.ev<boolean>("document.getElementById('parts').getBoundingClientRect().left >= 0");
-  await s.clickEl("[...document.querySelectorAll('#tree .row.top .name')].find((b) => b.querySelector('.label').textContent === 'Monitor stand')", "Monitor stand");
-  await s.clickEl("[...document.querySelectorAll('#tree .row.kid .name')].find((b) => b.querySelector('.label').textContent === 'Monitor')", "Monitor"); await sleep(350);
-  const card = (await s.rect("document.getElementById('card')"))!, closed = await s.ev<boolean>("document.getElementById('parts').getBoundingClientRect().right <= 0");
+  const inv = await s.ev(INVENTORY);
+  const start = await s.ev<boolean>("!document.getElementById('components').open && document.getElementById('card').hidden");
+  await s.clickEl("document.getElementById('open-parts')", "Open workspace panel"); await s.settle(300);
+  const workspace = await s.rect("document.getElementById('ws-bar')"), footer = await s.rect("document.getElementById('toolbar')");
+  await s.shot("after-08b-narrow-workspace-drawer-390"); await s.key("Escape");
+  await s.browseComponents();
+  await s.clickEl(`document.querySelector('#tree button[aria-label="Expand Monitor stand components"]')`, "Expand monitor stand");
+  const monitor = "[...document.querySelectorAll('#tree .row.kid .name')].find((b) => b.querySelector('.label').textContent === 'Monitor')";
+  await s.reveal(monitor);
+  await s.clickEl(monitor, "Monitor");
+  await s.settle(350);
+  const inspector = (await s.rect("document.getElementById('inspector')"))!, frame = (await s.rect("document.getElementById('gl')"))!;
+  const closed = await s.ev<boolean>("!document.getElementById('components').open && document.getElementById('card').closest('#inspection') !== null");
+  const float = await s.rect("document.querySelector('#card .dock-toggle')");
   const overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
   await s.slide(s.slider("Height"), -100, "Height");
   await s.shot("after-08c-narrow-monitor-sheet-390");
-  const j = (await s.state()).joints.J_mon_height, tb = await s.ev<number[]>("[...document.querySelectorAll('#toolbar button')].filter((b) => b.getClientRects().length).map((b) => Math.round(b.getBoundingClientRect().right))");
-  record("T52", "phone-width window: model first, parts as a drawer, card as a sheet", hidden && open1 && closed && card.h <= 800 * 0.47 && card.y + card.h <= 800 && overflow <= 0 && near(j, -0.1, 0.01) && Math.max(...tb) <= 390, `list folded away: ${hidden}; opens with "Parts": ${open1}; closes on choosing a part: ${closed}; card is a bottom sheet ${Math.round(card.h)} px tall (${(card.h / 8).toFixed(0)} % of the height); sideways overflow ${overflow} px; toolbar ends at ${Math.max(...tb)} px; slider works (${(j * 100).toFixed(1)} cm); ${inv.controls} controls by default`);
+  const j = (await s.state()).joints.J_mon_height, camera = await s.rect("document.getElementById('view-controls')");
+  record("T52", "phone shows one sheet and leaves the camera controls usable",
+    start && !!workspace && !!footer && footer.x + footer.w <= 390.5 && closed && (await s.state()).selected === 'C_stand_monitor' &&
+    !float && frame.y + frame.h <= inspector.y + 2 &&
+    inspector.h <= 800 * 0.52 && inspector.y + inspector.h <= 801 && overflow <= 0 && near(j, -0.1, 0.01) &&
+    !!camera && camera.x + camera.w <= 390.5 && camera.y + camera.h <= inspector.y + 1,
+    `components initially collapsed: ${start}; workspace drawer reached: ${!!workspace}; one inspector sheet: ${closed}; sheet ${Math.round(inspector.h)} px tall; slider ${(j * 100).toFixed(1)} cm; camera controls above sheet: ${!!camera && camera.y + camera.h <= inspector.y + 1}; ${inv.controls} controls by default`);
   await close(s);
-  for (const [w, h, name] of [[1024, 768, "after-07b-seat-moved-1024"], [390, 800, "after-08d-narrow-assumed-notice-390"]] as [number, number, string][]) {
+  for (const [w, h, name] of [[1024, 768, "after-07b-seat-moved-1024"], [390, 800, "after-08d-narrow-scene-recovery-390"]] as [number, number, string][]) {
     const t = await open(w, h, "?pose=J_seat_slide:-0.06,J_seat_recline:22&sel=seat");
-    const n = await t.rect("document.querySelector('#notices .amber')"), c = (await t.rect("document.getElementById('gl')"))!;
+    if (w < 900) {
+      await t.clickEl("document.getElementById('open-parts')", "Open workspace panel");
+      await t.settle();
+    }
+    const n = await t.rect("document.getElementById('scene-recovery')");
     await t.shot(name);
-    record(`T34-${w}`, `amber notice visible over the 3D view at ${w}×${h}`, !!n && n.x >= c.x && n.x + n.w <= c.x + c.w + 1 && n.y >= 0, n ? `at ${Math.round(n.x)},${Math.round(n.y)} size ${Math.round(n.w)}×${Math.round(n.h)}` : "absent");
+    record(`T34-${w}`, `recovery reachable on a moved pose at ${w}×${h}`, !!n && n.x >= 0 && n.x + n.w <= w + 1 && n.y >= 0 && n.y + n.h <= h + 1,
+      n ? `at ${Math.round(n.x)},${Math.round(n.y)} size ${Math.round(n.w)}×${Math.round(n.h)} px` : "absent");
     await close(t);
   }
 });
@@ -593,9 +756,16 @@ async function personPixel(s: Session): Promise<[number, number]> {
 /** wait until the person (and the panel's queue) satisfies a condition on st = viewer.person.state(), ps = viewer.personPanel.state() */
 const untilPerson = (s: Session, cond: string, what: string, ms = 20000) => s.page.waitFor(`(() => { const st = viewer.person.state(), ps = viewer.personPanel.state(); return ps.busy === 0 && (${cond}) ? 'yes' : null; })()`, what, ms);
 const seg = (text: string) => `[...document.querySelectorAll('#person .seg label')].find((l) => l.getClientRects().length && l.querySelector('.seg-t').textContent === ${JSON.stringify(text)})`;
-const personBtn = (text: string) => `[...document.querySelectorAll('#person button')].find((b) => b.getClientRects().length && b.textContent.trim() === ${JSON.stringify(text)})`;
+const personBtn = (text: string) => `[...document.querySelectorAll('#person button')].find((b) => b.getClientRects().length && (b.getAttribute('aria-label') ?? b.textContent.trim()) === ${JSON.stringify(text)})`;
 const personSlider = (label: string) => `[...document.querySelectorAll('#person .adj')].find((a) => a.querySelector('label')?.textContent === ${JSON.stringify(label)})?.querySelector('input[type=range]')`;
-const visibleIn = (s: Session, id: string) => s.ev<boolean>(`(() => { const e = document.getElementById(${JSON.stringify(id)}); if (!e || !e.getClientRects().length) return false; const r = e.getBoundingClientRect(), c = document.getElementById('gl').getBoundingClientRect(), t = document.elementFromPoint(r.left + 6, r.top + r.height / 2); return r.left >= c.left && r.right <= c.right + 1 && r.bottom <= c.bottom + 1 && r.top >= c.top && !!t && e.contains(t); })()`);
+const visibleIn = (s: Session, id: string) => s.ev<boolean>(`(() => {
+  const e = document.getElementById(${JSON.stringify(id)});
+  if (!e || !e.getClientRects().length) return false;
+  const rect = e.getBoundingClientRect(), frame = document.getElementById('gl').getBoundingClientRect();
+  const hitRect = e.querySelector('a')?.getClientRects()[0] ?? rect;
+  const hit = document.elementFromPoint(hitRect.left + hitRect.width / 2, hitRect.top + hitRect.height / 2);
+  return rect.left >= frame.left && rect.right <= frame.right + 1 && rect.bottom <= frame.bottom + 1 && rect.top >= frame.top && !!hit && e.contains(hit);
+})()`);
 
 await test("T60", "click the person: its panel opens; a click on the rig works as before", async () => {
   const s = await open(1440, 900, "?sel=seat");
@@ -647,7 +817,7 @@ await test("T63", "preset Tall man P95, a stature drag, Undo twice", async () =>
 await test("T64", "credits: on the view while dressed, and in full under More", async () => {
   const s = await open(1440, 900);
   const line = await s.ev<string>("document.getElementById('person-credit').textContent"), shown = await visibleIn(s, "person-credit");
-  await s.clickEl(s.byText("More"), "More"); await s.clickEl(s.byText("Credits", "document.getElementById('more')"), "Credits"); await s.settle(300);
+  await s.clickEl("document.getElementById('more-btn')", "Settings"); await s.clickEl(s.byText("Credits", "document.getElementById('more')"), "Credits"); await s.settle(300);
   const text = await s.ev<string>("document.getElementById('credits')?.innerText ?? ''"), box = await s.rect("document.getElementById('credits')");
   await s.shot("after-64-credits-1440");
   await s.key("Escape"); await s.settle(200);
@@ -659,6 +829,7 @@ await test("T64", "credits: on the view while dressed, and in full under More", 
 await test("T65", "keyboard and screen reader: the Person row, labels, focus order, Esc", async () => {
   const s = await open(1440, 900);
   const press = async (key: string, code: string, vk: number) => { await s.page.call("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode: vk, ...(key === "Enter" ? { text: "\r" } : {}) }); await s.page.call("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk }); await sleep(120); };
+  await s.browseComponents();
   await s.ev("document.querySelector('.person-row .name').focus()"); await press("Enter", "Enter", 13); await s.settle(300);
   const opened = await s.ev<any>("({ open: viewer.personPanel.state().open, focus: document.activeElement?.id, expanded: document.querySelector('.person-row .name').getAttribute('aria-expanded') })");
   // every control in the panel has a name a screen reader can say
@@ -667,31 +838,32 @@ await test("T65", "keyboard and screen reader: the Person row, labels, focus ord
   const order: string[] = [];
   for (let i = 0; i < 9; i++) { await press("Tab", "Tab", 9); order.push(await s.ev<string>("(() => { const e = document.activeElement; if (!e) return '?'; if (!document.getElementById('person').contains(e)) return 'outside'; return e.labels?.[0]?.textContent?.trim() || e.getAttribute('aria-label') || e.textContent.trim().slice(0, 24) || e.tagName; })()")); }
   await press("Escape", "Escape", 27); await s.settle(200);
-  const after = await s.ev<any>("({ open: viewer.personPanel.state().open, focus: document.activeElement?.closest('.person-row') ? 'Person row' : document.activeElement?.tagName })");
-  const want = ["Close", "Hide"], inside = !order.includes("outside");
-  record("T65", "keyboard: Enter on the Person row opens the panel; every control is named; Tab stays in order; Esc closes and returns", opened.open && opened.focus === "person-title" && opened.expanded === "true" && unnamed.length === 0 && order[0] === want[0] && order[1] === want[1] && inside && order.includes("Stature") && !after.open && after.focus === "Person row",
+  const after = await s.ev<any>("({ open: viewer.personPanel.state().open, focus: document.activeElement?.closest('.person-row') ? 'Person row' : document.activeElement?.id })");
+  const headerActions = order.slice(0, 3), inside = !order.includes("outside");
+  record("T65", "keyboard: Enter on the Person row opens the panel; every control is named; Tab stays in order; Esc closes and returns", opened.open && opened.focus === "person-title" && opened.expanded === "true" && unnamed.length === 0 && ["Pop out controls", "Close controls", "Hide"].every((label) => headerActions.includes(label)) && inside && order.includes("Stature") && !after.open && after.focus === "components-toggle",
     `Enter on the row: panel ${opened.open ? "open" : "closed"}, focus on ${opened.focus}, aria-expanded ${opened.expanded}; unnamed controls: ${unnamed.length ? unnamed.join(" | ") : 0}; Tab order: ${order.join(" → ")}; Esc: panel ${after.open ? "open" : "closed"}, focus back on the ${after.focus}`);
   await close(s);
 });
 await test("T66", "phone-width window: the person's panel as a bottom sheet, the credits line above it", async () => {
   const s = await open(390, 800);
   const credit0 = await visibleIn(s, "person-credit");
-  await s.clickEl(s.byText("Parts"), "Parts"); await sleep(350);
+  await s.browseComponents();
   await s.clickEl("document.querySelector('.person-row .name')", "Person"); await sleep(450);
-  const panel = (await s.rect("document.getElementById('person')"))!, drawer = await s.ev<boolean>("document.getElementById('parts').getBoundingClientRect().right <= 0");
+  const panel = (await s.rect("document.getElementById('inspector')"))!, drawer = await s.ev<boolean>("!document.getElementById('components').open");
   const credit = await s.rect("document.getElementById('person-credit')"), creditSeen = await visibleIn(s, "person-credit"), overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
   const frame = (await s.rect("document.getElementById('frame')"))!;
   await s.shot("after-66-person-panel-narrow-390");
   await s.ev(`${seg("Clay figure")}.scrollIntoView({ block: 'nearest' })`); await sleep(200);
   await s.clickEl(seg("Clay figure"), "Style: Clay figure"); await untilPerson(s, "st.style === 'clay'", "the clay figure"); await s.settle(400);
   await s.shot("after-66b-person-panel-narrow-clay-390");
-  record("T66", "phone width: the person's panel is a bottom sheet; the 3D view and the credits line end above it", !!panel && panel.y + panel.h <= 800.5 && panel.h <= 800 * 0.47 && drawer && credit0 && creditSeen && !!credit && credit.y + credit.h <= panel.y + 1 && frame.y + frame.h <= panel.y + 1 && overflow <= 0,
-    `sheet ${Math.round(panel.h)} px tall (${(panel.h / 8).toFixed(0)} % of the height), parts drawer closed: ${drawer}; credits line before ${credit0}, with the sheet ${creditSeen} (ends ${credit ? Math.round(panel.y - credit.y - credit.h) : "?"} px above it); 3D view ends ${Math.round(panel.y - frame.y - frame.h)} px above the sheet; sideways overflow ${overflow} px`);
+  record("T66", "phone width: the person's panel is a bottom sheet; the 3D view and the credits line end above it", !!panel && panel.y + panel.h <= 800.5 && panel.h <= 800 * 0.52 && drawer && credit0 && creditSeen && !!credit && credit.y + credit.h <= panel.y + 1 && frame.y + frame.h <= panel.y + 1 && overflow <= 0,
+    `sheet ${Math.round(panel.h)} px tall (${(panel.h / 8).toFixed(0)} % of the height), Components closed: ${drawer}; credits line before ${credit0}, with the sheet ${creditSeen} (ends ${credit ? Math.round(panel.y - credit.y - credit.h) : "?"} px above it); 3D view ends ${Math.round(panel.y - frame.y - frame.h)} px above the sheet; sideways overflow ${overflow} px`);
   await close(s);
 });
 await test("T67", "the person's package fails: a plain error, the rig unaffected", async () => {
   const s = await open(1440, 900, "?person=asset/manikin/nobody/nobody.avatar.json");
   const ok = await s.ev<boolean>("viewer.person.ready"), tag = await s.ev<string>("document.querySelector('.person-row .count').textContent");
+  await s.browseComponents();
   await s.clickEl("document.querySelector('.person-row .name')", "Person"); await s.settle(300);
   const text = await s.ev<string>("document.getElementById('person').innerText"), note = await s.ev<string>("document.querySelector('.person-status')?.textContent ?? ''");
   const [mx, my] = await s.find("S_mon_screen"); await s.click(mx, my, "the monitor"); await s.settle(300);
@@ -1113,7 +1285,7 @@ await test("W06", "delete: one confirmation that names the workspace; Escape can
   await a.page.waitFor("location.pathname === '/' && document.querySelector('main.pg')", "the landing after the delete");
   const notice = await b.page.waitFor("document.querySelector('.gone') ? document.querySelector('.gone').innerText : null", "the notice in the second page", 6000).catch(() => "");
   await wsShot(b, "07-deleted-notice");
-  const focus = await b.ev<string>("document.activeElement?.textContent ?? ''"), inert = await b.ev<boolean>("document.getElementById('stage').hasAttribute('inert')"), href = await b.ev<string>("new URL(document.querySelector('.gone a').href).pathname");
+  const focus = await b.ev<string>("document.activeElement?.textContent ?? ''"), inert = await b.ev<boolean>("document.getElementById('viewer-shell').inert"), href = await b.ev<string>("new URL(document.querySelector('.gone a').href).pathname");
   const gone = !(await exists(ws.id)), recents = (await stored(a, RECENT)) ?? [];
   record("W06", "delete: one confirmation that names the workspace; Escape cancels; the other page shows a plain notice",
     asked.title === "Delete “Doomed 1”?" && /gone for everyone/.test(asked.body) && closed && still && gone && /deleted/.test(notice) && focus === "Back to workspaces" && href === "/" && inert && !recents.some((r: any) => r.id === ws.id),
@@ -1168,6 +1340,7 @@ await test("W09", "phone width (375 px): the landing, Manage and the viewer's to
   await wsShot(s, "09b-manage-375");
   await closeExpecting(s, /404/);
   const v = await openAt(`${ORIGIN}/workspaces/${w[11].id}?person=0`, 375, 800);
+  await v.clickEl("document.getElementById('open-parts')", "Open workspace panel");
   const boxes = await v.ev<any>(`(() => { const r = (s) => { const e = document.querySelector(s); const b = e && e.getClientRects().length ? e.getBoundingClientRect() : null; return b && { x: b.left, y: b.top, r: b.right, b: b.bottom }; }; return { bar: r('#ws-bar'), tool: r('#toolbar'), scroll: document.documentElement.scrollWidth }; })()`);
   await openMenu(v); await sleep(200);
   const menu = await v.ev<any>("(() => { const b = document.getElementById('ws-menu').getBoundingClientRect(); return { x: b.left, r: b.right, b: b.bottom, W: innerWidth, H: innerHeight }; })()");
@@ -1225,9 +1398,13 @@ await test("W12", "Connect an agent: this workspace's own agent address, with Co
   await purge();
   const [ws] = await seed(1, "Agent");
   const s = await openAt(`${ORIGIN}/workspaces/${ws.id}?person=0`, 1280, 900);
-  await s.clickEl(s.byText("More"), "More");
-  const r = await s.ev<{ head: string; value: string; copy: boolean }>("({ head: [...document.querySelectorAll('#more h3')].map((h) => h.textContent).find((t) => /Connect/.test(t)) ?? '', value: document.querySelector('.connect input')?.value ?? '', copy: [...document.querySelectorAll('.connect button')].some((b) => b.textContent === 'Copy address') })");
-  record("W12", "Connect an agent: this workspace's own agent address, with Copy", r.head === "Connect an agent" && r.value === `${ORIGIN}/api/workspaces/${ws.id}/mcp` && r.copy, `heading "${r.head}"; address ${r.value}; Copy address button: ${r.copy}`);
+  await s.clickEl("document.getElementById('more-btn')", "Settings");
+  const section = "document.getElementById('settings-agent')";
+  const summary = "document.querySelector('#settings-agent summary')";
+  const before = await s.ev<boolean>(`!(${section}).open`);
+  await s.clickEl(summary, "Agent access");
+  const r = await s.ev<{ value: string; copy: boolean }>("({ value: document.querySelector('#settings-agent .connect input')?.value ?? '', copy: [...document.querySelectorAll('#settings-agent .connect button')].some((b) => b.textContent === 'Copy address' && b.getClientRects().length) })");
+  record("W12", "Agent access shows this workspace's own agent address and Copy", before && r.value === `${ORIGIN}/api/workspaces/${ws.id}/mcp` && r.copy, `agent settings initially collapsed: ${before}; address ${r.value}; Copy address button: ${r.copy}`);
   await closeExpecting(s, /404/);
 });
 await test("W14", "the landing's first screen: name, one sentence, one primary action, the picture; Continue is primary when there is a recent workspace", async () => {
@@ -1249,13 +1426,20 @@ await test("W14", "the landing's first screen: name, one sentence, one primary a
     /primary/.test(b.cls) && !/primary/.test(b.create) && b.py < b.cy && c.below && c.scroll <= 375 && Math.abs(c.w / c.h - 4 / 3) < 0.02,
     `picture ${a.w}×${a.h} attributes, ${a.bytes} bytes, beside the text on a wide screen: ${a.beside}, below it at 375 px: ${c.below} (${c.w}×${c.h}); with no recent workspace Create is primary (${a.create}); with one, Continue is primary (${b.cls}) and above Create (${b.create}); no three.js or model: ${!a.heavy && !a.canvas}`);
 });
-await test("W15", "touch screens: the hint on the 3D view fits on one line at 375 px and speaks of touch", async () => {
+await test("W15", "touch camera controls open without default viewer text", async () => {
   const w = await makeWorkspace("Touch"), page = await browser.page("about:blank");
   await page.viewport(375, 800); await page.call("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
-  await page.call("Page.navigate", { url: `${ORIGIN}/workspaces/${w.id}?person=0` }); await page.waitFor("window.viewerReady || window.viewerError", "the viewer"); await sleep(300);
-  const r = await page.evaluate("(() => { const h = document.getElementById('hint'), b = h.getBoundingClientRect(), s = getComputedStyle(h); return { text: h.textContent, lines: (() => { const g = document.createRange(); g.selectNodeContents(h); return new Set([...g.getClientRects()].map((q) => Math.round(q.top))).size; })(), w: b.width, coarse: matchMedia('(pointer: coarse)').matches }; })()");
-  allErrors.push(...page.errors); await page.close();
-  record("W15", "touch screens: the hint on the 3D view fits on one line at 375 px and speaks of touch", r.coarse ? (/pinch/.test(r.text) && /tap/.test(r.text) && r.lines <= 1 && r.w <= 375 - 16) : false, `"${r.text}" is ${r.lines} line(s), ${Math.round(r.w)} px wide (touch emulated: ${r.coarse})`);
+  await page.call("Page.navigate", { url: `${ORIGIN}/workspaces/${w.id}?person=0` }); await page.waitFor("window.viewerReady || window.viewerError", "the viewer");
+  const s = new Session(page, 375, 800);
+  const passive = await s.rect("document.getElementById('hint')"), coarse = await s.ev<boolean>("matchMedia('(pointer: coarse)').matches");
+  const key = "document.getElementById('view-menu')";
+  await s.tapEl(key, "Choose a view");
+  const front = "document.querySelector('#views [data-view=front]')", option = await s.rect(front);
+  await s.tapEl(front, "Front");
+  const closed = !(await s.rect(front)), state = (await s.state()).view;
+  record("W15", "touch camera menu reveals named views and closes after a choice", coarse && !passive && !!option && option.x >= 0 && option.x + option.w <= 375.5 && closed && state === "front",
+    `touch emulation ${coarse}; default hint ${!!passive}; front option within the viewport: ${!!option && option.x + option.w <= 375.5}; menu closed: ${closed}; selected ${state}`);
+  await close(s);
 });
 await test("W16", "pictures: the landing with the Playground and three others; a workspace with the person shown", async () => {
   await purge();

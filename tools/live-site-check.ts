@@ -7,7 +7,7 @@
 //   2. Undo on one page's activity line puts it back in both
 //   3. a slider move in page A (the monitor's height, 5 mm) appears in B, and history.undo of its version puts it back
 //   4. a view command reaches only the page whose session code it names
-//   5. nothing is logged in the pages; "Shared scene" under More shows the session code and the sandbox statement
+//   5. nothing is logged in the pages; Settings → Agent access shows the browser code and workspace agent address
 // The site's Playground is public and shared: this script makes four changes in all (two and their two undos) and
 // one view command, a handful of queries, and leaves the pose exactly as it found it: it compares the pose before
 // and after, and if it stops half-way it puts its two joints back. Exit code 1 when a step fails.
@@ -57,9 +57,18 @@ try {
   const limits = await A.evaluate(`(() => { const j = viewer.manifest().joints.find((j) => j.id === '${PAN}'); return [j.lower, j.upper]; })()`) as number[];
   pan0 = (await joint(A, PAN)) / DEG; height0 = await joint(A, HEIGHT);
 
-  // 5a. the "Shared scene" block under More: this page's code and the statement about the sandbox
-  const block = await A.evaluate("(() => { const b = document.getElementById('live-more'); return { inMore: !!b && !b.hidden && !!b.closest('#more'), code: document.getElementById('live-code').textContent, about: b ? [...b.querySelectorAll('.live-about')].map((e) => e.textContent).join(' ').replace(/\\s+/g, ' ').trim() : '' }; })()") as { inMore: boolean; code: string; about: string };
-  check(block.inMore && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code) && /the last 200 changes/.test(block.about) && /no names of people/i.test(block.about), "More shows \"Shared scene\" with this page's code and the sandbox statement", `code ${block.code}; "${block.about.slice(0, 90)}…"`);
+  const block = await A.evaluate(`(() => {
+    const settings = document.querySelector('#more #settings-agent');
+    return {
+      enabled: !!settings && !settings.hidden,
+      code: settings?.querySelector('#live-code')?.textContent,
+      address: settings?.querySelector('.connect input')?.value,
+      policy: !!settings?.querySelector('.live-views select'),
+    };
+  })()`) as { enabled: boolean; code?: string; address?: string; policy: boolean };
+  check(block.enabled && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code ?? "") &&
+    block.address === `${base}/api/workspaces/${WS}/mcp` && block.policy,
+    "Settings shows the browser code, workspace agent address and view policy");
 
   // 1. the command line turns the monitor by 1° (the other way if that would pass the joint's limit)
   const pan1 = +(pan0 + (pan0 + 1 <= limits[1] / DEG - 0.5 ? 1 : -1)).toFixed(6);

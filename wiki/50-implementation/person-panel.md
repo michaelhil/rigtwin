@@ -1,6 +1,6 @@
 ---
 title: The person panel
-tldr: A click on the person (or its row in the parts list) opens its panel: three survey presets, sex, stature, weight and 36 survey measures, dressed or clay, tone, glasses and headset, with Undo, every change recorded in the shared scene as person.set. The CC BY clothing is credited on the view, in saved pictures and under More, Credits; the panel loads after the page is ready.
+tldr: Click the seated person or choose Person from Components to open the inspector. Edit the body and appearance, change the preset, and undo changes in the shared workspace. Settings → Credits lists the sources and licences.
 status: draft
 updated: 2026-11-25
 tags: [viewer, manikin, interface, implementation, accessibility]
@@ -10,23 +10,16 @@ tags: [viewer, manikin, interface, implementation, accessibility]
 
 ## TL;DR
 
-- **What it is:** phase 4 of manikin v1, on the branch `manikin-v1` only. It works on [the person in the viewer](person-in-viewer.md). It is a panel for the person in the seat, in the same place and style as the part card. The two take turns.
-- **How it opens:** click the person in the 3D view, or click the new row **Person** at the end of the parts list (Enter works too). The person gets a faint outline. A click on the rig works as before.
-- **What it changes:**
-  - Who: Short woman (P5), Median man (P50), Tall man (P95), and Woman or Man.
-  - Body: stature and weight, and the survey's 36 other measures under "More measurements", each in its unit and with the size that results.
-  - Look: Dressed operator or Clay figure. For the dressed operator also skin tone (Light, Medium, Dark) and glasses and headset on or off. The cap stays on.
-  - "Back to <preset>" and Undo.
-- **Shared:** every change is shown at once and recorded in the shared scene as `person.set` ([the person's commands](person-commands.md)). Other browsers and agents see it. Undo takes back one change at a time, and a slider drag is one change.
-- **Credits:** while the dressed operator is shown, one line at the bottom left of the 3D view credits the CC BY 4.0 shirt and trousers. The same line is in saved pictures and in agents' pictures. More, Credits shows the full credits (`assets/manikin/CREDITS.md`).
-- **Cost:** 26 kB in the person's own script, which loads after the page is ready. The scripts before ready are 764 kB of the 800 kB budget (T10). The person's scripts after ready are 342 kB of 400 kB (T10b). *Measured.*
-- **Checks:** nine new viewer checks, T60 to T67 and T46p (the frame rate with the person shown). All nine pass. All 65 checks of `tools/ui-accept.ts` passed when they were added; other checks have been added since.
+- Click [the seated person](person-in-viewer.md) in the view, or expand **Components** and choose **Person**. The selected person gets an outline and shares the inspector with rig controls.
+- Choose Short woman (P5), Median man (P50) or Tall man (P95), or set sex, stature and weight. **More measurements** opens the other 36 survey measures. Appearance controls switch between dressed and clay, or set the dressed person’s tone, glasses and headset.
+- Each change is recorded in the shared workspace as `person.set`. A slider drag records as one change. **Undo** takes back the latest panel change. [The person’s commands](person-commands.md).
+- Clothing attribution appears in the view and in saved and agent-requested pictures. **Settings → Credits** lists the full credits and licences.
 
 ## What is on it
 
 | Block | Controls | Notes |
 |---|---|---|
-| Header | Hide, Undo, close (×) | Hide shows or hides the person in this browser only, like the eye in the parts list. Undo is greyed when there is nothing to take back |
+| Header and actions | Pop out or dock controls, close (×), Hide, Undo | The dock control is available on desktop. Hide applies to the current view. Undo is available once there is a change to take back. |
 | Who | Preset: Short woman P5, Median man P50, Tall man P95. Sex: Woman, Man | The presets are the package's own: "Small woman (stature P5)", "Median man", "Tall man (stature P95)", with their exact values. The commands use the same three. A change of sex alone gives that sex's median |
 | Body | Stature (cm), Weight (kg), each with ↺ back to the preset's value; More measurements: 13 build and proportion measures and 23 finer ones | A survey measure is set in standard deviations (SD) away from what is typical for this stature and weight. Its readout gives the measure that results, e.g. "+1.00 SD · 652 mm". The slider ends say what the direction means (shorter … longer, lean … soft). The 36 sliders are built only when the section is first opened |
 | Look | Style: Dressed operator, Clay figure. Skin tone: Light, Medium, Dark. Wearing: Glasses, Headset | Tone and wearing are shown only for the dressed operator. They are kept while the clay figure is shown, so switching back restores them |
@@ -58,7 +51,7 @@ Without a server, or with one that does not know `person.set` (it answers `unkno
   - On a narrow window it sits just above the bottom sheet (T66).
   - Saved pictures and the pictures agents ask for carry it in their bottom left corner (`pictureCredits` in `ui.ts`).
   - The clay figure has no third-party clothing, so the line goes away while it is shown (T62).
-- **More, Credits:** the clothing line and the motion line, then the rest of `assets/manikin/CREDITS.md`, bundled into the person's script:
+- **Settings → Credits** has the clothing line, the motion line and the rest of `assets/manikin/CREDITS.md`, bundled into the person’s script.
   - the CC BY garments with title, author, source, licence and changes
   - the CMU terms and their credit line
   - the open licences of everything else
@@ -66,13 +59,13 @@ Without a server, or with one that does not know `person.set` (it answers `unkno
 
 ## Keyboard, screen readers and narrow windows
 
-- **Keyboard:** the Person row is a button (Enter or Space). Opening the panel from it moves the focus to the panel's heading. Tab goes through the panel in reading order. Esc closes the panel and returns the focus to the row. Esc closes the credits first when they are open.
+- **Keyboard** opens the Person row with Enter or Space after expanding Components. Focus moves to the heading. Escape closes the inspector and returns focus to the Components disclosure. Escape closes Credits first when it is open.
 - **Screen readers:**
   - Choices are native radio buttons in named groups; the presets are named "Short woman, P5".
   - Sliders have labels and spoken values ("175.6 cm", "+1.00 SD · 652 mm").
   - The row says whether the panel is open (`aria-expanded`).
   - Status lines are announced.
-- **Narrow windows:** below 900 px the panel is a bottom sheet of at most 46 % of the height, as the part card is. The 3D view and the credits line end above it. Opening the panel from the parts drawer closes the drawer.
+- **Narrow windows** use the same bottom sheet for the Components list and the selected person or rig controls. The credits line sits above the sheet.
 
 ## Where it lives
 
@@ -82,11 +75,14 @@ Without a server, or with one that does not know `person.set` (it answers `unkno
 | `viewer/src/main.ts` | one line: after the page is ready it imports the panel, which starts the person module |
 | `viewer/src/engine.ts` | `hooks.click` (a click asked for before the rig is picked) and `outlineExtra` (the faint outline of another object) |
 | `viewer/src/interact.ts` | one line: ask `hooks.click` first |
-| `viewer/src/ui.ts` | `pictureCredits`: lines a saved picture carries |
+| `viewer/src/ui.ts` | `pictureCredits` builds the attribution lines a saved picture carries |
+| `viewer/src/panels.ts` | Shared inspector docking, pop-out, bottom sheet and focus |
 | `viewer/viewer.css` | the panel shares the part card's rules; a section for the panel, the row, the credits line and page |
 | `tools/ui-accept.ts` | checks T60 to T67, and three changes to the old ones (below) |
 
 ## Checks
+
+These are the measurements from the original person panel, before it moved into the shared inspector.
 
 | Script id | Verifies | Result (2026-11-25) |
 |---|---|---|

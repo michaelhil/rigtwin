@@ -17,7 +17,7 @@ tags: [server, workspaces, api, storage, limits, implementation]
 - **Delete moves, it does not erase.** The folder goes to `deleted/` on the server and nothing reads it or removes it. The owner can bring it back by hand ([how](#bringing-a-deleted-workspace-back)).
 - **Status:** live on the public site since 2026-11-25; the earlier shared scene is the workspace "Playground" ([deployment](deployment.md)).
 
-The page that shows the workspaces (the landing, the list, the viewer under `/workspaces/<id>`) is described on the [viewer page](viewer.md). This page is the server's side. The server as a whole, its host and its guards are on the [server page](server-and-host-setup.md). The agent side is the [agent interface](../80-reference/agent-interface.md).
+The workspace selector is at the top of the viewer’s left panel. Its **Copy workspace link** command shares the workspace address. **Copy view link** in the footer includes the current camera, selection and adjustments. Open **Settings → Agent access** to find this workspace’s agent address and the open viewer’s browser code. [The viewer](viewer.md#workspaces-on-the-page), [host setup](server-and-host-setup.md), [agent interface](../80-reference/agent-interface.md).
 
 ## What is stored
 
@@ -77,7 +77,7 @@ All numbers are in `server/limits.ts`, each with its reason next to it. The ones
 | Rename and delete | the existing edit limit (60 a minute per visitor) | They are edits like any other. |
 | Workspaces in memory | 200 | A scene with history and streams is some hundreds of kB. |
 | Idle before dropping | 10 minutes | Long enough that a tab left open stays warm, short enough that a quiet server holds few. |
-| Name | 80 characters | A sentence fits; a title bar and a phone list stay tidy. |
+| Name | 80 characters | Keeps the workspace selector and phone list readable. |
 | Request body for a name | 2 kB | 80 characters, escaped, is well under it. |
 | List page | 50 by default, at most 100 | A page stays small whatever the visitor asks. |
 

@@ -325,7 +325,7 @@ export function runCommand(state: { doc: SceneDoc; asset: AssetInfo }, actor: Ac
     if (wire.expectedVersion !== undefined && !(Number.isInteger(wire.expectedVersion) && (wire.expectedVersion as number) >= 0)) return refuse({ code: "invalid_args", message: "expectedVersion must be a whole number", hint: "the scene version from scene.summary" });
     const { spec } = checked;
     const hasSession = typeof wire.session === "string" && new RegExp(SESSION_PATTERN).test(wire.session);
-    if (spec.kind === "view" && !hasSession && (!spec.sessionOptional || wire.session !== undefined)) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (${JSON.stringify(wire.session)} is not one: eight characters)`}`, hint: "a view command is carried out by one browser: pass --viewer <code>, the code shown in that browser's More menu" });
+    if (spec.kind === "view" && !hasSession && (!spec.sessionOptional || wire.session !== undefined)) return refuse({ code: "invalid_args", message: `${spec.id}: a view command needs the session code of its browser at the request level${wire.session === undefined ? "" : ` (${JSON.stringify(wire.session)} is not one: eight characters)`}`, hint: "pass --viewer <code> with the browser code under Settings → Agent access" });
     const out = spec.run!({ doc, asset, actor }, checked.args);
     if (spec.kind === "query") return { ok: true, version: doc.version, result: out.result };
     if (spec.kind === "view") return { ok: true, version: doc.version, result: out.result, view: { session: hasSession ? (wire.session as string) : null, id: spec.id, args: (out.view ?? checked.args) as Record<string, unknown> } };

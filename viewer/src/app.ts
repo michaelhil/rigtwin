@@ -15,7 +15,7 @@ const root = document.getElementById('app')!;
 
 /** A page of text and lists: the viewer's own elements are not needed. */
 function textPage() {
-  for (const id of ['stage', 'parts', 'scrim']) document.getElementById(id)?.remove();
+  document.getElementById('viewer-shell')?.remove();
   document.documentElement.classList.add('page'); document.body.classList.add('page'); root.hidden = false;
 }
 async function viewer() {

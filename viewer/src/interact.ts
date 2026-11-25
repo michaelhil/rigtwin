@@ -110,16 +110,11 @@ function follow(plan: DragPlan, dofs: Dof[], x: number, y: number) {
   }
   dofs.forEach((d, k) => setAdjustment(d.id, d.comp, vals[k]));   // announces the change: card, notices, shadows, redraw
 }
-/** Words for the card: what dragging the selected thing does, or '' when nothing can be dragged. */
-export function dragHint(): string {
-  if (!S.selected) return '';
-  return jointsFor(S.selected).length ? 'or drag the part in the picture' : '';
-}
-
 // --------------------------------------------------------------------------------------------- pointer wiring
-export function initPointer(hooks: { onFirstUse: () => void; freeWidth: () => number }) {
+export function initPointer(hooks: { freeWidth: () => number }) {
   const tip = $('tip');
-  let down: { x: number; y: number; id: number } | null = null, lastMove = 0, lastClick = { t: 0, whole: '' };
+  let down: { x: number; y: number; id: number } | null = null, lastMove = 0;
+  let lastClick: { t: number; x: number; y: number; target: string | null; person: boolean } | null = null;
   let drag: { plan: DragPlan; dofs: Dof[] | null; moved: boolean; wasEnabled: boolean } | null = null;
   const local = (e: { clientX: number; clientY: number }): [number, number] => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const setCursor = (c: string) => { if (canvas.style.cursor !== c) canvas.style.cursor = c; };
@@ -128,7 +123,7 @@ export function initPointer(hooks: { onFirstUse: () => void; freeWidth: () => nu
   // capture phase on the parent: runs before the orbit control's own handler on the canvas, so a part drag can switch the orbit off for this gesture
   frameEl.addEventListener('pointerdown', (e) => {
     if (e.target !== canvas) return;
-    hooks.onFirstUse(); stopGlide();
+    stopGlide();
     const [x, y] = local(e);
     down = { x, y, id: e.pointerId };
     tip.hidden = true;
@@ -162,7 +157,7 @@ export function initPointer(hooks: { onFirstUse: () => void; freeWidth: () => nu
     const draggable = !!S.selected && members(S.selected).includes(h.id) && !!planDrag(h);
     setHover(draggable ? S.selected : target);
     setCursor(draggable ? 'move' : 'pointer');
-    tip.textContent = draggable ? `${nameOf(S.selected!)}: drag to adjust` : nameOf(target) + (jointsFor(target).length ? ' · adjustable' : '');
+    tip.textContent = draggable ? `Drag to adjust ${nameOf(S.selected!)}` : nameOf(target);
     tip.hidden = false;
     const s = stageEl.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = `${Math.max(4, Math.min(e.clientX - s.left + 14, s.width - tw - 4))}px`;
@@ -173,27 +168,29 @@ export function initPointer(hooks: { onFirstUse: () => void; freeWidth: () => nu
     const [x, y] = local(e), still = Math.hypot(x - down.x, y - down.y) < 4, wasDrag = drag?.moved;
     if (drag) { controls.enabled = drag.wasEnabled; drag = null; document.body.classList.remove('part-drag'); try { canvas.releasePointerCapture(e.pointerId); } catch { /* not captured */ } }
     down = null; setCursor('grab');
-    if (e.type !== 'pointerup' || !still || wasDrag || e.button !== 0) return;
+    if (e.type !== 'pointerup' || !still || wasDrag || e.button !== 0) { lastClick = null; return; }
+    const now = performance.now();
+    if (lastClick && now - lastClick.t < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 5) return;
     const h = pickAt(x, y);
-    if (engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity))) return;   // the person took it (person-panel.ts)
-    if (!h) { select(null); return; }
-    const part = partOf(h.id), whole = firstPick(part), now = performance.now();
-    const second = now - lastClick.t < 400 && lastClick.whole === whole;      // second click of a double-click: stay, the double-click zooms
-    if (!(second && S.selected === whole)) select(wouldPick(part));
-    lastClick = { t: now, whole };
+    const person = engineHooks.click.some((f) => f(x, y, h ? h.world.distanceTo(currentCamera().position) : Infinity));
+    const target = !person && h ? wouldPick(partOf(h.id)) : null;
+    lastClick = { t: now, x: e.clientX, y: e.clientY, target, person };
+    if (!person) select(target);
   };
   canvas.addEventListener('pointerup', finish);
   canvas.addEventListener('pointercancel', finish);
   canvas.addEventListener('pointerleave', () => { if (!down) { setHover(null); tip.hidden = true; } });
   canvas.addEventListener('dblclick', (e) => {
-    const [x, y] = local(e), h = pickAt(x, y);
-    if (h) { const part = partOf(h.id); zoomTo([S.selected && members(S.selected).includes(h.id) ? S.selected : wouldPick(part)], hooks.freeWidth()); }
+    const click = lastClick; lastClick = null;
+    if (!click || click.person || Math.hypot(e.clientX - click.x, e.clientY - click.y) >= 5) return;
+    // The first click may open the inspector and reproject the rig before the second.
+    if (click.target) zoomTo([click.target], hooks.freeWidth());
     else goHome();
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   // operator's eye: the wheel narrows or widens the view instead of flying through the monitor
   frameEl.addEventListener('wheel', (e) => {
-    hooks.onFirstUse(); stopGlide();
+    stopGlide();
     if (S.view === 'operator' && currentCamera() === persp && !S.photo) { e.preventDefault(); e.stopPropagation(); lookZoom(e.deltaY > 0 ? 1.07 : 1 / 1.07); }
   }, { capture: true, passive: false });
 }

@@ -18,7 +18,7 @@ export function toJsonSchema(s: Schema): Record<string, unknown> {
 export function toolList() {
   return toolSpecs().map((spec: CommandSpec) => {
     const schema = toJsonSchema(spec.args) as any;
-    if (spec.id === "look") schema.properties = { ...schema.properties, viewer: { type: "string", pattern: "^[A-Za-z2-9]{8}$", description: "the browser's code (More → Shared scene); remembered for later calls. Locally it may be left out: then every open page." } };
+    if (spec.id === "look") schema.properties = { ...schema.properties, viewer: { type: "string", pattern: "^[A-Za-z2-9]{8}$", description: "browser code (Settings → Agent access), remembered for later calls. Locally, omit it to reach every open page." } };
     const examples = spec.examples.map((e) => `${JSON.stringify(e.args)}: ${e.note}`).join("; ");
     return {
       name: spec.tool!, description: `${spec.summary} Examples: ${examples}`, inputSchema: { type: "object", ...schema },

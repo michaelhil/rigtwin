@@ -2,7 +2,7 @@
 title: Skills and agents
 tldr: The Agent Skill "modeling-3d-assets-from-references" (version 0.1.0) and three agent definitions that package the modelling method for the next asset, and the operating Skill "operating-synergon" (v0) that tells Claude Code how to change, show, measure and undo things in the shared scene; what each holds, how to invoke it, what is unexercised and how the Skills are refined.
 status: living
-updated: 2026-11-24
+updated: 2026-11-25
 tags: [skill, agents, reference, process]
 ---
 
@@ -100,7 +100,7 @@ cannot say:
 |---|---|
 | Which tools | `mcp__synergon__*` for the owner's local scene, `mcp__synergon-public__*` for the public sandbox: the tool name says where it acts. One call per request, with a table from everyday requests to calls |
 | The reply is the check | `adjust` answers with before → after, the request name for undo and what else is moved: no `state` before or after unless the owner asks |
-| Views and pictures | on the public sandbox `look` needs the browser's code (More → Shared scene), given once; locally it goes to every page. A picture shows what that browser shows; it checks a view, it does not measure |
+| Views and pictures | Target a browser using **Settings → Agent access → Browser code**. A local request without a code reaches each open page. Public broadcast requests follow the workspace’s consent and Follow rules. A picture shows the resulting view. |
 | Report | two or three lines: what changed, before → after in cm and degrees, the request name, what is estimated or assumed |
 | Honesty words | "assumed adjustment" whenever a reply notes one (move it when the owner named it; ask first only when the agent chose it, [D-49](../20-decisions/decision-log.md#d-49)); a distance is a point estimate with no range yet; never "compliant", "correct" or "ergonomic"; authors are labels the server makes from what a caller claims |
 | When to ask | `ambiguous` (the reply lists the candidates), `out_of_range` (the travel is given), `stale` or "replaces a change by", `needs_viewer` / `unknown_session` |
