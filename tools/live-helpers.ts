@@ -14,7 +14,9 @@ export const joint = (p: Page, id: string) => p.evaluate(`viewer.state().joints.
 export const live = (p: Page) => p.evaluate("viewer.live()") as Promise<{ code: string; version: number; preview: boolean; unsaved: string[]; activity: string | null; resyncs: number; connected: boolean; attempt: number } | null>;
 /** The real command line, as Claude Code runs it (in its own process: the server answers it from this one). */
 export async function rig(origin: string, ...args: string[]) {
-  const p = Bun.spawn(["bun", join(ROOT, "tools", "rig.ts"), ...args, "--server", origin], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  // env given explicitly: Bun.spawn does not pass on a variable set in process.env after the start (RIG_WORKSPACE is set
+  // that way by the checks, and a remote server has no default workspace)
+  const p = Bun.spawn(["bun", join(ROOT, "tools", "rig.ts"), ...args, "--server", origin], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env } });
   const out = await new Response(p.stdout).text(); await p.exited;
   return JSON.parse(out);
 }

@@ -58,20 +58,22 @@ try {
   pan0 = (await joint(A, PAN)) / DEG; height0 = await joint(A, HEIGHT);
 
   // 5a. the "Shared scene" block under More: this page's code and the statement about the sandbox
-  const block = await A.evaluate("(() => { const b = document.getElementById('live-more'); return { inMore: !!b && !b.hidden && !!b.closest('#more'), code: document.getElementById('live-code').textContent, about: b ? b.querySelector('.live-about').textContent.replace(/\\s+/g, ' ').trim() : '' }; })()") as { inMore: boolean; code: string; about: string };
-  check(block.inMore && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code) && /only the pose of the rig and its last 200 changes/.test(block.about) && /no names/.test(block.about), "More shows \"Shared scene\" with this page's code and the sandbox statement", `code ${block.code}; "${block.about.slice(0, 90)}…"`);
+  const block = await A.evaluate("(() => { const b = document.getElementById('live-more'); return { inMore: !!b && !b.hidden && !!b.closest('#more'), code: document.getElementById('live-code').textContent, about: b ? [...b.querySelectorAll('.live-about')].map((e) => e.textContent).join(' ').replace(/\\s+/g, ' ').trim() : '' }; })()") as { inMore: boolean; code: string; about: string };
+  check(block.inMore && block.code === la.code && /^[A-HJKMNP-Z2-9]{8}$/.test(block.code) && /the last 200 changes/.test(block.about) && /no names of people/.test(block.about), "More shows \"Shared scene\" with this page's code and the sandbox statement", `code ${block.code}; "${block.about.slice(0, 90)}…"`);
 
   // 1. the command line turns the monitor by 1° (the other way if that would pass the joint's limit)
   const pan1 = +(pan0 + (pan0 + 1 <= limits[1] / DEG - 0.5 ? 1 : -1)).toFixed(6);
   const r1 = await rig(base, "pose.set", JSON.stringify({ joints: { [PAN]: pan1 } }), "--group", group); commands++;
   const seen = (p: Page, id: string, si: number) => until<boolean>(p, `Math.abs(viewer.state().joints.${id} - (${si})) < 1e-7`, 8000);
+  // the activity line comes from the trace event, which follows the change itself: over the internet a moment later, so wait for it
+  const activityOf = async (p: Page, re: RegExp) => (await until<string>(p, `(() => { const a = viewer.live() && viewer.live().activity; return a && ${re}.test(a) ? a : null; })()`, 8000)) ?? (await live(p))?.activity ?? "";
   const [a1, b1] = [await seen(A, PAN, pan1 * DEG), await seen(B, PAN, pan1 * DEG)];
-  const [act1a, act1b] = [(await live(A))?.activity ?? "", (await live(B))?.activity ?? ""];
+  const [act1a, act1b] = [await activityOf(A, /^Claude Code · [0-9a-f]{4} — Monitor: turn/), await activityOf(B, /^Claude Code · [0-9a-f]{4} — Monitor: turn/)];
   check(r1.ok && !!a1 && !!b1 && /^Claude Code · [0-9a-f]{4} — Monitor: turn/.test(act1a) && act1a === act1b, "a pose.set from the command line appears in both pages, the activity line naming Claude Code", `turn ${pan0}° → ${pan1}°; "${act1b}"`);
 
   // 2. Undo on B's activity line
   await clickText(B, "Undo"); commands++;
-  const [a2, b2] = [await seen(A, PAN, pan0 * DEG), await seen(B, PAN, pan0 * DEG)], act2 = (await live(A))?.activity ?? "";
+  const [a2, b2] = [await seen(A, PAN, pan0 * DEG), await seen(B, PAN, pan0 * DEG)], act2 = await activityOf(A, /undid a change/);
   check(!!a2 && !!b2 && /undid a change/.test(act2), "Undo on B's activity line puts it back in both pages", `turn ${pan0}° again; A says "${act2}"`);
 
   // 3. a slider move in A (5 mm), seen in B, undone by history.undo of its version
@@ -79,7 +81,7 @@ try {
   const s = await heightSlider(A), to = s.v - 5 >= s.min + 5 ? s.v - 5 : s.v + 5, v3 = (await live(A))!.version;
   await press(A, s.at(s.v), s.at(to), s.y); await release(A, s.at(to), s.y); commands++;
   const a3 = await until<number>(A, `viewer.live().version > ${v3} && !viewer.live().unsaved.length && Math.abs(viewer.state().joints.${HEIGHT} - (${height0})) > 0.002 && viewer.state().joints.${HEIGHT}`, 8000);
-  const b3 = a3 === null ? null : await seen(B, HEIGHT, a3), act3b = (await live(B))?.activity ?? "";
+  const b3 = a3 === null ? null : await seen(B, HEIGHT, a3), act3b = await activityOf(B, /^Person · [0-9a-f]{4} — Monitor: height/);
   const mine = (await scene()).recent.find((e) => e.version > v3 && e.command === "pose.set" && e.actor_kind === "person" && e.changes.some((c: any) => c.joint === HEIGHT));
   check(a3 !== null && !!b3 && /^Person · [0-9a-f]{4} — Monitor: height/.test(act3b) && !!mine, "a slider move in A appears in B with its activity line", `height ${(height0 * 1000).toFixed(1)} → ${a3 === null ? "?" : (a3 * 1000).toFixed(1)} mm; B: "${act3b}"; entry ${mine?.version ?? "not found"}`);
   if (mine) {

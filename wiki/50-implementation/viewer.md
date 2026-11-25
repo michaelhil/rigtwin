@@ -235,9 +235,9 @@ its own changes by the versions its requests recorded. The words are the same as
 
 **The session code** (eight letters and digits) is shown under More, "Shared scene", with "Give it to
 Claude Code to show views here". View commands (`view.set`, `view.show`, `view.select`) reach only the
-page with that code. Under it, "About this sandbox" says what is stored: only the pose of the rig and
-its last 200 changes, each with a random author id, no names and no other text; anyone can change it,
-Undo puts a change back, and the scene is reset on request.
+page with that code. Under it, "About this workspace" says what is stored: the workspace's name, the pose of the rig,
+the person in the seat and the last 200 changes, each with a random author id, no names of people and no other
+text; anyone with the link can change it, Undo puts a change back, and anyone with the link can rename or delete it.
 
 **Agent interface v2** ([D-51](../20-decisions/decision-log.md#d-51)). The page also carries out `look`, the
 one-call view command of the intent layer: what it shows, the named view and the selection in one go. On a local
