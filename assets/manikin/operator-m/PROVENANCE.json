@@ -42,8 +42,8 @@
     "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
    },
    "packages/operator-m/penetration.json": {
-    "bytes": 52495,
-    "sha256": "613261a02f5df51531c04568cbc2f40f410f129866ac4311c5d0d7fcc3a4012a"
+    "bytes": 65359,
+    "sha256": "c0e0a8b782f50459449b7fa792fb13d3520dd0c9397fa9687a6fe5742b77772f"
    },
    "packages/operator-m/CREDITS.md": {
     "bytes": 2407,
@@ -54,16 +54,16 @@
     "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
    },
    "packages/operator-m/operator-m.avatar.json": {
-    "bytes": 316840,
-    "sha256": "4017eed31db25c53e611ef564ce20cf3b34dbc6b3d11170957c34197458ec842"
+    "bytes": 317589,
+    "sha256": "f21b6cd2a0187bec198bede0090f3f0b53c3655647c10fbe5daa7551cba0ecce"
    },
    "packages/operator-m/operator-m.clay.shape.bin": {
     "bytes": 3071880,
     "sha256": "8819ce2e290579797c9721a7572a8bd4c7b1583f05b4ae1acaf9e36768e52a63"
    },
    "packages/operator-m/operator-m.glb": {
-    "bytes": 18858348,
-    "sha256": "cc6bb9d303eed09c85aa798c9e3f3db5dbdeaaf815b53722ee6628b5550d7dc6"
+    "bytes": 19457232,
+    "sha256": "93b083de6541d7e34654a8cd878405cbd908fb3b38f75acd0cebf22708fff1c9"
    },
    "packages/operator-m/operator-m.wear.shape.bin": {
     "bytes": 7206192,
@@ -114,8 +114,8 @@
     "sha256": "142089c9c230b461afe4a1fb8ae7a4cb7ceff68e5a0fbfce4a364452c0d6030e"
    },
    "packages/operator-m-medium/operator-m-medium.avatar.json": {
-    "bytes": 316914,
-    "sha256": "0ce260aed2ea03269f31216296706c206b1c2cf29a5b1c7f39143a84edf68068"
+    "bytes": 317663,
+    "sha256": "a00ff903ea0c01eb9a1c0fe914762c1ef4877b6e99e0e376867438b6733f1720"
    },
    "packages/operator-m-medium/CREDITS.md": {
     "bytes": 2427,
@@ -130,8 +130,8 @@
     "sha256": "bf46bb4f0ceba8cccb66a22821ade8d2384c47bc7b368813388b1685d32c0a6c"
    },
    "packages/operator-m-medium/operator-m-medium.glb": {
-    "bytes": 18707784,
-    "sha256": "465f089e07fb86a3d9f418abf030ead469c472ce170cf87921a0d785d8d816c9"
+    "bytes": 19306672,
+    "sha256": "6e341e14c2c7f4deb805dcbdbce1ec248c0126b7ad4be885f0e6796de5d6a442"
    },
    "packages/operator-m-medium/operator-m-medium.clay.shape.bin": {
     "bytes": 3071880,
@@ -174,12 +174,12 @@
     "sha256": "4e7dfae1d69f753858056dd1184a5abdbe79c84d6db7e1cca0a5bd1d521553dc"
    },
    "packages/operator-m-dark/operator-m-dark.glb": {
-    "bytes": 18689060,
-    "sha256": "e067f66013dceb47328d84b8730d0b5535225a92437b1203c8df843bd510dd9b"
+    "bytes": 19287944,
+    "sha256": "365aeab77ecb7e8188884daef95b6db23e1104124aaaeffb931baf0ff24c2a76"
    },
    "packages/operator-m-dark/operator-m-dark.avatar.json": {
-    "bytes": 316913,
-    "sha256": "c16dc17e9ac8e03115eb3c8b2da374a37980f587e93b77bcf03be50a682f6a05"
+    "bytes": 317662,
+    "sha256": "c927c6ab5b59915b78b781d855e4b7416df5b6b0694d7807c2cd1b5b72f64d7e"
    },
    "packages/operator-m-dark/CREDITS.md": {
     "bytes": 2410,
@@ -202,7 +202,7 @@
     "sha256": "8819ce2e290579797c9721a7572a8bd4c7b1583f05b4ae1acaf9e36768e52a63"
    }
   },
-  "repository_revision": "67e22d92b57e21330a2862e012fcd7f79b9e9b3b",
+  "repository_revision": "c85e5e867282316c66a631b11538d2cc613dff03",
   "note": "The lab is the project's working folder (work/, never committed); the SHA-256 of every lab file read identifies the version packed. The lab build code is in tools/manikin-build/pipeline/."
  },
  "sources": [
@@ -531,12 +531,12 @@
    "sha256": "ff6933c655e70498df9fd347a5251920f12d7c9e8305530e7518137d7d0f00c4"
   },
   "operator-m.avatar.json": {
-   "bytes": 293448,
-   "sha256": "1b6a07e66d1d39fa24ca82003d56d5b347f4cf4445ee33f88a4f5701fb6a3953"
+   "bytes": 294131,
+   "sha256": "2bd90d596df1b225b3b7772d244ffd4687a390aabc1af594a41821fe98b7a1b6"
   },
   "operator-m.glb": {
-   "bytes": 6270804,
-   "sha256": "03fba6fafa96fb843a7092d2c9f006761c52a0e9b868a7cd124b89f491d00bc1"
+   "bytes": 6312212,
+   "sha256": "d205f2eb5b059f1a4b117f11131a51e45799e5e087d9b1a1ea4c3c94d654cae7"
   },
   "operator-m.wear.shape.bin": {
    "bytes": 1437310,
@@ -580,18 +580,18 @@
   }
  },
  "budget": {
-  "transfer_bytes": 9327093,
-  "core_bytes": 9599311,
+  "transfer_bytes": 9368553,
+  "core_bytes": 9641402,
   "core": [
    {
     "path": "operator-m.avatar.json",
-    "bytes": 293448,
-    "sha256": "1b6a07e66d1d39fa24ca82003d56d5b347f4cf4445ee33f88a4f5701fb6a3953"
+    "bytes": 294131,
+    "sha256": "2bd90d596df1b225b3b7772d244ffd4687a390aabc1af594a41821fe98b7a1b6"
    },
    {
     "path": "operator-m.glb",
-    "bytes": 6270804,
-    "sha256": "03fba6fafa96fb843a7092d2c9f006761c52a0e9b868a7cd124b89f491d00bc1"
+    "bytes": 6312212,
+    "sha256": "d205f2eb5b059f1a4b117f11131a51e45799e5e087d9b1a1ea4c3c94d654cae7"
    },
    {
     "path": "operator-m.shape.bin",

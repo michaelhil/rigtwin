@@ -50,20 +50,20 @@
     "sha256": "43a61e98bd50d9fa40506ab6913d68040c1782559d85e4bf6e7184d0733bd556"
    },
    "packages/operator-f/penetration.json": {
-    "bytes": 33381,
-    "sha256": "4d53261be356653c79817390aa7848d9d38ecc6e7755469603f3f42c4e8044b5"
+    "bytes": 42136,
+    "sha256": "af02838896e53c3eb184af43be97baafbcd3bfe737debc52205682bcc8e345ab"
    },
    "packages/operator-f/operator-f.avatar.json": {
-    "bytes": 314956,
-    "sha256": "a2b127154bbeb58b027d391e08ae9a26b4cafc3cb693070bb618aaef6cac608a"
+    "bytes": 315705,
+    "sha256": "64a174ab1b6c842864b1244d79b59b45a66f48f796f8f3036c7bd1797890bff9"
    },
    "packages/operator-f/CREDITS.md": {
     "bytes": 2409,
     "sha256": "970e5f338856d18abef9275fa3c893fa7bdbe7b65cc8ff6ab8eb11806eb84245"
    },
    "packages/operator-f/operator-f.glb": {
-    "bytes": 19151820,
-    "sha256": "9959e77e56eafd861a1516803879654e899a952b776fd2527dbcce09c65b3aeb"
+    "bytes": 19761168,
+    "sha256": "d1f3b04dc6c7bc487de6135cfe4c4ac09cdf006ef382a8ee99dbecc30ebbacd5"
    },
    "packages/operator-f/poses.json": {
     "bytes": 39549,
@@ -134,8 +134,8 @@
     "sha256": "1394bd7513a7db33aae8766fb4ce37b242adc357233d70c76f218b0b27647219"
    },
    "packages/operator-f-medium/operator-f-medium.avatar.json": {
-    "bytes": 315026,
-    "sha256": "5ff6fce5ba09f33993f71931bca2e55d5406e60ca9ab8b633c2832e6a1bc300c"
+    "bytes": 315775,
+    "sha256": "d40e408e1c3ae8e153487477bcb8ab9c2cb23dd177d54da269914d89d7a967a2"
    },
    "packages/operator-f-medium/operator-f-medium.clay.shape.bin": {
     "bytes": 3073896,
@@ -150,8 +150,8 @@
     "sha256": "3584e550a59616c4d1a05b9c13e73ebaefcab1bf8ea169337e2d2d8fc1e510d8"
    },
    "packages/operator-f-medium/operator-f-medium.glb": {
-    "bytes": 19082764,
-    "sha256": "22c67f294249bd290fe8721aea4990b81a70fea71e8a16733994be613516f090"
+    "bytes": 19692112,
+    "sha256": "f9c224bb9dfafc68496b4f6fa20ca891922975dd8ce4ed5c90338f9ee990073f"
    },
    "packages/operator-f-dark/maps/cover_top_shirt.png": {
     "bytes": 20151,
@@ -198,12 +198,12 @@
     "sha256": "43a61e98bd50d9fa40506ab6913d68040c1782559d85e4bf6e7184d0733bd556"
    },
    "packages/operator-f-dark/operator-f-dark.glb": {
-    "bytes": 19115356,
-    "sha256": "fb9ff67aaa90a72795482334234ade89a600cc5e4c1eaf6d927dfa2ca891d8db"
+    "bytes": 19724704,
+    "sha256": "1b31fde4981a108a37a1f2fc89a0db47b8ddc58bb47329683425e69a5a8ba8f9"
    },
    "packages/operator-f-dark/operator-f-dark.avatar.json": {
-    "bytes": 315029,
-    "sha256": "bc30776b2d67a01b2d76ecb778f92762605760df5667b73ac65a0ccd49b2b24d"
+    "bytes": 315778,
+    "sha256": "1d4bf38508a031072d6261f69c8cb0386da26056497938e28fcf5e097a9f02b4"
    },
    "packages/operator-f-dark/operator-f-dark.shape.bin": {
     "bytes": 3371760,
@@ -226,7 +226,7 @@
     "sha256": "1394bd7513a7db33aae8766fb4ce37b242adc357233d70c76f218b0b27647219"
    }
   },
-  "repository_revision": "67e22d92b57e21330a2862e012fcd7f79b9e9b3b",
+  "repository_revision": "c85e5e867282316c66a631b11538d2cc613dff03",
   "note": "The lab is the project's working folder (work/, never committed); the SHA-256 of every lab file read identifies the version packed. The lab build code is in tools/manikin-build/pipeline/."
  },
  "sources": [
@@ -586,12 +586,12 @@
    "sha256": "43a61e98bd50d9fa40506ab6913d68040c1782559d85e4bf6e7184d0733bd556"
   },
   "operator-f.avatar.json": {
-   "bytes": 291487,
-   "sha256": "9a6fdb830ab4f1c7831f4e7144d1cb4ec904144337c4f7650f975639f6ba8c47"
+   "bytes": 292170,
+   "sha256": "25e976891774c708f900fc8ef179d5634802136a4f19e3b2b583d4c645683393"
   },
   "operator-f.glb": {
-   "bytes": 6509124,
-   "sha256": "21582bbb4b446b6e97a90b4a42f79b129f3d1b4aa4fd101bc5838143663f6d33"
+   "bytes": 6558048,
+   "sha256": "dd16dabb43226664c9c037a8cfa7d0ebd5f2733b3da48adc024f51a38721c4de"
   },
   "poses.json": {
    "bytes": 39549,
@@ -639,18 +639,18 @@
   }
  },
  "budget": {
-  "transfer_bytes": 9658703,
-  "core_bytes": 9929187,
+  "transfer_bytes": 9707677,
+  "core_bytes": 9978794,
   "core": [
    {
     "path": "operator-f.avatar.json",
-    "bytes": 291487,
-    "sha256": "9a6fdb830ab4f1c7831f4e7144d1cb4ec904144337c4f7650f975639f6ba8c47"
+    "bytes": 292170,
+    "sha256": "25e976891774c708f900fc8ef179d5634802136a4f19e3b2b583d4c645683393"
    },
    {
     "path": "operator-f.glb",
-    "bytes": 6509124,
-    "sha256": "21582bbb4b446b6e97a90b4a42f79b129f3d1b4aa4fd101bc5838143663f6d33"
+    "bytes": 6558048,
+    "sha256": "dd16dabb43226664c9c037a8cfa7d0ebd5f2733b3da48adc024f51a38721c4de"
    },
    {
     "path": "operator-f.shape.bin",
