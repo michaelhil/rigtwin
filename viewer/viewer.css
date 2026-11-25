@@ -372,14 +372,17 @@ a.wrow-name:hover { color: var(--accent); text-decoration: underline; }
 .hero-fig { margin: 0; min-width: 0; }
 .hero-credit { margin: 6px 2px 0; font-size: 12px; line-height: 1.4; color: var(--ink-2); }
 .hero-credit a { color: inherit; }
-.card-link { margin-left: 14px; font-size: 13px; color: var(--accent); } .card-head { justify-content: flex-start; } .card-head h2 { flex: 1; }
+.card-link { margin-left: 14px; font-size: 13px; color: var(--ink-2); } .card-head { justify-content: flex-start; } .card-head h2 { flex: 1; white-space: nowrap; }
 .mg-act { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 button.danger:disabled, button.danger:disabled:hover { background: #e4e6ea; border-color: #c4c9d1; color: #565c66; opacity: 1; }
 @media (max-width: 760px) {
   .hero { grid-template-columns: 1fr; gap: 18px; }
   .hero-text h1 { font-size: 28px; }
-  .mg-act { width: 100%; margin-left: 0; justify-content: space-between; }
+  .mg-act { width: 100%; margin-left: 0; justify-content: space-between; flex-wrap: wrap; }
+  .mg-act .muted { min-width: max-content; }       /* the hint keeps its line; the button goes under it when both do not fit */
+  .mg-act button { margin-left: auto; }
 }
+@media (max-width: 420px) { .card-head > .muted { display: none; } }   /* the count gives way, so "Browse workspaces" stays on one line */
 @media (pointer: coarse) { #hint { white-space: nowrap; font-size: 12.5px; } }
 body.page .pg:not(:has(.hero)) { max-width: 640px; }
 .mg-act button { white-space: nowrap; flex: none; } .mg-act .muted { min-width: 0; }
