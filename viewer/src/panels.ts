@@ -5,7 +5,7 @@ import { icons } from './icons.ts';
 const narrow = matchMedia('(max-width: 899px)');
 const rail = $('parts'), split = $<HTMLButtonElement>('rail-resize'), reopen = $<HTMLButtonElement>('open-parts');
 const browser = $<HTMLDetailsElement>('components'), summary = $('components-toggle');
-const dock = $('inspection');
+const dock = $('inspection'), floatingLayer = $('floating-panels'), notices = $('notices');
 const body = document.body;
 const RAIL_MIN = 200, RAIL_MAX = 344, RAIL_SNAP = 105, RAIL_STEP = 16;
 let collapsed = false, drawer = false, expandedWidth = 244;
@@ -14,6 +14,7 @@ const floating = new Set<HTMLElement>();
 const wired = new WeakSet<HTMLElement>();
 const fitCards = new ResizeObserver(() => {
   if (body.classList.contains('no-ui')) return;
+  floatingLayer.style.setProperty('--notices-height', `${notices.offsetHeight}px`);
   for (const panel of floating) if (!panel.hidden && panel.style.left) place(panel, panel.offsetLeft, panel.offsetTop);
 });
 let resize: { id: number; start: number; width: number; value: number } | null = null;
@@ -73,9 +74,9 @@ function place(panel: HTMLElement, x: number, y: number) {
 
 function bringForward(panel: HTMLElement) {
   if (!floating.delete(panel)) return;
-  for (const other of floating) other.classList.remove('front-card');
   floating.add(panel);
-  panel.classList.add('front-card');
+  let order = 0;
+  for (const card of floating) card.style.zIndex = String(++order);
 }
 
 function wireCard(panel: HTMLElement) {
@@ -124,7 +125,7 @@ function labelDock(panel: HTMLElement) {
 function floatCard(panel: HTMLElement) {
   if (!floating.has(panel)) {
     panel.classList.add('floating-controls');
-    stageEl.append(panel);
+    floatingLayer.append(panel);
     wireCard(panel);
     const others = [...floating].filter((item) => !item.hidden);
     const left = panel.offsetLeft, top = panel.offsetTop, width = panel.offsetWidth;
@@ -147,10 +148,11 @@ function floatCard(panel: HTMLElement) {
 function unfloat(panel: HTMLElement) {
   if (!floating.delete(panel)) return;
   fitCards.unobserve(panel);
-  panel.classList.remove('floating-controls', 'front-card');
+  panel.classList.remove('floating-controls');
   panel.querySelector('header')?.removeAttribute('title');
   panel.style.removeProperty('left');
   panel.style.removeProperty('top');
+  panel.style.removeProperty('z-index');
 }
 
 function dockCard(panel: HTMLElement) {
@@ -218,7 +220,7 @@ export function closeComponentBrowser() {
 }
 export function dismissInspector() {
   if (closeComponentBrowser()) { returnToViewer(true); return true; }
-  const panel = [...floating].at(-1) ?? active;
+  const panel = active?.contains(document.activeElement) ? active : [...floating].at(-1) ?? active;
   const close = panel?.querySelector<HTMLButtonElement>('.x');
   if (!close) return false;
   close.click();
@@ -230,6 +232,7 @@ export function initPanels() {
   split.setAttribute('aria-valuemin', String(RAIL_MIN)); split.setAttribute('aria-valuemax', String(RAIL_MAX));
   setWidth(expandedWidth); refreshRail();
   fitCards.observe(stageEl);
+  fitCards.observe(notices);
   reopen.addEventListener('click', () => setRail(narrow.matches ? !drawer : true, true));
   $('scrim').addEventListener('click', () => setRail(false, true));
   split.addEventListener('pointerdown', (event) => {

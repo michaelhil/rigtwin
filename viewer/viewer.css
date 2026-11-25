@@ -144,10 +144,14 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
 }
 .view-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #notices {
-  position: absolute; left: var(--float-offset); right: var(--edge); top: var(--edge); z-index: 3;
+  position: absolute; left: var(--float-offset); right: var(--edge); top: var(--edge); z-index: 6;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 520px; pointer-events: none;
 }
-#stage:has(> .floating-controls:not([hidden])) #notices { left: calc(var(--float-offset) + var(--float-width) + var(--edge)); }
+@media (min-width: 900px) {
+  #stage:has(#floating-panels > .floating-controls:not([hidden])) #notices {
+    left: auto; width: min(520px, calc(100% - 2 * var(--edge))); align-items: flex-end;
+  }
+}
 .note { display: flex; align-items: center; max-width: 100%; gap: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 4px 4px 4px 12px; box-shadow: 0 1px 4px rgba(0,0,0,.12); min-height: 38px; pointer-events: auto; }
 .note button { flex: none; }
 .note.amber { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); font-weight: 600; }
@@ -192,12 +196,12 @@ body.mode-ids .row .chip, body.mode-class .row .chip { display: inline-block; }
 
 /* ---- the rig and person inspectors ---- */
 .component-card, #person { min-width: 0; padding: 10px var(--edge) 14px; }
-#stage > .floating-controls {
+#floating-panels { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+#floating-panels > .floating-controls {
   position: absolute; top: var(--float-top, var(--edge)); left: var(--float-offset); width: var(--float-width);
-  max-height: calc(100% - 72px); overflow: auto; overscroll-behavior: contain; z-index: 5;
+  max-height: calc(100% - 72px); overflow: auto; overscroll-behavior: contain; pointer-events: auto;
   background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--surface-shadow);
 }
-#stage > .front-card { z-index: 6; }
 .floating-controls > header { cursor: grab; touch-action: none; user-select: none; }
 .floating-controls > header:active { cursor: grabbing; }
 .component-card header, #person header { display: flex; align-items: center; gap: 4px; }
@@ -250,7 +254,11 @@ body.part-drag #tip { display: none; }
 @media (max-width: 899px) {
   body { --drawer-w: min(300px, calc(100vw - env(safe-area-inset-right) - 52px)); }
   body:not(.no-ui, .rail-collapsed) #stage { left: 0; }
-  #stage, .rail-collapsed #stage { --float-offset: 8px; --float-top: calc(60px + env(safe-area-inset-top)); }
+  #stage, .rail-collapsed #stage { --float-offset: 8px; }
+  #floating-panels {
+    --float-top: min(calc(60px + env(safe-area-inset-top) + var(--notices-height, 0px) + min(8px, var(--notices-height, 0px))), 45%);
+  }
+  #floating-panels > .floating-controls { max-height: calc(100% - var(--float-top) - var(--edge)); }
   #rail-resize { display: none; }
   #parts, .rail-collapsed #parts {
     display: flex; width: var(--drawer-w); transform: translateX(-102%); visibility: hidden;

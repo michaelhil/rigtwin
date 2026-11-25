@@ -645,7 +645,7 @@ await test("T54", "drag or keyboard-resize the workspace panel, snap closed and 
   await s.ev(`(${handle}).focus()`); await s.press('Enter');
   const collapsedByKey = await s.ev<boolean>(`(${rail}).inert`);
   await s.click(...await s.find('S_mon_screen'), 'monitor with workspace panel collapsed');
-  const stayedClosed = await s.ev<boolean>(`(${rail}).inert && !!document.querySelector("#stage > #card.floating-controls:not([hidden])")`);
+  const stayedClosed = await s.ev<boolean>(`(${rail}).inert && !!document.querySelector("#floating-panels > #card.floating-controls:not([hidden])")`);
   record("T54", "workspace panel resizes, snaps closed, and has a keyboard path back",
     b.w > a.w + 20 && canvasB.w < canvasA.w - 20 && keyed.w < b.w && collapsed.w > canvasA.w + 20 &&
     !!onTop && keyboardAccess && translucent && unreachable && near(restored.w, keyed.w, 1) && canvasC.w < collapsed.w - 20 &&
@@ -663,7 +663,7 @@ await test("T55", "one inspector stays in the workspace panel or floats over the
   const height = (await s.state()).joints.J_mon_height;
   await s.ev(`window.acceptanceCard = ${card}; window.acceptanceRange = ${s.slider("Height")}`);
   await s.clickEl(`document.querySelector('#card .dock-toggle[aria-label="Pop out controls"]')`, "Pop out controls");
-  const floats = await s.ev<boolean>(`(${card}).parentElement.id === "stage"`), floatWidth = await size();
+  const floats = await s.ev<boolean>(`(${card}).parentElement.id === "floating-panels"`), floatWidth = await size();
   const stage = (await s.rect("document.getElementById('stage')"))!, overlay = (await s.rect(card))!;
   const atLeft = overlay.x >= stage.x && overlay.x - stage.x <= 24;
   const header = (await s.rect("document.querySelector('#card h2')"))!;
@@ -688,17 +688,43 @@ await test("T59", "Shift-click opens a second component card without replacing t
   await s.click(...await s.find("S_mon_screen"), "monitor");
   const seat = () => s.find("C_seat_back_shell", 3);
   await s.click(...await seat(), "seat with Shift", 1, 8);
-  const cards = () => s.ev<string[]>("Array.from(document.querySelectorAll('#stage > .component-card:not([hidden]) h2'), e => e.textContent)");
+  const cards = () => s.ev<string[]>("Array.from(document.querySelectorAll('#floating-panels > .component-card:not([hidden]) h2'), e => e.textContent)");
   const first = await cards();
   const selected = (await s.state()).selected;
   const primary = await s.ev<boolean>("!!document.querySelector('#parts #card:not([hidden])')");
   await s.click(...await seat(), "seat with Shift again", 1, 8);
   const again = await cards();
   const rail = await s.ev<boolean>("!document.getElementById('parts').inert");
-  await s.clickEl("document.querySelector('#stage > .component-card .x')", "Close the extra card");
+  await s.clickEl("document.querySelector('#floating-panels > .component-card .x')", "Close the extra card");
+  const extraClosed = !(await cards()).length && (await s.state()).selected === selected;
+  await s.click(...await seat(), "seat with Shift again", 1, 8);
+  await s.ev("document.querySelector('#card h2').focus()");
+  await s.press("Escape");
+  const focusedClosed = (await s.state()).selected === null && (await cards()).join() === "Seat";
   record("T59", "Shift-click keeps existing controls and opens one independent card per component",
-    selected === "C_stand_monitor" && primary && first.join() === "Seat" && again.join() === "Seat" && rail && !(await cards()).length && (await s.state()).selected === selected,
-    `main selection ${selected}; extra cards ${first.join()} and after repeat ${again.join()}; existing dock ${primary}`);
+    selected === "C_stand_monitor" && primary && first.join() === "Seat" && again.join() === "Seat" && rail && extraClosed && focusedClosed,
+    `main selection ${selected}; extra cards ${first.join()} and after repeat ${again.join()}; existing dock ${primary}; Escape closes the focused docked card: ${focusedClosed}`);
+  await close(s);
+});
+await test("T58", "overlapping pop-outs follow focus order", async () => {
+  const s = await open(1440, 900);
+  await s.click(...await s.find("S_mon_screen"), "monitor");
+  await s.click(...await s.find("C_seat_back_shell", 3), "seat with Shift", 1, 8);
+  await s.click(...await s.find("S_ts_screen", 3), "touchscreen with Shift", 1, 8);
+  await s.clickEl("document.querySelector('#card .dock-toggle')", "Pop out the monitor controls");
+  const front = () => s.ev<string | null>("(() => { const layer = document.getElementById('floating-panels').getBoundingClientRect(); return document.elementFromPoint(layer.x + 395, layer.y + 55)?.closest('.component-card')?.querySelector('h2')?.textContent ?? null; })()");
+  await s.ev(`document.querySelectorAll('#floating-panels .component-card').forEach(card => {
+    card.style.left = '380px'; card.style.top = '44px';
+  })`);
+  await s.ev("document.querySelector('#controls-seat h2').focus()");
+  const seatFront = await front();
+  await s.ev("document.querySelector('#controls-touchscreen h2').focus()");
+  const touchFront = await front();
+  await s.press("Escape");
+  const next = await front();
+  record("T58", "overlapping cards retain their order after Escape closes the front card",
+    seatFront === "Seat" && touchFront === "Touchscreen" && next === "Seat" && (await s.state()).selected === "C_stand_monitor",
+    `front after focusing Seat: ${seatFront}; after focusing Touchscreen: ${touchFront}; after Escape: ${next}`);
   await close(s);
 });
 await test("T56", "keyboard opens Components and reaches an adjustment", async () => {
@@ -757,7 +783,7 @@ await test("T52", "phone-width window: selecting from the model leaves the drawe
   await s.click(...await s.find("S_mon_screen", 3), "monitor in the model"); await s.settle(350);
   const selection = (await s.state()).selected;
   const frame = (await s.rect("document.getElementById('gl')"))!;
-  const floatedFromModel = !(await openRail()) && await s.ev<boolean>("!!document.querySelector('#stage > #card.floating-controls:not([hidden])')");
+  const floatedFromModel = !(await openRail()) && await s.ev<boolean>("!!document.querySelector('#floating-panels > #card.floating-controls:not([hidden])')");
   await s.clickEl("document.querySelector('#card .dock-toggle')", "Dock controls and open the workspace panel");
   await s.settle(300);
   const drawer = (await s.rect(rail))!;
@@ -797,6 +823,28 @@ await test("T52", "phone-width window: selecting from the model leaves the drawe
       n ? `at ${Math.round(n.x)},${Math.round(n.y)} size ${Math.round(n.w)}×${Math.round(n.h)} px` : "absent");
     await close(t);
   }
+});
+
+await test("T52b", "a shared-pose prompt and floating card fit on a phone", async () => {
+  const s = await open(390, 800, "?pose=J_mon_height:-0.05");
+  await s.page.waitFor("viewer.live()?.preview", "the link preview");
+  await s.click(...await s.find("S_mon_screen", 3), "monitor with a shared-pose prompt");
+  await s.settle();
+  const rects = await s.ev<{ below: boolean; buttons: boolean }>(`(() => {
+    const note = [...document.querySelectorAll('#notices .note')].find(e => !e.hidden && e.textContent.includes('Apply'));
+    const card = document.querySelector('#floating-panels #card');
+    const buttons = Array.from(note.querySelectorAll('button'), button => {
+      const r = button.getBoundingClientRect();
+      return r.left >= 0 && r.right <= innerWidth && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === button;
+    });
+    return { below: card.getBoundingClientRect().y >= note.getBoundingClientRect().bottom, buttons: buttons.length === 2 && buttons.every(Boolean) };
+  })()`);
+  await s.clickEl(s.byText("Dismiss"), "Dismiss the shared-pose preview");
+  await s.page.waitFor("viewer.live()?.preview === false", "the preview dismissed");
+  const staysFloating = await s.ev<boolean>("document.getElementById('parts').inert && !!document.querySelector('#floating-panels #card:not([hidden])')");
+  record("T52b", "phone-width prompt stays readable and actionable with the component card open",
+    rects.below && rects.buttons && staysFloating, `card starts below prompt: ${rects.below}; both buttons fully inside and clickable: ${rects.buttons}; card still floating after Dismiss: ${staysFloating}`);
+  await close(s);
 });
 
 // ---- the person panel (viewer/src/person-panel.ts) --------------------------------------------------------
@@ -914,7 +962,7 @@ await test("T66", "phone-width window: the person uses the same floating control
   const credit0 = await visibleIn(s, "person-credit");
   await s.click(...await personPixel(s), "Person in the model"); await s.settle();
   const person = (await s.rect("document.getElementById('person')"))!;
-  const single = await s.ev<boolean>("document.getElementById('parts').inert && !!document.querySelector('#stage > #person.floating-controls:not([hidden])') && document.getElementById('card').hidden");
+  const single = await s.ev<boolean>("document.getElementById('parts').inert && !!document.querySelector('#floating-panels > #person.floating-controls:not([hidden])') && document.getElementById('card').hidden");
   const float = await s.rect("document.querySelector('#person .dock-toggle')"), overflow = await s.ev<number>("document.documentElement.scrollWidth - innerWidth");
   await s.shot("after-66-person-drawer-narrow-390");
   await s.reveal(seg("Clay figure"));
