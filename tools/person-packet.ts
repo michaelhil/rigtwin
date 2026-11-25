@@ -13,7 +13,7 @@
 //                  The camera keeps the designer's distance and lens even where a rig part stands between it and the person: the
 //                  part hiding the shot's target is named in the caption ("hidden by ...") and in manifest.json.
 //   standing shots (A_POSE, RELAXED_STAND, HAND_POSE_ARM and the standing range-of-motion poses): the person stands on the
-//                  ground plane beside the rig, far enough out that no part of the body can touch it, with the rig behind the
+//                  room floor beside the rig (place() puts the soles on D_floor), far enough out that nothing can touch it, rig behind the
 //                  figure. The camera stays on one side of the rig and the FIGURE turns (the lab's turntable): `az` is the
 //                  camera's azimuth around the figure as in the shot list, the light falls the same way for every azimuth.
 //   camera fit     a seated designer shot whose subject (its body-part target, or TOOL.subjectOf) the real rig hides is refitted:
@@ -802,7 +802,8 @@ try {
       const pen = await pp.page.evaluate("pp.penetration()");
       const st = await pp.page.evaluate("viewer.person.state()");
       const eye = await pp.page.evaluate("pp.anchorModel('eye_midpoint')");
-      metricsByPerson[mkey] = { package: im.pkg.key, person: im.person, posture, from_image: im.file, pen, state: st, eye_model_m: eye };
+      const shells = posture === "seated" ? await pp.page.evaluate("viewer.person.shells()") : null;   // the pods' inner sides as drawn (GPU, after the contact)
+      metricsByPerson[mkey] = { package: im.pkg.key, person: im.person, posture, from_image: im.file, pen, state: st, eye_model_m: eye, shells };
     }
     if (i % 10 === 9) console.log(`  ${i + 1}/${order.length} images, ${((performance.now() - t0) / 1000).toFixed(0)} s`);
     for (const e of pp.page.errors.splice(0)) errorsSeen.add(e.slice(0, 300));
@@ -864,7 +865,11 @@ try {
   const per: Record<string, any> = {};
   for (const [key, m] of Object.entries<any>(metricsByPerson)) {
     const parts = m.pen?.parts ?? {}, st = m.state ?? {}, br = st.binding?.report ?? null, rep = st.report ?? {};
-    const faults = Object.entries<any>(parts).filter(([c, r]) => !DESIGNED.test(c) && r.deepest_mm > TOOL.faultMm).map(([c, r]) => ({ part: c, deepest_mm: r.deepest_mm, region: r.deepest_region, vertices_inside: r.inside }));
+    // a pod shell is a contact surface: its depth counts as drawn (viewer.person.shells(), after the contact), not as read back on the CPU
+    const podDrawn = (c: string) => { const k = /^C_pod_shell_([LR])$/.exec(c); return k ? m.shells?.[`pod_${k[1]}`] ?? null : null; };
+    const faults = Object.entries<any>(parts).filter(([c, r]) => !DESIGNED.test(c) && r.deepest_mm > TOOL.faultMm && !(podDrawn(c) && podDrawn(c).after_mm <= TOOL.faultMm))
+      .map(([c, r]) => ({ part: c, deepest_mm: r.deepest_mm, region: r.deepest_region, vertices_inside: r.inside, ...(podDrawn(c) ? { drawn_after_contact_mm: podDrawn(c).after_mm } : {}) }));
+    const placed = st.placed ?? null, surfZ = placed?.origin?.[2] != null ? placed.origin[2] * 1000 : null;
     const contact = (re: RegExp, reg: RegExp) => Object.fromEntries(Object.entries<any>(parts).filter(([c]) => re.test(c)).map(([c, r]) => {
       const regs = Object.entries<any>(r.regions).filter(([g]) => reg.test(g)), deep = Math.max(0, ...regs.map(([, g]) => g.deepest_mm ?? 0)), gaps = regs.map(([, g]) => g.nearest_gap_mm).filter((x) => x !== null) as number[];
       return [c, { penetration_mm: deep, nearest_gap_mm: gaps.length ? Math.min(...gaps) : null, vertices_inside: regs.reduce((k, [, g]) => k + g.inside, 0), skin_to_surface_mm: deep > 0 ? -deep : gaps.length ? Math.min(...gaps) : null }];
@@ -880,7 +885,11 @@ try {
       eye: m.posture === "seated" ? { survey_sitting_eye_height_mm: survey, cushion_compression_m: comp, survey_less_compression_m: br?.eye?.survey_less_compression_m ?? null, eye_above_cushion_m: br?.eye?.eye_above_cushion_m ?? null,
         difference_mm: br?.eye?.eye_above_cushion_m != null && br?.eye?.survey_less_compression_m != null ? Math.round((br.eye.eye_above_cushion_m - br.eye.survey_less_compression_m) * 10000) / 10 : null,
         eye_as_rendered_model_m: m.eye_model_m, eye_by_binding_model_m: br?.eye?.eye_model_m ?? null, vs_rig_eye_points_mm: br?.eye?.vs_rig_eye_points_mm ?? null, screens: { main: br?.eye?.main_monitor ?? null, touchscreen: br?.eye?.touchscreen ?? null } }
-        : { stature_survey_mm: st.measures?.stature ?? null, top_of_figure_mm: m.pen?.top_z_mm, note: "standing on the ground plane (z = 0); the top includes the cap" },
+        : { stature_survey_mm: st.measures?.stature ?? null, top_of_figure_mm: m.pen?.top_z_mm, note: "the top includes the cap" },
+      soles: m.posture === "seated" ? null : { how: "the lowest drawn point of the person (Avatar.skinnedPositions) against the surface place() stood it on (state().placed.origin[2])", stands_on: placed?.on ?? null, surface_z_mm: surfZ != null ? +surfZ.toFixed(1) : null,
+        lowest_point_vs_surface_mm: surfZ != null && m.pen?.lowest_point_z_mm != null ? +(m.pen.lowest_point_z_mm - surfZ).toFixed(1) : null, lowest_region: m.pen?.lowest_region ?? null, top_vs_surface_mm: surfZ != null && m.pen?.top_z_mm != null ? +(m.pen.top_z_mm - surfZ).toFixed(1) : null },
+      pods: m.posture === "seated" ? { how: "viewer.person.shells(): how deep the drawn skin lies inside each pod's inner side before and after the contact layer (mm, GPU)", drawn: m.shells ?? null,
+        cpu_read_back_mm: Object.fromEntries(Object.entries<any>(parts).filter(([c]) => /^C_pod_shell_[LR]$/.test(c)).map(([c, r]) => [c, { deepest_mm: r.deepest_mm, region: r.deepest_region, note: "before the contact layer" }])) } : null,
       binding_findings: m.posture === "seated" ? br : null, solver_report: m.posture === "seated" ? { clash: rep.clash ?? null, arm_into_body: rep.armPen ?? null, wrist: rep.wrist ?? null, collision: rep.collision ?? null, person_fit: rep.person ?? null } : null,
       timing: st.timing ?? null,
     };
