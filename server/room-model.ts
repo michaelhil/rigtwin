@@ -42,6 +42,9 @@ export function newRoom(id: string, name: string, catalog: RoomCatalog, template
       ["display-a", "Freestanding display", display.id, 7.25, 4.2, 23, {}],
       ["wall-display", "Wall display", wall.id, center, scene.room.depth - wall.footprint.max[0], 90, wallPose],
     ] as const) scene.instances.push({ id, label, release, x, y, yaw, pose: { ...pose } });
+    // An operator desk, when the library has one: back to the east wall, clear of the door and of both stations.
+    const desk = catalog.releases.find(r => r.kind === "desk");
+    if (desk) scene.instances.push({ id: "desk-a", label: "Operator desk", release: desk.id, x: 6.9, y: 1.4, yaw: 0, pose: {} });
     if (station.seat && catalog.defaultPerson) scene.person = { host: "station-a", state: structuredClone(catalog.defaultPerson(scene.instances[0])) };
   }
   return { scene, history: [] };

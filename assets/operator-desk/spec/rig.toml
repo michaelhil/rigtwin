@@ -68,12 +68,12 @@ label = "Floor anchor: on the floor under the centre of the desktop's front edge
 [nodes.D_eye_seated]
 parent = "C_desk"
 label = "Seated eye reference (ASSUMED design reference, not a person): median adult, on the centre line; x forward, z up"
-pos = ["operator.eye_x", "0", "operator.eye_seated_z"]
+pos = ["operator.eye_x", "0", "operator.seat_height + operator.eye_above_seat"]
 
 [nodes.D_eye_standing]
 parent = "C_desk"
 label = "Standing eye reference (ASSUMED design reference, not a person): median adult in shoes, on the centre line; meaningful only if the desk rises to a standing height, which is not known"
-pos = ["operator.eye_x", "0", "operator.eye_standing_z"]
+pos = ["operator.eye_x", "0", "operator.eye_standing_bare + operator.shoe"]
 
 [nodes.D_desk_front_fixed]
 parent = "C_desk"

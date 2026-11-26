@@ -40,7 +40,7 @@ export interface RoomJoint {
   axis?: number[] | null;
 }
 export interface RoomRelease {
-  id: string; label: string; kind: "station" | "display";
+  id: string; label: string; kind: "station" | "display" | "desk";
   asset: string; version: string; digest: string; modelUrl: string; manifestUrl: string;
   anchor: RoomPoint; variant?: string; frame?: string;
   members: RoomMember[]; joints: RoomJoint[];

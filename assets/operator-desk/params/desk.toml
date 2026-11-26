@@ -369,20 +369,38 @@ basis = "standard_default"
 tier = "critical"
 evidence = "Eye in front of the desktop's front edge (toward the operator), seated or standing at the centre of the desk: a person working at a desk has the trunk a few centimetres from the edge and the eyes roughly 0.05 to 0.25 m behind it. An assumption, not taken from a standard; a result assessed against a viewing-distance guideline inherits it."
 
-[operator.eye_seated_z]
-value = 1.21
+[operator.seat_height]
+value = 0.434
 unit = "m"
-range = 0.09
+range = 0.054
 class = "assumed"
 basis = "standard_default"
 tier = "critical"
-evidence = "Seated eye height above the floor for a median adult: sitting eye height above the seat 0.765 m (the value this project already uses for its first asset: midway between the median woman, 740 mm, and man, 790 mm, of the British adult tables in Pheasant and Haslegrave, Bodyspace, quoted there from memory and not looked up) plus a seat height of about 0.445 m. The range spans roughly a small woman to a tall man (0.685 to 0.845 m above the seat) at seat heights of 0.40 to 0.50 m. Not looked up for this asset; a value filled from typical data cannot be assessed against a standard."
+evidence = "STATED seat height for the seated eye reference: the top of the loaded seat above the floor, set so that the thighs are level, which is the popliteal height plus the shoe (operator.shoe). Popliteal height from this project's own body data, the manikin's shape model fitted to the ANSUR II survey (assets/manikin/operator-m and operator-f, shape.measures at the presets Median man and Median woman): 0.427 m and 0.386 m, midway 0.406 m; plus 0.028 m of shoe. The range runs from the preset Small woman (stature P5, 0.354 m) to Tall man (stature P95, 0.462 m), each with the seat set for them. The asset has no seat: this is a design reference, not an observation."
 
-[operator.eye_standing_z]
-value = 1.58
+[operator.eye_above_seat]
+value = 0.785
 unit = "m"
-range = 0.12
+range = 0.07
 class = "assumed"
 basis = "standard_default"
 tier = "critical"
-evidence = "Standing eye height above the floor for a median adult in shoes: about 1.52 m (women) and 1.63 m (men) for the median of European adult tables, plus about 2.5 cm of shoe, from memory and not looked up; the range spans roughly a small woman to a tall man. Only meaningful if the desk really rises to a standing height, which is not known."
+evidence = "Eye height above the seat for the seated eye reference: the survey measure eye height, sitting, from this project's own body data (the manikin's shape model fitted to the ANSUR II survey, shape.measures at the presets Median man, 0.813 m, and Median woman, 0.757 m), midway. The range runs from the preset Small woman (stature P5, 0.720 m) to Tall man (stature P95, 0.855 m). The survey measures a person sitting erect; a relaxed sitter's eyes are a few centimetres lower, which the range covers. A design reference, not a person."
+
+[operator.eye_standing_bare]
+value = 1.590
+unit = "m"
+range = 0.17
+class = "assumed"
+basis = "standard_default"
+tier = "critical"
+evidence = "Standing eye height without shoes for the standing eye reference. The manikin's survey measures hold no standing eye height, so it is stature less the distance from the top of the head to the eye, which is sitting height less eye height, sitting (the same distance standing or seated). From this project's own body data (the manikin's shape model fitted to the ANSUR II survey, presets Median man: 1.756 - (0.917 - 0.813) = 1.652 m; Median woman: 1.628 - (0.858 - 0.757) = 1.528 m), midway. The range runs from the preset Small woman (stature P5, 1.428 m) to Tall man (stature P95, 1.762 m). Only meaningful if the desk really rises to a standing height, which is not known. A design reference, not a person."
+
+[operator.shoe]
+value = 0.028
+unit = "m"
+range = 0.015
+class = "assumed"
+basis = "standard_default"
+tier = "layout"
+evidence = "Shoe allowance under the heel, added to the seat height and to the standing eye height: the sole height of the manikin's own work shoe (rest.soleHeight in assets/manikin/operator-m and operator-f, 0.028 m). The range covers a thin indoor sole to a thick safety sole."

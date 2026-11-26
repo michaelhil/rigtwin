@@ -534,11 +534,11 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     const picker = h('div', 'rm-library-list');
     for (const r of releases) {
       const row = action(r.label, () => { chosenRelease = r.id; renderPanel(); }, r.kind, 'rm-library-row');
-      row.setAttribute('aria-pressed', String(chosenRelease === r.id)); row.querySelector('span')!.append(h('small', null, r.kind === 'station' ? 'Operator station · v' + r.version : 'Display · v' + r.version));
+      row.setAttribute('aria-pressed', String(chosenRelease === r.id)); row.querySelector('span')!.append(h('small', null, (r.kind === 'station' ? 'Operator station' : r.kind === 'desk' ? 'Operator desk' : 'Display') + ' · v' + r.version));
       if (chosenRelease === r.id) row.append(icon('check')); picker.append(row);
     }
     const asset = byRelease.get(chosenRelease)!;
-    const base = asset.kind === 'station' ? 'Station' : 'Display';
+    const base = asset.kind === 'station' ? 'Station' : asset.kind === 'desk' ? 'Desk' : 'Display';
     let no = 1; while (scene.instances.some(i => i.label === base + ' ' + no)) no++;
     const automaticName = base + ' ' + no;
     const input = h('input'); input.type = 'text'; input.maxLength = 80; input.value = newLabel; input.placeholder = automaticName;

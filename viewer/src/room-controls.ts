@@ -6,6 +6,7 @@ const paths = {
   room: 'M3 3h18v18h-7m-5 0H3V3m6 18v-5a5 5 0 0 1 5 5',
   station: 'M3 4h12v8H3z M9 12v4m-5 0h10m4-7v6h3v4h-7v-4h4m-2 4v2m4-2v2',
   display: 'M2.5 4.5h19v12h-19z M12 16.5v4m-5 0h10',
+  desk: 'M2 11h20v2H2z M4 13v7m16-7v7 M7 4h10v5H7z',
   layers: 'm3 8 9-5 9 5-9 5z M3 12l9 5 9-5 M3 16l9 5 9-5',
   measure: 'm3 15 12-12 6 6L9 21z M12 6l3 3m-6 0 2 2m-5 1 3 3',
   pop: 'M13 3h8v8m0-8L10 14M9 5H4v15h15v-5',

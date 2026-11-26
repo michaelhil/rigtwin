@@ -12,6 +12,7 @@ const editions = [
   { asset: "floor-display", version: "2", kind: "display", variant: "freestanding", paramsDir: "releases/2/params" },
   { asset: "wall-display", version: "1", kind: "display", variant: "wall" },
   { asset: "wall-display", version: "2", kind: "display", variant: "wall", paramsDir: "releases/2/params", specDir: "releases/2/spec" },
+  { asset: "operator-desk", version: "1", kind: "desk" },
 ] as const;
 
 function collect(dir: string, prefix: string, files: Map<string, Buffer>) {

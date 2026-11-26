@@ -396,7 +396,7 @@ async function checkScope(page: Page, browser: Browser, base: string, path: stri
   assert.equal(await page.evaluate(scope), "station-b", "Another viewer left this viewer’s asset");
   await clickControl(page, back);
   await page.waitFor(
-    "!" + scope + " && document.querySelectorAll('.rv-orbit-tag').length===4",
+    "!" + scope + " && document.querySelectorAll('.rv-orbit-tag').length===5",
     "the restored 3D room",
   );
   const restored = await copyCamera(page);

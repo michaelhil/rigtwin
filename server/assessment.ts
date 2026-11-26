@@ -64,7 +64,9 @@ export function evaluate(inputs:RunInputs,catalog:RoomCatalog):AssessmentReport 
     population:person ? person.preset??"Individual operator, custom body" : null,posture:person?.posture??null,geometryPins:geometryPins(scene),
     rulePin:assessmentPin({rules,customer:inputs.settings.profile==="customer-layout"?inputs.settings.customer:null}),
     bindingPin:assessmentPin(bindings),inputsPin:assessmentPin(inputs),findings,
-    unassessed:["Control reach","Seat adjustment","Other operators and postures","Full exit route, occupancy and door operation"]};
+    unassessed:["Control reach","Seat adjustment","Other operators and postures","Full exit route, occupancy and door operation",
+      // a desk has no operator of its own yet: its screens are not bound to the seated person of another station
+      ...(scene.instances.some(i=>catalog.releases.find(r=>r.id===i.release)?.kind==="desk") ? ["Operator desk: viewing distances and reach at the desk (no operator at the desk)"] : [])]};
 }
 function validateSettings(settings:Settings) { ensure(!check(settingsSchema,settings),"Malformed project assessment settings."); }
 const refSchema=schemaObject({instance:text,member:text});

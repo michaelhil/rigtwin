@@ -66,11 +66,11 @@ function prepareSource(pin:string, payload:Payload) {
   if (![min,max].every(p=>p.length === 3 && p.every(Number.isFinite)) || min.some((v,i)=>v>max[i])) throw new Error("Invalid release bounds for " + pin);
   const base = "/library/" + digest + "/";
   const adjustments=componentAdjustments(manifest);
-  const release: RoomRelease = { id:pin,label:manifest.title,kind:people?"station":"display",asset,version,digest,
+  const release: RoomRelease = { id:pin,label:manifest.title,kind:people?"station":manifest.datums.some(d=>d.id==="D_desk_surface")?"desk":"display",asset,version,digest,
     modelUrl:base+"model.glb",manifestUrl:base+"manifest.json",anchor,frame:manifest.conventions?.frame,seat:!!people,
     ...(asset === "wall-display" ? {variant:"wall"} : asset === "floor-display" ? {variant:"freestanding"} : {}),
     members:[...manifest.components,...manifest.surfaces,...manifest.datums,...manifest.joints].map(n=>({
-      id:n.id,...(adjustments.has(n.id) ? {controls:adjustments.get(n.id)} : {}),label:people ? labelOf(info,n.id) : "label" in n ? n.label : n.id,
+      id:n.id,...(adjustments.has(n.id) ? {controls:adjustments.get(n.id)} : {}),label:people || n.id.startsWith("J_") ? labelOf(info,n.id) : "label" in n ? n.label : n.id,
       kind:n.id.startsWith("D_") ? "datum" : n.id.startsWith("J_") ? "joint" : "part" })),
     joints:manifest.joints.map(({id,type,axis,lower,upper,neutral,locked,evidence})=>({id,label:labelOf(info,id),type,axis,lower,upper,neutral,locked,assumed:evidence==="assumed"})),
     footprint:{min:[min[0]-anchor[0],min[1]-anchor[1]],max:[max[0]-anchor[0],max[1]-anchor[1]]},

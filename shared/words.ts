@@ -119,6 +119,12 @@ const ADJ_RULES: Rule[] = [
   [/^J_pedal_1$/, null, { label: 'Left pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 71, zero: 'released', aliases: ['left pedal', 'pedal 1'] }],
   [/^J_pedal_2$/, null, { label: 'Middle pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 72, zero: 'released', aliases: ['middle pedal', 'pedal 2', 'centre pedal'] }],
   [/^J_pedal_3$/, null, { label: 'Right pedal', lo: 'released', hi: 'pressed', section: 'Press', order: 73, zero: 'released', aliases: ['right pedal', 'pedal 3'] }],
+  // the operator desk (assets/operator-desk)
+  [/^J_desk_height$/, null, { label: 'Height', lo: 'lower', hi: 'higher', section: 'Desk', order: 80, zero: 'as photographed', aliases: ['desk height', 'table height', 'desktop height', 'raise the desk', 'lower the desk'] }],
+  [/^J_small_tilt_1$/, null, { label: 'Tilt', lo: 'upright', hi: 'back', section: 'Left small display', order: 81, zero: 'screen face vertical', aliases: ['left small display tilt', 'small display 1', 'left desk monitor'] }],
+  [/^J_small_tilt_2$/, null, { label: 'Tilt', lo: 'upright', hi: 'back', section: 'Middle small display', order: 82, zero: 'screen face vertical', aliases: ['middle small display tilt', 'small display 2', 'middle desk monitor'] }],
+  [/^J_small_tilt_3$/, null, { label: 'Tilt', lo: 'upright', hi: 'back', section: 'Right small display', order: 83, zero: 'screen face vertical', aliases: ['right small display tilt', 'small display 3', 'right desk monitor'] }],
+  [/^J_big_tilt_([LR])$/, null, { label: 'Tilt', lo: 'upright', hi: 'forward', section: '$s large display', order: 84, zero: 'screen face vertical', aliases: ['large display tilt', 'big display tilt', 'wall display tilt'] }],
 ];
 /** Words whose left end is the joint's positive direction (so the control reads left-to-right as people expect). */
 const LEFT_IS_POSITIVE = new Set(['right|left']);

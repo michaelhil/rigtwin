@@ -97,3 +97,44 @@ test("scoped discovery reports the posed direction and footprint of just the cho
   expect(call("discover",{instance:"station-b",query:"C_seat_pan"}).instances[0].joints.map((j:any)=>j.id)).toContain("J_seat_slide");
   expect(call("discover",{instance:"station-a",query:"J_seat_slide"}).instances[0].joints[0].value).toBe(0);
 });
+
+test("the operator desk is a desk in the library and the demo room: placed clear, measurable from its eye reference, not assessed", async () => {
+  const catalog=library.catalog, desk=catalog.releases.find(r=>r.asset==="operator-desk")!;
+  expect(desk.kind).toBe("desk");
+  expect(desk.seat).toBe(false);
+  expect(desk.joints.find(j=>j.id==="J_desk_height")?.label).toBe("Desk: height");
+  let record=newRoom("desk","Room",catalog,"demo");
+  const call=(id:string,args:object)=>{ const reply=roomCommand(record,catalog,{id,args}); record=reply.record; return reply.result as any; };
+  const placed=record.scene.instances.at(-1)!;
+  expect(record.scene.instances).toHaveLength(5);
+  expect(record.scene.instances[0].id).toBe("station-a");
+  expect({id:placed.id,release:placed.release,x:placed.x,y:placed.y,yaw:placed.yaw}).toEqual({id:"desk-a",release:desk.id,x:6.9,y:1.4,yaw:0});
+  // inside the room, the doorway fully open, no footprint of another object within half a metre
+  const {footprint}=await import("../shared/room-geometry.ts");
+  const boxes=record.scene.instances.map(i=>{ const v=footprint(i,catalog.releases.find(r=>r.id===i.release)!).vertices;
+    return {id:i.id,min:[Math.min(...v.map(p=>p[0])),Math.min(...v.map(p=>p[1]))],max:[Math.max(...v.map(p=>p[0])),Math.max(...v.map(p=>p[1]))]}; });
+  const own=boxes.find(b=>b.id==="desk-a")!, {width,depth}=record.scene.room;
+  expect(own.min[0]).toBeGreaterThan(0); expect(own.min[1]).toBeGreaterThan(0); expect(own.max[0]).toBeLessThan(width); expect(own.max[1]).toBeLessThan(depth);
+  for (const other of boxes.filter(b=>b.id!=="desk-a")) {
+    const gap=Math.hypot(...[0,1].map(k=>Math.max(0,other.min[k]-own.max[k],own.min[k]-other.max[k])));
+    expect(gap).toBeGreaterThan(.5);
+  }
+  const door=call("measure.clearance",{instance:"desk-a"});
+  expect(door.opening.metres).toBeCloseTo(record.scene.room.door.width,9);
+  expect(door.opening.blockers).toEqual([]);
+  expect(door.metres).toBeGreaterThan(4);
+  // every screen centre can be measured from the seated eye reference
+  const eye={instance:"desk-a",member:"D_eye_seated"};
+  for (const member of ["D_small_center_1","D_small_center_2","D_small_center_3","D_big_center_L","D_big_center_R","D_touch_center"]) {
+    const metres=call("measure.distance",{from:eye,to:{instance:"desk-a",member}}).metres;
+    expect(metres).toBeGreaterThan(.5); expect(metres).toBeLessThan(1.5);
+  }
+  expect(call("discover",{instance:"desk-a",query:"seated eye"}).instances[0].members.map((m:any)=>m.id)).toContain("D_eye_seated");
+  // no operator of its own: nobody sits at it, its assumed height needs the caller's word, and the assessment says so
+  expect(()=>call("person.set",{host:"desk-a"})).toThrow("no compatible seated operator");
+  expect(()=>call("pose.set",{instance:"desk-a",member:"J_desk_height",value:.01})).toThrow("allowAssumed");
+  const {assessmentCommand}=await import("./assessment.ts");
+  const run=assessmentCommand(record.scene,catalog,{id:"assessment.run"},{read:()=>null,write(){}}) as any;
+  expect(run.report.findings.some((f:any)=>f.binding.includes("desk-a"))).toBe(false);
+  expect(run.report.unassessed.some((u:string)=>u.startsWith("Operator desk"))).toBe(true);
+});
