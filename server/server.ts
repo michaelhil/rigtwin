@@ -85,6 +85,7 @@ export interface ApiOptions {
   limits?: Partial<Limits>;
   /** called when `releaseDir` no longer points at the release we started from (default: exit, systemd starts the new one) */
   onReleaseChange?: () => void;
+  otherStreams?: () => Iterable<StreamPlace>;
 }
 
 const KIND_LABEL = { person: "Person", agent: "Claude Code", script: "Script" } as const;
@@ -119,7 +120,7 @@ export function blockKey(visitor: string): string {
 }
 
 /** At most `n` hits per `ms` for each key (a sliding window). */
-class Window {
+export class RateWindow {
   private hits = new Map<string, number[]>();
   constructor(private n: number, private ms: number) {}
   hit(key: string, now = Date.now()) {
@@ -190,6 +191,7 @@ export function loadPeople(dir: string): People | null {
 
 
 /** One open live stream (of one workspace). */
+export interface StreamPlace { visitor: string; block: string }
 interface Stream { code: string; visitor: string; block: string; send(chunk: Uint8Array): void; close(why?: "slow" | "spent"): void }
 type Pending = { ws: string; codes: string[]; exclusive: boolean; visitor: string; done(b: Uint8Array | null, pageMs?: number): void };
 type Reply = { status: number; body: Record<string, any> };
@@ -239,11 +241,11 @@ export function createApi(opts: ApiOptions) {
   }
 
   // ---- deployed guards (PLAN-v7 D1), global: the same for every workspace
-  const edits = new Window(L.editsPerMinutePerVisitor, 60_000), editsAll = new Window(L.editsPerSecondTotal, 1_000), queries = new Window(L.queriesPerMinutePerVisitor, 60_000);
-  const editsBlock = new Window(L.editsPerSecondPerBlock, 1_000), unknownSessions = new Window(L.unknownSessionsPerMinutePerVisitor, 60_000);
-  const createsVisitor = new Window(L.workspacesPerHourPerVisitor, 3_600_000), createsBlock = new Window(L.workspacesPerHourPerBlock, 3_600_000), createsDay = new Window(L.workspacesPerDayTotal, 86_400_000);
+  const edits = new RateWindow(L.editsPerMinutePerVisitor, 60_000), editsAll = new RateWindow(L.editsPerSecondTotal, 1_000), queries = new RateWindow(L.queriesPerMinutePerVisitor, 60_000);
+  const editsBlock = new RateWindow(L.editsPerSecondPerBlock, 1_000), unknownSessions = new RateWindow(L.unknownSessionsPerMinutePerVisitor, 60_000);
+  const createsVisitor = new RateWindow(L.workspacesPerHourPerVisitor, 3_600_000), createsBlock = new RateWindow(L.workspacesPerHourPerBlock, 3_600_000), createsDay = new RateWindow(L.workspacesPerDayTotal, 86_400_000);
   /** questions put to every page, per caller (consent) */
-  const asks = new Window(L.asksPerMinutePerCaller, 60_000);
+  const asks = new RateWindow(L.asksPerMinutePerCaller, 60_000);
   const sweeper = setInterval(() => { for (const w of [edits, editsAll, queries, editsBlock, unknownSessions, asks, createsVisitor, createsBlock, createsDay]) w.sweep(); }, 60_000);
   function diskLow() {
     try { const s = statfsSync(opts.dataDir), free = s.bavail * s.bsize, total = s.blocks * s.bsize; return free < L.diskMinFreeBytes || free / total < L.diskMinFreeFraction; }
@@ -310,7 +312,7 @@ export function createApi(opts: ApiOptions) {
 
     function live(req: Request, url: URL, visitor: string): Response {
       if (deployed) {
-        const places = [...allStreams, ...draining];
+        const places = [...allStreams, ...draining, ...(opts.otherStreams?.() ?? [])];
         if (places.length >= L.streamsTotal) return fail(503, "too_many_streams", `the server has its maximum of ${L.streamsTotal} live connections`, "try again later");
         if (places.filter((s) => s.visitor === visitor).length >= L.streamsPerVisitor) return fail(429, "too_many_streams", `at most ${L.streamsPerVisitor} live connections per visitor`, "close another tab of the viewer");
         if (places.filter((s) => s.block === blockKey(visitor)).length >= L.streamsPerBlock) return fail(429, "too_many_streams", `at most ${L.streamsPerBlock} live connections per network block`, "try again later");
@@ -728,6 +730,7 @@ export function createApi(opts: ApiOptions) {
 
   return {
     fetch, close, reset,
+    streamPlaces: (): StreamPlace[] => [...allStreams, ...draining],
     /** the Playground (the oldest workspace of that name): for tools and tests */
     playground: () => store.byName(PLAYGROUND),
     list: (o?: Parameters<Store["list"]>[0]) => store.list(o),
@@ -737,7 +740,14 @@ export function createApi(opts: ApiOptions) {
 }
 
 // ---------------------------------------------------------------------------------------------- run directly
-if (import.meta.main) {
+type AdditionalApi = {
+  fetch(req: Request, ip: string, stationStreams: () => StreamPlace[]): Promise<Response | undefined>;
+  streamPlaces(): Iterable<StreamPlace>;
+  close(): void;
+};
+
+/** Start from the same release link and service arguments for both the station and room runtime. */
+export function startServer(additional?: (options: { release: string; dataDir: string; mode: "deployed" | "local"; revision: string }) => AdditionalApi) {
   const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
   const mode = opt("--mode") ?? "local";
   if (mode !== "local" && mode !== "deployed") { console.error(`--mode is local or deployed, not ${mode}`); process.exit(2); }
@@ -750,13 +760,19 @@ if (import.meta.main) {
   if (!opt("--revision") && existsSync(join(release, "version.json"))) try { revision = JSON.parse(readFileSync(join(release, "version.json"), "utf8")).revision ?? revision; } catch { /* keep the default */ }
   const dataDir = opt("--data") ? resolve(opt("--data")!) : mode === "local" ? join(dirname(release), "synergon-projects") : null;
   if (!dataDir) { console.error("--data <dir> is required in deployed mode"); process.exit(2); }
-  const api = createApi({ dataDir, assetDir, mode, revision, ...(mode === "deployed" ? { releaseDir } : {}) });
+  const extra = additional?.({ release, dataDir, mode, revision });
+  const api = createApi({ dataDir, assetDir, mode, revision, otherStreams: extra?.streamPlaces, ...(mode === "deployed" ? { releaseDir, onReleaseChange: () => stop() } : {}) });
   const srv = Bun.serve({
     port: Number(opt("--port") ?? 4173), hostname: opt("--host") ?? "127.0.0.1", development: false, idleTimeout: LIMITS.idleTimeoutS, maxRequestBodySize: LIMITS.bodyBytes,
-    async fetch(req, s) { return (await api.fetch(req, s.requestIP(req)?.address ?? "")) ?? new Response("not found", { status: 404 }); },
+    async fetch(req, s) {
+      const ip = s.requestIP(req)?.address ?? "";
+      return await extra?.fetch(req, ip, api.streamPlaces) ?? await api.fetch(req, ip) ?? new Response("not found", { status: 404 });
+    },
     error(e) { console.error(e); return new Response("internal error", { status: 500 }); },
   });
   console.log(JSON.stringify({ listening: srv.port }));
-  const stop = () => { api.close(); srv.stop(true); process.exit(0); };
+  function stop() { extra?.close(); api.close(); srv.stop(true); process.exit(0); }
   process.on("SIGTERM", stop); process.on("SIGINT", stop);
 }
+
+if (import.meta.main) startServer();

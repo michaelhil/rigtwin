@@ -8,6 +8,9 @@ tags: [overview, summary, results]
 
 # Summary
 
+The room editor supports independent placements, component and operator editing, and modular ergonomic screening. Local projects organize scenes, versioned assets and assessment records for transfer. [Room layout](../50-implementation/room-layout.md) · [Portable projects](../50-implementation/portable-projects.md) · [Screening criteria](../85-standards/workstation-screening.md)
+
+
 Synergon is a tool for the layout, design and evaluation of work environments. Its first example is a seated remote operator’s station. The [platform plan](../30-plan/platform-plan.md) covers ergonomic assessment and layouts containing multiple assets.
 
 ## TL;DR

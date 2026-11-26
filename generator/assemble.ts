@@ -31,7 +31,7 @@ export interface JointSpec {
   lower: string | number; upper: string | number; neutral: string | number | (string | number)[];
   kind: "adjustment" | "control"; evidence: "seen" | "inferred" | "assumed"; locked: boolean; signal?: string;
 }
-export interface Spec { asset: string; title: string; groups: string[]; nodes: Record<string, NodeSpec>; joints: Record<string, JointSpec>; motion: Record<string, string[]>; symmetry?: { single?: string[]; free?: string[] } }
+export interface Spec { asset: string; title: string; frame?: string; groups: string[]; nodes: Record<string, NodeSpec>; joints: Record<string, JointSpec>; motion: Record<string, string[]>; symmetry?: { single?: string[]; free?: string[] } }
 
 /** What a component function receives. */
 export interface Ctx {

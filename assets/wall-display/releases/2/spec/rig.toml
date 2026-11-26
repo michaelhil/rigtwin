@@ -1,0 +1,53 @@
+asset = "wall-display"
+title = "Wall display"
+frame = "Metres, right-handed, Z up. The screen faces -X. The origin is the floor projection of the mounting centre."
+groups = ["display"]
+
+[nodes.C_display]
+label = "Wall display"
+assembly = true
+
+[nodes.D_floor]
+parent = "C_display"
+label = "Floor anchor"
+
+[nodes.C_carrier]
+parent = "C_display"
+group = "display"
+label = "Wall mount"
+assembly = true
+joints = ["J_mount_height"]
+
+[nodes.C_mount]
+parent = "C_carrier"
+group = "display"
+label = "Wall bracket"
+
+[nodes.C_panel]
+parent = "C_carrier"
+group = "display"
+label = "Display housing"
+pos = ["-display.standoff", 0, "display.centre"]
+
+[nodes.S_screen]
+parent = "C_panel"
+group = "display"
+label = "Active screen"
+pos = ["-display.thickness / 2 - display.glass_lift", 0, 0]
+
+[nodes.D_screen_center]
+parent = "S_screen"
+label = "Screen centre"
+
+[joints.J_mount_height]
+type = "prismatic"
+axis = [0, 0, 1]
+lower = "display.min_lift"
+upper = "display.max_lift"
+neutral = 0
+kind = "adjustment"
+evidence = "assumed"
+locked = false
+
+[motion]
+J_mount_height = ["C_carrier", "C_mount", "C_panel", "S_screen", "D_screen_center"]

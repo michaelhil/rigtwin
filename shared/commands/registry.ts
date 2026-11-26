@@ -12,7 +12,7 @@ import type { People } from "../person-model.ts";
 
 /** The open asset as the commands see it: its description file and its node tree (from the GLB). */
 export interface AssetInfo {
-  name: string; sha256: string; manifest: Manifest; nodes: KNode[]; joints: Map<string, ManifestJoint>;
+  name: string; sha256: string; releaseDigest?: string; manifest: Manifest; nodes: KNode[]; joints: Map<string, ManifestJoint>;
   /** the person's packages (shared/person-model.ts), when the server has them: person.* commands and the person's eye in look */
   people?: People | null;
 }

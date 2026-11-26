@@ -14,13 +14,13 @@ import { ROOT, timeline } from "../tools/timeline.ts";
 
 export interface BuildResult { ok: boolean; glbPath: string; manifestPath: string; sha256: string; seconds: number; manifest: any; messages: string[] }
 
-export async function build(opts: { asset?: string; only?: string[]; outDir?: string; buildFolder?: string; quiet?: boolean } = {}): Promise<BuildResult> {
+export async function build(opts: { asset?: string; paramsDir?: string; specDir?: string; only?: string[]; outDir?: string; buildFolder?: string; quiet?: boolean } = {}): Promise<BuildResult> {
   const t0 = performance.now();
   const asset = opts.asset ?? "rig-b", dir = join(ROOT, "assets", asset), outDir = opts.outDir ?? (opts.buildFolder ? join(ROOT, "work", opts.buildFolder, "build") : join(dir, "build"));
   const say = (m: string) => { if (!opts.quiet) console.log(m); };
   const messages: string[] = [];
-  const spec = loadSpec(join(dir, "spec"));
-  const params = loadParams(join(dir, "params"), spec.groups);
+  const spec = loadSpec(opts.specDir ?? join(dir, "spec"));
+  const params = loadParams(opts.paramsDir ?? join(dir, "params"), spec.groups);
   const asm = await assemble(spec, params, { srcDir: join(dir, "src"), only: opts.only });
   if (asm.errors.length) {
     for (const e of asm.errors) console.error("error: " + e);
@@ -29,7 +29,7 @@ export async function build(opts: { asset?: string; only?: string[]; outDir?: st
   const partial = !!opts.only?.length;
   const { bytes, stats } = writeGlb(asm.root, PALETTE, screenTextures(), {
     asset, schema: "synergon-glb/1",
-    frame: "children of the root node use: metres, Z up, X forward (operator to main display), Y to the operator's left; origin at the centre of the deck top. The root node rotation converts to glTF Y-up.",
+    frame: spec.frame ?? "children of the root node use: metres, Z up, X forward (operator to main display), Y to the operator's left; origin at the centre of the deck top. The root node rotation converts to glTF Y-up.",
   });
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const unused = [...params.records.keys()].filter((k) => ![...params.usage.values()].some((s) => s.has(k)));
@@ -38,7 +38,7 @@ export async function build(opts: { asset?: string; only?: string[]; outDir?: st
     asset, title: spec.title,
     conventions: {
       units: "metres, radians",
-      frame: "right-handed, Z up, X forward (from the operator toward the main display), Y to the operator's left; origin at the centre of the platform deck's top surface",
+      frame: spec.frame ?? "right-handed, Z up, X forward (from the operator toward the main display), Y to the operator's left; origin at the centre of the platform deck's top surface",
       gltf: "glTF is Y-up. The conversion is applied once, as the rotation of the root node: x_gltf = x, y_gltf = z, z_gltf = -y. Every node below the root is in the frame above.",
       names: `${NAME_PATTERN.source} ; C_ component, J_ joint frame, D_ reference frame, S_ functional surface; _L/_R are the operator's left and right`,
       joints: "A joint is a node between a parent and a child component. Its transform is pose(pos, rpy) · motion(value): rotation about `axis` (revolute, radians) or translation along `axis` (prismatic, metres), axis given in the joint frame. The GLB stores the transform at value = neutral; to pose, right-multiply the stored transform by motion(value - neutral). Ball joints: neutral is roll/pitch/yaw; offsets are applied the same way as a roll/pitch/yaw rotation.",

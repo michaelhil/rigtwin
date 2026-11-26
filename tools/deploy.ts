@@ -176,7 +176,41 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   if (expect.version.server) {
     const health = await serverHealth(u, expect.version.revision);
     out.push(health);
-    if (health.ok) out.push(...(await workspaceChecks(u)));        // a server that does not answer its health has nothing to list
+    if (health.ok) {
+      out.push(...(await workspaceChecks(u)));
+      const room = expect.version.server.room;
+      if (room) {
+        const base = u + "api/room/";
+        await attempt("room API revision and format", base + "health", true, async () => {
+          const status = await (await get(base + "health")).json();
+          return status.ok && status.revision === expect.version.revision && status.format === room.format ? true : "room API does not match the installed release";
+        });
+        await attempt("installed public room editions", base + "catalog", true, async () => {
+          const { releases } = await (await get(base + "catalog")).json();
+          return Array.isArray(releases) && room.releases.every((pin: { id: string; digest: string }) =>
+            releases.some(r => r.id === pin.id && r.digest === pin.digest)) ? true : "public catalog differs from version.json";
+        });
+        await attempt("public room command catalogue", base + "commands", true, async () => {
+          const { commands } = await (await get(base + "commands")).json();
+          return Array.isArray(commands) && ["instances.move", "assessment.run"].every(id => commands.some(c => c.id === id)) &&
+            commands.every(c => !c.id.startsWith("project.")) ? true : "room or assessment commands missing, or local project commands exposed";
+        });
+        await attempt("room directory available", base + "workspaces?limit=1", true, async () => {
+          const page = await (await get(base + "workspaces?limit=1")).json();
+          return Array.isArray(page.workspaces) && typeof page.total === "number" ? true : "invalid room directory";
+        });
+        await attempt("public screening source and homepage", u, true, async () => {
+          const home = await (await get(u)).text();
+          const source = await get(u + "standards/workstation-screening.md");
+          return home.includes('href="/workspaces/room') && home.includes('/release-entry.js') && source.ok && (await source.text()).includes('#')
+            ? true : "room homepage, routing entry or public criteria source missing";
+        });
+        await attempt("local project directory excluded", base + "projects", true, async () => {
+          const status = (await get(base + "projects")).status;
+          return status === 404 || status === 403 ? true : "public server returned HTTP " + status;
+        });
+      }
+    }
   }
   // server behaviour the site relies on; reported, but not a reason to roll back
   const base = u.replace(/\/$/, "");
@@ -231,9 +265,7 @@ async function serverHealth(u: string, revision: string): Promise<Check> {
     await sleep(1000);
   }
 }
-/** The workspaces of the live server: GET <publicUrl>api/workspaces lists at least one workspace, and the live stream of the newest one opens and
- *  sends its first snapshot within 10 s (the stream is read once and closed: it holds a place in the stream limits only that long). Both are
- *  required: a server that lists no workspace, or whose scenes do not stream, is not working. The old single-scene addresses are not asked. */
+/** Read only the legacy index and row. Opening a live station can initialize its doc.json. */
 async function workspaceChecks(u: string): Promise<Check[]> {
   const listUrl = u + "api/workspaces?limit=1", opts = { headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" } };
   const what = "server: api/workspaces lists the workspaces", fail = (url: string, detail: string, w = what): Check[] => [{ what: w, url, ok: false, detail, required: true }];
@@ -246,23 +278,12 @@ async function workspaceChecks(u: string): Promise<Check[]> {
     id = body.workspaces[0].id; total = body.total;
   } catch (e: any) { return fail(listUrl, e?.message ?? String(e)); }
   const out: Check[] = [{ what, url: listUrl, ok: true, detail: `${total} workspace${total === 1 ? "" : "s"}`, required: true }];
-  const liveUrl = `${u}api/workspaces/${id}/live`, w2 = "server: a workspace's live stream sends its snapshot";
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+  const metadataUrl = u + "api/workspaces/" + encodeURIComponent(id), w2 = "server: station workspace metadata";
   try {
-    const r = await fetch(liveUrl, { ...opts, headers: { ...opts.headers, accept: "text/event-stream" }, signal: ctl.signal }), type = r.headers.get("content-type") ?? "";
-    if (r.status !== 200 || !type.includes("text/event-stream")) { await r.body?.cancel().catch(() => {}); out.push(...fail(liveUrl, `HTTP ${r.status}${type ? `, ${type}` : ""}, expected an event stream`, w2)); return out; }
-    const reader = r.body!.getReader(), dec = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      if (buf.includes("\n\n", Math.max(0, buf.indexOf("event: snapshot")) + 1) && /event: snapshot\n/.test(buf)) break;
-    }
-    ctl.abort();
-    out.push(/event: session\n/.test(buf) && /event: snapshot\n/.test(buf) ? { what: w2, url: liveUrl, ok: true, detail: "ok", required: true } : { what: w2, url: liveUrl, ok: false, detail: "the stream ended without a session and a snapshot event", required: true });
-  } catch (e: any) { out.push(...fail(liveUrl, ctl.signal.aborted ? "no snapshot within 10 s" : e?.message ?? String(e), w2)); }
-  finally { clearTimeout(timer); ctl.abort(); }
+    const r = await get(metadataUrl), row = r.ok ? await r.json() : null;
+    if (row?.id !== id || typeof row?.name !== "string") out.push(...fail(metadataUrl, "station metadata unavailable, HTTP " + r.status, w2));
+    else out.push({ what: w2, url: metadataUrl, ok: true, detail: "ok", required: true });
+  } catch (e: any) { out.push(...fail(metadataUrl, e?.message ?? String(e), w2)); }
   return out;
 }
 /** What the receipt records about the server, from the checks of one release. */
@@ -277,7 +298,7 @@ const failedRequired = (checks: Check[]) => checks.filter((c) => !c.ok && c.requ
 function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json", server: { revision: string } | null | "if it has one" = null) {
   const u = cfg.publicUrl;
   for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"], ["anything but 200 (also without the file name)", u + "server/"], ["anything but 200 (also without the slash)", u + "server"]]) say(`  would check: GET ${url}  → ${what}`);
-  if (server) say(`  would check: GET ${u}api/workspaces?limit=1  → at least one workspace, then GET ${u}api/workspaces/<its id>/live  → an event stream that sends session and snapshot within 10 s (both required)`);
+  if (server) say(`  would check: GET ${u}api/workspaces?limit=1  → at least one workspace, then GET ${u}api/workspaces/<its id>  → matching station metadata; deployed room release checks read its catalog, commands, screening source and directory`);
   if (server) say(`  would check: GET ${u}api/health  → ${server === "if it has one" ? "for a release with a server: its revision" : `revision ${server.revision}`} within 20 s, asked every second (404 at once, or 502 or another revision after 20 s: a failure)`);
   else say(`  (no api/health check: ${source} has no server entry)`);
   for (const [what, url] of [...(new URL(u).pathname !== "/" ? [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")]] : []), ["the viewer page, 200 HTML (warning only)", u + "workspaces/deploy-check"], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);

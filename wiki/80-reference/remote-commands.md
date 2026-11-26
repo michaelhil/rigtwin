@@ -8,6 +8,16 @@ tags: [reference, agents, mcp, commands, discovery]
 
 # Remote commands
 
+Production serves two workspace types. Start at `/llms.txt`, find the named workspace and use its advertised paths.
+
+| Workspace link | Command catalogue | Scope |
+|---|---|---|
+| `/workspaces/room/{id}` | `/api/room/commands` | Placed assets, component controls, operator, room measurements and assessment. Qualify each member by instance. |
+| `/workspaces/{id}` | `/api/commands` | The single-station viewer and remote commands documented below. |
+
+The local multi-asset installation uses `/api/commands` for rooms. Follow the [room interface](../50-implementation/room-layout.md#agent-entry-point) and the [portable project interface](../50-implementation/portable-projects.md#agent-interfaces) for their command and discovery models.
+
+
 ## Start at the homepage
 
 Give your agent the Synergon homepage and describe what you want to do. The homepage links to the workspace directory and a short agent guide at `/llms.txt`. Both work with an ordinary HTTP client. An agent can look up a workspace by name and ask which one you mean when several fit. With a workspace open in the same browser tab that the agent can see, it can read the ID from that tab's address.

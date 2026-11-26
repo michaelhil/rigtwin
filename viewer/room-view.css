@@ -1,0 +1,75 @@
+.rv-stage { --rv-paper: #eeeee8; --rv-floor: #fbfbf5; --rv-line: #39473f; --rv-teal: #12695c; position: absolute; inset: 0; overflow: hidden; isolation: isolate; background: var(--rv-paper); color: var(--rv-line); }
+.rv-stage svg.rv-plan, .rv-orbit, .rv-orbit canvas { display: block; width: 100%; height: 100%; }
+.rv-stage [hidden] { display: none !important; }
+.rv-plan { touch-action: none; user-select: none; cursor: grab; }
+.rv-plan text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.rv-floor { fill: var(--rv-floor); }
+.rv-minor, .rv-major, .rv-swing, .rv-threshold, .rv-leaf, .rv-scale, .rv-window-mid { fill: none; }
+.rv-minor { stroke: #e8eae2; stroke-width: .6; }
+.rv-major { stroke: #dbe0d5; stroke-width: .85; }
+.rv-wall { fill: none; stroke: var(--rv-line); stroke-width: 7; stroke-linecap: butt; }
+.rv-window { fill: #ecf4ed; stroke: #54746b; stroke-width: 1.2; }
+.rv-window-mid { stroke: #738e83; stroke-width: 1.15; }
+.rv-leaf { stroke: #657b6e; stroke-width: 2.4; }
+.rv-swing { stroke: #8f9f8f; stroke-width: 1; }
+.rv-threshold { stroke: #a9b6a7; stroke-width: 1; stroke-dasharray: 3 3; }
+.rv-feature { fill: #67756c; font-size: 10.5px; }
+.rv-dim-line { stroke: #68756b; stroke-width: 1.1; }
+.rv-extension { stroke: #97a196; stroke-width: .8; }
+.rv-dim-label { font-size: 12px; fill: #45574f; font-variant-numeric: tabular-nums; font-weight: 600; paint-order: stroke; stroke: var(--rv-paper); stroke-width: 10px; }
+.rv-area-title { fill: #758579; font-size: 9.5px; letter-spacing: 1.5px; font-weight: 650; }
+.rv-area { fill: #4c655a; font: 500 23px Georgia, serif !important; }
+.rv-plan .rv-object, .rv-object-label { cursor: grab; }
+.rv-footprint { fill: transparent; stroke: none; }
+.rv-loading-shape { fill: #d2d9ce; stroke: #698276; stroke-dasharray: 4 3; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rv-part { vector-effect: non-scaling-stroke; stroke: #55665b; stroke-width: .7; stroke-linejoin: round; }
+.rv-part:hover { stroke: var(--rv-teal); stroke-width: 1.4; }
+.rv-part.rv-chosen { fill: #96c8b6; stroke: #0e6956; stroke-width: 1.35; }
+.rv-object-label { fill: #39483d; font-size: 11px; font-weight: 590; paint-order: stroke; stroke: var(--rv-floor); stroke-width: 3.5; stroke-linejoin: round; }
+.rv-active-label { fill: #076050; }
+.rv-seated-tag { fill: var(--rv-teal); font-weight: 450; }
+.rv-selected-bounds { fill: none; stroke: var(--rv-teal); stroke-width: 1.4; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.rv-stem { stroke: var(--rv-teal); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.rv-rotation { cursor: crosshair; }
+.rv-handle { fill: white; stroke: var(--rv-teal); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.rv-plan.rv-dragging, .rv-plan.rv-dragging * { cursor: grabbing; }
+.rv-measure { pointer-events: none; }
+.rv-measure-line { stroke: var(--rv-teal); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.rv-endpoint { fill: #fffef8; stroke: var(--rv-teal); stroke-width: 1.5; }
+.rv-measure-label { font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; fill: #096353; paint-order: stroke; stroke: var(--rv-floor); stroke-width: 4.5px; stroke-linejoin: round; }
+.rv-legend { pointer-events: none; }
+.rv-scale { stroke: #536357; stroke-width: 1.2; }
+.rv-scale-label { font-size: 10px; fill: #536357; font-weight: 550; }
+.rv-north { fill: #536357; }
+.rv-orbit { position: absolute; inset: 0; touch-action: none; }
+.rv-orbit canvas { touch-action: none; }
+.rv-orbit-tags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.rv-orbit-tag { position: absolute; transform: translate(-50%,-100%); padding: 2px 5px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 11px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color: #34453d; background: rgb(251 251 245 / 92%); border-radius: 2px; }
+.rv-orbit-tag[data-active] { color: #0b6252; box-shadow: inset 0 -1px #37917a; }
+.rv-status { position: absolute; inset: auto auto 12px 50%; transform: translateX(-50%); max-width: min(75%,520px); padding: 6px 12px; border: 1px solid #d6ddd2; border-radius: 5px; background: #fdfdf8; font-size: 12px; color: #465a4e; text-align: center; pointer-events: none; }
+
+/* Bottom-rail tools and drawing controls occupy separate landmarks on desktop and touch layouts. */
+.rw-toolbar { width:100%; display:flex; align-items:center; gap:5px; }
+.rw-toolbar .rw-cog { margin-left:auto; }
+.rw-tool { flex:none; }
+.rw-cameras { position:absolute; bottom:48px; right:14px; display:flex; align-items:center; gap:3px; padding:4px; border:1px solid #c6d0c4; border-radius:7px; background:#fbfcf6f5; z-index:3; }
+.rw-cameras .rw-tool { border-color:transparent; background:transparent; }
+.rw-cameras .rw-tool[aria-pressed=true],.rw-tool[aria-expanded=true] { background:#dce9df; }
+.rw-pop { position:fixed; z-index:30; width:min(300px,calc(100vw - 16px)); max-height:min(66vh,540px); overflow:auto; padding:13px; border:1px solid #c6d0c4; border-radius:7px; box-shadow:0 5px 22px #253b282e; background:#fafbf5; color:#304438; font:13px/1.4 Inter,system-ui,sans-serif; }
+.rw-pop header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.rw-pop h2 { font:600 16px/1.3 Inter,system-ui,sans-serif; margin:0; }
+.rw-pop .rw-content { display:grid; gap:5px; }
+.rw-pop p { margin:6px 0; }
+.rw-section { border-top:1px solid #d6dfd3; padding:8px 0; }
+.rw-section summary { cursor:pointer; font-weight:550; margin-bottom:4px; }
+.rw-section .rw-section { margin-left:8px; }
+.rw-check { display:flex; align-items:center; gap:8px; min-height:28px; }
+.room-app .rw-check input { width:16px; min-height:16px; height:16px; accent-color:#12695c; }
+.rw-choice { text-align:left; border:0; border-radius:3px; padding:6px 9px; color:inherit; background:transparent; cursor:pointer; font:inherit; }
+.rw-choice:hover,.rw-choice:focus-visible { background:#deeadf; }
+.rw-event { display:grid; grid-template-columns:40px 1fr; padding:5px 0; border-top:1px solid #d6dfd3; }
+.rw-event small { display:block; overflow-wrap:anywhere; }.rw-guide { margin-left:8px; color:inherit; }
+.rv-no-labels :is(.rv-object-label,.rv-orbit-tags,.rv-feature,.rv-area-title,.rv-area) { display:none; }
+.rv-operator-marker {cursor:pointer}
+.rv-no-grid .rv-minor,.rv-no-grid .rv-major { stroke:none; }
+@media(max-width:600px){.rw-cameras { bottom:43px; right:8px; }.rw-pop { max-height:58dvh; }}

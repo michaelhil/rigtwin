@@ -1,0 +1,27 @@
+# Synergon · Room layout
+
+Synergon is a work environment layout, design and evaluation tool. A workspace opens one live, saved scene. Each scene contains a room, zero or more placed assets and optionally one seated operator. This installation provides layout editing, measurements and ergonomic screening.
+
+## Find the requested object
+1. GET /api/workspaces?search=<workspace name>. Check the returned names and IDs. Follow next with cursor if present. If more than one exact name fits, ask which workspace. The editor URL is /workspaces/{id}.
+2. GET /api/workspaces/{id}/state gives the scene, its version, room, placements and optional person. GET /api/workspaces/{id}/discover?query=display searches within the room and installed library. Scope another discovery call with instance=<instance ID> to inspect that placement's members and joints. Choose by instance ID and local member ID. Two copies of a station have different instance IDs and may have identical member IDs. Discovery and GET /api/workspaces/{id}/meta report liveConnections, the number of open scene snapshot streams. The browser owns its camera and selection.
+3. GET /api/commands gives argument schemas and units. GET /api/catalog gives exact installed release pins with model/manifest URLs, anchors, members, joints and footprints. A display swap keeps the placement and tests compatibility. Install or choose the exact pin.
+
+## Edit or measure
+POST /api/workspaces/{id}/command. Send Content-Type: application/json and X-Synergon: 1. Use {"id":"instances.move","args":{"instance":"<resolved ID>","x":3.25},"expectedVersion":<scene version>}. A success returns ok, version, result, and recorded for an edit. Check ok on every reply. On overlapping stale changes, re-read state before deciding how to proceed. A failed edit leaves the scene intact. Undo a particular edit with {"id":"undo","args":{"version":<recorded version>}}.
+
+A placement uses the asset's floor anchor, in metres east (x) and north (y) from the southwest corner. Positive yaw turns east towards north in degrees. Local joint settings are metres or radians. Use a discovered part’s controls to find its joints. pose.set changes one joint. pose.apply submits coupled axes on one instance as a single undoable edit. The room is Z-up. The door is on the south wall and the window is on the north wall. Opening offsets are measured from the west wall.
+
+measure.distance takes from and to, each {"instance":"...","member":"..."}. Every placement has the floor member. person.measure uses the seated operator's eyes and a qualified target. person.set binds a person and local gaze/limb targets to a compatible host. measure.clearance reports the plan distance between the door threshold and a selected footprint and the longest unblocked span across the threshold. Both measurements return their endpoints and bounding edges. These are layout measures.
+
+## Shared sessions and tools
+GET /api/workspaces/{id}/live streams snapshot events. The first event contains the current scene and revision, including after a reconnect. The UI, HTTP, CLI and workspace MCP endpoint use the same scene writer.
+For MCP, POST JSON-RPC to /api/workspaces/{id}/mcp. Initialize, then tools/list. tools/call uses underscore names (instances_move), with command arguments and optional expectedVersion. HTTP works directly from this homepage without client setup.
+In the repository, bun run rig workspaces --server <origin> searches this installation. bun run rig discover '{"query":"display"}' --workspace <workspace page URL> discovers objects. bun run rig list --server <origin> prints command schemas.
+To start an empty room use POST /api/workspaces with {"name":"...","template":"empty"} and the same HTTP headers. template "demo" creates an independent furnished room.
+
+## Assess a layout
+Open Assessment or call assessment.profiles through the scene command endpoint. Choose a source profile and record known facts with assessment.configure. Run assessment.run to see findings, their bindings, limits, sources and uncertainties. Unknown or unbounded inputs remain open. A stored run replays from its frozen inputs with assessment.replay. The source-checked criterion text and machine-readable rules are available at /standards/workstation-screening.md and /wiki/85-standards/workstation-screening.html.
+
+## Local projects
+Open /projects for local project folders, their scenes, named versions and transfers. GET /api/projects/commands describes the project commands, and POST /api/projects/command uses the same envelope and X-Synergon header as workspace commands. An embedded transfer carries exact releases to an offline installation. A linked transfer requires matching release pins at the receiving installation. Use project.help in the command-line client to see file import/export options. Store customer requirements in the private project on your installation.
