@@ -244,11 +244,11 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       const signature=(i:RoomInstance)=>JSON.stringify(joints.map(j=>i.pose[j.id] ?? j.neutral));
       const initial=signature(item);
       let committing=false;
-      function stop(revert:boolean) {
+      function stop(revert:boolean,refresh=true) {
         if (poseGesture!==active) return;
         poseGesture=undefined;delete card.dataset.poseGesture;view.clearPosePreview();
         if(revert)reset();
-        if (scene.version!==started && card.isConnected) {
+        if (refresh && scene.version!==started && card.isConnected) {
           const replacement=cardFor(item.id,part,popup);
           if (replacement) replaceComponentCard(card.parentElement!,replacement);
         }
@@ -256,7 +256,8 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       const active={card,cancel:()=>stop(true),accept:(next:RoomScene)=>{
         const target=next.instances.find(i=>i.id===item.id && i.release===item.release);
         if (target && signature(target)===initial) return;
-        stop(!committing);
+        // accept() will rebuild this card from the new authoritative snapshot.
+        stop(!committing,false);
         if (!committing) tell('This adjustment changed in another edit. The latest values are shown.',true);
       }};
       poseGesture=active;card.dataset.poseGesture='';
