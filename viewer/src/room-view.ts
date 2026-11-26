@@ -92,6 +92,9 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
     if (loadingPerson || personKey===key || !orbit || !seated || !model || !obj) return;
     const epoch=personEpoch;
     const current=()=>!disposed && personEpoch===epoch;
+    // Rebinding hides and mutates the current avatar. If this job is superseded,
+    // even returning to the previous key needs a fresh bind before it is visible.
+    personKey="";
     loadingPerson=true; personWaiting=true; person?.hide(); statusLine();
     let error:unknown;
     try {
