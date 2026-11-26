@@ -2,7 +2,8 @@
 // The same card is used in the sidebar and in movable comparison windows.
 import { adjWords, type AdjWord } from "../../shared/words.ts";
 import { h } from "./dom.ts";
-import { action, displayNumber, iconAction } from "./room-controls.ts";
+import { action, iconAction } from "./room-controls.ts";
+import { sliderRow, wireDrag, type BeginSlider } from "./room-slider.ts";
 import type { JointValue } from "../../shared/pose.ts";
 import type { RoomInstance, RoomJoint, RoomRelease } from "../../shared/room.ts";
 
@@ -37,48 +38,31 @@ export function componentCard({item,release,part,edit,apply,beginGesture,close,p
     return card;
   }
   const axes=joints.flatMap(joint=>adjWords(joint).map(word=>({joint,word})));
-  for (const axis of axes) {
+  for (const {joint,word} of axes) {
+    const angle=joint.type!=="prismatic",scale=angle?180/Math.PI:1000;
+    const component=word.comp??0,pose=item.pose[joint.id]??joint.neutral;
+    const value=Array.isArray(pose)?pose[component]:pose;
+    const offset=Array.isArray(joint.neutral)?joint.neutral[component]:0;
+    const low=(joint.lower+offset)*scale,high=(joint.upper+offset)*scale;
+    const name=word.label || joint.label || joint.id;
+    const jointValue=(n:number)=>Array.isArray(pose)?pose.map((v,i)=>i===component?n/scale:v):n/scale;
+    const begin:BeginSlider=(read,reset)=>{
+      const gesture=beginGesture(card,[joint],reset);
+      const values=()=>({[joint.id]:jointValue(read())});
+      return {update:()=>gesture.update(values()),commit:()=>gesture.commit(values()),cancel:gesture.cancel};
+    };
+    const {row,range,exact}=sliderRow({key:word.key,label:name,unit:angle?"°":"mm",value:value*scale,
+      step:Math.min(angle ? 0.1 : 1,(high-low)/200||1),low,high,min:low,max:high},
+      n=>edit(joint,jointValue(n)),begin,item.id+"/"+part+"/"+word.key);
+    range.dataset.joint=joint.id;exact.dataset.joint=joint.id;card.append(row);
+  }
+  for(const axis of axes){
     const pair=axis.word.pad;
-    if (!pair || axis.word.key!==pair[0]) continue;
+    if(!pair || axis.word.key!==pair[0])continue;
     const other=axes.find(a=>a.word.key===pair[1]);
-    if (other) card.append(directionPad(axis,other,item,apply,card,beginGesture));
+    if(other)card.append(h("details","rm-disclosure",h("summary",null,axis.word.padLabel??"Direction pad"),
+      directionPad(axis,other,item,apply,card,beginGesture)));
   }
-  const paired=new Set(axes.filter(axis=>axis.word.pad?.every(key=>axes.some(a=>a.word.key===key))).map(axis=>axis.word.key));
-  const precise=h("details","rm-disclosure",h("summary",null,"Exact adjustments"));
-  for (const joint of joints) {
-    const angle=joint.type!=="prismatic", scale=angle ? 180/Math.PI : 1000, unit=angle ? "°" : "mm";
-    const pose=item.pose[joint.id] ?? joint.neutral, values=Array.isArray(pose) ? [...pose] : [pose];
-    const labels=joint.type==="ball" ? ["Roll","Pitch","Yaw"] : [""];
-    labels.forEach((axis,k)=>{
-      const name=[joint.label ?? joint.id,axis].filter(Boolean).join(" · ");
-      const row=h("div","rm-adjust-row",h("span","rm-adjust-name",name));
-      const offset=Array.isArray(joint.neutral) ? joint.neutral[k] : 0;
-      const range=h("input"); range.type="range"; range.min=String((joint.lower+offset)*scale); range.max=String((joint.upper+offset)*scale);
-      const exact=h("input"); exact.type="number"; exact.step="any"; exact.min=range.min; exact.max=range.max;
-      const lo=Number(range.min), hi=Number(range.max);
-      range.step=String(Math.min(angle ? 0.1 : 1,(hi-lo)/200 || 1));
-      const initial=displayNumber(values[k]*scale,3);
-      range.value=initial;exact.value=initial;
-      range.setAttribute("aria-label",name);exact.setAttribute("aria-label",name+" in "+(angle?"degrees":"millimetres"));
-      range.dataset.joint=joint.id;exact.dataset.joint=joint.id;
-      const jointValue=(n:number)=>joint.type==="ball" ? values.map((v,i)=>i===k?n/scale:v) : n/scale;
-      const commit=async(n:number)=>{
-        if (!Number.isFinite(n) || n<lo-1e-6 || n>hi+1e-6) { exact.reportValidity();return; }
-        const ok=await edit(joint,jointValue(n));
-        if (!ok) {range.value=initial;exact.value=initial;}
-      };
-      const gesture=wirePoseGesture(range,card,beginGesture,[joint],()=>({[joint.id]:jointValue(range.valueAsNumber)}),
-        ()=>{range.value=initial;exact.value=initial;});
-      range.oninput=()=>{exact.value=displayNumber(range.valueAsNumber,2);gesture.input();};
-      range.onchange=()=>{if(!gesture.handlesChange()) void commit(range.valueAsNumber);};
-      exact.onchange=()=>{if(exact.value!=="" && exact.checkValidity()){range.value=exact.value;void commit(exact.valueAsNumber);}else exact.reportValidity();};
-      exact.onkeydown=e=>{if(e.key==="Enter") {e.preventDefault();exact.blur();exact.focus({preventScroll:true});}};
-      row.append(h("label","rm-adjust-value",exact,h("span",null,unit)),range);
-      const key=joint.type==="ball" ? joint.id+":"+k : joint.id;
-      (paired.has(key)?precise:card).append(row);
-    });
-  }
-  if (paired.size) card.append(precise);
   if (joints.some(j=>Object.hasOwn(item.pose,j.id))) {
     card.append(action("Reset component",()=>void apply(Object.fromEntries(joints.map(j=>[j.id,null]))),"undo","rm-text-action"));
   }
@@ -130,50 +114,6 @@ export function replaceComponentCard(container:HTMLElement,card:HTMLElement) {
 }
 
 type PadAxis = {joint:RoomJoint; word:AdjWord};
-// Native ranges supply input events. A pad supplies its position from pointer events.
-// Both hold one local gesture until release, including when the pointer leaves the card.
-function wirePoseGesture(control:HTMLElement,card:HTMLElement,begin:BeginPoseGesture,joints:RoomJoint[],
-  values:()=>PoseValues,reset:()=>void,track?:(event:PointerEvent)=>void) {
-  let pointer:number|null=null,gesture:ReturnType<BeginPoseGesture>|undefined;
-  let changed=false,ignoreChange=false;
-  function input() {
-    if (gesture) {changed=true;gesture.update(values());}
-    else if (ignoreChange) reset();
-  }
-  function stopListening() {
-    window.removeEventListener("keydown",escape,true);
-    window.removeEventListener("blur",abort);
-  }
-  function abort() {gesture?.cancel();}
-  function escape(e:KeyboardEvent) {
-    if (e.key!=="Escape") return;
-    e.preventDefault();e.stopPropagation();abort();
-  }
-  function finish(event:PointerEvent,commit:boolean) {
-    if (event.pointerId!==pointer) return;
-    if (commit && track && gesture) {track(event);input();}
-    const active=gesture;
-    gesture=undefined;pointer=null;stopListening();
-    if (commit && changed) active?.commit(values()); else active?.cancel();
-    if (control.hasPointerCapture(event.pointerId)) control.releasePointerCapture(event.pointerId);
-    // A native range can emit change as its default action after pointerup.
-    setTimeout(()=>{if(pointer===null)ignoreChange=false;},0);
-  }
-  control.addEventListener("pointerdown",e=>{
-    if (!e.isPrimary || e.button!==0 || gesture) return;
-    pointer=e.pointerId;changed=false;ignoreChange=true;
-    gesture=begin(card,joints,()=>{gesture=undefined;stopListening();reset();});
-    control.setPointerCapture(e.pointerId);
-    window.addEventListener("keydown",escape,true);window.addEventListener("blur",abort);
-    if (track) {track(e);input();}
-  });
-  control.addEventListener("pointermove",e=>{if (track && gesture && e.pointerId===pointer) {track(e);input();}});
-  control.addEventListener("pointerup",e=>finish(e,true));
-  control.addEventListener("pointercancel",e=>finish(e,false));
-  control.addEventListener("lostpointercapture",e=>finish(e,false));
-  return {input,handlesChange:()=>ignoreChange};
-}
-
 function directionPad(x:PadAxis,y:PadAxis,item:RoomInstance,apply:CardOptions["apply"],card:HTMLElement,begin:BeginPoseGesture) {
   const axes=[x,y], title=x.word.padLabel ?? "Adjust direction";
   const thumb=h("i"), pad=h("div","rm-direction-pad",thumb);
@@ -207,7 +147,10 @@ function directionPad(x:PadAxis,y:PadAxis,item:RoomInstance,apply:CardOptions["a
     const box=pad.getBoundingClientRect();
     point=[clamp((event.clientX-box.left)/box.width),clamp((box.bottom-event.clientY)/box.height)];paint();
   }
-  wirePoseGesture(pad,card,begin,axes.map(a=>a.joint),currentValues,reset,track);
+  wireDrag(pad,resetDrag=>{
+    const gesture=begin(card,axes.map(a=>a.joint),resetDrag);
+    return {update:()=>gesture.update(currentValues()),commit:()=>gesture.commit(currentValues()),cancel:gesture.cancel};
+  },reset,track);
   pad.onkeydown=e=>{
     const deltas:Record<string,[number,number]>={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]};
     const delta=deltas[e.key];if (!delta) return;
@@ -215,7 +158,7 @@ function directionPad(x:PadAxis,y:PadAxis,item:RoomInstance,apply:CardOptions["a
     void apply(currentValues()).then(ok=>{if (!ok) reset();});
   };
   paint();
-  return h("div","rm-direction",h("strong",null,title),h("small",null,y.word.hi),
+  return h("div","rm-direction",h("small",null,y.word.hi),
     h("div","rm-direction-row",h("small",null,x.word.lo),pad,h("small",null,x.word.hi)),h("small",null,y.word.lo));
 }
 

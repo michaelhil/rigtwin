@@ -43,43 +43,6 @@ export function select(label: string, choices: Choice[], selected?: string) {
 }
 export function field(label: string, input: HTMLElement) { return h('label', 'rm-field', h('span', 'rm-field-label', label), input); }
 export const displayNumber = (n: number, precision = 3) => Number(n.toFixed(precision)).toString();
-export interface Quantity { key: string; label: string; value: number; unit: string; min?: number; max?: number }
-interface Draft { version: number; values: Record<string, string> }
-export type Drafts = Map<string, Draft>;
-
-/** An exact numeric edit is applied as one command. Preserve unfinished edits across other viewers' snapshots. */
-export function numberForm(key: string, version: number, fields: Quantity[], drafts: Drafts,
-  save: (values: Record<string, number>, version: number) => Promise<boolean>, updated: () => void) {
-  const form = h('form', 'rm-number-form'), grid = h('div', 'rm-fields'), edits = new Map<string, HTMLInputElement>();
-  const draft = drafts.get(key);
-  for (const f of fields) {
-    const input = h('input'); input.type = 'number'; input.name = f.key; input.step = 'any'; input.required = true;
-    input.dataset.focus = key + '/' + f.key;
-    input.value = draft?.values[f.key] ?? displayNumber(f.value, 6);
-    if (f.min !== undefined) input.min = String(f.min);
-    if (f.max !== undefined) input.max = String(f.max);
-    edits.set(f.key, input);
-    grid.append(field(f.label, h('span', 'rm-quantity', input, h('span', 'rm-unit', f.unit))));
-  }
-  const reset = action('Discard', () => { drafts.delete(key); updated(); }, undefined, 'rm-quiet');
-  const apply = h('button', 'rm-button rm-primary', 'Apply'); apply.type = 'submit';
-  const actions = h('div', 'rm-form-acts', reset, apply); actions.hidden = !draft;
-  form.append(grid, actions);
-  form.addEventListener('input', () => {
-    const current = drafts.get(key);
-    drafts.set(key, { version: current?.version ?? version, values: Object.fromEntries([...edits].map(([k, input]) => [k, input.value])) });
-    actions.hidden = false;
-  });
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    const edit = drafts.get(key); if (!edit || apply.disabled) return;
-    apply.disabled = true;
-    const values = Object.fromEntries([...edits].map(([k, input]) => [k, input.valueAsNumber]));
-    if (await save(values, edit.version)) { drafts.delete(key); updated(); }
-    apply.disabled = false;
-  });
-  return form;
-}
 export function section(title: string, ...content: (Node | string)[]) {
   return h('section', 'rm-section', h('h2', 'rm-section-title', title), ...content);
 }

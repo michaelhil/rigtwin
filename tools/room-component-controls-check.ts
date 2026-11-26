@@ -81,13 +81,18 @@ async function pressKey(page: Page, key: string, code: number) {
 
 async function exact(page: Page, joint: string, value: string) {
   const selector = inspector + ` input[type=number][data-joint="${joint}"]`;
-  await clickControl(page, selector, 3);
+  await clickControl(page, selector);
   await page.call("Input.insertText", { text: value });
   await pressKey(page, "Enter", 13);
 }
 
 const pad = inspector + " .rm-direction-pad";
+async function openPad(page:Page) {
+  if(!await page.evaluate(element(pad)+".closest('details').open"))
+    await clickControl(page,inspector+" details:has(.rm-direction-pad) > summary");
+}
 async function thumbDragPoints(page: Page, x: number, y: number) {
+  await openPad(page);
   return page.evaluate(`(() => {
     const e=${element(pad)}, thumb=e.firstElementChild;
     e.scrollIntoView({block:"nearest"});
@@ -103,6 +108,7 @@ async function dragThumb(page: Page) {
 }
 
 async function thumbPosition(page: Page): Promise<number[]> {
+  await openPad(page);
   return page.evaluate(`(() => {
     const e=${element(pad)}, r=e.getBoundingClientRect(), t=e.firstElementChild.getBoundingClientRect();
     return [(t.left+t.width/2-r.left)/r.width,(t.top+t.height/2-r.top)/r.height];
@@ -538,7 +544,19 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   assert(await page.evaluate(element(pad)), "The 3D monitor face must open its directional pad");
   await checkScope(page, browser, base, path, read);
   await labelSetting(page, false, true);
-  await pickDatum(a, "eye", "@operator");
+  const eyePoint=await pickDatum(a, "eye", "@operator");
+  const heightSlider=element(inspector+" input[name=stature]") + "?.closest('.rm-adjust-row').querySelector('input[type=range]')";
+  await page.waitFor(heightSlider,"rendered stature control");
+  const heightPoints = await sliderPoints(page,heightSlider);
+  const bodyPixels = canvasStamp(eyePoint,Math.ceil(scale*.8));
+  const bodyBefore = await page.evaluate(bodyPixels);
+  await pointer(page,"mousePressed",heightPoints.start);
+  await pointer(page,"mouseMoved",heightPoints.left);
+  await page.waitFor(bodyPixels+"!=="+JSON.stringify(bodyBefore),"held stature slider to resize the avatar");
+  assert.equal((await read()).version,before.version+2,"A body preview should be local");
+  await pressKey(page,"Escape",27);
+  await pointer(page,"mouseReleased",heightPoints.left);
+  await page.waitFor(bodyPixels+"==="+JSON.stringify(bodyBefore),"Escape to restore the operator");
   const cameraAnchor = element('.rv-orbit-tag[data-instance="station-b"]') + ".style.left";
   const oldAnchor = await page.evaluate(cameraAnchor);
   const background = await page.evaluate(
@@ -602,9 +620,9 @@ try {
   await page.waitFor(element(stature), "the body editor");
   const original = Number(await page.evaluate(element(stature) + ".value"));
   const step = Number(await page.evaluate(element(stature) + ".max")) - original > 1 ? 1 : -1;
-  await clickControl(page, stature, 3);
+  await clickControl(page, stature);
   await page.call("Input.insertText", { text: String(original + step) });
-  await clickControl(page, inspector + " form button[type=submit]");
+  await pressKey(page, "Tab", 9);
   await nextRevision();
   assert.equal(snapshot.person?.state.body.stature, original + step);
 
@@ -639,7 +657,6 @@ try {
   await nextRevision();
   const { J_mon_pan: pan, J_mon_tilt: tilt } = stationB().pose;
   assert(Number.isFinite(pan) && Number.isFinite(tilt), "Dragging the monitor must set both axes");
-  await clickControl(page, inspector + " details summary");
   await exact(page, "J_mon_pan", "-5");
   await nextRevision();
   assert(Math.abs(Number(stationB().pose.J_mon_pan) + (5 * Math.PI) / 180) < 1e-8);
@@ -651,7 +668,7 @@ try {
   );
   assert(
     await page.evaluate(element(inspector + " details") + ".open"),
-    "The exact adjustments closed after editing pan",
+    "The direction pad closed after editing pan",
   );
   assert.equal(
     await page.evaluate(
