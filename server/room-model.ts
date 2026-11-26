@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { check, Refusal } from "../shared/commands/schema.ts";
 import { AIM_LIMBS, type PersonAims } from "../shared/person-aims.ts";
 import { limitViolation, type JointValue } from "../shared/pose.ts";
-import { doorClearance } from "../shared/room-geometry.ts";
+import { doorClearance, footprint } from "../shared/room-geometry.ts";
 import { operatorFields,type OperatorPatch } from "../shared/room-person.ts";
 import { roomCommands } from "../shared/room-commands.ts";
 import { ROOM_SCHEMA, roomPoint, type RoomCatalog, type RoomDimensions, type RoomInstance,
@@ -166,11 +166,20 @@ function discover(scene: RoomScene, c: RoomCatalog, args: { query?: string; inst
   const items = args.instance ? [getInstance(scene, c, args.instance)] : scene.instances;
   const instances = items.flatMap(i => {
     const r = releaseFor(c, i.release);
-    const selectedMembers = members(r).filter(m => matches(m.id, m.label)).map(m => ({ ...m, instance: i.id }));
+    const selectedMembers = args.instance || q ? members(r).filter(m => matches(m.id, m.label)).map(m => ({ ...m, instance: i.id })) : [];
     if (!args.instance && q && !matches(i.id, i.label, r.asset, r.label, r.kind) && !selectedMembers.length) return [];
-    return [{ ...describe(i), kind: r.kind, ...(args.instance || q ? { members: selectedMembers, joints: r.joints.filter(j => matches(j.id, j.label ?? "")) } : {}) }];
+    const placement={x:i.x,y:i.y,yaw:i.yaw};
+    const base={...describe(i),kind:r.kind,placement};
+    if (!args.instance && !q) return [base];
+    const controls=new Set(selectedMembers.flatMap(m=>"controls" in m ? m.controls ?? [] : []));
+    const matched=r.joints.filter(j=>matches(j.id,j.label ?? "") || controls.has(j.id));
+    const axes=args.instance && matched.length ? c.jointAxesInRoom?.(i,matched) : undefined;
+    const joints=matched.map(j=>({...j,value:i.pose[j.id] ?? j.neutral,...(axes?.[j.id] ? {axisRoom:axes[j.id]} : {})}));
+    return [{...base,frame:r.frame,footprintRoom:footprint(i,r).vertices,members:selectedMembers,joints}];
   });
-  return { instances, releases: c.releases.filter(r => !q || matches(r.id, r.asset, r.label, r.kind)).map(({ id, asset, label, version, kind, variant }) => ({ id, asset, label, version, kind, variant })), commands: roomCommands.map(s => s.id) };
+  const releases=c.releases.filter(r=>!q || matches(r.id,r.asset,r.label,r.kind))
+    .map(({id,asset,label,version,kind,variant,footprint})=>({id,asset,label,version,kind,variant,...(q || args.instance ? {footprint} : {})}));
+  return {version:scene.version,...(!args.instance ? {room:scene.room} : {}),instances,releases,commands:roomCommands.map(s=>s.id)};
 }
 
 type AimPatch = { [K in keyof PersonAims]?: PersonAims[K] | null };

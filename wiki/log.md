@@ -546,3 +546,6 @@ The public room editor combines placement, direct component picking and operator
 
 
 Room sliders and direction pads now move geometry during a drag and record one shared edit at release. The view heading switches between the full room and one placed asset. Asset names and plan feature captions start hidden and can be enabled in Settings. [Working on one asset](50-implementation/room-layout.md#focus-on-one-asset)
+
+
+A homepage-only agent found the two placed stations, edited the seat on one, and placed a third parallel rig on a disposable installation. Scoped discovery now returns joint directions in room coordinates, current values, the release's coordinate convention and placed footprint corners. [Remote asset placement and adjustment](50-implementation/room-layout.md#place-or-adjust-an-asset-remotely)

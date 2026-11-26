@@ -65,3 +65,35 @@ test("seat and monitor surfaces share the functional controls of their placement
   const monitor=station.members.find(m=>m.controls?.includes("J_mon_pan") && m.id.startsWith("S_"));
   expect(monitor?.controls).toContain("J_mon_tilt");
 });
+
+test("scoped discovery reports the posed direction and footprint of just the chosen rig", () => {
+  const catalog=library.catalog;
+  let record=newRoom("discovery","Room",catalog,"demo");
+  function call(id:string,args:object) {
+    const reply=roomCommand(record,catalog,{id,args});
+    record=reply.record;return reply.result as any;
+  }
+  const summary=call("discover",{});
+  expect(summary.instances[0].placement).toEqual({x:2.65,y:3.6,yaw:90});
+  expect(summary.instances[0].footprintRoom).toBeUndefined();
+  const query={instance:"station-b",query:"J_seat_slide"};
+  const original=call("discover",query).instances[0];
+  expect(original.frame).toContain("X forward");
+  expect(original.footprintRoom).toHaveLength(4);
+  expect(original.joints[0].axis).toEqual([1,0,0]);
+  expect(original.joints[0].axisRoom[1]).toBeCloseTo(1,8);
+  call("instances.move",{instance:"station-b",yaw:35});
+  call("pose.set",{instance:"station-b",member:"J_seat_swivel",value:.17,allowAssumed:true});
+  const result=call("discover",query).instances[0], joint=result.joints[0];
+  expect(result.footprintRoom).not.toEqual(original.footprintRoom);
+  const endpoints={from:{instance:"station-b",member:"floor"},to:{instance:"station-b",member:"D_seat_front"}};
+  const before=call("measure.distance",endpoints).to.point;
+  call("pose.set",{instance:"station-b",member:"J_seat_slide",value:.02,allowAssumed:true});
+  const after=call("measure.distance",endpoints).to.point;
+  for(let k=0;k<3;k++) expect((after[k]-before[k])/.02).toBeCloseTo(joint.axisRoom[k],6);
+  const edited=call("discover",query);
+  expect(edited.instances[0].joints[0].value).toBe(.02);
+  expect(edited.version).toBe(record.scene.version);
+  expect(call("discover",{instance:"station-b",query:"C_seat_pan"}).instances[0].joints.map((j:any)=>j.id)).toContain("J_seat_slide");
+  expect(call("discover",{instance:"station-a",query:"J_seat_slide"}).instances[0].joints[0].value).toBe(0);
+});
