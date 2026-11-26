@@ -1,11 +1,14 @@
 import type { RoomInstance, RoomRelease, RoomScene } from "../../shared/room.ts";
 import type { OperatorOptions } from "../../shared/room-person.ts";
+import type { SliderSpec } from "./room-slider.ts";
 import { h } from "./dom.ts";
 import { action,field,select } from "./room-controls.ts";
 
 interface Context {
   item:RoomInstance;release:RoomRelease;scene:RoomScene;apiRoot:string;
   write:(id:string,args:Record<string,unknown>,base?:number)=>Promise<boolean>;
+  embedded?:boolean;
+  bodySlider:(spec:SliderSpec)=>HTMLElement;
   details:(key:string,label:string,children:Node[],hint?:string)=>HTMLElement;
 }
 const definitions=new Map<string,Promise<OperatorOptions>>();
@@ -41,27 +44,22 @@ export function roomOperatorControls(c:Context) {
       choice("Appearance",[{value:"dressed",label:"Work clothes"},{value:"clay",label:"Clay"}],state.style,change("style")));
     if(state.style==="dressed") {
       body.append(choice("Skin tone",config.tones.map(t=>({value:t.id,label:t.label})),state.tone,change("tone")));
+      const wear=h("div","rm-wear-options");
       for(const [key,label] of [["glasses","Safety glasses"],["headset","Headset"]] as const) {
         const check=h("input");check.type="checkbox";check.checked=state[key];check.onchange=()=>void submit({[key]:check.checked});
-        body.append(h("label","rm-field-label",check," "+label));
+        wear.append(h("label","rm-field-label",check,label));
       }
+      body.append(wear);
     }
-    const dimensions=h("div","rm-disclosure-body"),form=h("form","rm-disclosure-body");
+    const dimensions=h("div","rm-slider-list"), main=h("div","rm-slider-list");
     for(const ctrl of config.controls) {
-      const title=ctrl.label+" ("+ctrl.unit+")",el=h("input");
-      const original=state.body[ctrl.id]??ctrl.default;
-      el.type="number";el.name=ctrl.id;el.step="any";el.min=String(ctrl.min);el.max=String(ctrl.max);el.value=String(original);
-      el.dataset.original=el.value;el.required=true;
-      (["stature","mass"].includes(ctrl.id)?form:dimensions).append(field(title,el));
+      const slider=c.bodySlider({key:ctrl.id,label:ctrl.label,unit:ctrl.unit,value:state.body[ctrl.id]??ctrl.default,
+        low:ctrl.min,high:ctrl.max,min:ctrl.min,max:ctrl.max,step:ctrl.step});
+      (["stature","mass"].includes(ctrl.id)?main:dimensions).append(slider);
     }
-    form.append(h("details","rm-disclosure",h("summary",null,"Body proportions"),dimensions));
-    const save=h("button","rm-button","Apply body measurements");save.type="submit";form.append(save);
-    form.onsubmit=e=>{
-      e.preventDefault();const changes:Record<string,number>={};
-      for (const el of form.querySelectorAll("input")) if(el.value!==el.dataset.original)changes[el.name]=Number(el.value);
-      if(Object.keys(changes).length)void submit({body:changes});
-    };
-    body.append(form,choice("Posture",config.postures.map(value=>({value,label:value==="operating"?"Operating":value==="RELAXED_STAND"?"Relaxed stand":value})),state.posture,change("posture")));
+    const proportions=c.embedded?h("details","rm-disclosure",h("summary",null,"Body proportions"),dimensions)
+      :details(item.id+"/proportions","Body proportions",[dimensions]);
+    body.append(main,proportions,choice("Posture",config.postures.map(value=>({value,label:value==="operating"?"Operating":value==="RELAXED_STAND"?"Relaxed stand":value})),state.posture,change("posture")));
     if(state.posture!=="operating") { body.append(h("p","rm-help","This library posture is shown beside its host. Select Operating to bind the seat, measure the eye and set targets."));return; }
     const targets=release.members.filter(m=>/^[CDS]_/.test(m.id)).map(m=>({value:m.id,label:m.label}));
     const aims=state.aims??{};
@@ -86,5 +84,5 @@ export function roomOperatorControls(c:Context) {
   };
   void setup().catch(e=>body.append(h("p","rm-error",e instanceof Error?e.message:String(e))));
   content.push(action("Unseat operator",()=>void write("person.set",{host:null},base),undefined,"rm-quiet"));
-  return details(item.id+"/operator","Seated operator",content,"Attached");
+  return c.embedded?h("div","rm-disclosure-body",...content):details(item.id+"/operator","Seated operator",content,"Attached");
 }

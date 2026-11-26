@@ -2,7 +2,8 @@ import { ROOM_API, ROOM_DIRECTORY, PUBLIC_ROOM, roomURL, apiRoot } from './room-
 // Local room editor. The same command endpoint and event stream serve the UI and remote clients.
 import { h, link } from './dom.ts';
 import { ask } from './dialog.ts';
-import { action, brand, displayNumber, field, icon, iconAction, numberForm, section, select, store, stored, wirePanel, type Drafts, type Glyph } from './room-controls.ts';
+import { action, brand, displayNumber, field, icon, iconAction, section, select, store, stored, wirePanel, type Glyph } from './room-controls.ts';
+import { sliderRow, type SliderSpec, type Drag } from "./room-slider.ts";
 import { componentCard, componentPanel, floatingCard, placeFloatingCard, replaceComponentCard, type BeginPoseGesture } from './room-component-card.ts';
 import {mountRoomWorkspaceTools} from './room-workspace-tools.ts';
 import { roomScope } from './room-scope.ts';
@@ -129,7 +130,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases[0]?.id ?? '', newLabel = '';
   let undoable = scene.version > 0, undoToken = 0, addId = '';
   const api = apiRoot(scene.id), byRelease = new Map(releases.map(r => [r.id, r]));
-  const drafts: Drafts = new Map(), expanded = new Set<string>(), chosenJoints = new Map<string, string>();
+  const expanded = new Set<string>(), chosenJoints = new Map<string, string>();
   const from: RoomRef = { instance: '', member: 'floor' }, to: RoomRef = { instance: '', member: 'floor' };
   const current = () => scene.instances.find(i => i.id === selected);
   const pane = h('aside', 'rm-panel'); pane.id = 'room-controls'; pane.setAttribute('aria-label', 'Workspace panel');
@@ -285,6 +286,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     for (const card of popouts.keys()) card.style.zIndex=String(order++);
   }
   function clearPopup(frame:HTMLElement) {
+    cancelLayoutDrag?.();
     if (poseGesture && frame.contains(poseGesture.card)) poseGesture.cancel();
     const focused=frame.contains(document.activeElement);
     fitPopouts.unobserve(frame);
@@ -298,6 +300,42 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     if (pane.inert) open.click();
     choose(ref.instance,ref.part);
     scroll.querySelector<HTMLElement>('.rm-card-head button')?.focus({preventScroll:true});
+  }
+  // Layout and body drags only preview locally. Save once on release against the starting revision.
+  let cancelLayoutDrag:(()=>void)|undefined;
+  function sceneSlider(f:SliderSpec, key:string, save:(value:number)=>Promise<boolean>, change:(draft:RoomScene,n:number)=>void) {
+    const field=sliderRow(f,save,(read,reset)=>{
+      cancelLayoutDrag?.();
+      let frame=0;
+      const cancel=()=>{
+        cancelAnimationFrame(frame);
+        if(cancelLayoutDrag!==cancel)return;
+        cancelLayoutDrag=undefined;reset();view.setScene(scene,releases);
+      };
+      cancelLayoutDrag=cancel;
+      const gesture:Drag={
+        update(){
+          if(!frame && cancelLayoutDrag===cancel)frame=requestAnimationFrame(()=>{
+            frame=0;if(!field.row.isConnected){cancel();return;}
+            const draft=structuredClone(scene);change(draft,read());view.setScene(draft,releases);
+          });
+        },
+        commit(){
+          if(cancelLayoutDrag!==cancel)return;
+          cancelAnimationFrame(frame);cancelLayoutDrag=undefined;
+          const n=read();
+          if(n===f.value){reset();view.setScene(scene,releases);return;}
+          void save(n).then(ok=>{if(!ok && !cancelLayoutDrag){reset();view.setScene(scene,releases);}});
+        },
+        cancel
+      };
+      return gesture;
+    },key+"/"+f.key);
+    return field.row;
+  }
+  function bodySlider(item:RoomInstance,base:number,f:SliderSpec) {
+    return sceneSlider(f,item.id+"/body",n=>write("person.set",{host:item.id,body:{[f.key]:n}},base),
+      (draft,n)=>{if(draft.person?.host===item.id)draft.person.state.body[f.key]=n;});
   }
   function cardFor(instance:string, part:string, popup?:HTMLElement):HTMLElement|null {
     const item=scene.instances.find(i=>i.id===instance), release=item && byRelease.get(item.release);
@@ -317,7 +355,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     }
     if (part === '@operator' && scene.person?.host === instance) {
       const card=componentPanel('Operator',item,part,close,pop,dock);
-      const fields=roomOperatorControls({item,release,scene,apiRoot:api,write,details:(_key,_label,children)=>h('div','rm-disclosure-body',...children)});
+      const fields=roomOperatorControls({item,release,scene,apiRoot:api,write,bodySlider:f=>bodySlider(item,base,f),embedded:true,details});
       card.append(fields);return addScopeLink(card);
     }
     if (!release.members.some(m=>m.id===part)) return null;
@@ -377,18 +415,31 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       return true;
     } catch (error) { tell(errorText(error), true); return false; }
   }
+  function afterTyping(container:HTMLElement,refresh:()=>void) {
+    const row=container.querySelector<HTMLElement>('[data-typing]');
+    if(!row){refresh();return;}
+    if(row.dataset.refreshPending)return;
+    row.dataset.refreshPending="1";
+    row.addEventListener("room-edit-end",()=>queueMicrotask(()=>{if(row.isConnected)refresh();}),{once:true});
+  }
   function accept(next: RoomScene) {
     if (next.id !== scene.id || next.version <= scene.version) return;
+    cancelLayoutDrag?.();
     scene = next;
     poseGesture?.accept(next);
     if (selected && !current()) { selected = null; member = ''; }
     if (member && !hasInspector(current(),member)) member='';
     for (const [frame, ref] of [...popouts]) {
       const card=cardFor(ref.instance,ref.part,frame);
-      if (card) replaceComponentCard(frame,card); else clearPopup(frame);
+      if (!card) clearPopup(frame);
+      else if (!frame.querySelector('[data-typing]')) replaceComponentCard(frame,card);
+      else afterTyping(frame,()=>{
+        const latest=cardFor(ref.instance,ref.part,frame);
+        if(latest)replaceComponentCard(frame,latest);
+      });
     }
     if (docked && !hasInspector(scene.instances.find(i=>i.id===docked!.instance),docked.part)) docked=null;
-    view.setScene(scene, releases); view.select(selected, member || undefined); renderPanel(); workspaceTools.refresh(); void updateUndo();
+    view.setScene(scene, releases); view.select(selected, member || undefined); afterTyping(scroll,renderPanel); workspaceTools.refresh(); void updateUndo();
   }
   async function updateUndo() {
     const n = ++undoToken, v = scene.version;
@@ -405,7 +456,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   });
   stream.onopen = () => { live.textContent = 'Live'; live.classList.add('rm-connected'); };
   stream.onerror = () => { live.textContent = 'Reconnecting'; live.classList.remove('rm-connected'); };
-  window.addEventListener('pagehide', event => { poseGesture?.cancel(); if (!event.persisted) { stream.close(); view.dispose(); } });
+  window.addEventListener('pagehide', event => { cancelLayoutDrag?.();poseGesture?.cancel(); if (!event.persisted) { stream.close(); view.dispose(); } });
   window.addEventListener('keydown', e => {
     if (e.key==='Escape' && !e.defaultPrevented && !e.altKey && !e.ctrlKey && !e.metaKey && !document.querySelector('dialog[open]')) {
       if (matchMedia('(max-width: 700px)').matches && pane.contains(e.target as Node)) return;
@@ -425,6 +476,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     return box;
   }
   function renderPanel() {
+    cancelLayoutDrag?.();
     const position = scroll.scrollTop, focus = (document.activeElement as HTMLElement | null)?.dataset.focus;
     layoutTab.setAttribute('aria-pressed', String(tab === 'layout')); measureTab.setAttribute('aria-pressed', String(tab === 'measure'));
     assessTab.setAttribute('aria-pressed', String(tab === 'assessment'));
@@ -459,7 +511,16 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     }
     if (poseGesture && (!poseGesture.card.isConnected || poseGesture.card.closest('[hidden],[inert]'))) poseGesture.cancel();
     scroll.scrollTop = position;
-    if (focus) [...scroll.querySelectorAll<HTMLElement>('[data-focus]')].find(el => el.dataset.focus === focus)?.focus({ preventScroll: true });
+    if (focus) {
+      // Operator controls are populated after the avatar's cached definitions resolve.
+      const restore = () => {
+        if (document.activeElement !== document.body) return;
+        const target = [...scroll.querySelectorAll<HTMLElement>('[data-focus]')].find(el => el.dataset.focus === focus);
+        target?.focus({preventScroll:true});
+      };
+      restore();
+      queueMicrotask(restore);
+    }
   }
   function objectRow(glyph: Glyph, name: string, info: string, active: boolean, run: () => void) {
     const btn = action(name, run, glyph, 'rm-object-row'); btn.setAttribute('aria-pressed', String(active));
@@ -498,26 +559,37 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   }
   function roomProperties() {
     const { room, version } = scene;
-    const dims = numberForm('dimensions', version, [
-      { key: 'width', label: 'Width', value: room.width, unit: 'm' }, { key: 'depth', label: 'Depth', value: room.depth, unit: 'm' },
-      { key: 'height', label: 'Height', value: room.height, unit: 'm' },
-    ], drafts, (values, base) => write('room.set', values, base), renderPanel);
-    const shell = section('Room dimensions', dims);
-    for (const [key, name, wall] of [['door', 'Doorway', 'South wall'], ['window', 'Window', 'North wall']] as const) {
-      const opening = room[key];
-      shell.append(details('room/' + key, name, [
-        h('p', 'rm-help', wall + ' · offset from west corner'),
-        numberForm('room/' + key, version, [{ key: 'offset', label: 'Offset', unit: 'm', value: opening.offset }, { key: 'width', label: 'Width', unit: 'm', value: opening.width }], drafts, (values, base) => write('room.set', { [key]: values }, base), renderPanel),
-      ], metres(opening.width)));
+    const dims = h('div','rm-slider-list');
+    for(const key of ['width','depth','height'] as const) {
+      const value=room[key], low=key==='width'?Math.max(...[room.door,room.window].map(o=>o.offset+o.width)):.01;
+      dims.append(sceneSlider({key,label:{width:'Width',depth:'Depth',height:'Height'}[key],value,unit:'m',step:.01,
+        low,high:Math.max(low+.01,2*value),min:key==='width'?low:undefined},'room',
+        n=>write('room.set',{[key]:n},version),(draft,n)=>{draft.room[key]=n;}));
+    }
+    const shell=section('Room dimensions',dims);
+    for(const [key,name,wall] of [['door','Doorway','South wall'],['window','Window','North wall']] as const) {
+      const opening=room[key], sliders=h('div','rm-slider-list');
+      for(const axis of ['offset','width'] as const){
+        const low=axis==='offset'?0:Math.min(.01,opening.width);
+        const high=room.width-opening[axis==='offset'?'width':'offset'];
+        sliders.append(sceneSlider({key:axis,label:axis==='offset'?'Offset':'Width',value:opening[axis],unit:'m',step:.01,
+          low,high,min:axis==='offset'?0:undefined,max:high},'room/'+key,
+          n=>write('room.set',{[key]:{...opening,[axis]:n}},version),(draft,n)=>{draft.room[key][axis]=n;}));
+      }
+      shell.append(details('room/'+key,name,[h('p','rm-help',wall+' · offset from west corner'),sliders],metres(opening.width)));
     }
     return [shell];
   }
   function inspect(item: RoomInstance, release: RoomRelease, isolated=false) {
     const prefix = item.id + '/', version = scene.version;
-    const placement = numberForm(prefix + 'placement', version, [
-      { key: 'x', label: 'X', value: item.x, unit: 'm' }, { key: 'y', label: 'Y', value: item.y, unit: 'm' },
-      { key: 'yaw', label: 'Turn', value: item.yaw, unit: '°' },
-    ], drafts, (values, base) => write('instances.move', { instance: item.id, ...values }, base), renderPanel);
+    const placement=h('div','rm-slider-list');
+    for(const key of ['x','y','yaw'] as const){
+      const turn=key==='yaw';
+      placement.append(sceneSlider({key,label:turn?'Turn':key.toUpperCase(),value:item[key],unit:turn?'°':'m',step:turn?1:.01,
+        low:turn?-180:0,high:turn?180:scene.room[key==='x'?'width':'depth']},prefix+'placement',
+        n=>write('instances.move',{instance:item.id,[key]:n},version),
+        (draft,n)=>{draft.instances.find(i=>i.id===item.id)![key]=n;}));
+    }
     const inspector = section('Placement', placement);
     const controls = h('div', 'rm-detail-group');
     const parts = release.members.filter(m => m.kind==='part');
@@ -533,7 +605,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       picker.onchange = () => { chosenJoints.set(item.id, picker.value); expanded.add(prefix + 'joints'); renderPanel(); };
       controls.append(details(prefix + 'joints', 'Adjustments', [field('Joint', picker), jointForm(item, joint)], String(joints.length)));
     }
-    if (release.seat) controls.append(roomOperatorControls({item,release,scene,apiRoot:api,write,details}));
+    if (release.seat) controls.append(roomOperatorControls({item,release,scene,apiRoot:api,write,bodySlider:f=>bodySlider(item,version,f),details}));
     const versions = select('Installed release', releases.map(r => ({ value: r.id, label: shortRelease(r) })), release.id);
     const swap = action('Swap release', () => {
       void write('instances.swap', { instance: item.id, release: versions.value }, version).then(ok => { if (!ok) { versions.value = item.release; swap.disabled = true; } });
@@ -553,10 +625,15 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     const axes = joint.type === 'ball' ? ['Roll', 'Pitch', 'Yaw'] : [angular ? 'Angle' : 'Position'];
     const values = Array.isArray(value) ? value : [value];
     const offsets = Array.isArray(joint.neutral) ? joint.neutral : [0];
-    const form = numberForm(item.id + '/joint/' + joint.id, scene.version, axes.map((label, index) => ({
-      label, key: String(index), unit: units, value: values[index] * scale,
-      min: (joint.lower + offsets[index]) * scale, max: (joint.upper + offsets[index]) * scale,
-    })), drafts, (v, base) => write('pose.set', { instance: item.id, member: joint.id, ...(joint.locked && joint.assumed ? {allowAssumed:true} : {}), value: joint.type === 'ball' ? axes.map((_, i) => v[i] / scale) : v[0] / scale }, base), renderPanel);
+    const version=scene.version,form=h('div','rm-slider-list');
+    axes.forEach((label,index)=>{
+      const low=(joint.lower+offsets[index])*scale,high=(joint.upper+offsets[index])*scale;
+      const next=(n:number)=>Array.isArray(value)?value.map((v,i)=>index===i?n/scale:v):n/scale;
+      form.append(sceneSlider({key:String(index),label,unit:units,value:values[index]*scale,low,high,min:low,max:high,
+        step:Math.min(angular ? .1 : .001,(high-low)/200||1)},item.id+'/joint/'+joint.id,
+        n=>write('pose.set',{instance:item.id,member:joint.id,...(joint.locked && joint.assumed?{allowAssumed:true}:{}),value:next(n)},version),
+        (draft,n)=>{draft.instances.find(i=>i.id===item.id)!.pose[joint.id]=next(n);}));
+    });
     const reset = action('Restore neutral position', () => void write('pose.set', { instance: item.id, member: joint.id, value: null }), undefined, 'rm-text-action');
     reset.disabled = !(joint.id in item.pose);
     return h('div', 'rm-joint-controls', form, h('p', 'rm-help', (joint.type === 'ball' ? 'From neutral ' : 'Range ') + displayNumber(joint.lower * scale, 2) + ' to ' + displayNumber(joint.upper * scale, 2) + ' ' + units), reset);

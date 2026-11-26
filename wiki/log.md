@@ -549,3 +549,5 @@ Room sliders and direction pads now move geometry during a drag and record one s
 
 
 A homepage-only agent found the two placed stations, edited the seat on one, and placed a third parallel rig on a disposable installation. Scoped discovery now returns joint directions in room coordinates, current values, the release's coordinate convention and placed footprint corners. [Remote asset placement and adjustment](50-implementation/room-layout.md#place-or-adjust-an-asset-remotely)
+
+**15:54** — Added compact sliders with editable values to the [room inspector](50-implementation/room-layout.md). Dragging previews the change, and Return or moving focus saves a typed value.
