@@ -9,7 +9,7 @@ const SIDES = ["min-y", "max-x", "max-y", "min-x"];
 const side = (p: Footprint, i: number) => p.id + "/footprint." + SIDES[i];
 const EPS = 1e-10;
 
-function footprint(instance: RoomInstance, release: RoomRelease): Footprint {
+export function footprint(instance: RoomInstance, release: RoomRelease): Footprint {
   const { min, max } = release.footprint;
   const local: XY[] = [[min[0], min[1]], [max[0], min[1]], [max[0], max[1]], [min[0], max[1]]];
   return { id: instance.id, vertices: local.map(([x, y]) => {

@@ -36,11 +36,13 @@ export interface RoomMember { id: string; label: string; controls?: string[]; ki
 export interface RoomJoint {
   id: string; label?: string; type: JointType; lower: number; upper: number;
   neutral: JointValue; locked?: boolean; assumed?: boolean;
+  /** Signed unit axis in the joint mount frame. Ball joints use three angles. */
+  axis?: number[] | null;
 }
 export interface RoomRelease {
   id: string; label: string; kind: "station" | "display";
   asset: string; version: string; digest: string; modelUrl: string; manifestUrl: string;
-  anchor: RoomPoint; variant?: string;
+  anchor: RoomPoint; variant?: string; frame?: string;
   members: RoomMember[]; joints: RoomJoint[];
   footprint: { min: [number, number]; max: [number, number] }; seat?: boolean;
 }
@@ -49,13 +51,19 @@ export interface RoomCatalog {
   releases: RoomRelease[];
   /** Positions in the posed asset frame measured from its declared floor anchor. */
   point(instance: RoomInstance, member: string): RoomPoint;
+  jointAxesInRoom?(instance: RoomInstance, joints: RoomJoint[]): Record<string,RoomPoint>;
   configureOperator?(instance:RoomInstance, prior:PersonState, patch:OperatorPatch):PersonState;
   operatorOptions?(instance:RoomInstance, state:PersonState):OperatorOptions;
   defaultPerson?(instance: RoomInstance): PersonState;
   eye?(instance: RoomInstance, state: PersonState): RoomPoint;
 }
 
+export function roomVector(yaw:number, local:RoomPoint): RoomPoint {
+  const angle=yaw*Math.PI/180, c=Math.cos(angle), s=Math.sin(angle);
+  return [c*local[0]-s*local[1],s*local[0]+c*local[1],local[2]];
+}
+
 export function roomPoint(instance: Pick<RoomInstance, "x" | "y" | "yaw">, local: RoomPoint): RoomPoint {
-  const a = instance.yaw * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-  return [instance.x + c * local[0] - s * local[1], instance.y + s * local[0] + c * local[1], local[2]];
+  const [x,y,z]=roomVector(instance.yaw,local);
+  return [instance.x+x, instance.y+y, z];
 }

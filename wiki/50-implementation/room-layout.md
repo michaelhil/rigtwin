@@ -52,6 +52,20 @@ The homepage links to `/llms.txt` and advertises the command catalogue. In produ
 | Use MCP | JSON-RPC at `/api/workspaces/{id}/mcp`; set `SYNERGON_WORKSPACE_MCP` to that full address for the repository configuration |
 | Use the command line | `bun run rig discover '{"query":"monitor"}' --workspace <room URL>` |
 
+## Place or adjust an asset remotely
+
+Start with the homepage's agent guide. An unfiltered workspace discovery returns the room dimensions, current revision, placed instances with their positions and yaws, and the installed release IDs. Narrow discovery with `instance` and `query` before editing.
+
+| Intent | Command and arguments |
+|---|---|
+| Find a seat adjustment on a particular station | `discover {"instance":"station-b","query":"seat"}`. A part lists its associated controls. |
+| Interpret a joint's direction | `discover {"instance":"station-b","query":"J_seat_slide"}`. Read its current `value`, limits, unit by joint type, and `axisRoom` in east/north/up coordinates. The release's authored `frame` describes its forward direction. |
+| Move that seat 20 mm from a neutral setting of zero | `pose.set {"instance":"station-b","member":"J_seat_slide","value":0.02,"allowAssumed":true}`. Supply the discovery revision as `expectedVersion`. Values are absolute. |
+| Place another copy | `instances.add` with the source instance's exact `release`, a fresh `instance` ID, `label`, and `x`, `y`, `yaw`. Supply initial joint settings in `pose` when required. |
+| Check placement | Scoped `discover` includes `footprintRoom`, the four corners of the release's floor-plan bounding box at the saved placement. Compare it with room boundaries and other objects. `measure.clearance` screens the doorway threshold. |
+
+For a prismatic joint the positive room axis gives its direction of travel. For a revolute joint it is the positive right-hand rotation axis. The room axis includes the placement yaw and current parent-joint rotations. A ball joint's three angles use its own mount frame.
+
 ## Ownership and persistence
 
 A release identifies its asset, version and SHA-256 digest of its ordered file inventory. Model geometry, manifest and operator package dependencies belong to the release. Fetch `inventory.json` next to its model URL to inspect file digests. An instance owns its placement and joint overrides. Address a point with an instance and its local member ID. The operator carries an explicit host and host-local targets. Each viewer owns its own camera and selection.

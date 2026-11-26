@@ -22,7 +22,7 @@ const tool = (id: string, description: string, inputSchema: Schema, edit = false
 
 export const roomCommands = [
   ...assessmentCommands,
-  tool("discover", "Find assets, instances and their member IDs by ordinary names. Scope with instance for its full list of joints, limits and datums. Use an exact release pin to add or swap.", object({ query: text, instance: text })),
+  tool("discover", "Find placements and exact releases by name. Narrow with instance and query for the placed footprint in east/north metres, asset frame, controls and joint values, limits and positive axes in room coordinates. Use an exact release pin to add or swap.", object({ query: text, instance: text })),
   tool("state", "Read the authoritative scene, its revision and the retained edits available for undo.", object({})),
   tool("instances.add", "Place one installed release at its floor anchor. Optional instance supplies a stable ID. x and y are metres; yaw is degrees. Joint seeds are SI.", object({ release: text, instance: id, label: text, x: number, y: number, yaw: number, allowAssumed: {type:"boolean"}, pose: { type: "object", additionalProperties: value } }, ["release"]), true),
   tool("instances.move", "Set the selected instance's x (east), y (north) or yaw (degrees counter-clockwise). Omitted values stay as they are.", object({ instance: text, x: number, y: number, yaw: number }, ["instance"]), true),
