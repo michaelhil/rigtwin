@@ -549,14 +549,37 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   await page.waitFor(heightSlider,"rendered stature control");
   const heightPoints = await sliderPoints(page,heightSlider);
   const bodyPixels = canvasStamp(eyePoint,Math.ceil(scale*.8));
+  // Picking the operator schedules a new selection frame. Compare finished renders.
+  await frames(page);
   const bodyBefore = await page.evaluate(bodyPixels);
   await pointer(page,"mousePressed",heightPoints.start);
   await pointer(page,"mouseMoved",heightPoints.left);
-  await page.waitFor(bodyPixels+"!=="+JSON.stringify(bodyBefore),"held stature slider to resize the avatar");
+  const settled = "document.querySelector('.rv-status').hidden";
+  await page.waitFor(settled+" && "+bodyPixels+"!=="+JSON.stringify(bodyBefore),"held stature slider to resize the avatar");
   assert.equal((await read()).version,before.version+2,"A body preview should be local");
   await pressKey(page,"Escape",27);
   await pointer(page,"mouseReleased",heightPoints.left);
-  await page.waitFor(bodyPixels+"==="+JSON.stringify(bodyBefore),"Escape to restore the operator");
+  await page.waitFor(settled+" && "+bodyPixels+"==="+JSON.stringify(bodyBefore),"Escape to restore the operator");
+  assert.equal(await page.evaluate(heightSlider+".value"),heightPoints.original);
+  assert.equal((await read()).version,before.version+2,"Cancelling a body preview should leave the saved operator intact");
+  // Also cancel during the async rebind, after the old avatar was hidden.
+  await page.evaluate(`(() => {
+    const status=document.querySelector('.rv-status');
+    const observer=new MutationObserver(()=>{
+      if(status.hidden)return;
+      observer.disconnect();
+      window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true,bubbles:true}));
+      status.dataset.cancelTest='interrupted';
+    });
+    observer.observe(status,{attributes:true,attributeFilter:['hidden']});
+  })()`);
+  await pointer(page,"mousePressed",heightPoints.start);
+  await pointer(page,"mouseMoved",heightPoints.left);
+  await page.waitFor("document.querySelector('.rv-status').dataset.cancelTest==='interrupted'","Escape during avatar rebind");
+  await pointer(page,"mouseReleased",heightPoints.left);
+  await frames(page);
+  await page.waitFor(settled+" && "+bodyPixels+"==="+JSON.stringify(bodyBefore),"restore visible operator after interrupted rebind");
+  assert.equal((await read()).version,before.version+2);
   const cameraAnchor = element('.rv-orbit-tag[data-instance="station-b"]') + ".style.left";
   const oldAnchor = await page.evaluate(cameraAnchor);
   const background = await page.evaluate(
