@@ -95,6 +95,8 @@ export class PlacedAsset {
   readonly rest = new Map<string, Trs>();
   planParts: PlanPart[] = [];
   private poseKey?: string;
+  private planKey?: string;
+  private projections=new Map<THREE.Mesh,{matrix:THREE.Matrix4;part:PlanPart}>();
 
   constructor(readonly asset: RoomAsset, readonly release: RoomRelease, readonly id: string) {
     this.model = asset.source.clone(true);
@@ -121,14 +123,18 @@ export class PlacedAsset {
     }
   }
 
-  apply(i: RoomInstance) {
+  apply(i: RoomInstance,project=true) {
     this.holder.position.set(i.x, 0, -i.y);
     this.holder.rotation.y = THREE.MathUtils.degToRad(i.yaw);
     const nextPose = JSON.stringify(i.pose);
-    if (this.poseKey === nextPose) return;
-    this.poseKey = nextPose;
-    this.pose(i.pose);
-    this.planParts = this.plan();
+    if (this.poseKey !== nextPose) {
+      this.poseKey = nextPose;
+      this.pose(i.pose);
+    }
+    if (project && this.planKey!==nextPose) {
+      this.planParts=this.plan();
+      this.planKey=nextPose;
+    }
   }
 
   private pose(values: Record<string, JointValue>) {
@@ -146,17 +152,50 @@ export class PlacedAsset {
     const inverse = this.holder.matrixWorld.clone().invert(), mat = new THREE.Matrix4();
     return this.parts.map(mesh => {
       mat.multiplyMatrices(inverse, mesh.matrixWorld);
+      const cached=this.projections.get(mesh);
+      if (cached?.matrix.equals(mat)) return cached.part;
       const projected = planProjection(mesh,mat);
       const source = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
-      const color = source.color?.clone().convertLinearToSRGB();
+      const color = source.color?.clone();
+      if (source.userData.roomBaseColour!==undefined) color?.setHex(source.userData.roomBaseColour);
+      color?.convertLinearToSRGB();
       const light = color ? Math.round(40 + (color.r * .25 + color.g * .65 + color.b * .1) * 44) : 70;
-      return {
+      const part = {
         id: String(mesh.userData.roomMember), ...projected,
         fill: `hsl(143,9%,${light}%)`,
       };
+      this.projections.set(mesh,{matrix:mat.clone(),part});
+      return part;
     }).sort((a, b) => a.top - b.top);
   }
 
+  partVisible(member:string,hidden:ReadonlySet<string>) {
+    for(let node=this.objects.get(member);node;node=node.parent??undefined)
+      if(hidden.has(this.id+"/"+node.userData.id))return false;
+    return !hidden.has(this.id+"/"+member);
+  }
+  displayColour(member:string,mode:"natural"|"parts"|"evidence"):string|undefined {
+    if(mode==="natural")return;
+    if(mode==="evidence") {
+      const cls=this.asset.manifest.components.find(n=>n.id===member)?.class;
+      const colours:Record<string,string>={measured:"#2e9e5b",vendor:"#2f7fd1",photo:"#e0a526",assumed:"#d9603b",invented:"#9a55c4"};
+      return colours[cls??""]??"#8a8f98";
+    }
+    let value=0;
+    for(const c of member)value=(value*31+c.charCodeAt(0))>>>0;
+    return "hsl("+(value%360)+",52%,58%)";
+  }
+  applyDisplay(hidden:ReadonlySet<string>,mode:"natural"|"parts"|"evidence") {
+    for(const mesh of this.parts) {
+      const member=mesh.userData.roomMember;
+      mesh.visible=this.partVisible(member,hidden);
+      const colour=this.displayColour(member,mode);
+      for(const mat of Array.isArray(mesh.material)?mesh.material:[mesh.material]) if(mat instanceof THREE.MeshStandardMaterial) {
+        const neutral=mat.userData.roomBaseColour??=mat.color.getHex();
+        if(colour)mat.color.setStyle(colour);else mat.color.setHex(neutral);
+      }
+    }
+  }
   select(member: string | null) {
     const target = member ? this.objects.get(member) : null;
     for (const mesh of this.parts) {

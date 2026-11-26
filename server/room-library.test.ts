@@ -57,3 +57,11 @@ test("installed station's off-axis grip and seated eye follow one host through 9
   execute("pose.set",{instance:a,member:"J_mon_height",value:.045});
   expect(record.scene.instances.find(i=>i.id === b)?.pose).toEqual(independentPose);
 });
+
+test("seat and monitor surfaces share the functional controls of their placement",()=>{
+  const station=library.catalog.releases.find(r=>r.seat)!;
+  const seat=station.members.find(m=>m.id==="C_seat_pan")!;
+  expect(seat.controls).toContain("J_seat_slide");
+  const monitor=station.members.find(m=>m.controls?.includes("J_mon_pan") && m.id.startsWith("S_"));
+  expect(monitor?.controls).toContain("J_mon_tilt");
+});

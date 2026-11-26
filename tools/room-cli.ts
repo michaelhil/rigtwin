@@ -16,22 +16,31 @@ async function main() {
   const base = new URL(suppliedBase ?? url?.origin ?? "http://127.0.0.1:4173");
   if (url && url.origin !== base.origin) throw new Error("Workspace link and server refer to different installations");
   if (revision !== undefined && !/^\d+$/.test(revision)) throw new Error("Expected a non-negative integer for --expected-version");
+  const [command, arg, ...extra] = words;
+  if (extra.length) throw new Error("Unexpected arguments: " + extra.join(" "));
+  if (!command || command === "--help") {
+    console.log('bun run rig list | workspaces [search] | project.help | <command> [JSON arguments] --workspace <name, UUID or link> [--server URL] [--expected-version N]');
+    return;
+  }
+  const namespace = command === "project.help" ? "/api" : url ? (/^\/(?:workspaces\/room|api\/room)(?:\/|$)/.test(url.pathname) ? "/api/room" : "/api") : await (async () => {
+    const r = await fetch(new URL("/api/room/health",base));
+    if (r.ok && (await r.json().catch(()=>null))?.format === "synergon-room/1") return "/api/room";
+    return "/api";
+  })();
   const request = async (path: string, body?: object) => {
-    const response = await fetch(new URL(path, base), body ? { method: "POST", headers: { "content-type": "application/json", "X-Synergon": "1" }, body: JSON.stringify(body) } : undefined);
+    const response = await fetch(new URL(path.replace(/^\/api(?=\/)/, namespace), base), body ? { method: "POST", headers: { "content-type": "application/json", "X-Synergon": "1" }, body: JSON.stringify(body) } : undefined);
     const data = await response.json();
     if (!response.ok || data.ok === false) throw new Error(JSON.stringify(data.error ?? data));
     return data;
   };
-  const [command, arg, ...extra] = words;
-  if (extra.length) throw new Error("Unexpected arguments: " + extra.join(" "));
-  if (!command || command === "--help") {
-    console.log('bun run rig list | workspaces [search] | <command> [JSON arguments] --workspace <name, UUID or link> [--server URL] [--expected-version N]');
-    return;
+  if (command.startsWith("project.")) {
+    const { runProjectCli } = await import("./project-cli.ts");
+    return runProjectCli(command, arg, request);
   }
   if (command === "list") return request("/api/commands");
   if (command === "workspaces") return request("/api/workspaces?search=" + encodeURIComponent(arg ?? ""));
   if (!workspace) throw new Error("Choose --workspace using 'workspaces' or a workspace link.");
-  let id = url ? /^\/(?:api\/)?workspaces\/([^/]+)(?:\/mcp)?\/?$/.exec(url.pathname)?.[1] : workspace;
+  let id = url ? /^\/(?:api\/(?:room\/)?workspaces|workspaces(?:\/room)?)\/([^/]+)(?:\/mcp)?\/?$/.exec(url.pathname)?.[1] : workspace;
   if (!id) throw new Error("Expected a Synergon workspace link");
   if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) {
     let cursor: string | null = null;

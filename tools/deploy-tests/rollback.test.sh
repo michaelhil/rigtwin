@@ -9,6 +9,7 @@ set -uo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 T=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/rollback-test.XXXXXX")" && pwd -P)
 export SYNERGON_AGENT=builder-D-test
+DIST=${SYNERGON_DIST_TEST_DIR:-"$REPO/dist"}
 PASS=0 FAIL=0
 ok() { PASS=$((PASS + 1)); printf '  ok    %s\n' "$1"; }
 no() { FAIL=$((FAIL + 1)); printf '  FAIL  %s\n' "$1"; }
@@ -27,18 +28,18 @@ chmod +x "$T/bin/ssh"
 release() {
   local d="$T/srv/synergon/releases/$1"
   mkdir -p "$d"
-  for f in "$REPO"/dist/*; do [[ "$(basename "$f")" == version.json ]] || ln -s "$f" "$d/$(basename "$f")"; done
+  for f in "$DIST"/*; do [[ "$(basename "$f")" == version.json ]] || ln -s "$f" "$d/$(basename "$f")"; done
   REV=$2 SRV=$3 bun -e '
     const v = JSON.parse(await Bun.file(process.argv[1]).text());
     v.revision = process.env.REV; v.short = "test " + process.env.REV;
     if (process.env.SRV !== "1") delete v.server; else v.server = { format: "synergon-scene/1" };
-    await Bun.write(process.argv[2], JSON.stringify(v, null, 1) + "\n");' "$REPO/dist/version.json" "$d/version.json"
+    await Bun.write(process.argv[2], JSON.stringify(v, null, 1) + "\n");' "$DIST/version.json" "$d/version.json"
 }
 switch_to() { ln -sfn "$T/srv/synergon/releases/$1" "$T/srv/synergon/current"; }
 live() { basename "$(readlink "$T/srv/synergon/current")"; }
 
 # the site: like Caddy, with the API answered by a stand-in that reports the live release's revision, lists one
-# workspace and streams its session and snapshot (the checks a deploy or rollback makes of a server, tools/deploy.ts)
+# workspace and returns its metadata row (the checks a deploy or rollback makes of a server, tools/deploy.ts)
 cat >"$T/site.ts" <<EOF
 import { serveFolder } from "$REPO/tools/dist.ts";
 import { readFileSync } from "node:fs";
@@ -47,7 +48,7 @@ const api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (req) => {
   const path = new URL(req.url).pathname;
   if (path === "/api/health") return Response.json({ ok: true, revision: JSON.parse(readFileSync("$T/srv/synergon/current/version.json", "utf8")).revision, format: "synergon-scene/1", mode: "deployed" });
   if (path === "/api/workspaces") return Response.json({ workspaces: [WS], next: null, total: 1 });
-  if (path === "/api/workspaces/" + WS.id + "/live") return new Response("event: session\ndata: {}\n\nevent: snapshot\ndata: {}\n\n", { headers: { "content-type": "text/event-stream" } });
+  if (path === "/api/workspaces/" + WS.id) return Response.json(WS);
   return new Response("no", { status: 404 });
 } });
 const s = serveFolder("$T/srv/synergon/current", "/", { api: "http://127.0.0.1:" + api.port });

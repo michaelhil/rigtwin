@@ -16,7 +16,7 @@
 //   colour-coded, rig-b-group-<group>, rig-b-view-{front-left,rear-right,operators-eye,side} at 1600 px,
 //   rig-b-joint-limits) and the masked photo comparisons into wiki/img/matched/. File names are stable,
 //   so the pages need no change after the model changes. Always the full model in its neutral pose.
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
@@ -104,19 +104,19 @@ export class Page {
 }
 
 export class Browser {
-  private constructor(private child: any, private profile: string, public port: number) {}
+  private constructor(private child: ChildProcess, private profile: string, public port: number) {}
   static async launch(): Promise<Browser> {
     const profile = mkdtempSync(join(tmpdir(), "synergon-render-"));
     // Graphics: Metal on macOS (the development machine); on Linux (the CI runner, no GPU) WebGL runs on
     // SwiftShader, which Chrome only allows with --enable-unsafe-swiftshader. Extra flags: SYNERGON_CHROME_FLAGS.
     const gfx = process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-dev-shm-usage"];
     const extra = (process.env.SYNERGON_CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
-    const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", ...gfx, "--disable-background-timer-throttling", "--disable-renderer-backgrounding", ...extra, "about:blank"], { stdio: "ignore" });
+    const child = spawn(findChrome(), ["--headless=new", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "--force-device-scale-factor=1", "--hide-scrollbars", ...gfx, "--disable-background-timer-throttling", "--disable-renderer-backgrounding", ...extra, "about:blank"], { stdio: "ignore", detached: process.platform !== "win32" });
     let port = 0;
     // A warm start takes well under a second; a cold start on a fresh CI runner can take several (a 5 s
     // limit failed there once), so wait up to 30 s.
     for (let i = 0; i < 1200 && !port; i++) { try { port = Number(readFileSync(join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]); } catch { await sleep(25); } }
-    if (!port) { child.kill(); throw new Error("Chromium did not open a debugging port within 30 s"); }
+    if (!port) { await new Browser(child, profile, port).close(); throw new Error("Chromium did not open a debugging port within 30 s"); }
     return new Browser(child, profile, port);
   }
   async page(url: string): Promise<Page> {
@@ -127,7 +127,20 @@ export class Browser {
     await page.call("Runtime.enable"); await page.call("Log.enable"); await page.call("Page.enable");
     return page;
   }
-  async close() { this.child.kill(); await sleep(150); rmSync(this.profile, { recursive: true, force: true }); }
+  async close() {
+    const child = this.child;
+    child.kill();
+    for (let i = 0; i < 10 && child.exitCode === null && child.signalCode === null; i++) await sleep(100);
+    // A busy software GPU can keep Chromium alive after SIGTERM. The isolated group contains only this launch.
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      if (process.platform === "win32") child.kill("SIGKILL");
+      else {
+        try { process.kill(-child.pid, "SIGKILL"); }
+        catch (err) { if ((err as NodeJS.ErrnoException).code !== "ESRCH") throw err; }
+      }
+    }
+    rmSync(this.profile, { recursive: true, force: true });
+  }
 }
 
 /** One viewer session: server + browser + page with the viewer loaded and its UI hidden. */

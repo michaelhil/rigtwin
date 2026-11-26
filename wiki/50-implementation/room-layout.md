@@ -1,6 +1,6 @@
 ---
 title: Multi-asset room editor
-tldr: Run the local room editor, place versioned assets and use the same instance-qualified commands from the UI, HTTP, MCP or CLI.
+tldr: Arrange a room, edit its components and operators, and discover the same instance-qualified controls through HTTP, MCP or the CLI.
 status: living
 updated: 2026-11-26
 tags: [implementation, viewer, server, assets]
@@ -10,7 +10,7 @@ tags: [implementation, viewer, server, assets]
 
 ## TL;DR
 
-Run `bun run serve` and open the printed local address. Choose **Open viewer** to return to the last room. The workspace selector opens the directory, where **New room** creates an empty scene. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
+Open the Synergon homepage or run `bun run serve` for a local installation. Choose **Open viewer** to return to the last room. The workspace menu at the top of the panel switches rooms, opens the directory or creates an empty workspace. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
 
 ## Arrange and measure
 
@@ -18,14 +18,33 @@ Use **Add object** to select a release. Drag an object in plan, use its rotation
 
 A scene uses a rectangular floor with east and north coordinates measured from its southwest corner. Door and window offsets are measured east from the west wall. Positive yaw turns east towards north. Every asset declares a floor anchor. Rig B's deck origin sits 0.20 m above that anchor. Doorway approach is the shortest distance from the threshold to one rotated bounding footprint. The unblocked opening is the longest continuous interval at the threshold after subtracting every footprint. A doorway measurement includes the defining points and edges. These are plan projections, including overhanging features.
 
+## Edit a component or operator
+
+Click a part in either view to open its controls in the left panel. For overlapping geometry, select the station in the object list and expand **Components** to choose the part by name. The inspector names the station it edits, so the same seat on a second station has its own settings. A fixed part offers **Object placement**.
+
+In 3D, select a movable component and drag it to adjust the joint along its visible direction of travel. Release to commit the movement as one edit. Drag empty space to orbit. Sliders and two-axis pads preview movement as you drag. Release to share one undoable edit. Escape cancels the preview. Type an exact length in millimetres or angle in degrees when a numeric setting matters. Joysticks and adjustable screens offer a two-axis pad with keyboard arrow controls and an **Exact adjustments** disclosure. **Reset component** restores the selected part's controls to neutral. Room undo restores each pad gesture or reset in one step.
+
+Click the operator in 3D, the operator tag in Plan, or choose **Operator** in Components. Set the person's body, posture, appearance, gaze or limb targets. **Operating** uses the host's seat and joystick geometry. Eye measurements use this posture.
+
+Drag the left divider to resize the panel or drag it to the edge to collapse. With the panel closed, picking a component opens a movable inspector. Shift-click opens another inspector for comparison. Use the header icons to pop out, dock or close a card.
+
+## Focus on one asset
+
+Open **Full room** above the drawing and choose an asset, or click the station name above a component's controls. The viewer frames the asset in 3D with its attached operator. Pick and adjust its components as in the full room. These edits apply to the same placed asset. Other viewers keep their own camera and scope.
+
+In the view heading, **Full room** returns to your previous camera and selection. The adjacent asset name switches directly to another asset. **Plan** returns to the full floor plan. A shared view link preserves the focused asset.
+
+Asset labels start hidden. Turn on **Object labels** in the left panel’s **Settings** to show object names and plan feature captions. Dimensions, active measurements and the operator marker remain available when labels are hidden.
+
 ## Agent entry point
 
-The installation homepage links to `/llms.txt` and advertises `/api/commands`. The guide describes discovery, target qualification, units, writes and undo. All paths in this table are relative to that installation. Substitute the workspace UUID for `{id}`.
+The homepage links to `/llms.txt` and advertises the command catalogue. In production, rooms open under `/workspaces/room/{id}` and the table below uses `/api/room/` in place of `/api/`. The local room server uses the paths as printed. Existing single-station links on the public installation have a separate catalogue. The guide describes discovery, target qualification, units, writes and undo. All paths in this table are relative to that installation. Substitute the workspace UUID for `{id}`.
 
 | Operation | Interface |
 |---|---|
 | Find a room by name | GET `/api/workspaces?search=Control%20room` |
 | Read the scene revision and objects | GET `/api/workspaces/{id}/state` |
+| Read revision and live connection count | GET `/api/workspaces/{id}/meta` |
 | Resolve names or inspect one placement | GET `/api/workspaces/{id}/discover?query=monitor` or supply `instance` |
 | Inspect installed pins or command schemas | GET `/api/catalog` or GET `/api/commands` |
 | Run one operation | POST `/api/workspaces/{id}/command` with JSON, `X-Synergon: 1`, `id`, `args` and optional `expectedVersion` |
@@ -38,3 +57,18 @@ The installation homepage links to `/llms.txt` and advertises `/api/commands`. T
 A release identifies its asset, version and SHA-256 digest of its ordered file inventory. Model geometry, manifest and operator package dependencies belong to the release. Fetch `inventory.json` next to its model URL to inspect file digests. An instance owns its placement and joint overrides. Address a point with an instance and its local member ID. The operator carries an explicit host and host-local targets. Each viewer owns its own camera and selection.
 
 An accepted edit writes the scene and its undo record in the same SQLite transaction. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. The local milestone uses newly authored rooms.
+
+## Camera and workspace tools
+
+**Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
+
+The panel footer holds **Copy view link**, **Save picture**, **Trace** and **Settings**. A view link opens this workspace with its plan centre and zoom or its 3D camera, selected object and component. Pictures are PNGs of the visible plan or 3D drawing. Trace lists recorded layout edits newest first. Settings controls object labels, the floor grid, colours and component visibility. **Agent access** gives the workspace MCP endpoint.
+
+**Reset all** restores neutral joint settings, component visibility and the camera. Undo restores the affected joint settings. To transfer a layout and saved versions to a colleague, see [Portable room projects](portable-projects.md).
+
+
+## Assessment and private projects
+
+The **Assessment** tab loads the screening module on demand. Choose a profile, identify the task and scene targets, and open each finding for its source, applicability and measurement. The evaluator uses the same posed scene and exact asset releases as the viewer. See [workstation and doorway screening](../85-standards/workstation-screening.md).
+
+The local [project directory](portable-projects.md) organizes scenes and named versions, and can package their exact asset releases and saved assessments for another installation.

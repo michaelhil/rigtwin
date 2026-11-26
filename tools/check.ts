@@ -342,6 +342,14 @@ if (!fast) {
     report(r.status === 0, name, (summary.exec(out)?.[0] ?? "no summary") + " (tools/deploy-tests/, local stand-ins, no SSH)", r.status === 0 ? [] : out.split("\n").filter((l) => l.includes("FAIL")));
   }
   else report("warn", "deploy checks", "skipped: no dist/ (run bun run dist first)");
+  for (const [name, script] of [
+    ["room component controls", "room-component-controls-check.ts"],
+    ["room workspace tools", "room-workspace-tools-check.ts"],
+  ]) {
+    const run = spawnSync("bun", [join(ROOT,"tools",script)], {encoding:"utf8",cwd:ROOT,timeout:process.env.CI ? 240_000 : 120_000});
+    const log=(run.stdout + run.stderr).trim().split("\n");
+    report(run.status===0,name,run.status===0 ? log.at(-1) ?? name : "Browser acceptance failed",run.status===0 ? [] : log.slice(-18));
+  }
   // the shared scene in two real browsers (tools/live-accept.ts, about 10 s)
   // 180 s here; 360 s on a CI runner, where software rendering made the 14 steps take 165 s (GitHub, 2026-11-25)
   const r = spawnSync("bun", [join(ROOT, "tools", "live-accept.ts")], { encoding: "utf8", cwd: ROOT, timeout: process.env.CI ? 360_000 : 180_000 });

@@ -1,24 +1,11 @@
 // bun run dist [--out dist] [--no-verify] [--strict-wiki]
-// Assembles the self-contained deployable folder:
-//   dist/index.html, viewer.css, app.js        the bundled page (landing, Manage; the viewer with three.js behind a dynamic import), split into chunks: app.js and the chunks it
-//                                              imports load before the page is ready; the person chunk only after (tools/bundle.ts)
-//   dist/asset/rig-b.glb, rig-b.manifest.json  the asset
-//   dist/asset/manikin/                        the person's packages (assets/manikin/, copied whole); version.json names the default
-//   dist/libs/basis/                           three's KTX2 transcoder (basis_transcoder.js, .wasm), loaded by the person chunk
-//   dist/wiki/                                 the wiki as a static site (built here, from wiki/*.md and wiki/img/)
-//   dist/server/server.js                      the Synergon server bundled into one file for Bun (from server/server.ts;
-//                                              only code from server/ and shared/, and the person's solver, rig binding and
-//                                              body fit from viewer/src/person/ with their numbers; no npm package). Never served:
-//                                              Caddy answers 404 for /server/* (deploy/synergon.caddy)
-//   dist/version.json                          build time, source revision, model hash and triangle count; with the
-//                                              server, also server: {format} (the scene format it stores)
-// Nothing from private/ or work/ is copied. All URLs are relative, so the folder works from any
-// sub-path. Unless --no-verify is given, the result is served from the root / by a throwaway local server
-// and loaded in headless Chromium: the viewer, its link to the documentation, and several wiki pages. Every
-// request must succeed and no page may log an error. Like Caddy (deploy/synergon.caddy), the throwaway server
-// answers /api/* from the built server (started on a free port with an empty temporary data folder, answers
-// streamed so the live channel works), gives the viewer page for /workspaces/*, and refuses /server/*.
-import { mkdirSync, rmSync, writeFileSync, copyFileSync, cpSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
+// Build the self-contained public room and station site for the existing Caddy root.
+// The release contains both browser shells, the station model, immutable library editions,
+// the wiki and the public screening source. server/server.js runs both APIs from separate
+// data stores. Caddy refuses the server/ tree. The local proxy below mirrors these routes.
+// Unless --no-verify is given, exercise the installed bundle in Chromium and test release
+// replacement with disposable workspace data. Private project stores are outside this build.
+import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -27,10 +14,11 @@ import { tmpdir } from "node:os";
 import { ROOT, timeline } from "./timeline.ts";
 import { bundleViewer } from "./bundle.ts";
 import { buildWiki, lintWiki } from "./wiki.ts";
+import { buildRoomRelease, verifyDisposableRoom } from "./room-dist.ts";
 import { currentVersion } from "./version.ts";
 import { personEntry } from "./serve.ts";
 
-const TYPES: Record<string, string> = { ".txt": "text/plain; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
+const TYPES: Record<string, string> = { ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
 
 /** Static file server for `dir` under the path `base`, behaving like the production web server (deploy/synergon.caddy): index.html for a folder, a
  *  redirect when the folder's slash is missing, 404 otherwise; the viewer page (index.html) for `<base>workspaces/*`; 404 for the server's folder `server/`; and, given `api` (the origin of a running Synergon
@@ -50,6 +38,8 @@ export function serveFolder(dir: string, base = "/", opts: { api?: string; idleT
       if (!opts.api) return answer(404, "no Synergon server");
       const headers = new Headers(req.headers);
       for (const h of ["host", "connection", "accept-encoding", "content-length"]) headers.delete(h);
+      headers.set("host", url.host);
+      headers.set("x-forwarded-proto", url.protocol.slice(0, -1));
       headers.set("x-forwarded-for", srv.requestIP(req)?.address ?? "127.0.0.1");
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
       const up = await fetch(opts.api + url.pathname.slice(base.length - 1) + url.search, { method: req.method, headers, body, redirect: "manual", signal: req.signal }).catch(() => null);
@@ -71,9 +61,9 @@ export function serveFolder(dir: string, base = "/", opts: { api?: string; idleT
   return { server, log, origin: `http://127.0.0.1:${server.port}`, base };
 }
 
-/** Bundles server/server.ts into `<out>/server/server.js` (one file, for Bun). Refuses a bundle that takes code from anywhere but server/ and shared/
+/** Bundles the public service into `<out>/server/server.js` (one file, for Bun). Refuses a bundle that takes code from anywhere but server/ and shared/
  *  (no viewer code, no npm package) or that keeps an import the Bun runtime does not provide itself (bun, bun:*, Node's built-in modules). */
-export function buildServer(out: string, entry = "server/server.ts"): { file: string; bytes: number; modules: number } {
+export function buildServer(out: string, entry = "server/room-public.ts"): { file: string; bytes: number; modules: number } {
   const file = join(out, "server", "server.js"), tmp = mkdtempSync(join(tmpdir(), "synergon-dist-")), meta = join(tmp, "meta.json");
   try {
     const r = spawnSync(process.execPath, ["build", entry, "--target=bun", `--outfile=${file}`, `--metafile=${meta}`], { cwd: ROOT, encoding: "utf8" });
@@ -96,20 +86,23 @@ export function buildServer(out: string, entry = "server/server.ts"): { file: st
 
 /** Starts the built server like the host does, but in local mode, on a free port, with an empty temporary data folder and the release's own asset
  *  folder; resolves once it prints its {"listening": port} line. */
-async function startBuiltServer(out: string) {
+export async function startBuiltServer(out: string, options: { data?: string; mode?: "local" | "deployed" } = {}) {
   const free = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response() }), port = free.port; free.stop(true);
-  const data = mkdtempSync(join(tmpdir(), "synergon-dist-data-"));
-  const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", "local", "--port", String(port), "--host", "127.0.0.1", "--data", data, "--asset", join(out, "asset")], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
+  const data = options.data ?? mkdtempSync(join(tmpdir(), "synergon-dist-data-"));
+  const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", options.mode ?? "local", "--port", String(port), "--host", "127.0.0.1", "--data", data, "--asset", join(out, "asset")], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
   let said = "";
   const collect = async (s: ReadableStream<Uint8Array>, onText?: (t: string) => void) => { const d = new TextDecoder(), r = s.getReader(); for (;;) { const { done, value } = await r.read(); if (done) return; const t = d.decode(value, { stream: true }); said += t; onText?.(t); } };
-  const stop = () => { proc.kill(); rmSync(data, { recursive: true, force: true }); };
+  const stop = async () => {
+    proc.kill(); await proc.exited;
+    if (!options.data) rmSync(data, { recursive: true, force: true });
+  };
   const listening = await new Promise<number>((resolve, reject) => {
     let line = "";
     const timer = setTimeout(() => reject(new Error(`the built server did not report {"listening": port} within 15 s; it printed: ${said.trim().slice(-800) || "nothing"}`)), 15000);
     collect(proc.stdout, (t) => { line += t; for (const l of line.split("\n")) { try { const j = JSON.parse(l); if (typeof j?.listening === "number") { clearTimeout(timer); resolve(j.listening); } } catch { /* not that line */ } } });
     collect(proc.stderr);
     proc.exited.then((code) => { clearTimeout(timer); reject(new Error(`the built server exited (code ${code}) before listening; it printed: ${said.trim().slice(-800) || "nothing"}`)); });
-  }).catch((e) => { stop(); throw e; });
+  }).catch(async (e) => { await stop(); throw e; });
   return { origin: `http://127.0.0.1:${listening}`, proc, output: () => said, stop };
 }
 
@@ -152,20 +145,21 @@ if (import.meta.main) {
   // the server goes into the release once its source exists (server/server.ts); until then the release has no server/ and version.json no server entry
   const hasServer = existsSync(join(ROOT, "server", "server.ts"));
   const sceneFormat: string | null = hasServer ? (await import("../shared/commands/doc.ts")).SCENE_FORMAT : null;
-  const version: ReturnType<typeof currentVersion> & { server?: { format: string }; person?: { package: string } } = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
+  const version: ReturnType<typeof currentVersion> & { server?: { format: string; room?: Awaited<ReturnType<typeof buildRoomRelease>> }; person?: { package: string } } = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, "asset"), { recursive: true });
   for (const [name, f] of Object.entries(bundle.files)) writeFileSync(join(out, name), f.body);
   let serverBuild: ReturnType<typeof buildServer> | null = null;
   if (hasServer) {
     try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
-    console.log(`server: bundled server/server.ts into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
+    version.server!.room = await buildRoomRelease(out, bundle.files["index.html"].body, bundle.files["llms.txt"].body);
+    console.log(`room: bundled browser and ${version.server!.room.releases.length} verified editions`);
+    console.log(`server: bundled station and public room APIs into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
   } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /api/)");
   if (existsSync(join(ROOT, "viewer", "landing-rig.webp"))) copyFileSync(join(ROOT, "viewer", "landing-rig.webp"), join(out, "landing-rig.webp"));   // the landing's picture
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
-  // the person: MP's packages (assets/manikin/, whole) and three's KTX2 transcoder, which the person chunk loads after the page is ready
-  const manikin = join(ROOT, "assets", "manikin"), basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
-  if (existsSync(manikin)) cpSync(manikin, join(out, "asset", "manikin"), { recursive: true, dereference: true });
+  // The person chunk loads the transcoder after the page is ready.
+  const basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
   mkdirSync(join(out, "libs", "basis"), { recursive: true });
   for (const f of ["basis_transcoder.js", "basis_transcoder.wasm"]) copyFileSync(join(basis, f), join(out, "libs", "basis", f));
   Object.assign(version, personEntry(join(out, "asset", "manikin")));
@@ -175,7 +169,7 @@ if (import.meta.main) {
   const files = listFiles(out), size = (list: string[]) => list.reduce((n, f) => n + statSync(f).size, 0);
   const wikiFiles = files.filter((f) => f.startsWith(join(out, "wiki") + sep)), total = size(files);
   console.log(`dist: ${files.length} files, ${(total / 1e6).toFixed(2)} MB → ${out}   (version ${version.short})`);
-  for (const f of files.filter((x) => !wikiFiles.includes(x))) console.log(`  ${f.slice(out.length + 1).padEnd(32)} ${statSync(f).size.toLocaleString("en")} bytes`);
+  for (const f of files.filter((x) => !wikiFiles.includes(x) && !x.startsWith(join(out, "library") + sep))) console.log(`  ${f.slice(out.length + 1).padEnd(32)} ${statSync(f).size.toLocaleString("en")} bytes`);
   console.log(`  ${"wiki/".padEnd(32)} ${size(wikiFiles).toLocaleString("en")} bytes in ${wikiFiles.length} files (${wiki.pages} pages, ${wikiFiles.filter((f) => /\.(png|jpe?g|svg|gif|webp)$/i.test(f)).length} images)`);
 
   let ok = true;
@@ -212,6 +206,7 @@ if (import.meta.main) {
     // the server, through the sub-path as the viewer reaches it: health, the live channel, and its own code not served
     if (api) {
       try {
+        if (version.server?.room) await verifyDisposableRoom(origin, version.server.room);
         const probe = { headers: { "x-synergon-probe": "1" } };
         const h = await fetch(`${origin}${base}api/health`, { signal: AbortSignal.timeout(10000) }), health: any = h.ok ? await h.json() : null;
         if (!health?.ok) errors.push(`server: ${base}api/health answered HTTP ${h.status}${health ? " without ok: true" : ""}`);
@@ -236,29 +231,28 @@ if (import.meta.main) {
     const { Browser } = await import("./render.ts");
     const browser = await Browser.launch();
     try {
-      // 0. the landing: a small page, no viewer files
-      if (api) {
-        const land = await browser.page(`${origin}${base}`);
-        // the list's rows, or a final word in its status line (empty, nothing found, no server); the status line is there
-        // from the start, empty or "Loading workspaces…", so it alone is no sign that the list has come (a slow runner saw 0 rows)
-        await land.waitFor("document.querySelector('.wl-list li') || (document.querySelector('.wl-status')?.textContent ?? '').replace('Loading workspaces…', '').trim()", "the deployed landing's list of workspaces");
-        const lm = await land.evaluate("({ js: performance.getEntriesByType('resource').filter((e) => /\\.m?js(\\?|$)/.test(e.name)).reduce((a, e) => a + e.decodedBodySize, 0), heavy: performance.getEntriesByType('resource').some((e) => /\\.(glb|wasm)|manifest/.test(e.name)), canvas: !!document.querySelector('canvas'), rows: document.querySelectorAll('.wl-list li').length })");
-        if (lm.js > 40e3 || lm.heavy || lm.canvas || lm.rows < 1) errors.push(`landing: ${JSON.stringify(lm)} (a small page with the workspaces listed, no model, no canvas)`);
-        const orientation = await land.evaluate(`(async () => {
-          const initial = new DOMParser().parseFromString(await (await fetch(location.href)).text(), 'text/html');
-          const guide = initial.querySelector('link[rel="help"]')?.getAttribute('href');
-          const links = [...initial.querySelectorAll('#app a[href]')].map(a => a.getAttribute('href'));
-          if (!guide || !links.includes(guide) || !links.some(href => href.startsWith('/api/workspaces?')))
-            return 'initial HTML must link to the agent guide and workspace directory';
-          if (![...document.querySelectorAll('a')].some(a => a.getAttribute('href') === guide))
-            return 'rendered homepage lost its agent guide';
-          const response = await fetch(guide);
-          return response.ok && response.headers.get('content-type')?.startsWith('text/plain')
-            && (await response.text()).includes('/api/workspaces/<id>/command') ? '' : 'agent guide is missing its command entry point';
+      // The room is the default entry. Exercise both editors through the installed proxy routes;
+      // all workspaces used here belong to the throwaway data directory.
+      if (api && version.server?.room) {
+        const land = await browser.page(origin + base);
+        await land.waitFor("document.querySelector('a[href^=\"/workspaces/room\"]')", "the public room directory link");
+        const about = await land.evaluate(`(async () => {
+          const guide = document.querySelector('link[rel=help]')?.href;
+          return { guide: guide && await (await fetch(guide)).text(), scripts: performance.getEntriesByType('resource').filter(e=>e.name.endsWith('.js')).reduce((n,e)=>n+e.decodedBodySize,0), canvas:!!document.querySelector('canvas') };
         })()`);
-        if (orientation) errors.push(`landing: ${orientation}`);
-        errors.push(...land.errors.map((e) => "landing console: " + e));
+        if (!about.guide?.includes('/api/room/workspaces') || about.scripts > 40_000 || about.canvas) errors.push('room landing must link to the public agent guide and load without the 3D engine');
+        errors.push(...land.errors.map(e => "room landing console: " + e));
         await land.close();
+        const directory = await browser.page(origin + base + "workspaces/room/?list=1");
+        const roomPath = await directory.waitFor("document.querySelector('a[href^=\"/workspaces/room/\"][class*=directory-row]')?.pathname", "a public room in the directory");
+        errors.push(...directory.errors.map(e => "room directory console: " + e));
+        await directory.close();
+        const roomPage = await browser.page(origin + roomPath);
+        await roomPage.waitFor("document.querySelector('#room-controls') && document.querySelector('.rv-plan [data-instance]')", "the deployed room editor");
+        await roomPage.evaluate("Array.from(document.querySelectorAll('.rm-view-switch button')).find(b => b.textContent.trim() === '3D').click()");
+        await roomPage.waitFor("!!document.querySelector('[data-seated-host]')", "the operator and pinned geometry in the public room", process.env.CI ? 150000 : 60000);
+        errors.push(...roomPage.errors.map(e => "room editor console: " + e));
+        await roomPage.close();
       }
       // 1. the viewer (in the first workspace when there is a server), its Documentation link and its version line
       const page = await browser.page(`${origin}${base}${api ? `workspaces/${wsId}` : ""}`);
@@ -316,7 +310,7 @@ if (import.meta.main) {
             if (!after) { errors.push(`${name}: the ${what} did not lead anywhere`); break; }
             clicked += `${clicked ? ", " : ""}${what} → ${after.replace(base, "") || "viewer"}`;
           }
-          if (clicked.endsWith("viewer")) { await p.waitFor("window.viewerReady || window.viewerError || document.querySelector('main.pg')", "the page behind the wiki's link (the landing, or the viewer on a server without workspaces)"); if (await p.evaluate("window.viewerError || null")) errors.push("viewer reached from the wiki failed to load"); }
+          if (clicked.endsWith("viewer")) { await p.waitFor("window.viewerReady || window.viewerError || document.querySelector('.room-home main, main.pg')", "the page behind the wiki's link (the landing, or the viewer on a server without workspaces)"); if (await p.evaluate("window.viewerError || null")) errors.push("viewer reached from the wiki failed to load"); }
         }
         errors.push(...p.errors.map((e) => `${name} console: ${e}`));
         await p.close();
@@ -329,7 +323,14 @@ if (import.meta.main) {
       console.log(`verify from ${base}: ${errors.length ? "FAILED" : "ok"}: viewer drew ${st?.render.triangles ?? 0} triangles and links to the documentation; ${sample.length} wiki pages loaded (${sample.map((u) => u || "index").join(", ")}) with ${images} images; followed ${clicked || "no links"}; ${serverSummary}; ${good} requests answered, ${failed.length} failed, ${[...new Set(errors)].length} problem(s)`);
       for (const e of [...new Set(errors)]) fail(e);
     } catch (e: any) { fail("verify: " + e.message); }
-    await browser.close(); server.stop(true); api?.stop();
+    await browser.close(); server.stop(true); await api?.stop();
+  }
+  if (!args.includes("--no-verify") && version.server?.room && ok) {
+    try {
+      const { verifyRoomRestart } = await import("./deploy-tests/room-restart.ts");
+      await verifyRoomRestart(out, startBuiltServer);
+      console.log("room restart: public pins, geometry, room and legacy station metadata survived a replacement release");
+    } catch (e: any) { fail("room restart: " + e.message); }
   }
   const seconds = (performance.now() - t0) / 1000;
   console.log(`dist ${ok ? "done" : "FAILED"} in ${seconds.toFixed(2)} s`);

@@ -22,30 +22,43 @@ tags: [deployment, implementation, wiki, viewer, server]
 The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the viewer itself works is on the
 [viewer page](viewer.md), the checks it runs are on the [checks page](../40-method/checks.md).
 
+## Public rooms and existing station workspaces
+
+The homepage opens the room editor at `/workspaces/room/`. Existing station links at
+`/workspaces/<id>` keep their original viewer, command API and database. Caddy forwards both APIs
+through its existing `/api/*` route. The service starts both from the release selected by
+`/srv/synergon/current`. A rollback selects the earlier application and leaves workspace storage in place.
+
+| Address | Contents |
+|---|---|
+| `/`, `/llms.txt` | Room homepage and guide to room and station discovery |
+| `/workspaces/room/<id>`, `/api/room/workspaces/<id>` | Room editor, state, commands, events and workspace MCP |
+| `/api/room/catalog`, `/api/room/library/<digest>/` | Installed editions and their verified, immutable dependency files |
+| `/standards/workstation-screening.md` | Public criteria read by the assessment engine, also rendered in the [standards wiki](../85-standards/workstation-screening.md) |
+| `/workspaces/<id>`, `/api/workspaces/<id>` | Original station editor, metadata, commands, events and workspace MCP |
+| `/wiki/` | Public project documentation |
+
+The public room store lives under `/var/lib/synergon/rooms`. Its SQLite database holds public rooms
+and assessments. Its `public-library-v1` archive keeps redistributable editions admitted by published
+release catalogs. A new edition is verified and installed atomically. Older rooms continue to resolve
+the exact geometry, operator files and coordinate frames they saved, even after release folders are
+pruned. Include this directory with the existing station data in backups. Local project packages,
+imports and customer requirements stay in their own local installation.
+
 ## What is published
 
-`bun run dist` assembles one self-contained folder, `dist/`. All addresses inside it are relative, so it
-works from any sub-path; it is tested from the root `/` (where it is served) on every build.
+`bun run dist` builds the room and station browser bundles, the station model, the declared room
+editions and their file inventories, the public screening source and the wiki. The backend entry
+`server/room-public.ts` builds to `dist/server/server.js`. The release stores its catalog and evaluator
+source under `dist/server/`, which Caddy refuses to serve. `version.json` records the revision,
+station format, room format and current release pins.
 
-| Path in `dist/` | What | Size (*measured*, 2026-11-24) |
-|---|---|---|
-| `index.html`, `viewer.css`, `viewer.js` | the viewer, bundled with three.js; no other file is loaded from anywhere. Since step 1 it includes the live client (about 6 kB), which talks to the server when there is one | 2.7 kB, 16 kB, 732,720 bytes (726 kB on 2026-11-23) |
-| `asset/rig-b.glb` | the model | 720 kB |
-| `asset/rig-b.manifest.json` | the model's description: parts, joints, where every number comes from | 220 kB |
-| `server/server.js` | **new in step 1:** the Synergon server bundled into one file for Bun (`bun build --target bun` of `server/server.ts`). `bun run dist` refuses a bundle that takes code from anywhere but `server/` and `shared/` (no viewer code, no npm package) or imports anything Bun does not provide itself. Never served: Caddy answers 404 for `/server/*` | 65,471 bytes |
-| `version.json` | build time, source revision, model hash and triangle count. The viewer shows the short revision in Settings, and the wiki shows build information in its footer. With the server it also says `server: {format: "synergon-scene/1"}`, the scene format the server stores (it holds the person in the seat, see [the person's commands](person-commands.md#the-scene-format)); the viewer looks for a server only when this entry is there | under 1 kB |
-| `wiki/` | this wiki as a static site: one HTML page per Markdown page, one stylesheet, one small search script, the images | 19.6 MB in 144 files, 37 pages (15.5 MB, 29 pages on 2026-11-23) |
-| `deploy-receipt.json` | written after a deployment (or dry run): what was published, where, the result of every check, and the server's state (`server`, and `rollbackServer` after a switch back) | — |
-
-**The verify step of `bun run dist`** now also starts the built `server/server.js` (local mode, a free
-port, an empty temporary data folder, the release's own `asset/`) behind the throwaway static server,
-which forwards `/api/*` to it the way Caddy does, gives the viewer page for `/workspaces/*`, and refuses `/server/*`. It requires:
-`api/health` answers with the scene format, mode and the revision of `version.json`; `api/live` is an
-event stream that delivers a snapshot within 5 s; `server/server.js`, `server/` and `server` answer 404;
-the server is still running at the end. The viewer's own health request and live channel are therefore
-part of the headless-Chromium check, which fails on any failed request or console error. *Measured*
-2026-11-24: "server … answered health and streamed session, snapshot through /api/; /server/
-refused; 155 requests answered, 0 failed".
+Local distribution checks launch the bundled server against disposable storage. Chromium opens the
+room plan, renders the seated operator in 3D and follows an original station link. An isolated edit
+and assessment exercise the public API. A second server starts from a release that omits the station
+edition and verifies saved room state, exact model bytes, solved eye measurement and the previous
+station database row. Production release probes read the station index and metadata only. They also
+verify the public room revision, catalog, commands, directory, screening source and project boundary.
 
 The wiki site has navigation by section, a table of contents per page, the TL;DR highlighted, a status
 badge and the date of the last update, previous and next links, a search over titles and summaries,

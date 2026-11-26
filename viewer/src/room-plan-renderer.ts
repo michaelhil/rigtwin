@@ -1,7 +1,9 @@
 // A dimensioned, north-up floor drawing in CSS pixels. Its geometry is in room metres.
 import { doorClearance, type DoorGap } from "../../shared/room-geometry.ts";
 import { roomPoint, type RoomInstance, type RoomPoint, type RoomRelease, type RoomScene } from "../../shared/room.ts";
+import type { PlanCamera } from "./room-camera-state.ts";
 import type { PlacedAsset } from "./room-assets-renderer.ts";
+import type { JointValue } from "../../shared/pose.ts";
 
 type Point = [number, number];
 const NS = "http://www.w3.org/2000/svg";
@@ -18,16 +20,19 @@ const format = (n: number) => n.toFixed(2) + " m";
 const path = (d: string, cls: string) => element("path", { d, class: cls });
 const meter = (x: number) => Number(x.toFixed(3));
 
-export interface RoomMeasurement { points: [RoomPoint, RoomPoint]; label: string }
+export interface RoomMeasurement { points: [RoomPoint, RoomPoint]; label: string; instances?:[string,string] }
 export type RoomPlacement = Pick<RoomInstance, "x" | "y" | "yaw">;
 export interface RoomViewCallbacks {
-  onSelect(instanceId: string | null, memberId?: string): void;
+  onFocusChange?(instance:string|null, mode:"plan"|"3d", selected:string|null, member?:string):void;
+  onSelect(instanceId: string | null, memberId?: string, additional?: boolean): void;
   onPlace(instanceId: string, placement: RoomPlacement): void;
+  onAdjust?(instanceId:string,values:Record<string,JointValue>,version:number):void;
   onError?(message: string): void;
 }
 export interface Drawing {
+  focused?:string|null;
   scene: RoomScene; releases: RoomRelease[]; models: Map<string, PlacedAsset>;
-  selected: string | null; member: string | null; measurement: RoomMeasurement | null;
+  selected: string | null; member: string | null; measurement: RoomMeasurement | null; hiddenParts?: ReadonlySet<string>; colours?:"natural"|"parts"|"evidence";
 }
 type Gesture = { pointer: number; start: Point; local: Point; pan: Point; moved: boolean; rotate: boolean; object?: RoomInstance; member?: string };
 
@@ -66,6 +71,12 @@ export class RoomPlan {
   }
   resize(width: number, height: number) { this.width = width; this.height = height; this.paint(); }
   fit() { this.zoom = 1; this.pan = [0, 0]; this.paint(); }
+  cameraState(): PlanCamera { return { center:this.local([this.width/2,this.height/2]),zoom:this.zoom }; }
+  restoreCamera(state:PlanCamera) {
+    this.zoom=state.zoom;this.pan=[0,0];this.layout();
+    const [x,y]=this.pixel(...state.center);
+    this.pan=[this.width/2-x,this.height/2-y];this.paint();
+  }
   cancel = () => {
     if (this.gesture && this.svg.hasPointerCapture(this.gesture.pointer)) this.svg.releasePointerCapture(this.gesture.pointer);
     this.gesture = null; this.preview = null; this.svg.classList.remove("rv-dragging"); this.paint();
@@ -82,7 +93,7 @@ export class RoomPlan {
     const rotate = !!target.closest("[data-rotate]");
     this.gesture = { pointer: e.pointerId, start: p, local: this.local(p), pan: [...this.pan], moved: false, rotate, object, member };
     this.svg.setPointerCapture(e.pointerId);
-    if (object) this.callbacks.onSelect(object.id, rotate ? this.drawing.member ?? undefined : member);
+    if (object && rotate) this.callbacks.onSelect(object.id);
     e.preventDefault();
   };
   private move = (e: PointerEvent) => {
@@ -108,7 +119,11 @@ export class RoomPlan {
     if (!g || g.pointer !== e.pointerId) return;
     const preview = this.preview;
     this.cancel();
-    if (preview && g.moved) this.callbacks.onPlace(preview.id, { x: preview.x, y: preview.y, yaw: preview.yaw });
+    if (preview && g.moved) {
+      this.callbacks.onSelect(preview.id);
+      this.callbacks.onPlace(preview.id, { x: preview.x, y: preview.y, yaw: preview.yaw });
+    }
+    else if (g.object && !g.moved && !g.rotate) this.callbacks.onSelect(g.object.id, g.member, e.shiftKey);
     else if (!g.object && !g.moved && e.button === 0) this.callbacks.onSelect(null);
   };
   private wheel = (e: WheelEvent) => {
@@ -192,7 +207,7 @@ export class RoomPlan {
       const model = models.get(i.id);
       if (model && model.release.id === i.release) {
         for (const p of model.planParts) {
-          if (p.path) group.append(element("path", { d: p.path, fill: p.fill, class: sel && member === p.id ? "rv-part rv-chosen" : "rv-part", "data-member": p.id }));
+          if (p.path && (!this.drawing.hiddenParts || model.partVisible(p.id,this.drawing.hiddenParts))) group.append(element("path", { d: p.path, fill: model.displayColour(p.id,this.drawing.colours??"natural")??p.fill, class: sel && member === p.id ? "rv-part rv-chosen" : "rv-part", "data-member": p.id }));
         }
       } else group.append(element("rect", { x:min[0], y:min[1], width:max[0]-min[0], height:max[1]-min[1], class: "rv-loading-shape" }));
       const corners = [roomPoint(i, [min[0],min[1],0]), roomPoint(i, [min[0],max[1],0]), roomPoint(i, [max[0],min[1],0]), roomPoint(i, [max[0],max[1],0])];
@@ -202,7 +217,19 @@ export class RoomPlan {
       const name = label([P(labelX,0)[0],labelY], i.label, sel ? "rv-object-label rv-active-label" : "rv-object-label");
       name.setAttribute("data-instance", i.id);
       name.dataset.above = String(P(labelX,Math.max(...corners.map(p=>p[1])))[1]-14);
-      if (scene.person?.host === i.id) name.append(element("tspan", { class: "rv-seated-tag" }, " · Seated"));
+      if (scene.person?.host === i.id) {
+        const marker=element("g",{"data-instance":i.id});
+        const person=element("g",{"data-member":"@operator","aria-label":"Operator controls for "+i.label,
+          role:"button",tabindex:0,class:"rv-operator-marker",transform:`translate(${P(labelX,0)[0]},${labelY-16})`});
+        person.append(element("title",{},"Operator controls for "+i.label),
+          element("circle",{r:8,fill:"var(--rv-floor)",stroke:"var(--rv-teal)"}),
+          element("circle",{cx:0,cy:-2.8,r:2.1,fill:"var(--rv-teal)"}),
+          element("path",{d:"M-4 4C-4 0 4 0 4 4",fill:"none",stroke:"var(--rv-teal)","stroke-width":1.3}));
+        person.addEventListener("keydown",e=>{
+          if (e.key==="Enter" || e.key===" ") {e.preventDefault();this.callbacks.onSelect(i.id,"@operator",e.shiftKey);}
+        });
+        marker.append(person);handles.append(marker);
+      }
       labels.append(name);
       if (sel) {
         const gap = 4/s, handle = 21/s, mid = (min[0]+max[0])/2;

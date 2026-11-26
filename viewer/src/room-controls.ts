@@ -8,6 +8,7 @@ const paths = {
   display: 'M2.5 4.5h19v12h-19z M12 16.5v4m-5 0h10',
   layers: 'm3 8 9-5 9 5-9 5z M3 12l9 5 9-5 M3 16l9 5 9-5',
   measure: 'm3 15 12-12 6 6L9 21z M12 6l3 3m-6 0 2 2m-5 1 3 3',
+  pop: 'M13 3h8v8m0-8L10 14M9 5H4v15h15v-5',
   plus: 'M12 5v14 M5 12h14', chevron: 'm7 10 5 5 5-5', next: 'm9 6 6 6-6 6',
   collapse: 'M3 4h18v16H3z M9 4v16m8-11-3 3 3 3', expand: 'M3 4h18v16H3z M9 4v16m4-11 3 3-3 3',
   undo: 'M9 4 3 10l6 6 M4 10h10a6 6 0 0 1 6 6v3',

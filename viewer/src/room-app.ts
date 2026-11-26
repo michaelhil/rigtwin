@@ -1,19 +1,22 @@
+import { ROOM_API, ROOM_DIRECTORY, PUBLIC_ROOM, roomURL, apiRoot } from './room-paths.ts';
 // Local room editor. The same command endpoint and event stream serve the UI and remote clients.
 import { h, link } from './dom.ts';
 import { ask } from './dialog.ts';
 import { action, brand, displayNumber, field, icon, iconAction, numberForm, section, select, store, stored, wirePanel, type Drafts, type Glyph } from './room-controls.ts';
+import { componentCard, componentPanel, floatingCard, placeFloatingCard, replaceComponentCard, type BeginPoseGesture } from './room-component-card.ts';
+import {mountRoomWorkspaceTools} from './room-workspace-tools.ts';
+import { roomScope } from './room-scope.ts';
 import { mountRoomView } from './room-view.ts';
 import type { RoomInstance, RoomJoint, RoomPoint, RoomRef, RoomRelease, RoomScene } from '../../shared/room.ts';
-import { AIM_LIMBS, type PersonAims } from '../../shared/person-aims.ts';
+import {roomOperatorControls} from './room-operator-controls.ts';
 
 type Workspace = Pick<RoomScene, 'id' | 'name'>;
+type PanelTab = 'layout' | 'measure' | 'assessment';
 type Args = Record<string, unknown>;
 interface Receipt<T> { ok: boolean; version: number; recorded: number | null; result: T }
-interface Distance { metres: number; from: { point: RoomPoint }; to: { point: RoomPoint } }
+interface Distance { metres: number; from: RoomRef & { point: RoomPoint }; to: RoomRef & { point: RoomPoint } }
 interface Span { metres: number; edges: [string, string] }
 interface Clearance extends Span { opening: Span }
-const roomURL = (id: string) => '/workspaces/' + encodeURIComponent(id);
-const apiRoot = (id: string) => '/api' + roomURL(id);
 const shortRelease = (release: RoomRelease) => release.label + ' · v' + release.version;
 const distanceFormat = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 3, useGrouping: false });
 const metres = (n: number) => distanceFormat.format(n) + ' m';
@@ -36,7 +39,7 @@ async function directories() {
   let cursor = '';
   for (;;) {
     const params = new URLSearchParams({ limit: '50' }); if (cursor) params.set('cursor', cursor);
-    const page = await request<{ workspaces: Workspace[]; next?: string | null }>('/api/workspaces?' + params);
+    const page = await request<{ workspaces: Workspace[]; next?: string | null }>(ROOM_API + '/workspaces?' + params);
     workspaces.push(...page.workspaces);
     if (!page.next || seen.has(page.next)) break;
     cursor = page.next; seen.add(cursor);
@@ -47,7 +50,7 @@ async function createRoom() {
   await ask({
     title: 'New workspace', field: { label: 'Workspace name', max: 80, placeholder: 'e.g. Control room' }, confirm: 'Create empty room',
     run: async name => {
-      try { const ws = await request<Workspace>('/api/workspaces', { name: name.trim() || 'Untitled room', template: 'empty' }); location.assign(roomURL(ws.id)); return null; }
+      try { const ws = await request<Workspace>(ROOM_API + '/workspaces', { name: name.trim() || 'Untitled room', template: 'empty' }); location.assign(roomURL(ws.id)); return null; }
       catch (error) { return errorText(error); }
     },
   });
@@ -61,7 +64,7 @@ function directory(workspaces: Workspace[], message = '') {
   if (!workspaces.length) list.append(h('p', 'rm-help', 'Create a workspace to start with an empty room.'));
   document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main',
     h('h1', null, 'Room workspaces'), message && h('p', 'rm-error', message),
-    action('New workspace', () => void createRoom(), 'plus', 'rm-primary'), list)));
+    action('New workspace', () => void createRoom(), 'plus', 'rm-primary'), !PUBLIC_ROOM && link('Projects', '/projects', 'rm-link'), list)));
 }
 export async function startRoomApp() {
   document.body.className = 'room-app'; document.documentElement.classList.remove('page');
@@ -69,7 +72,7 @@ export async function startRoomApp() {
   let id = '';
   document.body.replaceChildren(h('main', 'rm-loading', brand(), h('p', null, 'Opening workspace…')));
   try {
-    id = path.startsWith('/workspaces/') ? decodeURIComponent(path.slice('/workspaces/'.length)) : '';
+    id = path.startsWith(ROOM_DIRECTORY + '/') ? decodeURIComponent(path.slice(ROOM_DIRECTORY.length + 1)) : '';
     if (!id) {
       const all = await directories();
       if (!new URLSearchParams(location.search).has('list')) {
@@ -88,7 +91,7 @@ export async function startRoomApp() {
       }
       directory(all); return;
     }
-    const [scene, { releases }] = await Promise.all([request<RoomScene>(apiRoot(id) + '/state'), request<{ releases: RoomRelease[] }>('/api/catalog')]);
+    const [scene, { releases }] = await Promise.all([request<RoomScene>(apiRoot(id) + '/state'), request<{ releases: RoomRelease[] }>(ROOM_API + '/catalog')]);
     let recents: unknown = []; try { recents = JSON.parse(stored('synergon.roomRecents') || '[]'); } catch { /* ignore */ }
     store('synergon.roomRecents', JSON.stringify([scene.id, ...(Array.isArray(recents) ? recents.filter(x => typeof x === 'string' && x !== scene.id) : [])].slice(0, 12)));
     editor(scene, releases);
@@ -97,7 +100,7 @@ export async function startRoomApp() {
       try { directory(await directories(), 'This room could not be found. Choose another workspace or create a room.'); return; } catch { /* show retry */ }
     }
     document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main', h('h1', null, 'Workspace unavailable'),
-      h('p', 'rm-error', errorText(error)), action('Try again', () => location.reload()), link('Browse workspaces', '/workspaces?list=1', 'rm-link'))));
+      h('p', 'rm-error', errorText(error)), action('Try again', () => location.reload()), link('Browse workspaces', ROOM_DIRECTORY + '/?list=1', 'rm-link'))));
   }
 }
 
@@ -122,7 +125,7 @@ function initialPlacement(scene: RoomScene, asset: RoomRelease, releases: Map<st
 }
 
 function editor(first: RoomScene, releases: RoomRelease[]) {
-  let scene = first, selected: string | null = null, member = '', tab: 'layout' | 'measure' = 'layout', library = false;
+  let scene = first, selected: string | null = null, member = '', tab: PanelTab = 'layout', library = false;
   let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases[0]?.id ?? '', newLabel = '';
   let undoable = scene.version > 0, undoToken = 0, addId = '';
   const api = apiRoot(scene.id), byRelease = new Map(releases.map(r => [r.id, r]));
@@ -132,44 +135,228 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   const pane = h('aside', 'rm-panel'); pane.id = 'room-controls'; pane.setAttribute('aria-label', 'Workspace panel');
   const hide = iconAction('Collapse panel', () => {}, 'collapse'), open = iconAction('Open workspace panel', () => {}, 'expand');
   open.classList.add('rm-reopen'); open.setAttribute('aria-controls', pane.id);
-  const resize = h('div', 'rm-grip'), railTop = h('div', 'rm-brand-row', brand(), hide);
-  const wsLink = link('', '/workspaces?list=1', 'rm-workspace-link');
-  wsLink.title = 'Browse workspaces'; wsLink.append(h('span', null, scene.name), icon('chevron'));
-  const title = h('div', 'rm-workspace', h('div', 'rm-kicker', 'Workspace'), wsLink);
+  const resize = h('div', 'rm-grip');
+  const wsLink=h('summary','rm-workspace-link',h('span',null,scene.name),icon('chevron'));
+  wsLink.title='Switch workspace';
+  const recent=h('div','rm-workspace-choices');
+  const browse=link('Browse all workspaces',ROOM_DIRECTORY+'/?list=1','rm-workspace-choice');
+  const menu=h('div','rm-workspace-menu',recent,browse,
+    action('New workspace',()=>void createRoom(),'plus','rm-workspace-choice'));
+  const switcher=h('details','rm-workspace-switcher',wsLink,menu);
+  switcher.addEventListener('toggle',async()=>{
+    if (!switcher.open) return;
+    try {
+      const {workspaces}=await request<{workspaces:Workspace[]}>(ROOM_API+'/workspaces?limit=8');
+      recent.replaceChildren(...workspaces.filter(w=>w.id!==scene.id).map(w=>link(w.name,roomURL(w.id),'rm-workspace-choice')));
+    } catch { recent.replaceChildren(); }
+  });
+  document.addEventListener('pointerdown',e=>{if(switcher.open && !switcher.contains(e.target as Node)) switcher.open=false;});
+  switcher.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();switcher.open=false;wsLink.focus();}});
+  const home=brand();home.classList.add('rm-home-symbol');
+  const railTop=h('div','rm-brand-row',home,switcher,hide);
   const scroll = h('div', 'rm-scroll'), stage = h('div', 'room-viewport'), live = h('span', 'rm-live', 'Connecting');
-  const stageTitle = h('h1', 'rm-stage-title', 'Floor plan'), stageSize = h('p', 'rm-stage-size');
+  const scope = roomScope(focusAsset);
   const viewHelp = h('span', 'rm-view-help');
-  const stageHead = h('header', 'rm-stage-head', h('div', null, stageTitle, stageSize));
   const versionText = h('span', 'rm-version');
   const stageFoot = h('footer', 'rm-stage-foot', viewHelp, h('div', 'rm-status', live, versionText));
   const notice = h('div', 'rm-notice'); notice.hidden = true; notice.setAttribute('role', 'status');
-  const drawing = h('main', 'rm-drawing', stageHead, stage, stageFoot, notice);
+  const drawing = h('main', 'rm-drawing', scope.node, stage, stageFoot, notice);
+  drawing.style.isolation='isolate';
+  drawing.tabIndex=-1;
   const tabs = h('div', 'rm-tabs');
   const layoutTab = action('Layout', () => changeTab('layout'), 'layers'), measureTab = action('Measure', () => changeTab('measure'), 'measure');
-  tabs.append(layoutTab, measureTab);
+  const assessTab = action('Assessment', () => changeTab('assessment'));
+  tabs.append(layoutTab, measureTab, assessTab);
   const plan = action('Plan', () => setMode('plan'), 'plan'), three = action('3D', () => setMode('3d'), 'cube');
   const fit = iconAction('Fit room to view', () => view.fit(), 'fit');
   const undo = iconAction('Undo latest change', () => void write('undo', {}), 'undo');
-  pane.append(railTop, title, tabs, scroll, h('footer', 'rm-panel-foot', h('div', 'rm-view-switch', plan, three), fit, undo));
+  const toolbar=h('div','rm-workspace-toolbar');
+  const nav=h('div','rm-panel-foot',h('div','rm-view-switch',plan,three),fit,undo,!PUBLIC_ROOM && link('Project','/projects?scene='+encodeURIComponent(scene.id),'rm-link rm-project-link'));
+  pane.append(railTop,tabs,scroll,h('footer','rm-panel-tools',nav,toolbar));
   const shell = h('div', 'rm-shell', pane, resize, drawing, open); document.body.replaceChildren(shell);
   wirePanel(shell, pane, resize, open, hide);
   let placementVersion = scene.version;
+  let scopeBefore: string|null=null, roomTab: PanelTab | undefined;
   const view = mountRoomView(stage, {
-    onSelect: (id, part) => { choose(id, part); },
+    onFocusChange: (id,nextMode,instance,part) => {
+      if(id && !scopeBefore) roomTab=tab;
+      scopeBefore=id;
+      mode=nextMode;
+      for (const [frame,ref] of popouts) frame.hidden=!!id && ref.instance!==id;
+      if (tab==='assessment') assessment?.deactivate();
+      tab='layout';library=false;
+      syncMode();
+      choose(instance ?? id,part);
+      if (!id && roomTab) {const restore=roomTab;roomTab=undefined;if(restore!==tab) changeTab(restore);}
+      workspaceTools.refresh();
+    },
+    onSelect: (id, part, additional) => { pickComponent(id, part, additional); },
+    onAdjust: (id,values,version) => {
+      const item=scene.instances.find(i=>i.id===id), release=item && byRelease.get(item.release);
+      const assumed=release?.joints.some(j=>j.assumed && j.locked && Object.hasOwn(values,j.id));
+      void write('pose.apply',{instance:id,values,...(assumed?{allowAssumed:true}:{})},version);
+    },
     onPlace: (id, placement) => { void write('instances.move', { instance: id, ...placement }, placementVersion).then(ok => { if (!ok) view.setScene(scene, releases); }); },
     onError: message => tell(message, true),
   });
   stage.addEventListener('pointerdown', () => { placementVersion = scene.version; }, true);
-  async function setMode(next: typeof mode) {
-    await view.setView(next);
-    mode = view.getView(); stageTitle.textContent = mode === 'plan' ? 'Floor plan' : '3D view';
+  async function focusAsset(id:string|null) {
+    try { await view.focusAsset(id); }
+    catch(error) { tell(errorText(error),true); }
+  }
+  function syncMode() {
+    const focused=view.focusedAsset();
+    scope.update(scene,focused,mode);
+    const fitLabel=focused?'Fit asset to view':'Fit room to view';
+    fit.title=fitLabel;fit.setAttribute('aria-label',fitLabel);
     plan.setAttribute('aria-pressed', String(mode === 'plan')); three.setAttribute('aria-pressed', String(mode === '3d'));
     viewHelp.textContent = mode === 'plan' ? 'Drag to place or pan · Scroll to zoom' : 'Drag to orbit · Scroll to zoom';
   }
-  function changeTab(next: typeof tab) { tab = next; library = false; renderPanel(); }
+  async function setMode(next: typeof mode) {
+    await view.setView(next);
+    mode=view.getView();syncMode();
+  }
+  let assessment: ReturnType<typeof import('./assessment-panel.ts').createAssessmentPanel> | undefined;
+  let assessmentLoading = false;
+  async function loadAssessment() {
+    if (assessmentLoading) return;
+    assessmentLoading = true;
+    try {
+      const { createAssessmentPanel } = await import('./assessment-panel.ts');
+      assessment = createAssessmentPanel({workspaceId: first.id, apiRoot: api, getScene: () => scene, showMeasurement: value => view.setMeasurement(value)});
+      if (tab === 'assessment') renderPanel();
+    } catch (error) {
+      if (tab === 'assessment') scroll.replaceChildren(h('p', 'rm-error', 'Assessment could not open. ' + errorText(error)),
+        action('Retry', () => void loadAssessment()));
+    } finally { assessmentLoading = false; }
+  }
+  function changeTab(next: typeof tab) { if (tab === 'assessment' && next !== tab) assessment?.deactivate(); tab = next; library = false; renderPanel(); }
+  let docked: { instance:string; part:string } | null = null;
+  const popouts = new Map<HTMLElement,{instance:string;part:string}>();
+  const fitPopouts=new ResizeObserver(()=>{for (const frame of popouts.keys()) placeFloatingCard(frame);});
+  fitPopouts.observe(drawing);
+  let primaryPopup:HTMLElement|undefined;
+  let poseGesture:{card:HTMLElement;accept:(next:RoomScene)=>void;cancel:()=>void}|undefined;
+  function poseGestureFor(item:RoomInstance,part:string,popup?:HTMLElement):BeginPoseGesture {
+    return (card,joints,reset)=>{
+      poseGesture?.cancel();
+      const started=scene.version;
+      const signature=(i:RoomInstance)=>JSON.stringify(joints.map(j=>i.pose[j.id] ?? j.neutral));
+      const initial=signature(item);
+      let committing=false;
+      function stop(revert:boolean) {
+        if (poseGesture!==active) return;
+        poseGesture=undefined;delete card.dataset.poseGesture;view.clearPosePreview();
+        if(revert)reset();
+        if (scene.version!==started && card.isConnected) {
+          const replacement=cardFor(item.id,part,popup);
+          if (replacement) replaceComponentCard(card.parentElement!,replacement);
+        }
+      }
+      const active={card,cancel:()=>stop(true),accept:(next:RoomScene)=>{
+        const target=next.instances.find(i=>i.id===item.id && i.release===item.release);
+        if (target && signature(target)===initial) return;
+        stop(!committing);
+        if (!committing) tell('This adjustment changed in another edit. The latest values are shown.',true);
+      }};
+      poseGesture=active;card.dataset.poseGesture='';
+      return {
+        update(values) {if (poseGesture===active) view.previewPose(item.id,values);},
+        commit(values) {
+          if (poseGesture!==active) return;
+          if (joints.every(j=>JSON.stringify(values[j.id])===JSON.stringify(item.pose[j.id] ?? j.neutral))) {stop(true);return;}
+          committing=true;
+          const assumed=joints.some(j=>j.locked && j.assumed);
+          const entries=Object.entries(values);
+          const single=entries.length===1;
+          const args=single ? {instance:item.id,member:entries[0][0],value:entries[0][1]} : {instance:item.id,values};
+          void write(single?'pose.set':'pose.apply',{...args,...(assumed?{allowAssumed:true}:{})},scene.version).then(ok=>stop(!ok));
+        },
+        cancel:active.cancel,
+      };
+    };
+  }
+  function raisePopup(frame:HTMLElement) {
+    const ref=popouts.get(frame);
+    if (!ref) return;
+    popouts.delete(frame); popouts.set(frame,ref);
+    let order=4;
+    for (const card of popouts.keys()) card.style.zIndex=String(order++);
+  }
+  function clearPopup(frame:HTMLElement) {
+    if (poseGesture && frame.contains(poseGesture.card)) poseGesture.cancel();
+    const focused=frame.contains(document.activeElement);
+    fitPopouts.unobserve(frame);
+    popouts.delete(frame); frame.remove(); if (primaryPopup === frame) primaryPopup=undefined;
+    if (focused) ([...popouts.keys()].at(-1) ?? drawing).focus({preventScroll:true});
+  }
+  function dockPopup(frame:HTMLElement) {
+    const ref=popouts.get(frame);
+    if (!ref) return;
+    clearPopup(frame);
+    if (pane.inert) open.click();
+    choose(ref.instance,ref.part);
+    scroll.querySelector<HTMLElement>('.rm-card-head button')?.focus({preventScroll:true});
+  }
+  function cardFor(instance:string, part:string, popup?:HTMLElement):HTMLElement|null {
+    const item=scene.instances.find(i=>i.id===instance), release=item && byRelease.get(item.release);
+    if (!item || !release) return null;
+    const base=scene.version;
+    const close=()=>{if (popup) clearPopup(popup);else {docked=null;choose(instance);}};
+    const pop=popup ? undefined : ()=>{docked=null;openPopup(instance,part,false);renderPanel();};
+    const dock=popup ? ()=>dockPopup(popup) : undefined;
+    function addScopeLink(card:HTMLElement) {
+      const owner=card.querySelector<HTMLElement>('.rm-kicker');
+      if (owner && view.focusedAsset()!==item!.id) {
+        const link=h('button','rm-card-scope',item!.label,icon('next'));
+        link.type='button';link.title='Focus on '+item!.label;link.setAttribute('aria-label',link.title);
+        link.onclick=()=>void focusAsset(instance);owner.replaceChildren(link);
+      }
+      return card;
+    }
+    if (part === '@operator' && scene.person?.host === instance) {
+      const card=componentPanel('Operator',item,part,close,pop,dock);
+      const fields=roomOperatorControls({item,release,scene,apiRoot:api,write,details:(_key,_label,children)=>h('div','rm-disclosure-body',...children)});
+      card.append(fields);return addScopeLink(card);
+    }
+    if (!release.members.some(m=>m.id===part)) return null;
+    return addScopeLink(componentCard({item,release,part,close,pop,dock,beginGesture:poseGestureFor(item,part,popup),
+      edit:(joint,value)=>write('pose.set',{instance,member:joint.id,value,...(joint.locked && joint.assumed ? {allowAssumed:true} : {})},base),
+      apply:values=>write('pose.apply',{instance,values,...(release.joints.some(j=>j.assumed && j.locked && Object.hasOwn(values,j.id))?{allowAssumed:true}:{})},base),
+      placement:()=>{if (popup) clearPopup(popup); if (shell.classList.contains('rm-panel-closed')) open.click(); choose(instance);},
+    }));
+  }
+  function openPopup(instance:string,part:string,additional:boolean) {
+    if (!additional && primaryPopup) clearPopup(primaryPopup);
+    const frame=floatingCard(drawing,popouts.size);
+    const card=cardFor(instance,part,frame);
+    if (!card) {frame.remove();return;}
+    frame.replaceChildren(card);popouts.set(frame,{instance,part});
+    frame.setAttribute('aria-label',card.getAttribute('aria-label') ?? card.querySelector('h2')?.textContent ?? 'Controls');
+    frame.addEventListener('focusin',()=>raisePopup(frame));
+    frame.addEventListener('pointerdown',()=>raisePopup(frame));
+    fitPopouts.observe(frame);
+    frame.focus({preventScroll:true});
+    if (!additional) primaryPopup=frame;
+  }
+  function hasInspector(item:RoomInstance | undefined, part:string | undefined) {
+    if (!item || !part) return false;
+    if (part === '@operator') return scene.person?.host === item.id;
+    return byRelease.get(item.release)?.members.some(m=>m.id===part) ?? false;
+  }
+  function pickComponent(id:string|null,part?:string,additional=false) {
+    const item=scene.instances.find(i=>i.id===id);
+    if (!item || !part || !hasInspector(item,part)) {choose(id);return;}
+    if (additional || shell.classList.contains('rm-panel-closed')) {
+      selected=item.id;member=part;view.select(item.id,part);openPopup(item.id,part,additional);return;
+    }
+    choose(item.id,part);
+  }
   function choose(id: string | null, part = '') {
+    id ??= view.focusedAsset();
     selected = id; member = part;
-    if (part) expanded.add(id + '/components');
+    docked = id && part ? {instance:id,part} : null;
+    if (docked) { if (tab === 'assessment') assessment?.deactivate(); tab='layout'; scroll.scrollTop=0; }
     if (tab === 'layout') library = false;
     view.select(selected, member || undefined); renderPanel();
   }
@@ -192,9 +379,15 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   function accept(next: RoomScene) {
     if (next.id !== scene.id || next.version <= scene.version) return;
     scene = next;
+    poseGesture?.accept(next);
     if (selected && !current()) { selected = null; member = ''; }
-    if (member && current() && !byRelease.get(current()!.release)?.members.some(m => m.id === member)) member = '';
-    view.setScene(scene, releases); view.select(selected, member || undefined); renderPanel(); void updateUndo();
+    if (member && !hasInspector(current(),member)) member='';
+    for (const [frame, ref] of [...popouts]) {
+      const card=cardFor(ref.instance,ref.part,frame);
+      if (card) replaceComponentCard(frame,card); else clearPopup(frame);
+    }
+    if (docked && !hasInspector(scene.instances.find(i=>i.id===docked!.instance),docked.part)) docked=null;
+    view.setScene(scene, releases); view.select(selected, member || undefined); renderPanel(); workspaceTools.refresh(); void updateUndo();
   }
   async function updateUndo() {
     const n = ++undoToken, v = scene.version;
@@ -211,8 +404,14 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   });
   stream.onopen = () => { live.textContent = 'Live'; live.classList.add('rm-connected'); };
   stream.onerror = () => { live.textContent = 'Reconnecting'; live.classList.remove('rm-connected'); };
-  window.addEventListener('pagehide', event => { if (!event.persisted) { stream.close(); view.dispose(); } });
+  window.addEventListener('pagehide', event => { poseGesture?.cancel(); if (!event.persisted) { stream.close(); view.dispose(); } });
   window.addEventListener('keydown', e => {
+    if (e.key==='Escape' && !e.defaultPrevented && !e.altKey && !e.ctrlKey && !e.metaKey && !document.querySelector('dialog[open]')) {
+      if (matchMedia('(max-width: 700px)').matches && pane.contains(e.target as Node)) return;
+      const focused=(e.target as HTMLElement)?.closest?.<HTMLElement>('.rm-floating-card');
+      const frame=focused ?? [...popouts.keys()].filter(el=>!el.hidden).at(-1);
+      if (frame) { e.preventDefault();clearPopup(frame);return; }
+    }
     if (e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); if (!undo.disabled) undo.click(); }
   });
@@ -227,13 +426,24 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   function renderPanel() {
     const position = scroll.scrollTop, focus = (document.activeElement as HTMLElement | null)?.dataset.focus;
     layoutTab.setAttribute('aria-pressed', String(tab === 'layout')); measureTab.setAttribute('aria-pressed', String(tab === 'measure'));
+    assessTab.setAttribute('aria-pressed', String(tab === 'assessment'));
     undo.disabled = !undoable || !scene.version;
-    stageSize.textContent = displayNumber(scene.room.width) + ' × ' + displayNumber(scene.room.depth) + ' m';
+    scope.update(scene,view.focusedAsset(),mode);
     versionText.textContent = 'Revision ' + scene.version; document.title = scene.name + ' · Synergon';
     wsLink.querySelector('span')!.textContent = scene.name;
     view.setMeasurement(null); ++measurementToken;
-    if (tab === 'measure') scroll.replaceChildren(measurePanel());
-    else if (library) scroll.replaceChildren(libraryPanel());
+    if (tab === 'assessment') {
+      if (assessment) scroll.replaceChildren(assessment.render());
+      else { scroll.replaceChildren(h('p','rm-help','Opening assessment…')); void loadAssessment(); }
+    } else if (tab === 'measure') scroll.replaceChildren(measurePanel());
+    else if (docked) {
+      const card=cardFor(docked.instance,docked.part);
+      if (card) replaceComponentCard(scroll,card);
+      else {docked=null;renderPanel();return;}
+    } else if (view.focusedAsset() && current()) {
+      const item=current()!, release=byRelease.get(item.release);
+      if (release) scroll.replaceChildren(...inspect(item,release,true));
+    } else if (library) scroll.replaceChildren(libraryPanel());
     else {
       const rows = h('div', 'rm-object-list');
       rows.append(objectRow('room', 'Room envelope', '', selected === null, () => choose(null)));
@@ -246,6 +456,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       const item = current(), release = item && byRelease.get(item.release);
       scroll.replaceChildren(list, ...(item && release ? inspect(item, release) : roomProperties()));
     }
+    if (poseGesture && (!poseGesture.card.isConnected || poseGesture.card.closest('[hidden],[inert]'))) poseGesture.cancel();
     scroll.scrollTop = position;
     if (focus) [...scroll.querySelectorAll<HTMLElement>('[data-focus]')].find(el => el.dataset.focus === focus)?.focus({ preventScroll: true });
   }
@@ -300,7 +511,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     }
     return [shell];
   }
-  function inspect(item: RoomInstance, release: RoomRelease) {
+  function inspect(item: RoomInstance, release: RoomRelease, isolated=false) {
     const prefix = item.id + '/', version = scene.version;
     const placement = numberForm(prefix + 'placement', version, [
       { key: 'x', label: 'X', value: item.x, unit: 'm' }, { key: 'y', label: 'Y', value: item.y, unit: 'm' },
@@ -308,26 +519,30 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     ], drafts, (values, base) => write('instances.move', { instance: item.id, ...values }, base), renderPanel);
     const inspector = section('Placement', placement);
     const controls = h('div', 'rm-detail-group');
-    const parts = release.members.filter(m => m.id.startsWith('C_'));
+    const parts = release.members.filter(m => m.kind==='part');
     if (parts.length) {
-      const pick = select('Selected component', [{ value: '', label: 'Whole object' }, ...parts.map(m => ({ value: m.id, label: m.label }))], member);
-      pick.onchange = () => { member = pick.value; view.select(item.id, member || undefined); };
+      const pick = select('Selected component', [{ value: '', label: 'Whole object' }, ...(scene.person?.host === item.id ? [{value:'@operator',label:'Operator'}] : []), ...parts.map(m => ({ value: m.id, label: m.label }))], member);
+      pick.onchange = () => choose(item.id, pick.value);
       controls.append(details(prefix + 'components', 'Components', [field('Selected component', pick)], String(parts.length)));
     }
-    const joints = release.joints.filter(j => !j.locked);
+    const joints = release.joints.filter(j => !j.locked || j.assumed);
     if (joints.length) {
       const joint = joints.find(j => j.id === chosenJoints.get(item.id)) ?? joints[0];
       const picker = select('Adjustment', joints.map(j => ({ value: j.id, label: j.label || j.id })), joint.id);
       picker.onchange = () => { chosenJoints.set(item.id, picker.value); expanded.add(prefix + 'joints'); renderPanel(); };
       controls.append(details(prefix + 'joints', 'Adjustments', [field('Joint', picker), jointForm(item, joint)], String(joints.length)));
     }
-    if (release.seat) controls.append(operatorControls(item, release));
+    if (release.seat) controls.append(roomOperatorControls({item,release,scene,apiRoot:api,write,details}));
     const versions = select('Installed release', releases.map(r => ({ value: r.id, label: shortRelease(r) })), release.id);
     const swap = action('Swap release', () => {
       void write('instances.swap', { instance: item.id, release: versions.value }, version).then(ok => { if (!ok) { versions.value = item.release; swap.disabled = true; } });
     }); swap.disabled = true; versions.onchange = () => { swap.disabled = versions.value === item.release; };
     const remove = action('Remove object', () => void write('instances.remove', { instance: item.id }, version), 'remove', 'rm-danger');
     controls.append(details(prefix + 'release', 'Asset release', [field('Installed release', versions), h('div', 'rm-object-actions', swap, remove)], 'v' + release.version));
+    if (isolated) {
+      controls.append(details(prefix+'placement','Room placement',[placement]));
+      return [section('Asset controls',controls)];
+    }
     const clearance = h('div', 'rm-clearance'); readClearance(item, clearance);
     return [inspector, section('Doorway clearance', clearance), controls];
   }
@@ -340,32 +555,10 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     const form = numberForm(item.id + '/joint/' + joint.id, scene.version, axes.map((label, index) => ({
       label, key: String(index), unit: units, value: values[index] * scale,
       min: (joint.lower + offsets[index]) * scale, max: (joint.upper + offsets[index]) * scale,
-    })), drafts, (v, base) => write('pose.set', { instance: item.id, member: joint.id, value: joint.type === 'ball' ? axes.map((_, i) => v[i] / scale) : v[0] / scale }, base), renderPanel);
+    })), drafts, (v, base) => write('pose.set', { instance: item.id, member: joint.id, ...(joint.locked && joint.assumed ? {allowAssumed:true} : {}), value: joint.type === 'ball' ? axes.map((_, i) => v[i] / scale) : v[0] / scale }, base), renderPanel);
     const reset = action('Restore neutral position', () => void write('pose.set', { instance: item.id, member: joint.id, value: null }), undefined, 'rm-text-action');
     reset.disabled = !(joint.id in item.pose);
     return h('div', 'rm-joint-controls', form, h('p', 'rm-help', (joint.type === 'ball' ? 'From neutral ' : 'Range ') + displayNumber(joint.lower * scale, 2) + ' to ' + displayNumber(joint.upper * scale, 2) + ' ' + units), reset);
-  }
-  function operatorControls(item: RoomInstance, release: RoomRelease) {
-    const occupied = scene.person?.host === item.id, host = scene.instances.find(i => i.id === scene.person?.host);
-    if (!occupied) {
-      const btn = action(host ? 'Move operator here' : 'Seat an operator', () => void write('person.set', { host: item.id }), 'person');
-      return details(item.id + '/operator', 'Seated operator', host ? [h('p', 'rm-help', 'Currently seated at ' + host.label + '.'), btn] : [btn]);
-    }
-    const aims = scene.person?.state.aims ?? {};
-    const targets = release.members.filter(m => /^[CDS]_/.test(m.id)).map(m => ({ value: m.id, label: m.label }));
-    const patch = (key: keyof PersonAims, value: unknown) => write('person.set', { host: item.id, aims: { [key]: value } });
-    const gaze = select('Look at', [{ value: '', label: 'Default gaze' }, ...targets], aims.look);
-    gaze.onchange = () => { void patch('look', gaze.value || null).then(ok => { if (!ok) renderPanel(); }); };
-    const content: Node[] = [field('Look at', gaze)];
-    for (const key of AIM_LIMBS) {
-      const currentAim = aims[key], target = currentAim && 'target' in currentAim ? currentAim.target : '';
-      const label = key.replace('_', ' ').replace(/^./, s => s.toUpperCase()), hand = key.endsWith('hand');
-      const picker = select(label, [{ value: '', label: hand ? 'At rest' : 'On floor' }, ...targets], target);
-      picker.onchange = () => { void patch(key, picker.value ? { mode: hand ? 'touch' : 'on', target: picker.value } : null).then(ok => { if (!ok) renderPanel(); }); };
-      content.push(field(label, picker));
-    }
-    content.push(action('Unseat operator', () => void write('person.set', { host: null }), undefined, 'rm-quiet'));
-    return details(item.id + '/operator', 'Seated operator', content, 'Attached');
   }
   function describeEdge(edge: string) {
     const [id, side] = edge.split('/');
@@ -418,9 +611,10 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
       if (token !== measurementToken || reply.version !== version) return;
       const { result } = reply;
       const value = output.querySelector('output')!; value.textContent = metres(result.metres); value.title = result.metres + ' m';
-      view.setMeasurement({ points: [result.from.point, result.to.point], label: metres(result.metres) });
+      view.setMeasurement({ points: [result.from.point, result.to.point], instances:[result.from.instance,result.to.instance], label: metres(result.metres) });
     }).catch(error => { if (token === measurementToken) output.querySelector('output')!.textContent = errorText(error); });
     return panel;
   }
-  view.setScene(scene, releases); setMode('plan'); renderPanel(); void updateUndo();
+  const workspaceTools=mountRoomWorkspaceTools({host:toolbar,cameraHost:drawing,view,getScene:()=>scene,setMode,select:choose,command,write,notify:tell,apiRoot:api});
+  view.setScene(scene,releases); void setMode('plan').then(()=>workspaceTools.restoreLink()); renderPanel(); void updateUndo();
 }

@@ -66,7 +66,7 @@ const solves = new Map<string, Seated>();
 export function seated(asset: AssetInfo, p: PersonState, pose: Record<string, JointValue>): Seated {
   const people = needPeople(asset), pkg = packageOf(people, p), values = controlValues(pkg, p.body);
   const aims = p.posture === OPERATING ? p.aims : undefined;
-  const key = JSON.stringify([asset.sha256, pkg.id, values, aims, Object.keys(pose).sort().map((k) => [k, pose[k]])]);
+  const key = JSON.stringify([asset.releaseDigest ?? asset.sha256, pkg.id, values, aims, Object.keys(pose).sort().map((k) => [k, pose[k]])]);
   let s = solves.get(key);
   if (s) { solves.delete(key); solves.set(key, s); return s; }
   s = seat(pkg, bodyOf(pkg, values), { manifest: asset.manifest, nodes: asset.nodes }, pose, aims);
@@ -149,7 +149,7 @@ function applyPose(asset: AssetInfo, people: People, p: PersonState, a: PoseArgs
 
 // ------------------------------------------------------------------------------------------- building a new state
 type SetArgs = { preset?: string; sex?: "female" | "male"; style?: "dressed" | "clay"; tone?: string; glasses?: boolean; headset?: boolean; cap?: boolean; body?: Record<string, number> };
-function applySet(people: People, cur: PersonState | null, a: SetArgs): { next: PersonState; notes: string[] } {
+export function applySet(people: People, cur: PersonState | null, a: SetArgs): { next: PersonState; notes: string[] } {
   if (a.cap === false) throw new Refusal("not_optional", "the cap cannot be taken off: it is part of the operator's outfit", "glasses and headset can be taken off: {\"glasses\": false} or {\"headset\": false}");
   const notes: string[] = [];
   let p: PersonState = structuredClone(cur ?? defaultPerson(people.packages)!);
@@ -183,7 +183,7 @@ function applySet(people: People, cur: PersonState | null, a: SetArgs): { next: 
   return { next: p, notes };
 }
 /** "operating", "RELAXED_STAND" or the name of a pose of the package's library */
-function resolvePosture(people: People, p: PersonState, text: string): string {
+export function resolvePosture(people: People, p: PersonState, text: string): string {
   const w = norm(text);
   if (Object.hasOwn(POSTURE_WORDS, w)) return POSTURE_WORDS[w];
   if (text === RELAXED_STAND || text === OPERATING) return text;

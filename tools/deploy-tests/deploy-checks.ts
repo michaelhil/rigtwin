@@ -8,25 +8,29 @@ import { join } from "node:path";
 import { verifySite, routeProbe, FIRST_ROLLOUT } from "../deploy.ts";
 import { serveFolder } from "../dist.ts";
 
-const dist = join(import.meta.dir, "..", "..", "dist");
+const dist = process.env.SYNERGON_DIST_TEST_DIR || join(import.meta.dir, "..", "..", "dist");
 const version = JSON.parse(readFileSync(join(dist, "version.json"), "utf8"));
-if (!version.server) throw new Error("dist/version.json has no server entry: run bun run dist with server/server.ts present");
+if (!version.server?.format) throw new Error("dist/version.json has no server entry: run bun run dist with server/server.ts present");
 const glbBuf = readFileSync(join(dist, "asset", `${version.model.asset}.glb`));
 const glb = { path: `asset/${version.model.asset}.glb`, bytes: glbBuf.length, sha256: createHash("sha256").update(glbBuf).digest("hex") };
 const wikiPages = ["README.html"];
 let pass = 0, fail = 0;
 const expect = (what: string, cond: boolean, detail = "") => { cond ? pass++ : fail++; console.log(`  ${cond ? "ok  " : "FAIL"} ${what}${!cond && detail ? `: ${detail}` : ""}`); };
 
-/** A stand-in Synergon server: answers /api/health with `status` and `revision()`, lists one workspace and streams its snapshot
+/** A stand-in Synergon server: answers /api/health with `status` and `revision()`, lists one workspace and returns its metadata
  *  (what the checks of the live site ask besides the health). `workspaces` false: no list (404), as the server of a release before them. */
 const WS = "6f1c2a3e-5b7d-4c9a-8e0f-1a2b3c4d5e6f";
 function fakeApi(status: () => number, revision: () => string, workspaces = true) {
   return Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
     const p = new URL(req.url).pathname;
     if (p === "/api/health") return Response.json({ ok: true, revision: revision(), format: "synergon-scene/1", mode: "deployed" }, { status: status() });
+    if (p === "/api/room/health") return Response.json({ ok: true, revision: revision(), format: version.server?.room?.format });
+    if (p === "/api/room/catalog") return Response.json({ releases: version.server?.room?.releases });
+    if (p === "/api/room/commands") return Response.json({ commands: ["instances.move", "assessment.run"].map(id => ({id})) });
+    if (p === "/api/room/workspaces") return Response.json({ workspaces: [], total: 0 });
     if (!workspaces) return new Response("not found", { status: 404 });
     if (p === "/api/workspaces") return Response.json({ workspaces: [{ id: WS, name: "Playground", created: "2026-11-25T00:00:00.000Z", changed: "2026-11-25T00:00:00.000Z" }], next: null, total: 1 });
-    if (p === `/api/workspaces/${WS}/live`) return new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); c.enqueue(e.encode(`retry: 2000\n\nevent: session\ndata: {"code":"ABCDEFGH"}\n\nid: 0\nevent: snapshot\ndata: {"doc":{}}\n\n`)); } }), { headers: { "content-type": "text/event-stream" } });
+    if (p === `/api/workspaces/${WS}`) return Response.json({ id: WS, name: "Playground" });
     return new Response("not found", { status: 404 });
   } });
 }
@@ -124,12 +128,13 @@ writeFileSync(join(oldDist, "version.json"), JSON.stringify(noServer, null, 1) +
   expect("health itself is fine", r.get("server: api/health")?.ok === true);
   s.server.stop(true); api.stop(true);
 }
-// 8. the workspace check in a good server: the list and one stream, and the removed addresses are not asked
+// 8. the workspace check in a good server: the list and one metadata row, and the removed addresses are not asked
 {
   const asked: string[] = [], inner = fakeApi(() => 200, () => version.revision), api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) { asked.push(new URL(req.url).pathname); return inner.fetch(req); } });
   const s = serveFolder(dist, "/", { api: `http://127.0.0.1:${api.port}` });
   const r = await run("8. what the checks ask of the server", s, version);
-  expect("the list and the stream are checked and ok", r.get("server: api/workspaces")?.ok === true && r.get("server: a workspace's live stream")?.ok === true, r.checks.map((c) => `${c.what}: ${c.detail}`).join("; "));
+  expect("the list and metadata are checked and ok", r.get("server: api/workspaces")?.ok === true && r.get("server: station workspace metadata")?.ok === true, r.checks.map((c) => `${c.what}: ${c.detail}`).join("; "));
+  expect("the deploy never opens a legacy station scene", !asked.some(p => p.endsWith("/live") || p.endsWith("/command")), asked.join(", "));
   expect("the single-scene addresses are not asked", !asked.some((p) => ["/api/live", "/api/command", "/api/mcp"].includes(p)), asked.join(", "));
   s.server.stop(true); api.stop(true); inner.stop(true);
 }

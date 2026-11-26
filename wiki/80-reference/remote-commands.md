@@ -8,7 +8,14 @@ tags: [reference, agents, mcp, commands, discovery]
 
 # Remote commands
 
-The local multi-asset editor has its own current scene and command contract. [Room layout and agent interfaces](../50-implementation/room-layout.md)
+Production serves two workspace types. Start at `/llms.txt`, find the named workspace and use its advertised paths.
+
+| Workspace link | Command catalogue | Scope |
+|---|---|---|
+| `/workspaces/room/{id}` | `/api/room/commands` | Placed assets, component controls, operator, room measurements and assessment. Qualify each member by instance. |
+| `/workspaces/{id}` | `/api/commands` | The single-station viewer and remote commands documented below. |
+
+The local multi-asset installation uses `/api/commands` for rooms. Follow the [room interface](../50-implementation/room-layout.md#agent-entry-point) and the [portable project interface](../50-implementation/portable-projects.md#agent-interfaces) for their command and discovery models.
 
 
 ## Start at the homepage

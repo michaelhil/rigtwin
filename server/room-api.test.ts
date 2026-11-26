@@ -135,6 +135,27 @@ describe("room workspace", () => {
     expect(height.ok).toBe(true);
   });
 
+  test("component edits, resets and undo stay scoped across reloads", async () => {
+    const app=setup(), ws=await app.create();
+    for (const instance of ["left","right"]) await ws.command("instances.add",{instance,release:station.id});
+    const first=await ws.command("pose.apply",{instance:"left",values:{J_slide:0.2}});
+    const second=await ws.command("pose.apply",{instance:"right",values:{J_slide:0.7}});
+    expect(second.version).toBe(first.version+1);
+    const rejected=await ws.command("pose.apply",{instance:"left",values:{J_slide:0.8,missing:0}});
+    expect(rejected.ok).toBe(false);
+    const reset=await ws.command("scene.reset",{});
+    app.restart();
+    expect((await ws.state()).instances.map(i=>i.pose)).toEqual([{},{}]);
+    expect((await ws.command("history.list")).result.entries[0].command).toBe("scene.reset");
+    expect((await ws.command("undo",{version:reset.recorded})).ok).toBe(true);
+    app.restart();
+    expect((await ws.state()).instances.map(i=>i.pose)).toEqual([{J_slide:0.2},{J_slide:0.7}]);
+    const single=await ws.command("scene.reset",{instance:"left"});
+    await ws.command("pose.set",{instance:"right",member:"J_slide",value:0.5});
+    expect((await ws.command("undo",{version:single.recorded})).ok).toBe(true);
+    expect((await ws.state()).instances.map(i=>i.pose)).toEqual([{J_slide:0.2},{J_slide:0.5}]);
+  });
+
   test("SSE snapshots on subscribe/reconnect and an agent can undo a browser edit", async () => {
     const app = setup(), ws = await app.create();
     await ws.command("instances.add", { instance: "display", release: display.id });
@@ -145,6 +166,8 @@ describe("room workspace", () => {
       return JSON.parse(text.split("data: ")[1]) as RoomScene;
     };
     expect((await scene(reader)).version).toBe(1);
+    expect((await (await app.get(ws.path+"/meta")).json() as any).liveConnections).toBe(1);
+    expect((await ws.command("discover")).result.liveConnections).toBe(1);
     const init = await ws.mcp("initialize", { protocolVersion: "2025-06-18" });
     expect(init.result.protocolVersion).toBe("2025-06-18");
     const list = (await ws.mcp("tools/list")).result.tools;
@@ -155,6 +178,7 @@ describe("room workspace", () => {
     expect(result.result.structuredContent.ok).toBe(true);
     expect((await scene(reader)).instances[0].x).toBe(0);
     await reader.cancel();
+    expect((await ws.command("discover")).result.liveConnections).toBe(0);
     const again = (await app.get(ws.path + "/live")).body!.getReader();
     expect(await scene(again)).toEqual(await ws.state());
     await again.cancel();

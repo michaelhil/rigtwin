@@ -534,3 +534,15 @@ seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `wo
 ## 2026-11-26 · Multi-asset room editor for local trial
 
 The local editor opens a saved room, places independent copies of stations and displays, and exposes the same qualified scene operations to the UI, HTTP, MCP and CLI. The furnished trial and empty workspace creation use a fresh room store. [Room layout and agent interfaces](50-implementation/room-layout.md)
+
+## 2026-11-26 · Portable projects and room camera tools
+
+Local projects now hold named scenes, recovery versions, Markdown notes and saved assessments. Embedded, linked and mixed packages use exact release pins. A clean installation can restore a measured layout and replay its saved run offline. Room workspaces also offer a measured operator's-eye camera, pictures, shareable views and a recorded edit trace. [Portable room projects](50-implementation/portable-projects.md) and [Room camera and workspace tools](50-implementation/room-layout.md#camera-and-workspace-tools)
+
+
+## 2026-11-26 · Integrated room workspaces and assessment
+
+The public room editor combines placement, direct component picking and operator controls in one panel. An independent interaction review caught avatar picks passing through to the seat and a grouped reset that failed to reopen. Room editing, offline project transfer, assessment replay and preservation of existing single-station workspaces were exercised on disposable installations. [Room layout](50-implementation/room-layout.md) · [Assessment criteria](85-standards/workstation-screening.md) · [Public deployment](50-implementation/deployment.md)
+
+
+Room sliders and direction pads now move geometry during a drag and record one shared edit at release. The view heading switches between the full room and one placed asset. Asset names and plan feature captions start hidden and can be enabled in Settings. [Working on one asset](50-implementation/room-layout.md#focus-on-one-asset)

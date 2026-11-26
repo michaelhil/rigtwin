@@ -8,8 +8,9 @@ import * as THREE from 'three';
 import {
   S, $, canvas, frameEl, stageEl, controls, currentCamera, frameSize, scene, persp,
   pickAt, partOf, firstPick, kindOf, members, nameOf, setHover, jointsFor, poseJoint, setAdjustment, adjustmentRange, adjustmentValue,
-  zoomTo, goHome, lookZoom, stopGlide, hooks as engineHooks, type JointState,
+  zoomTo, goHome, lookZoom, stopGlide, hooks as engineHooks,
 } from './engine.ts';
+import { projectedGrab, type GrabAxis } from './direct-grab.ts';
 import { adjWords } from '../../shared/words.ts';
 
 /** What a click on this part would select right now. */
@@ -21,95 +22,28 @@ export function wouldPick(part: string): string {
 }
 
 // --------------------------------------------------------------------------------------------- dragging a part along its adjustment
-interface Dof { j: JointState; id: string; comp: number | null }
-/** What a drag on the grabbed point could move: the part's own hinge (one or two turning adjustments nearest to it), and every sliding adjustment that carries it. */
-interface DragPlan { mesh: THREE.Mesh; local: THREE.Vector3; hinge: Dof[]; slides: Dof[] }
-const get = (d: Dof) => adjustmentValue(d.id, d.comp);
-function trial(d: Dof, v: number) { const cur = d.j.value; poseJoint(d.j, d.comp === null ? v : (cur as number[]).map((x, i) => (i === d.comp ? v : x))); d.j.obj.updateMatrixWorld(true); }
-const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
-type Grab = { mesh: THREE.Mesh; local: THREE.Vector3 };
-const worldOf = (g: Grab, out: THREE.Vector3) => out.copy(g.local).applyMatrix4(g.mesh.matrixWorld);
-function screenOfWorld(p: THREE.Vector3): [number, number] { const { w, h } = frameSize(), q = tmp2.copy(p).project(currentCamera()); return [((q.x + 1) / 2) * w, ((1 - q.y) / 2) * h]; }
-const screenOf = (g: Grab) => screenOfWorld(worldOf(g, tmp));
-/** How far (pixels) the grabbed point moves on screen per unit of this adjustment, found by trying a small step. */
-function sensitivity(g: Grab, d: Dof): [number, number] {
-  const v = get(d), r = adjustmentRange(d.id, d.comp), eps = v + 1e-3 <= r.hi ? 1e-3 : -1e-3;
-  const a = screenOf(g); trial(d, v + eps); const b = screenOf(g); trial(d, v);
-  return [(b[0] - a[0]) / eps, (b[1] - a[1]) / eps];
-}
-/** Is dragging this adjustment by this point sensible from the current viewpoint? Not when the part would move straight toward
- *  or away from the camera (a hair of pointer travel would then throw it across its range), nor when its whole travel is a few pixels. */
-function draggable(g: Grab, d: Dof): boolean {
-  const v = get(d), r = adjustmentRange(d.id, d.comp), eps = v + 1e-3 <= r.hi ? 1e-3 : -1e-3;
-  const p0 = worldOf(g, new THREE.Vector3()), a = screenOfWorld(p0);
-  trial(d, v + eps); const p1 = worldOf(g, new THREE.Vector3()), b = screenOfWorld(p1); trial(d, v);
-  const metres = p0.distanceTo(p1) / Math.abs(eps), pixels = Math.hypot(b[0] - a[0], b[1] - a[1]) / Math.abs(eps);
-  if (metres < 1e-6) return false;
-  const cam = currentCamera(), side = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0), c = screenOfWorld(p0.clone().addScaledVector(side, 0.01));
-  const pxPerMetre = Math.hypot(c[0] - a[0], c[1] - a[1]) / 0.01;
-  return pixels / (metres * pxPerMetre) >= 0.3 && pixels * (r.hi - r.lo) >= 12;
-}
-/** The adjustment(s) a drag on this mesh would move, or null when the part does not move (or the view makes the drag too twitchy). */
-function planDrag(hit: { id: string; mesh: THREE.Mesh; world: THREE.Vector3 }): DragPlan | null {
+interface Dof extends GrabAxis { id:string;comp:number|null }
+function planDrag(hit:{id:string;mesh:THREE.Mesh;world:THREE.Vector3}) {
   if (!S.selected || S.photo || !members(S.selected).includes(hit.id)) return null;
-  const allowed = new Set(jointsFor(S.selected));
-  // joints that carry the grabbed mesh, nearest first
-  const chain: JointState[] = [];
-  for (let o: THREE.Object3D | null = hit.mesh; o; o = o.parent) { const id = o.userData?.id as string | undefined; if (id && allowed.has(id)) chain.push(S.joints.get(id)!); }
+  const allowed=new Set(jointsFor(S.selected)),chain=[];
+  for (let node:THREE.Object3D|null=hit.mesh;node;node=node.parent) {
+    const id=node.userData.id,j=S.joints.get(id);
+    if (!j || !allowed.has(id)) continue;
+    const axes:Dof[]=adjWords(j.def).filter(w=>!w.fine).map(({comp})=>({
+      id,comp,...adjustmentRange(id,comp),value:()=>adjustmentValue(id,comp),
+      trial(v:number) {
+        poseJoint(j,comp===null ? v : (j.value as number[]).map((n,i)=>i===comp ? v : n));
+        j.obj.updateMatrixWorld(true);
+      },
+    }));
+    chain.push({child:j.def.child,slide:j.def.type==='prismatic',axes});
+  }
   if (!chain.length) return null;
   scene.updateMatrixWorld();
-  const base = { mesh: hit.mesh, local: hit.mesh.worldToLocal(hit.world.clone()) };
-  const dofsOf = (j: JointState): Dof[] => adjWords(j.def).filter((w) => !w.fine).map((w) => ({ j, id: j.def.id, comp: w.comp }));
-  const groups: JointState[][] = [];
-  for (const j of chain) { const g = groups.find((x) => x[0].def.child === j.def.child); if (g) g.push(j); else groups.push([j]); }
-  const slides = chain.filter((j) => j.def.type === 'prismatic').flatMap(dofsOf).filter((d) => draggable(base, d));
-  // the part's own hinge: the nearest group of joints, when that group only turns (a backrest, a pedal, a joystick, a monitor head)
-  let hinge: Dof[] = [];
-  for (const g of groups) {
-    if (g.some((j) => j.def.type === 'prismatic')) break;
-    hinge = g.flatMap(dofsOf).filter((d) => draggable(base, d)).slice(0, 2);
-    if (hinge.length) break;
-  }
-  return hinge.length || slides.length ? { ...base, hinge, slides } : null;
+  const {w,h}=frameSize();
+  return projectedGrab(hit.mesh,hit.world,currentCamera(),w,h,chain);
 }
-/** Which of the plan's adjustments a drag that started out along (dx, dy) means. The part goes where it is pulled: a slide that
- *  runs along the pull wins over a two-way hinge (pull the monitor down: it goes down; pull its edge sideways: it turns); a
- *  one-way hinge that runs along the pull wins over a slide (pull the headrest back: the backrest reclines, the seat stays). */
-function choose(plan: DragPlan, dx: number, dy: number): Dof[] {
-  const along = (d: Dof) => { const v = sensitivity(plan, d), n = Math.hypot(...v) * Math.hypot(dx, dy); return n > 0 ? Math.abs(dx * v[0] + dy * v[1]) / n : 0; };
-  let slide: Dof | null = null, best = -1;
-  for (const d of plan.slides) { const c = along(d); if (c > best) { best = c; slide = d; } }
-  if (!plan.hinge.length) return slide ? [slide] : [];
-  if (!slide) return plan.hinge;
-  if (plan.hinge.length === 2) return best >= 0.8 ? [slide] : plan.hinge;
-  const c = along(plan.hinge[0]);
-  return c >= 0.8 || c >= best ? plan.hinge : [slide];
-}
-/** Move the plan's adjustments so the grabbed point follows the pointer as far as the limits allow. A few Newton steps on the
- *  screen position; an adjustment that has reached its stop and is asked for more is left there and the others take up the rest. */
-function follow(plan: DragPlan, dofs: Dof[], x: number, y: number) {
-  const vals = dofs.map(get), stuck = dofs.map(() => false), ranges = dofs.map((d) => adjustmentRange(d.id, d.comp));
-  for (let it = 0; it < 4; it++) {
-    const p = screenOf(plan), ex = x - p[0], ey = y - p[1];
-    if (Math.hypot(ex, ey) < 0.3) break;
-    const free = dofs.map((_, k) => k).filter((k) => !stuck[k]);
-    if (!free.length) break;
-    const s = dofs.map((d) => sensitivity(plan, d)), dv = dofs.map(() => 0);
-    const one = (k: number) => { const n = s[k][0] * s[k][0] + s[k][1] * s[k][1]; return n > 1 ? (ex * s[k][0] + ey * s[k][1]) / n : 0; };
-    if (free.length === 2) {
-      const det = s[0][0] * s[1][1] - s[1][0] * s[0][1];
-      if (Math.abs(det) > 0.05 * Math.hypot(...s[0]) * Math.hypot(...s[1])) { dv[0] = (ex * s[1][1] - s[1][0] * ey) / det; dv[1] = (s[0][0] * ey - ex * s[0][1]) / det; }
-      else { dv[0] = one(0) / 2; dv[1] = one(1) / 2; }
-    } else dv[free[0]] = one(free[0]);
-    for (const k of free) {
-      const r = ranges[k], span = r.hi - r.lo, want = vals[k] + Math.max(-span / 2, Math.min(span / 2, dv[k]));
-      vals[k] = Math.min(r.hi, Math.max(r.lo, want));
-      if (want !== vals[k]) stuck[k] = true;
-      trial(dofs[k], vals[k]);
-    }
-  }
-  dofs.forEach((d, k) => setAdjustment(d.id, d.comp, vals[k]));   // announces the change: card, notices, shadows, redraw
-}
+type DragPlan=NonNullable<ReturnType<typeof planDrag>>;
 // --------------------------------------------------------------------------------------------- pointer wiring
 export function initPointer(hooks: { freeWidth: () => number; revealSelection: () => void; openAdditional: (target: string) => void; selectComponent: (target: string | null) => void }) {
   const tip = $('tip');
@@ -145,9 +79,10 @@ export function initPointer(hooks: { freeWidth: () => number; revealSelection: (
       const dx = x - down.x, dy = y - down.y;
       if (!drag.moved && Math.hypot(dx, dy) < 4) return;
       drag.moved = true;
-      if (!drag.dofs) drag.dofs = choose(drag.plan, dx, dy);      // decided once, by the direction the drag sets out in
+      if (!drag.dofs) drag.dofs = drag.plan.choose(dx, dy);      // decided once, by the direction the drag sets out in
       if (!drag.dofs.length) return;
-      follow(drag.plan, drag.dofs, x, y);
+      drag.plan.follow(drag.dofs, x, y);
+      for (const axis of drag.dofs) setAdjustment(axis.id,axis.comp,axis.value());
       return;
     }
     if (e.buttons || e.pointerType === 'touch' || performance.now() - lastMove < 40) return; lastMove = performance.now();

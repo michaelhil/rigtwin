@@ -47,3 +47,29 @@
 .rv-orbit-tag { position: absolute; transform: translate(-50%,-100%); padding: 2px 5px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 11px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color: #34453d; background: rgb(251 251 245 / 92%); border-radius: 2px; }
 .rv-orbit-tag[data-active] { color: #0b6252; box-shadow: inset 0 -1px #37917a; }
 .rv-status { position: absolute; inset: auto auto 12px 50%; transform: translateX(-50%); max-width: min(75%,520px); padding: 6px 12px; border: 1px solid #d6ddd2; border-radius: 5px; background: #fdfdf8; font-size: 12px; color: #465a4e; text-align: center; pointer-events: none; }
+
+/* Bottom-rail tools and drawing controls occupy separate landmarks on desktop and touch layouts. */
+.rw-toolbar { width:100%; display:flex; align-items:center; gap:5px; }
+.rw-toolbar .rw-cog { margin-left:auto; }
+.rw-tool { flex:none; }
+.rw-cameras { position:absolute; bottom:48px; right:14px; display:flex; align-items:center; gap:3px; padding:4px; border:1px solid #c6d0c4; border-radius:7px; background:#fbfcf6f5; z-index:3; }
+.rw-cameras .rw-tool { border-color:transparent; background:transparent; }
+.rw-cameras .rw-tool[aria-pressed=true],.rw-tool[aria-expanded=true] { background:#dce9df; }
+.rw-pop { position:fixed; z-index:30; width:min(300px,calc(100vw - 16px)); max-height:min(66vh,540px); overflow:auto; padding:13px; border:1px solid #c6d0c4; border-radius:7px; box-shadow:0 5px 22px #253b282e; background:#fafbf5; color:#304438; font:13px/1.4 Inter,system-ui,sans-serif; }
+.rw-pop header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.rw-pop h2 { font:600 16px/1.3 Inter,system-ui,sans-serif; margin:0; }
+.rw-pop .rw-content { display:grid; gap:5px; }
+.rw-pop p { margin:6px 0; }
+.rw-section { border-top:1px solid #d6dfd3; padding:8px 0; }
+.rw-section summary { cursor:pointer; font-weight:550; margin-bottom:4px; }
+.rw-section .rw-section { margin-left:8px; }
+.rw-check { display:flex; align-items:center; gap:8px; min-height:28px; }
+.room-app .rw-check input { width:16px; min-height:16px; height:16px; accent-color:#12695c; }
+.rw-choice { text-align:left; border:0; border-radius:3px; padding:6px 9px; color:inherit; background:transparent; cursor:pointer; font:inherit; }
+.rw-choice:hover,.rw-choice:focus-visible { background:#deeadf; }
+.rw-event { display:grid; grid-template-columns:40px 1fr; padding:5px 0; border-top:1px solid #d6dfd3; }
+.rw-event small { display:block; overflow-wrap:anywhere; }.rw-guide { margin-left:8px; color:inherit; }
+.rv-no-labels :is(.rv-object-label,.rv-orbit-tags,.rv-feature,.rv-area-title,.rv-area) { display:none; }
+.rv-operator-marker {cursor:pointer}
+.rv-no-grid .rv-minor,.rv-no-grid .rv-major { stroke:none; }
+@media(max-width:600px){.rw-cameras { bottom:43px; right:8px; }.rw-pop { max-height:58dvh; }}

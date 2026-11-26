@@ -1,6 +1,6 @@
 # Synergon
 
-Synergon is a work environment layout, design and evaluation tool. Run `bun run serve` to try the local multi-asset room editor. Start with the furnished Control room or create an empty room. The [room editor guide](wiki/50-implementation/room-layout.md) covers placement, asset releases, measurements and remote commands.
+Synergon is a work environment layout, design and evaluation tool. Open the furnished Control room to arrange the stations, click their components and operator to edit them, and run ergonomic screening. Run `bun run serve` locally to create and transfer private projects. The [room editor guide](wiki/50-implementation/room-layout.md) covers placement, asset releases, measurements and remote commands.
 
 The first asset is **Rig B**, a seated teleoperation station for heavy machinery: platform, seat,
 two armrest pods with industrial joysticks, touchscreen on an arm, a two-column stand with a curved

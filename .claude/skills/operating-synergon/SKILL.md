@@ -65,7 +65,7 @@ request name ("say 'undo seat-recline-21' to put it back"), and what is estimate
   only when *you* picked an assumed adjustment that the owner didn't name.
 - A distance is a **point estimate** at the photo-estimated sizes, with no range yet. Round to the
   centimetre or the degree.
-- Never call a setting "compliant", "correct" or "ergonomic": there is no assessment yet.
+- For room assessment, use [assessing-synergon](../assessing-synergon/SKILL.md). Report each criterion with its source, scope and uncertainty. Station measurements alone are point estimates.
 - Authors are labels the server makes from what a caller claims ("Person · 3f2a", "Agent · 3f2a"):
   say "a browser", not "the owner".
 

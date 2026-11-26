@@ -7,7 +7,7 @@ const headers = { "cache-control": "no-store" };
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
 /** Stateless Streamable HTTP. The endpoint URL identifies the workspace. */
-export function roomMcp(message: unknown, run: (wire: RoomWire) => Reply): Response {
+export async function roomMcp(message: unknown, run: (wire: RoomWire) => Reply | Promise<Reply>): Promise<Response> {
   const m = record(message) ? message : {};
   function error(code: number, message: string, status = 200) {
     return Response.json({ jsonrpc: "2.0", id: m.id ?? null, error: { code, message } }, { status, headers });
@@ -31,7 +31,7 @@ export function roomMcp(message: unknown, run: (wire: RoomWire) => Reply): Respo
       if (!record(supplied)) return error(-32602, "Tool arguments must be an object.");
       const args = { ...supplied }, expectedVersion = spec.edit ? args.expectedVersion : undefined;
       if (spec.edit) delete args.expectedVersion;
-      const reply = run({ id: spec.id, args, expectedVersion });
+      const reply = await run({ id: spec.id, args, expectedVersion });
       result = { content: [{ type: "text", text: JSON.stringify(reply) }], structuredContent: reply, isError: !reply.ok };
       break;
     }
