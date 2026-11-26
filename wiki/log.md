@@ -530,3 +530,7 @@ seen by the person's materials only (`viewer.person.look(on)`). Re-rendered: `wo
 **00:48** — A second homepage-only trial found “Michael”, set a female avatar and verified her gaze at the small screen. Asking for her own left foot exposed an erroneous foot-to-pedal match. Target resolution now distinguishes a component's name from its association tags. The agent guide explains shared and per-viewer state and links to the data model and eligible [seated targets](50-implementation/person-commands.md#seated-targets).
 
 **06:55** — The homepage and agent guide describe Synergon’s purpose as the layout, design and evaluation of work environments and identify the remote operator’s station as its first example. [Product overview](00-overview/summary.md).
+
+## 2026-11-26 · Multi-asset room editor for local trial
+
+The local editor opens a saved room, places independent copies of stations and displays, and exposes the same qualified scene operations to the UI, HTTP, MCP and CLI. The furnished trial and empty workspace creation use a fresh room store. [Room layout and agent interfaces](50-implementation/room-layout.md)

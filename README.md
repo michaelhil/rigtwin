@@ -1,8 +1,6 @@
 # Synergon
 
-A proof of concept for building **credible, modular, parametric 3D models of operator workstations
-from a handful of photographs**, made by AI agents and checked by independent reviewers, for later
-human-factors assessment and simulator training.
+Synergon is a work environment layout, design and evaluation tool. Run `bun run serve` to try the local multi-asset room editor. Start with the furnished Control room or create an empty room. The [room editor guide](wiki/50-implementation/room-layout.md) covers placement, asset releases, measurements and remote commands.
 
 The first asset is **Rig B**, a seated teleoperation station for heavy machinery: platform, seat,
 two armrest pods with industrial joysticks, touchscreen on an arm, a two-column stand with a curved

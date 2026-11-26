@@ -25,7 +25,7 @@ export interface ViewerBundle { files: Record<string, { body: string; type: stri
 /** Build the static viewer: index.html, viewer.css, viewer.js. Throws with the bundler's messages on error. */
 /** The person's run-time numbers (assets/manikin/params/runtime*.toml) enter the bundle as their values only; a file with an
  *  incomplete record stops the bundle (shared/runtime-params.ts). Other TOML files are left to Bun. */
-const runtimeParams: BunPlugin = { name: "runtime-params", setup(b) {
+export const runtimeParams: BunPlugin = { name: "runtime-params", setup(b) {
   b.onLoad({ filter: /[\\/]assets[\\/]manikin[\\/]params[\\/]runtime[^\\/]*\.toml$/ }, async (args) => {
     const name = basename(args.path), doc = Bun.TOML.parse(await Bun.file(args.path).text()), errors = validateRuntime(doc, name);
     if (errors.length) throw new Error(`${name}: ${errors.length} incomplete record(s):\n  ${errors.slice(0, 20).join("\n  ")}`);

@@ -8,6 +8,9 @@ tags: [reference, agents, mcp, commands, discovery]
 
 # Remote commands
 
+The local multi-asset editor has its own current scene and command contract. [Room layout and agent interfaces](../50-implementation/room-layout.md)
+
+
 ## Start at the homepage
 
 Give your agent the Synergon homepage and describe what you want to do. The homepage links to the workspace directory and a short agent guide at `/llms.txt`. Both work with an ordinary HTTP client. An agent can look up a workspace by name and ask which one you mean when several fit. With a workspace open in the same browser tab that the agent can see, it can read the ID from that tab's address.
