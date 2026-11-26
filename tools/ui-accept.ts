@@ -1304,7 +1304,7 @@ await test("W01", "the landing: a small page, ready at once, no three.js, no mod
     return { js: js.reduce((a, e) => a + e.decodedBodySize, 0), scripts: js.length, heavy: r.map((e) => e.name).filter((n) => /\\.(glb|ktx2|wasm)|manifest|avatar|basis/.test(n)).map((n) => n.split('/').pop()), canvas: !!document.querySelector('canvas'), viewer: typeof window.viewer !== 'undefined' }; })()`);
   const t = await text(s);
   await wsShot(s, "01-landing-empty");
-  const lede = /shared copy of the rig and the person/.test(t) && /Anyone with its link can see it and change it/.test(t), empty = /There are no workspaces yet/.test(t), noContinue = !/Continue in/.test(t);
+  const lede = /layout, design and evaluation of work environments/.test(t) && /A workspace saves a shared scene/.test(t) && /Anyone with its link can see it and change it/.test(t), empty = /There are no workspaces yet/.test(t), noContinue = !/Continue in/.test(t);
   record("W01", "the landing: a small page, ready at once, no three.js, no model; its words when there is no workspace yet", m.js <= 40e3 && !m.canvas && !m.viewer && m.heavy.length === 0 && s.ms <= 1000 && lede && empty && noContinue,
     `${(m.js / 1e3).toFixed(1)} kB of script in ${m.scripts} file(s); ready ${s.ms.toFixed(0)} ms; ${m.heavy.length ? "heavy files: " + m.heavy.join(", ") : "no model, person or transcoder file"}; canvas: ${m.canvas}; says what a workspace is: ${lede}; empty line: ${empty}; no Continue: ${noContinue}`,
     "≤ 40 kB of script, no glb, wasm or person file, no canvas, ready ≤ 1 s");

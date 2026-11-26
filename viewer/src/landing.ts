@@ -5,7 +5,7 @@ import { workspaceList } from './browse.ts';
 import { CLOTHING, LICENCE } from './credits.ts';
 import { addressOf, createWorkspace, cleanName, forget, getWorkspace, NAME_MAX, recent, remember, rename, type Recent, type Workspace } from './workspace.ts';
 
-const NOTE = 'A workspace is a shared copy of the rig and the person. Anyone with its link can see it and change it.';
+const NOTE = 'A workspace saves a shared scene. Anyone with its link can see it and change it.';
 
 function shell(root: HTMLElement, title: string): HTMLElement {
   document.title = title === 'Synergon' ? 'Synergon' : `${title} · Synergon`;

@@ -1,6 +1,6 @@
 # Synergon
 
-Synergon is a shared 3D operator station. You can adjust components, pose the seated person, measure reach and sight lines, and show the result in a viewer. All paths below use the same origin as this page.
+Synergon is a tool for the layout, design and evaluation of work environments. The current example is a remote operator’s station. You can adjust its components, pose the seated person and measure reach and sight lines. Use discovery to identify the asset and controls available in the chosen workspace. All paths below use the same origin as this page.
 
 ## What lives in a scene
 

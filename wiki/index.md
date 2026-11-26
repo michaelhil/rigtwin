@@ -14,7 +14,7 @@ tags: [meta, generated]
 
 ## Start here
 
-1. **Summary:** [Summary](00-overview/summary.md). From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is live on mightwork.ai.
+1. **Summary:** [Summary](00-overview/summary.md). Synergon supports work environment layout, design and evaluation. Its first example is a photo-estimated remote operator’s station with an adjustable rig, a seated person, shared workspaces and agent control.
 2. **Lessons learned:** [Lessons learned](60-lessons/lessons-learned.md). Fifty-five numbered lessons (L-01 to L-55) from building a 3D asset from photos with a team of AI agents, each one sentence with its evidence and how it is now applied, grouped by topic, with a top ten and a map to the failures and patterns behind them.
 3. **Model card:** [Model card of the Rig B asset](70-results/rig-b-model-card.md). What the Rig B asset is, what it is for and what it must not be used for - 46 parts in five groups, 20 joints (6 of them assumed), 14 reference frames and 305 parameter records with their sources and ranges, built from eleven photos; sizes are photo estimates never checked against a tape, and all three of the owner's figures conflict with the photos.
 4. **Next steps:** [Next steps](90-next/next-steps.md). What to do next, in priority order and by whom: platform step 1 is live (2026-11-24) and the owner tries it; then a tape session with four questions for the owner, a planted-error test of the reviewer, the Skill on a second object, small fixes, other rig configurations, the assessment and simulator phases, and routine maintenance.
@@ -22,7 +22,7 @@ tags: [meta, generated]
 ## Overview
 
 - [Glossary](00-overview/glossary.md): Plain-language meanings of every technical term this wiki uses - from asset contract, blockout and camera solve to tier, triangulate and build folder - in one alphabetical table, each with the page where it matters most. *(living, updated 2026-11-26)*
-- [Summary](00-overview/summary.md): From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is live on mightwork.ai. *(living, updated 2026-11-25)*
+- [Summary](00-overview/summary.md): Synergon supports work environment layout, design and evaluation. Its first example is a photo-estimated remote operator’s station with an adjustable rig, a seated person, shared workspaces and agent control. *(living, updated 2026-11-26)*
 
 ## Request
 

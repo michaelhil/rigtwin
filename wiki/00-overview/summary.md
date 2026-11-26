@@ -1,12 +1,14 @@
 ---
 title: Summary
-tldr: From eleven phone photos and no tape, AI agents built a credible, parametric, articulated 3D model of a teleoperation rig, accepted by an independent reviewer and viewable in a browser; its sizes are unchecked photo estimates. Since 2026-11-24 a platform grows around it: step 1, agent control and live sharing between browsers, is live on mightwork.ai.
+tldr: Synergon supports work environment layout, design and evaluation. Its first example is a photo-estimated remote operator’s station with an adjustable rig, a seated person, shared workspaces and agent control.
 status: living
-updated: 2026-11-25
+updated: 2026-11-26
 tags: [overview, summary, results]
 ---
 
 # Summary
+
+Synergon is a tool for the layout, design and evaluation of work environments. Its first example is a seated remote operator’s station. The [platform plan](../30-plan/platform-plan.md) covers ergonomic assessment and layouts containing multiple assets.
 
 ## TL;DR
 
