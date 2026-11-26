@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.2.0 — 2026-11-27
+
+After the second asset: a desk with displays, built by one agent following 0.1.0, reviewed
+three times by the read-only reviewer and then audited (method and code) by agents that took
+no part.
+
+**Based on**
+
+- that asset's journal (a verdict per step), measurement register, three reviews, the method
+  audit, the platform review and the coordinator's nineteen rulings.
+
+**Promotion rule applied.** Into the core, because both assets showed it or it repairs an
+invariant: a closure test must be shown able to fail (invariant 5); no value is changed to
+pass a check, and sizes need a judge other than the measurer (invariant 9); one batched
+question to the person at the dimension-table gate; hold-out photos; grazing rays,
+exactly determined fits and by-eye depth as failure modes; `--asset` in the commands.
+As "exercised once": the measurement-first route with a scale rule, the gravity-aided cameras
+and the verdict on a phone's measuring app (measuring reference, section 0); drills; the model
+card. As a playbook: `playbooks/desk-console.md`. Left with the asset: its values, rulings and
+texture swatches. Not changed: the confidentiality wording (an optional swatch layer exists on
+the second asset by the owner's request; a wording needs the owner's approval).
+
+**What the second asset showed about this Skill**
+
+- It transferred: evidence set, dimension table, spec, blockout, checks and review worked
+  unchanged; the camera-first order and the playbook did not apply.
+- Accuracy was asserted, not tested: closure figures that could not fail, a measurer who was
+  also the modeller, a hold-out photo used up. Sizes: probably within 2–4 %, unverified.
+- Values were set by a new check until it passed. The rule against it is now invariant 9.
+- Still open for 1.0, unchanged: a fresh agent with only the template, and sealed tape values.
+
+
 ## 0.1.0 — 2026-11-23
 
 First version, written after the first asset was built, from what was actually done.
@@ -24,7 +56,7 @@ First version, written after the first asset was built, from what was actually d
 | three modellers in parallel with build folders and file ownership | the `component-modeller` and `asset-measurer` definitions as files (the agents ran from prose briefs) |
 | independent review, two rounds, by general agents with shell access | the read-only `asset-reviewer` definition; enforced isolation; the planted-error test |
 | a retrospective (this Skill) | drills as a formal step; a model card produced by following this Skill; resume by a cold session |
-| | human gates; a second object; a second repository; the tools with any asset id but the first |
+| | human gates; a second object; a second repository; the tools with any asset id but the first (0.2.0: a second object and asset id are now exercised) |
 
 **Honest limits**
 

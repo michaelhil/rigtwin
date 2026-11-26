@@ -1,0 +1,160 @@
+# Canopy on top of the rear wall. Method words are explained at the top of desk.toml.
+
+[canopy.depth]
+value = 0.87
+unit = "m"
+range = 0.06
+class = "photo"
+tier = "layout"
+evidence = "Front lower corners (three photos) lie over the desktop's front edge; the post junctions lie 0.87 m (right) and 0.89 m (left) behind them. Each side's depth rests on ONE oblique view paired with the front photo, which looks almost along the side edge: weaker than a true two-view size. Range 0.81-0.93 m, with an UNEXPLAINED app reading of 0.73 m for the same span (canopy.depth_app), outside it; an earlier single-ray result (0.79-0.83 m) grazed its plane and is discarded. Two checks speak against 0.73 m: the independent auditor's pixel distances in IMG_1793 (868 px seen, 883 predicted for 0.89 m, 755 for 0.73 m; right side 619 seen, 539 and 466 predicted) and the what-if drill. First item of the tape request."
+
+[canopy.depth_app]
+value = 0.73
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). One app measurement, visible in five screenshots (IMG_1788-1792): along the lower edge of the canopy's side, from the front corner to where it meets the post. Not modelled: two-view gives 0.87-0.89 m for what looks like the same span. Which rear point the app used is not certain. First item of the measurement request."
+
+[canopy.band_height]
+value = 0.085
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "cosmetic"
+evidence = "Two-view (IMG_1795, IMG_1796): upper and lower front corners of the canopy's edge are 0.07-0.10 m apart."
+
+[canopy.cap_height]
+value = 0.025
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Aluminium strip at the top of the canopy's edge, above the wood band and the green light line (IMG_1793, IMG_1796)."
+
+[canopy.glow_height]
+value = 0.006
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Green light line between the wood band and the aluminium strip, on the front and both sides (IMG_1793-1797)."
+
+[canopy.light_size]
+value = [0.045, 1.04, 0.012]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "White light strip along the front of the underside (IMG_1795, IMG_1802): depth, length, height by eye; it runs almost the full width."
+
+[canopy.light_inset]
+value = 0.03
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Distance of the light strip behind the front edge (IMG_1802, IMG_1805)."
+
+[canopy.fan_size]
+value = [0.28, 0.30, 0.012]
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "cosmetic"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App labels 28 cm and 30 cm on two sides of the square fan plate (IMG_1804, IMG_1805); thickness by eye."
+
+[canopy.fan_x]
+value = 0.42
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Centre of the fan plate behind the canopy's front edge, about the middle of the underside (IMG_1795, IMG_1803)."
+
+[canopy.spot_size]
+value = [0.20, 0.19, 0.035]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Triangular spotlights with rounded corners and a lit rim, one near each rear corner of the underside (IMG_1803, IMG_1805): length, width, height by eye against the fan plate. Enlarged in the last round: against the canopy width in IMG_1793 and IMG_1803 each spot is about a sixth of it."
+
+[canopy.spot_xy]
+value = [0.72, 0.42]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Centre of each spotlight: behind the front edge, and from the axis (IMG_1795, IMG_1803)."
+
+[canopy.bar_size]
+value = [0.07, 0.62, 0.05]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Dark bar under the rear of the canopy between the spotlights (IMG_1795, IMG_1803): depth, length, height by eye. What it is (loudspeaker or camera bar) is not established."
+
+[canopy.bar_x]
+value = 0.76
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Centre of the bar behind the canopy's front edge (IMG_1803)."
+
+[canopy.spot_rim]
+value = 0.018
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Width of the lit rim round each spotlight (IMG_1803)."
+
+[canopy.fan_grille]
+value = [0.125, 0.004]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Round grille in the square fan plate: radius, and how far it stands out (IMG_1803, IMG_1805)."
+
+[canopy.felt_recess]
+value = 0.012
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The dark felt underside sits a little above the lower edge of the wood band, inside a light frame (IMG_1802, IMG_1803, IMG_1805). The blockout had it hanging below the band; the review asked for it recessed."
+
+[canopy.band_thickness]
+value = 0.03
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Thickness of the wood band seen from below (IMG_1802, IMG_1805)."
+
+[canopy.spot_corner]
+value = 0.024
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Corner radius of the triangular spotlights (IMG_1803). Reduced from 35 mm, which made the triangle read as a disc."
+
+[canopy.spot_lens]
+value = 0.028
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Radius of the round lamp in the middle of each spotlight (IMG_1803)."
+
+[canopy.spot_segments]
+value = [2, 10]
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "Pieces per rounded corner of a spotlight, and sides of its round lamp."

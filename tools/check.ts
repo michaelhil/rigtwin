@@ -1,4 +1,7 @@
-// bun run check [--fast] [--build <name>]
+// bun run check [--fast] [--build <name>] [--asset <id>]
+// --asset <id> checks a further asset (assets/<id>/): the asset's own checks only (types, kit, parameters, build, determinism,
+// independent reader, names, coverage, left/right, geometry, validator, motion, poses, budget, banned words, literals, and the
+// two browser checks). The platform's checks (server, commands, person, deploy, live viewer) belong to the default run.
 // Runs every check of the build brief (section 10) and exits non-zero if one fails.
 // --fast skips the checks that need the headless browser (projection self-test, frame rate, the live viewer).
 import { spawnSync } from "node:child_process";
@@ -15,8 +18,10 @@ import { matFromQuat } from "../shared/math.ts";
 import type { Manifest } from "../shared/manifest.ts";
 
 const args = process.argv.slice(2), opt = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
-const fast = args.includes("--fast"), buildFolder = opt("--build") ?? process.env.SYNERGON_BUILD_DIR, asset = "rig-b";
-const BUDGET = { triangles: 150000, bytes: 4_000_000, primitives: 80, fps: 55 };
+const fast = args.includes("--fast"), buildFolder = opt("--build") ?? process.env.SYNERGON_BUILD_DIR, asset = opt("--asset") ?? "rig-b", own = asset !== "rig-b";
+// --nested: this run is one asset's part of the default gate (the caller has done the type check, kit tests and word scan)
+const nested = args.includes("--nested");
+const BUDGET = { triangles: 150000, bytes: 4_000_000, primitives: 80, fps: 55 };   // the toolkit's defaults; a spec's [budget] replaces them for its asset
 const t0 = performance.now();
 let failures = 0, warnings = 0;
 const report = (ok: boolean | "warn", name: string, summary: string, details: string[] = []) => {
@@ -28,26 +33,26 @@ const report = (ok: boolean | "warn", name: string, summary: string, details: st
 const glob = (pattern: string) => new RegExp("^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
 
 // ---- 1. type check ---------------------------------------------------------------------------------
-{
+if (!nested) {
   const r = spawnSync(join(ROOT, "node_modules", ".bin", "tsc"), ["--noEmit", "-p", ROOT], { encoding: "utf8" });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "types", r.status === 0 ? "tsc --noEmit clean (generator, shared, server, viewer, tools, asset sources)" : `${lines.filter((l) => l.includes("error TS")).length} type error(s)`, r.status === 0 ? [] : lines);
 }
 
-{
+if (!nested) {
   const r = spawnSync("bun", ["test", join(ROOT, "generator")], { encoding: "utf8", cwd: ROOT });
   const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "kit tests", r.status === 0 ? (out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim() + " (known-answer tests of the geometry kit, expressions and pose function)" : "bun test generator failed", r.status === 0 ? [] : out.filter((l) => /fail|error|expect/i.test(l)));
 }
 
 // the server must never show error pages with code to visitors (R3b F4; security review S10)
-{
+if (!own) {
   const src = readFileSync(join(ROOT, "server", "server.ts"), "utf8"), serve = src.slice(src.indexOf("Bun.serve({"), src.indexOf("Bun.serve({") + 600);
   const ok = serve.includes("development: false") && !/development:\s*true/.test(src);
   report(ok, "server options", ok ? "server/server.ts passes development: false to Bun.serve" : "server/server.ts must pass development: false to Bun.serve (no error pages with code)");
 }
 // the setup script's harness (deploy/setup-server.sh against a stand-in host; about 9 s, no root, no network)
-{
+if (!own) {
   const r = spawnSync("bash", [join(ROOT, "tools", "deploy-tests", "setup-server.test.sh")], { encoding: "utf8", cwd: ROOT });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "setup script", (lines.find((l) => /^setup-server.sh test: \d+ passed/.test(l)) ?? "no summary").replace(/ \(logs in .*\)$/, "") + " (check, apply, undo, probe, restore after a hang-up or a closed output)", r.status === 0 ? [] : lines.filter((l) => l.includes("FAIL") || l.includes("log> ")));
@@ -56,6 +61,7 @@ const glob = (pattern: string) => new RegExp("^" + pattern.replace(/[.+?^${}()|[
 // ---- 2. parameters, spec, build (a failure here stops the run) -------------------------------------
 let manifest: Manifest, glbPath: string, sha: string;
 const spec = loadSpec(join(ROOT, "assets", asset, "spec"));
+Object.assign(BUDGET, spec.budget ?? {});
 try {
   const res = await build({ asset, buildFolder, quiet: true });
   if (!res.ok) { report(false, "build", "component errors", res.messages); process.exit(1); }
@@ -71,7 +77,7 @@ try {
 // ---- 2b. command layer and server (step 1 of the platform): unit tests, then the integration test over real HTTP.
 // After the build on purpose: these tests read the built asset (assets/<asset>/build/), which a fresh checkout does not
 // have (the first automatic deploy with them failed for that reason, 2026-11-24).
-for (const [name, dir, what] of [
+if (!own) for (const [name, dir, what] of [
   ["commands", "shared/commands", "validation, units, limits, per-joint stale check, undo, history cap, rebuilt asset, scene.find, measure.distance; intent commands: plain-word targets, amounts, adjust, undo, state, measure, look, MCP instructions"],
   ["server", "server", "two live clients over HTTP, stale refusal, undo by group, resume, restart, view routing, deployed guards, author ids, Host check; MCP endpoint, look and pictures"],
   ["live client", "viewer/src", "reconnect rules: backoff, one resync, wakes, no reconnect after disconnect (Leitbild's cases)"],
@@ -82,7 +88,7 @@ for (const [name, dir, what] of [
 }
 
 // the agent interface v2 documents are generated (tools/agent-docs.ts): the Skill's reference and the wiki page must match the code
-{
+if (!own) {
   const r = spawnSync("bun", [join(ROOT, "tools", "agent-docs.ts"), "--check"], { encoding: "utf8", cwd: ROOT });
   report(r.status === 0, "agent docs", (r.stdout + r.stderr).trim().split("\n").at(-1) + " (.claude/skills/operating-synergon/reference.md, wiki/80-reference/agent-interface.md)");
 }
@@ -222,7 +228,20 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
       if (d > 2e-6) problems.push(`${j.name} at ${JSON.stringify(p.value)}: transforms differ by ${d.toExponential(2)}`);
     }
   }
-  report(!problems.length && n > 0, "pose conformance", problems.length ? `${problems.length} of ${n} test poses disagree` : `${n} test poses: shared/pose.ts (generator + viewer) and tools/glb_inspect.py agree (max difference ${worst.toExponential(1)})`, problems);
+  report(!problems.length && (n > 0 || !glb.joints.length), "pose conformance", problems.length ? `${problems.length} of ${n} test poses disagree` : `${n} test poses: shared/pose.ts (generator + viewer) and tools/glb_inspect.py agree (max difference ${worst.toExponential(1)})`, problems);
+}
+
+// ---- 11b. clearance at the joint limits (only for an asset whose spec asks for it with a [clearance] table) ---------------
+if (spec.clearance) {
+  const { clearance, CANNOT_SEE } = await import("./clearance.ts");
+  const r = clearance(join(glbPath, ".."), asset, { min: spec.clearance.min, watch: spec.clearance.watch }), mm = (x: number) => `${Math.round(x * 1000)} mm`;
+  const how = (depth: number, gap: number) => (depth > 1e-3 ? `overlap by ${mm(depth)}` : `are ${mm(gap)} apart`), was = (depth: number, gap: number) => (depth > 1e-3 ? `overlap ${mm(depth)}` : `${mm(gap)} or more`);
+  const one = r.findings.map((f) => ({ locked: f.locked, text: `${f.joint} at its ${f.end} limit: ${f.a} and ${f.b} ${how(f.depth, f.gap)} (at rest: ${was(f.rest_depth, f.rest_gap)})` }));
+  const many = r.corners.map((f) => ({ locked: f.locked, text: `${Object.keys(f.pose).join(" + ")} at limits: ${f.a} and ${f.b} ${how(f.depth, f.gap)} (at rest: ${was(f.rest_depth, f.rest_gap)})` }));
+  const hard = [...one, ...many].filter((f) => !f.locked), soft = [...one, ...many].filter((f) => f.locked);
+  report(!hard.length, "clearance", hard.length ? `${hard.length} pair(s) brought together by unlocked joints at their limits` : `unlocked joints at both limits, alone and in all ${r.cornerPoses} corner poses: no part nearer than ${mm(r.min)} to another unless it was so at rest. Sampled (tools/clearance.ts); cannot see: ${CANNOT_SEE}. Limits set from the solver cannot fail here`, hard.map((f) => f.text));
+  if (soft.length) report("warn", "clearance", `${soft.length} pair(s) at limits that involve a locked joint (reported, not failed)`, soft.map((f) => f.text));
+  for (const w of r.watch) if (w.gap < r.min) report("warn", "clearance", `watched gap ${w.sets[0]} against ${w.sets[1]}: ${w.gap < 0 ? `OVERLAP ${mm(-w.gap)}` : mm(w.gap)} at ${w.pose}`);
 }
 
 // ---- 12. performance budget ------------------------------------------------------------------------
@@ -236,7 +255,7 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
 }
 
 // ---- 13. banned words ------------------------------------------------------------------------------
-{
+if (!nested) {
   // The words are stored encoded so that this file does not contain them. More can be added, one per
   // line, in private/banned-words.txt.
   const { NEVER: anywhere, VENDORS: vendors, ALLOWED, extraWords } = await import("./banned.ts");   // rig maker, customer: never; device makers: only in parameter evidence
@@ -269,7 +288,7 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
 }
 
 // ---- 13b. the person's run-time numbers: every record of assets/manikin/params/runtime*.toml complete -----------------------
-{
+if (!own) {
   const { validateRuntime, countRuntime } = await import("../shared/runtime-params.ts");
   const dir = join(ROOT, "assets", "manikin", "params"), files = existsSync(dir) ? readdirSync(dir).filter((f) => /^runtime.*\.toml$/.test(f)).sort() : [];
   const problems: string[] = [], counts: string[] = [];
@@ -283,7 +302,7 @@ report(true, "independent reader", `${glb.counts.nodes} nodes, ${glb.counts.mesh
 // ---- 13c. the manikin packages (tools/manikin-check.ts): committed binaries, so checksums instead of a second build;
 // packaging records, files against PROVENANCE.json, budgets, glTF validator, licences and credits, banned names in
 // every file (binaries included), no symbolic links
-for (const r of await (await import("./manikin-check.ts")).manikinChecks(ROOT)) report(r.ok, r.name, r.summary, r.details);
+if (!own) for (const r of await (await import("./manikin-check.ts")).manikinChecks(ROOT)) report(r.ok, r.name, r.summary, r.details);
 
 // ---- 14. numbers in source (advisory) ----------------------------------------------------------------
 {
@@ -302,7 +321,7 @@ for (const r of await (await import("./manikin-check.ts")).manikinChecks(ROOT)) 
 if (!fast) {
   try {
     const { openViewer } = await import("./render.ts");
-    const v = await openViewer({ buildFolder });
+    const v = await openViewer({ buildFolder, asset });
     const st = await v.page.evaluate("viewer.selfTest()");
     report(st.pass, "projection self-test", `${st.checked} known points over ${st.cameras.length} camera(s): worst ${Number(st.worst_px).toFixed(3)} px (tolerance ${st.tolerance_px} px)`, st.pass ? [] : st.results.filter((r: any) => r.error || r.error_px > 1).map((r: any) => JSON.stringify(r)));
     await v.page.viewport(1600, 1000);
@@ -319,7 +338,7 @@ if (!fast) {
     await v.close();
   } catch (e: any) { report(false, "browser checks", String(e.message)); }
   // the person in the default view (the rig's budgets above are the rig's alone): it loads, and the frame rate while it idles
-  if (existsSync(join(ROOT, "assets", "manikin", "operator-m", "operator-m.avatar.json"))) try {
+  if (!own && existsSync(join(ROOT, "assets", "manikin", "operator-m", "operator-m.avatar.json"))) try {
     const { openViewer } = await import("./render.ts");
     const v = await openViewer({ buildFolder, person: true });
     await v.page.viewport(1600, 1000);
@@ -332,6 +351,7 @@ if (!fast) {
     if (errs.length) report(false, "person console", `${errs.length} error(s) or warning(s)`, errs);
     await v.close();
   } catch (e: any) { report(false, "person", String(e.message)); }
+  if (!own) {
   // the deploy's live-site checks and its rollback, against local stand-ins of the site (need dist/; about 90 s)
   if (existsSync(join(ROOT, "dist", "version.json"))) for (const [name, cmd, summary] of [
     ["deploy checks", ["bun", join(ROOT, "tools", "deploy-tests", "deploy-checks.ts")], /deploy checks test: .*/],
@@ -355,9 +375,18 @@ if (!fast) {
   const r = spawnSync("bun", [join(ROOT, "tools", "live-accept.ts")], { encoding: "utf8", cwd: ROOT, timeout: process.env.CI ? 360_000 : 180_000 });
   const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, "live viewer", `${lines.filter((l) => l.startsWith("ok ")).length} of ${lines.filter((l) => /^(ok |FAIL)/.test(l)).length} steps (two browsers and the command line on one local server: changes both ways, activity line and its Undo, stale refusal, link preview, view routing, no server)`, r.status === 0 ? [] : lines.filter((l) => l.startsWith("FAIL") || /error/i.test(l)));
+  }
+}
+
+// ---- 16. every further asset (assets/<id>/spec/rig.toml): its own checks, as part of the default gate ---------------------
+if (!own && !buildFolder) for (const id of readdirSync(join(ROOT, "assets")).sort()) {
+  if (id === asset || !existsSync(join(ROOT, "assets", id, "spec", "rig.toml"))) continue;
+  const r = spawnSync("bun", [join(ROOT, "tools", "check.ts"), "--asset", id, "--nested", ...(fast ? ["--fast"] : [])], { encoding: "utf8", cwd: ROOT, timeout: 300_000 });
+  const lines = (r.stdout + r.stderr).split("\n").filter((l) => l.trim()), last = lines.at(-1) ?? "no output";
+  report(r.status === 0, `asset ${id}`, last.replace(/^(all checks passed|CHECK FAILED): /, "") + ` (bun run check --asset ${id})`, r.status === 0 ? lines.filter((l) => l.startsWith("warn")) : lines.filter((l) => l.startsWith("FAIL") || l.startsWith("       ")));
 }
 
 const seconds = (performance.now() - t0) / 1000;
 console.log(`${failures ? "CHECK FAILED" : "all checks passed"}: ${failures} failure(s), ${warnings} warning(s), ${seconds.toFixed(1)} s`);
-timeline(failures ? "check failed" : "check", seconds, `${failures} failures, ${warnings} warnings${fast ? ", fast" : ""}${buildFolder ? `, build folder ${buildFolder}` : ""}`);
+timeline(failures ? "check failed" : "check", seconds, `${failures} failures, ${warnings} warnings${fast ? ", fast" : ""}${buildFolder ? `, build folder ${buildFolder}` : ""}${own ? `, asset ${asset}` : ""}`);
 process.exit(failures ? 1 : 0);

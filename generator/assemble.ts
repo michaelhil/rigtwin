@@ -11,7 +11,7 @@ import type { ManifestComponent, ManifestJoint, ManifestDatum, Box, ParamClass }
 import { kit, type Kit, type Part, type Mesh, assertMesh, mergeParts, triangleCount } from "./kit.ts";
 import { evalExpr } from "./expr.ts";
 import { ParamTable } from "./params.ts";
-import { PALETTE } from "./materials.ts";
+import { PALETTE, type Material } from "./materials.ts";
 import type { OutNode } from "./glb.ts";
 
 // The side marker _L / _R may sit before a trailing index or word (C_pod_button_L_1, J_joy_L_roll).
@@ -31,7 +31,25 @@ export interface JointSpec {
   lower: string | number; upper: string | number; neutral: string | number | (string | number)[];
   kind: "adjustment" | "control"; evidence: "seen" | "inferred" | "assumed"; locked: boolean; signal?: string;
 }
-export interface Spec { asset: string; title: string; frame?: string; groups: string[]; nodes: Record<string, NodeSpec>; joints: Record<string, JointSpec>; motion: Record<string, string[]>; symmetry?: { single?: string[]; free?: string[] } }
+/** `materials`: materials of this asset only, added to the shared palette (colour as "#rrggbb"). `stage`: the fixed frame of the
+ *  orthographic views. `budget`: limits for this asset where they differ from the toolkit's defaults. `clearance`: run the clearance sweep at the joint
+ *  limits as part of the check, with this smallest gap (tools/clearance.ts). All are optional. */
+export interface Spec { asset: string; title: string; frame?: string; groups: string[]; nodes: Record<string, NodeSpec>; joints: Record<string, JointSpec>; motion: Record<string, string[]>; symmetry?: { single?: string[]; free?: string[] };
+  materials?: Record<string, { color: string; metallic?: number; roughness?: number; note?: string; texture?: string; tile?: number; gain?: number; emissive?: string }>; stage?: Box; budget?: { triangles?: number; primitives?: number; bytes?: number }; clearance?: { min: number; watch?: [string, string][] } }
+
+/** The shared palette plus the spec's own materials (a spec may not redefine a shared one). */
+export function paletteOf(spec: Spec): Record<string, Material> {
+  const out: Record<string, Material> = { ...PALETTE };
+  for (const [name, m] of Object.entries(spec.materials ?? {})) {
+    if (PALETTE[name]) throw new Error(`spec material '${name}' has the name of a shared material`);
+    if (!/^#[0-9a-fA-F]{6}$/.test(m.color ?? "")) throw new Error(`spec material '${name}': color must be "#rrggbb"`);
+    if (m.emissive !== undefined && !/^#[0-9a-fA-F]{6}$/.test(m.emissive)) throw new Error(`spec material '${name}': emissive must be "#rrggbb"`);
+    out[name] = { color: [1, 3, 5].map((i) => parseInt(m.color.slice(i, i + 2), 16) / 255) as [number, number, number],
+      ...(m.emissive ? { emissive: [1, 3, 5].map((i) => parseInt(m.emissive!.slice(i, i + 2), 16) / 255) as [number, number, number] } : {}), metallic: m.metallic ?? 0, roughness: m.roughness ?? 0.6, note: m.note ?? "",
+      ...(m.texture ? { texture: { file: m.texture, tile: m.tile ?? 0.25, gain: m.gain ?? 1 } } : {}) };
+  }
+  return out;
+}
 
 /** What a component function receives. */
 export interface Ctx {
@@ -105,7 +123,8 @@ export interface Assembly {
 const r6 = (v: number) => { const x = Math.round(v * 1e6) / 1e6; return x === 0 ? 0 : x; };
 const r7 = (v: number) => { const x = Math.round(v * 1e7) / 1e7; return x === 0 ? 0 : x; };
 
-export async function assemble(spec: Spec, params: ParamTable, opts: { srcDir: string; only?: string[] }): Promise<Assembly> {
+export async function assemble(spec: Spec, params: ParamTable, opts: { srcDir: string; only?: string[]; palette?: Record<string, Material> }): Promise<Assembly> {
+  const PALETTE = opts.palette ?? paletteOf(spec);
   const errors: string[] = [], omitted: Assembly["omitted"] = [], missing: string[] = [], notBuilt: string[] = [];
   const built = opts.only?.length ? spec.groups.filter((g) => opts.only!.includes(g)) : spec.groups;
   for (const g of opts.only ?? []) if (!spec.groups.includes(g)) throw new Error(`--only: '${g}' is not a group (${spec.groups.join(", ")})`);

@@ -1,0 +1,120 @@
+# Rear wall behind the desk: a thin kinked screen wall between two wooden side boards, an open equipment base under it.
+# Method words ("rule photo", "one ray", "two-view", "app label") are explained at the top of desk.toml.
+
+[wall.width]
+value = 1.16
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "Two-view on the canopy's front corners (IMG_1794, 1795, 1796): 1.167 m; on the two post-canopy junctions: 1.124 m between the posts' inner front edges. App labels: 1.15 m (canopy front, IMG_1789-1792) and 1.14 m (between the posts under the canopy, IMG_1802, IMG_1803). Taken as the outer width over the side boards."
+
+[wall.fabric_width]
+value = 1.09
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App label, four screenshots (IMG_1813-1816): width of the blue fabric field on the rear, corner to corner along its top edge. With wall.width it leaves 3.5 cm for each side board, which is what the boards look like edge-on (IMG_1807)."
+
+[wall.height]
+value = 1.98
+unit = "m"
+range = 0.035
+class = "photo"
+tier = "layout"
+evidence = "Two-view (IMG_1795, IMG_1796): the canopy's two upper front corners are 1.205 and 1.214 m above the desktop, and the canopy top is the top of the wall (IMG_1808, IMG_1810). Plus desk.height. A fit of the vertical scale through the rear app labels (IMG_1816) gave 1.70 m; it assumed a flat wall and had no redundancy, and is discarded."
+
+[wall.front_x]
+value = 0.965
+unit = "m"
+range = 0.04
+class = "photo"
+tier = "layout"
+evidence = "One ray on the vertical plane of the right board's inner face (IMG_1794): the board's front edge is 0.96-0.97 m behind the front edge centre at desk level and 0.33 m above it, vertical between the two (0.4 degrees). Moves 0.7 m per metre of error in the plane's position."
+
+[wall.frame_depth]
+value = 0.085
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Width of the side boards seen edge-on from the side (IMG_1807, IMG_1810)."
+
+[wall.upper_lean]
+value = 10
+unit = "deg"
+range = 5
+class = "photo"
+tier = "layout"
+evidence = "The upper (blue) section leans forward to the canopy. One ray on the board's plane (IMG_1794): 8 degrees to a point 1.0 m above the desktop, 12 degrees to the canopy junction; two-view junctions of both posts lie 0.87 and 0.89 m behind the front edge centre, 0.08-0.10 m in front of wall.front_x. The lower (grey) section is vertical. From the side photos (IMG_1807, ultra-wide) the lean looks larger, 15-18 degrees; no square-on side photo exists."
+
+[wall.blue_length]
+value = 0.56
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App labels on the rear: height of the blue field 54 cm at the side edge (IMG_1812-1814) and 57 cm at the centre seam (IMG_1815, IMG_1816), measured along the leaning surface."
+
+[wall.grey_height]
+value = 0.59
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App labels on the rear: height of the grey field, 59 cm at the side edge (IMG_1814) and at the centre seam (IMG_1815, IMG_1816)."
+
+[wall.profile]
+value = 0.03
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Aluminium rails above the blue field, between the two fields and under the grey field (IMG_1809, IMG_1816). The height of the open base follows from wall.height less the two fields and three rails: about 0.76 m, level with the shelf of the small displays as IMG_1814 shows."
+
+[wall.panel_thickness]
+value = 0.03
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The fabric panels sit at the rear of the side boards; from the operator's side the dark felt face is set back between the boards (IMG_1795, IMG_1796)."
+
+[wall.base_depth]
+value = 0.125
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "Depth of the open base, from the wall's rear face forward. Upper bound from visible carpet: in IMG_1795 the floor is seen right up to the lower edge of the panel under the top, and the sight lines through that edge meet the floor 0.91-0.93 m behind the front edge centre (three points); nothing of the base can stand on the floor in front of that. The base is therefore the open lower part of the wall itself, a few centimetres deeper than the side boards, not a cabinet that runs forward under the shelf as the blockout assumed (0.40 m) and the form round kept (0.30 m). Its dark perforated front panel is seen from behind in IMG_1809 and IMG_1816."
+
+[wall.base_wall]
+value = 0.02
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Thickness given to the base's side walls, floor and front wall."
+
+[wall.equipment]
+value = [[0.09, 0.28, 0.20, -0.28], [0.09, 0.20, 0.06, 0.26]]
+unit = "m"
+class = "invented"
+tier = "layout"
+evidence = "Stand-in boxes for the equipment in the open base (seen in IMG_1809, IMG_1816): each [depth, width, height, y of centre]. Sizes and places are not measured; they stand behind the base's front panel and may stand out to the rear."
+
+[wall.rail_size]
+value = [0.015, 0.05]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Black slotted rail on the centre of the wall's operator side, from the canopy down behind the displays (IMG_1795, IMG_1806): depth and width by eye. (For one build the depth was cut to 12 mm to pass the clearance check; restored by ruling R11: no value is changed to pass a check.) How the large displays hang on it is seen only from behind (IMG_1808)."
+
+[wall.seam]
+value = 0.006
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Each field of the rear is two panels side by side with a narrow joint on the centre line (IMG_1809, IMG_1813, IMG_1816)."

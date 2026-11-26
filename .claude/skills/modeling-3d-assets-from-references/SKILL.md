@@ -17,7 +17,7 @@ compatibility: >-
   and viewer (run with Bun; Python 3 for the independent reader). Written for Claude Code in a
   repository with this project's structure.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Modeling 3D assets from references
@@ -26,7 +26,7 @@ Turns photos and partial sizes of a real object into a parametric, articulated a
 code + parameter records → one GLB + one description file, checked by scripts and judged by an
 independent reviewer. **Unit of reuse:** this Skill drives the project's toolkit (`generator/`,
 `tools/`, `viewer/`, `shared/`) and cannot build anything without it. **[E]** = exercised on
-the first asset; **[N]** = not yet exercised.
+both assets built so far; **[E1]** = on one; **[N]** = not yet exercised.
 
 ## Invariants
 
@@ -42,7 +42,8 @@ the first asset; **[N]** = not yet exercised.
    agrees by construction.
 5. **Scale is closed against other known sizes before modeling.** A range must cover the
    disagreement between methods; a conflict is recorded, not averaged, and not explained away by
-   a correction nobody tested.
+   a correction nobody tested. A closure test counts only if it has been shown able to fail:
+   perturb the unknowns it is said to validate, and if the figure does not move it tests nothing.
 6. **The spec lists every component and every build is compared with it.** Each component is
    built or listed as omitted with a reason, left and right alike. A whole side was once missing
    and nothing noticed.
@@ -53,7 +54,11 @@ the first asset; **[N]** = not yet exercised.
    axis.
 9. **The builder does not mark its own work.** Scripts decide what is numeric; a reviewer who
    has not seen the builders' notes decides whether the model matches the references. Nobody
-   weakens a check, a budget or the spec to get a pass.
+   weakens a check, a budget or the spec to get a pass, **and no value is changed to make a check
+   pass**: it moves only inside its stated range and is then listed as set by that check; a limit
+   taken from a check's own solver is labelled as such and is no evidence. **Sizes need a judge
+   other than the measurer** (a second agent's own picks, or tape values); a reviewer cannot
+   judge them by eye.
 10. **Two-edged standard: no toy, no wasted detail.** Credible at a glance to someone who knows
     the object; nothing that costs triangles or build time without helping recognition or use.
 11. **Photos are confidential by default.** Originals are read-only; anything containing photo
@@ -94,11 +99,16 @@ Ask the person, in one message, and record the answers verbatim:
 
 1. **Evidence set [E].** Working copies under `private/`; per photo: which instance, what may
    have moved, which viewpoints are really distinct; crops per component with captions.
-2. **Cameras and scale closure [E].** `asset-measurer` ties one camera set to named gauge
-   features, sets scale from one known size and tests it against the others.
+2. **Scale and cameras [E].** If sizes or a scale object exist, start from them: a register of
+   every stated size (from where to where, value, cross-check), then scale, then cameras
+   (measurement-first route [E1]). Otherwise `asset-measurer` ties one camera set to named gauge
+   features and sets scale from one known size [E1]. Either way the scale is tested against
+   the other known sizes.
 3. **Dimension table [E].** Each dimension with class, range and evidence; what the photos
    cannot check; conflicts with stated figures; a ranked tape request. The coordinator writes a
-   ruling for each conflict.
+   ruling for each conflict. **At this gate, send the person one batched question**: every
+   assumed critical value, every conflict, every motion whose existence or range is unknown.
+   Ten minutes with a tape there saves the weakest hours later.
 4. **Decomposition spec [E].** Tree, groups, mount frames, joints with kind and evidence level,
    reference frames, expected-motion and left/right tables. Show the person the tree [N].
 5. **Whole-object blockout with EVERY component [E].** Simple solids of the right size, in the
@@ -106,16 +116,20 @@ Ask the person, in one message, and record the answers verbatim:
 6. **Checks [E].** `bun run check` passes on a full build. Make each new check fail once on
    purpose before relying on it.
 7. **Photo-matched comparison [E].** `bun run render --set matched`: render, ID colours and
-   outlines through each solved camera. Read it beside the cannot-check list.
+   outlines through each solved camera. Read it beside the cannot-check list. Agreement through
+   a camera that measured the part is by construction: hold back whole-object photos that no
+   dimension comes from, and record when one is used up [E1].
 8. **Independent review [E].** A fresh `asset-reviewer`; a verdict per component and overall.
 9. **Form rounds [E].** One `component-modeller` per group, in parallel, each running the loop
    below; the coordinator assembles, runs the full check, keeps milestone images and calls a
    fresh review. Repeat until the stop rules say stop.
-10. **Drills [N].** Change listed parameters within their ranges and rebuild; enter a value in
-    `measured.toml` and rebuild with no code change; swap a purchased part's device record.
-11. **Model card [N].** Class counts, deviations, unverified critical values, what cannot be
-    checked, review verdicts, and the Skill version that produced the asset.
-12. **Retrospective [E, once].** Sort lessons into universal, asset-type and asset-specific
+10. **Drills [E1].** Change listed parameters within their ranges and rebuild; enter a value in
+    `measured.toml` and rebuild with no code change; swap a purchased part's device record [N].
+    A limit that came from a check's solver must be solved again after a size changes.
+11. **Model card [E1].** Class counts, deviations, values a check influenced, unverified critical
+    values, what cannot be checked, review verdicts, questions for the site, and the Skill
+    version that produced the asset.
+12. **Retrospective [E].** Sort lessons into universal, asset-type and asset-specific
     (rule in `CHANGELOG.md`).
 
 **Delegating.** Give each agent a named build folder, the files it owns and the coordinator's
@@ -145,10 +159,13 @@ acceptance) belong to the design but were replaced by the reviewer on the first 
 ```bash
 bun install                                   # once
 bun run build [--only <group>[,<group>]] [--build <name>] [--asset <id>]
-bun run check [--fast] [--build <name>]   # --fast skips the two browser checks
-bun run render --set sheet|ortho|ids|groups|matched|focus|ui|selftest|all \
+bun run check [--fast] [--build <name>] [--asset <id>]   # --fast skips the browser checks; the
+                                              # default run also checks every further asset
+bun run render --set sheet|ortho|ids|groups|matched|focus|view|ui|selftest|all [--asset <id>] \
     [--only <group or id>] [--fit <group or id>] [--cam <photo>] [--pose J_x:val,...] \
-    [--mode ids|class] [--build <name>] [--out <dir>]
+    [--mode ids|class] [--build <name>] [--out <dir>] [--frames] [--plain] \
+    [--camera x,y,z,tx,ty,tz,fov]              # with --set view: one free view
+bun tools/clearance.ts --asset <id> [--solve <joint>]   # sampled sweep of the joint limits
 bun run serve [--port <n>] [--build <name>]   # the viewer, locally
 bun run dist [--out <dir>] [--no-verify]          # self-contained deployable folder
 bash .claude/skills/modeling-3d-assets-from-references/scripts/check-vocabulary.sh
@@ -156,8 +173,8 @@ bash .claude/skills/modeling-3d-assets-from-references/scripts/check-vocabulary.
 
 Set `SYNERGON_BUILD_DIR=<name>` and `SYNERGON_AGENT=<role>` when working in parallel. Images with
 photo pixels are written under `private/renders/`. Every agent appends timings to
-`work/timeline.jsonl`. `generator/README.md` lists the kit operations. Only `build` takes
-`--asset`; `check`, `render`, `serve` and `dist` still hard-code the first asset's id [N].
+`work/timeline.jsonl`. `generator/README.md` lists the kit operations. `serve` and `dist` still
+serve the first asset only [N].
 
 ## Stop rules
 
@@ -179,7 +196,8 @@ photo pixels are written under `private/renders/`. Every agent appends timings t
   it was measured from and to.
 - It is unclear which instance is the reference, or whether a motion exists that the purpose
   depends on.
-- A critical-tier value is assumed or invented and the next use would rely on it.
+- A critical-tier value is assumed or invented and the next use would rely on it. Ask at the
+  dimension-table gate, in one batch, not at the end.
 - A component fails its iterations for lack of evidence: ask for the photo that would settle it.
 - Anything about confidentiality, publishing, pushing or deploying.
 - Any change to a check, a budget, or node IDs that something downstream already uses.
@@ -193,13 +211,18 @@ photo pixels are written under `private/renders/`. Every agent appends timings t
 - `references/reviewing.md`: read before rendering for judgment or briefing the reviewer.
 - `references/failure-modes.md`: read when something looks right too easily, or after a surprise.
 - `playbooks/seated-workstation.md`: read when the asset is a seated operator station.
+- `playbooks/desk-console.md`: read when the asset is a desk or console with displays.
 - `CHANGELOG.md`: version, basis, what would make this 1.0, and how lessons enter the Skill.
 
 ## Status of this version
 
-- **Exercised, once, on one asset:** steps 1–9 with three parallel modellers and two review
-  rounds; the retrospective that produced this text.
-- **Not exercised:** human gates; hold-out points clicked by a person; an acceptance spec by a
-  separate author; a planted-error test of the reviewer; drills; a second object or repository.
+- **Exercised on two assets** (a seated station, then a desk with displays, by one agent
+  following this text): steps 1–9, 12; the read-only reviewer on prepared packets (three reviews
+  on the second asset); the tools with a second asset id.
+- **Exercised once:** the measurement-first route; drills; a model card; an independent audit
+  of method and sizes after the fact (it found the accuracy claims untested).
+- **Not exercised:** tape values for any size (every size verdict so far is "unverified");
+  a measurer separate from the modeller on the second asset; human gates; an acceptance spec
+  by a separate author; a planted-error test of the reviewer; a second repository.
 - **Template for a new project:** this repository's structure (Skill, agent definitions,
   toolkit) without the first asset's folder. Keep no personal copy: it would shadow this one.

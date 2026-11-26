@@ -66,6 +66,8 @@ export interface Manifest {
   parameters: Record<string, ParamRecord>;
   parameter_class_counts: Record<string, number>;
   parameters_unused: string[];
+  /** Fixed frame of the orthographic views (model frame), from the spec's [stage]; absent: the viewer's default for the first asset. */
+  stage?: Box;
   totals: { triangles: number; vertices: number; primitives: number; nodes: number; meshes: number; materials: number; textures: number; bbox: Box };
   glb: { file: string; bytes: number; sha256: string };
 }

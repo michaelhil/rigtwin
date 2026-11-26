@@ -1,0 +1,248 @@
+# Two large displays on the rear wall, three small displays on the shelf. Method words are explained at the top of desk.toml.
+
+[big.size]
+value = [1.11, 0.632]
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "critical"
+evidence = "Two-view, three photos (IMG_1794, 1795, 1796), housing corners: widths 1.111, 1.121, 1.105, 1.103 m; heights 0.639, 0.623, 0.627, 0.638 m; diagonals 1.27-1.29 m; ratio 1.76 (16:9 is 1.78). A 49 to 50 inch class display. App labels for the edge where the two displays meet: 61 cm (IMG_1806), 3 % less, and 55 cm (IMG_1787), 13 % less; see big.height_app."
+
+[big.height_app]
+value = [0.55, 0.61]
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). Two app labels for the same edge between the large displays (IMG_1787 and IMG_1806). They differ by 6 cm from each other; not modelled. Display surfaces are dark and glossy, which is where the app's labels were worst."
+
+[big.thickness]
+value = 0.045
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Housing depth seen from behind (IMG_1808, IMG_1810). No label was read; the maker's drawing would replace this."
+
+[big.border]
+value = 0.012
+unit = "m"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "Bezel between housing edge and lit area, thin on these displays (IMG_1795). The active area follows from big.size less this border."
+
+[big.centre]
+value = [0.818, 0.561, 1.443]
+unit = "m"
+range = 0.025
+class = "photo"
+tier = "critical"
+evidence = "Two-view, three photos: centre of the four housing corners, left display (0.813, +0.570, 0.676 above the desktop) and right display (0.823, -0.552, 0.670), averaged as a mirror pair; height above the floor with desk.height."
+
+[big.yaw]
+value = 7.3
+unit = "deg"
+range = 2
+class = "photo"
+tier = "critical"
+evidence = "Two-view corners: the outer edge of each large display is nearer the operator than the inner edge; 8.0 degrees (left) and 6.5 degrees (right)."
+
+[big.tilt]
+value = 12.7
+unit = "deg"
+range = 2.5
+class = "photo"
+tier = "critical"
+evidence = "Two-view corners: the top edge of each large display is nearer the operator than the bottom edge; 13.5 degrees (left) and 11.9 degrees (right)."
+
+[big.tilt_range]
+value = [2, 14]
+unit = "deg"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "DERIVED BY THE CLEARANCE SOLVER (the basis list has no word for that; it is not a convention and not evidence). NOT A PROPERTY OF THE BRACKETS. The tilt joint of the wall brackets is assumed and locked (probably set once at installation). Both ends are outputs of the clearance solver on assumed geometry (1.7 and 14.2 degrees found: where the housing nears the wall's boards and rail). A question to the site."
+
+[big.mount_gap]
+value = 0.06
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Distance from the back of a large display to its tilt axis in the bracket (IMG_1808)."
+
+[big.arm_size]
+value = [0.03, 1.30, 0.06]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Horizontal bar that carries the two brackets (IMG_1808, IMG_1810): depth, length, height by eye."
+
+[small.size]
+value = [0.617, 0.366]
+unit = "m"
+range = 0.012
+class = "photo"
+tier = "critical"
+evidence = "Width: two-view, three photos, top edge of each small display: 0.628, 0.609, 0.615 m; a 27 inch class display. Height is not measured: assumed. The lit area is drawn 16:9 inside the side borders (0.599 x 0.337 m, a 27 inch panel), under the top border; the rest of the housing height is the lower border. App label for the lower edge of the left one: 56 cm (IMG_1784), 9 % less; see small.width_app."
+
+[small.width_app]
+value = 0.56
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App label in IMG_1784 along the lower edge of the left small display. Not modelled: two-view gives 0.61-0.63 m for all three displays."
+
+[small.thickness]
+value = 0.04
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Housing depth seen from behind (IMG_1807, IMG_1808)."
+
+[small.border]
+value = 0.009
+unit = "m"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "Thin bezel (IMG_1798, IMG_1801)."
+
+[small.top_centre]
+value = [[0.745, 0.630, 0.285], [0.827, 0.0, 0.290]]
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "critical"
+evidence = "Two-view, three photos: centre of the top edge of the outer small displays (left 0.742, +0.607, 0.293; right 0.749, -0.653, 0.277; averaged as a mirror pair) and of the middle one (0.827, -0.021, 0.290, set on the axis), as x, y, height above the desktop."
+
+[small.yaw]
+value = 14
+unit = "deg"
+range = 2
+class = "photo"
+tier = "critical"
+evidence = "Two-view top edges: the outer small displays are turned toward the operator by 14.4 degrees (left) and 13.7 degrees (right); the middle one by 1 degree, taken as zero."
+
+[small.tilt]
+value = 16
+unit = "deg"
+range = 5
+class = "photo"
+tier = "critical"
+evidence = "Lean back from vertical. One ray (IMG_1794) with an assumed housing height gives 16-21 degrees for the right display. SET WITHIN ITS RANGE BY THE CLEARANCE CHECK: at the first value (22, above that range) the three housings overlapped by 6 mm at their lower corners, and 16, the lower end of the one-ray range, was taken because they clear there. That overlap is within the noise of its inputs (corner gaps of 1.9 and 3.0 cm from sight lines that miss by 1-5 cm, yaw +-2 degrees, an assumed housing height), so this is a choice, not a measurement. Weak; feeds the viewing angle to these screens; a phone's level on the glass would settle it."
+
+[small.tilt_range]
+value = [14.5, 28]
+unit = "deg"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "DERIVED BY THE CLEARANCE SOLVER (the basis list has no word for that; it is not a convention and not evidence). NOT A PROPERTY OF THE BRACKETS. A pivot is seen from behind (IMG_1807, IMG_1808), in one position only. Both ends are outputs of the clearance solver on assumed geometry: the lower where the housing's lower edge nears the assumed shelf (14.1 degrees found), the upper where it would reach its assumed post. The real range is a question to the site."
+
+[small.pivot]
+value = [0.035, 0.10]
+unit = "m"
+class = "assumed"
+basis = "convention"
+tier = "layout"
+evidence = "Tilt axis of a small display: behind the housing's back, and above its lower edge, where the bracket meets the post (IMG_1807). Not measured."
+
+[small.post_size]
+value = [0.04, 0.07, 0.27]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Light wooden post behind the middle of each small display, standing on a metal foot on the shelf (IMG_1798, IMG_1801, IMG_1807): depth, width, height by eye."
+
+[small.post_foot]
+value = [0.13, 0.10, 0.006]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Metal foot plate of each post (IMG_1807): depth, width, thickness by eye."
+
+[screen.lift]
+value = 0.0008
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Modelling device: the screen surfaces stand this far proud of their housings so that the two do not share a plane."
+
+[big.stub]
+value = [0.12, 0.25]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Bracket plate on the back of each large display, width and height (IMG_1808, IMG_1810)."
+
+[big.arm_gap]
+value = 0.026
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Distance from the tilt axis back to the cross bar, chosen so that the bar clears the displays' inner edges."
+
+[small.stub]
+value = [0.08, 0.10]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Bracket plate on the back of each small display, width and height (IMG_1807)."
+
+[small.post_offset]
+value = 0.075
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "layout"
+evidence = "Distance from the tilt axis back to the front of the post (IMG_1807: a short metal arm joins the two). Chosen so that the leaning display clears the post."
+
+[small.arm_size]
+value = [0.04, 0.03]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Metal arm between post and display: width and height (IMG_1807)."
+
+[big.edge]
+value = 0.018
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Thickness of a large display at its edge; the rest of big.thickness is a raised back section (IMG_1808, IMG_1810)."
+
+[big.back]
+value = [0.80, 0.62]
+unit = "ratio"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Raised back section of a large display as a share of its width and height (IMG_1808, IMG_1810)."
+
+[small.edge]
+value = 0.012
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Thickness of a small display at its edge (IMG_1807)."
+
+[small.back]
+value = [0.62, 0.60]
+unit = "ratio"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Raised back section of a small display as a share of its width and height (IMG_1807, IMG_1810)."

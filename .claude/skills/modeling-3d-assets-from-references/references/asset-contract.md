@@ -249,4 +249,12 @@ Not implemented; each is expected to be needed by a later asset type (paper test
 - machine-written measurement records behind every `photo` value, so a value cannot be nudged
   without a new record;
 - a tag that makes a value filled from a standard "not assessable" against that standard;
-- a collision sweep over the joint ranges.
+- a collision sweep over the joint ranges: `tools/clearance.ts` now samples the joint limits,
+  alone and in combination, for an asset whose spec has a `[clearance]` table; it is a screen,
+  not a proof, and says what it cannot see;
+- documentation of the optional spec tables `[materials]`, `[stage]`, `[budget]`, `[clearance]`
+  (used by the second asset; see `generator/assemble.ts`), and a class for a value that is a
+  tool's output;
+- the second asset carries, at the owner's request, an optional layer of small material swatches
+  sampled from its photos; the rule under "GLB conventions" is unchanged until the owner
+  approves a wording for such layers.

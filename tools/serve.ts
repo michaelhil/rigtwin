@@ -107,6 +107,7 @@ export async function startServer(opts: { port?: number; buildFolder?: string; a
       if (opts.photos && path === CAMERAS) return masked ? new Response(masked, { headers: { "content-type": "application/json", "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
       // On a machine without the private camera file (a CI runner, a fresh clone) answer with an empty set
       // instead of a 404, which the viewer would log as a console error and the check would count.
+      if (/^\/private\/evidence\/[a-z0-9-]+\/cameras\.json$/.test(path) && !existsSync(join(ROOT, path))) return Response.json({ cameras: {}, note: "no camera file for this asset on this machine" }, { headers: { "cache-control": "no-store" } });
       if (path === CAMERAS && !existsSync(join(ROOT, "private", "evidence", "cameras.json"))) return Response.json({ cameras: {}, note: "no private camera file on this machine" }, { headers: { "cache-control": "no-store" } });
       if (path === "/index.html" && viewerSourceTime() > bundle.builtFrom) {
         try { bundle = await bundleViewer(); console.log(`viewer rebundled in ${bundle.seconds.toFixed(2)} s`); }

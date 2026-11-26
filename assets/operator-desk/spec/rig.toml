@@ -1,0 +1,489 @@
+# Operator desk: declarative structure. Tree, mount frames, joints, reference frames, expected motion.
+#
+# Frame: metres, radians, right-handed, Z up, X forward (operator -> displays), Y to the operator's left.
+# Origin: on the floor, under the centre of the desktop's front edge (the middle of the hollow front edge, dropped to the floor).
+# Record formats: see assets/rig-b/spec/rig.toml and the asset contract of the modelling Skill.
+#
+# What is fixed and what would move: the rear wall with its canopy and the two large displays stands on the floor. The desktop
+# with everything on it (shelf, small displays, keyboard unit, mouse, end screens, parts under the top) is modelled as carried by
+# two lifting columns inside the legs: an ASSUMED, LOCKED height adjustment (no photo shows a second height; the real range and
+# what rides with it are questions to the site).
+
+asset = "operator-desk"
+title = "Operator desk"
+frame = "Metres, right-handed, Z up, X forward (from the operator toward the displays), Y to the operator's left. The origin is on the floor under the centre of the desktop's front edge."
+groups = ["desk", "wall", "canopy", "displays", "input"]
+
+# Fixed frame of the orthographic views (the first asset's default frame is 2 m wide; this object is 2.4 m).
+[stage]
+min = [-1.5, -1.5, -0.15]
+max = [1.5, 1.5, 2.15]
+
+# Limits for this asset: 60 000 triangles (brief); 56 draw primitives (coordinator's ruling R1: the kit merges per
+# component and material only, and merging named parts would defeat the segmentation).
+[budget]
+triangles = 60000
+primitives = 56
+
+# Clearance sweep at the joint limits (tools/clearance.ts, part of the check): no motion of an unlocked joint, alone or in
+# combination with the others, may bring two parts nearer than this unless they were that near at rest. Locked joints are
+# reported, not failed. `watch` names pairs of part sets whose smallest gap is printed for every pose.
+[clearance]
+min = 0.02
+watch = [["C_small_*,S_small_*", "C_big_display_*,S_big_*"]]
+
+# Materials of this asset only (the shared palette has no wood, laminate or fabric).
+# OPTIONAL TEXTURE LAYER: `texture` names a swatch in assets/operator-desk/textures/ (256 px, tileable, colour-neutral, sampled
+# from the photos by work/operator-desk/tools/swatch.ts: nothing but the material's surface), `tile` its size in metres, `gain`
+# its mean. The colour stays the authority; the swatch only modulates it. `bun run build --plain` leaves the layer out, and
+# the viewer's colour setting "Plain materials" (mode=plain) hides it.
+[materials]
+wood_light    = { color = "#c4b69d", roughness = 0.55, texture = "wood.jpg", tile = 0.122, gain = 0.69, note = "light ash-like wood: centre of the desktop, side boards of the rear wall, canopy edge, display posts" }
+laminate_grey = { color = "#c4c6c5", roughness = 0.5, note = "cool light grey laminate: desktop wings, leg blades" }
+aluminium     = { color = "#d3d5d8", metallic = 0.3, roughness = 0.35, note = "bright aluminium: rails of the rear wall, canopy cap, base post" }
+edge_anthracite = { color = "#3d4046", roughness = 0.55, note = "anthracite: desktop edge and body of the wings, leg edges" }
+shelf_slate   = { color = "#2c323b", roughness = 0.7, note = "blue-grey shelf behind the desktop" }
+base_grey     = { color = "#4b4e53", roughness = 0.8, note = "dark grey steel of the wall's base (perforated in reality)" }
+housing_black = { color = "#1f2022", roughness = 0.5, note = "display housings (satin black, lighter and rougher than the glass)" }
+kb_charcoal   = { color = "#3a3c40", roughness = 0.75, note = "keyboard unit body (matt charcoal)" }
+key_black     = { color = "#0d0d0e", roughness = 0.45, note = "key rows and loudspeaker grilles of the keyboard unit" }
+fabric_navy   = { color = "#1d2742", roughness = 0.95, note = "dark blue fabric: end screens of the desk" }
+fabric_blue   = { color = "#28447a", roughness = 0.95, texture = "fabric_blue.jpg", tile = 0.27, gain = 0.69, note = "blue fabric: upper field of the rear wall (colour as photographed in IMG_1813)" }
+felt_grey     = { color = "#b0b8be", roughness = 0.95, texture = "felt_grey.jpg", tile = 0.12, gain = 0.69, note = "light grey felt: lower field of the rear wall (close to the colour photographed in IMG_1816)" }
+felt_slate    = { color = "#5d636a", roughness = 0.95, texture = "felt_grey.jpg", tile = 0.12, gain = 0.69, note = "mid grey felt: inner face of the end screens (darker than the wall's felt in IMG_1793 and IMG_1795)" }
+felt_charcoal = { color = "#46484b", roughness = 0.95, texture = "felt_charcoal.jpg", tile = 0.12, gain = 0.69, note = "dark felt: operator side of the rear wall" }
+felt_canopy   = { color = "#6b6c6d", roughness = 0.95, emissive = "#343536", texture = "felt_charcoal.jpg", tile = 0.12, gain = 0.69, note = "the same dark felt under the canopy; a weak glow stands in for the light the canopy's own strip and spots throw on it (IMG_1803, IMG_1795), since the viewer has no lamps there" }
+light_white   = { color = "#f2f0e8", roughness = 0.4, emissive = "#fff7e6", note = "light strip, spotlight rings and lamps: lit" }
+light_green   = { color = "#46c873", roughness = 0.4, emissive = "#3fd97a", note = "green light line of the canopy: lit" }
+
+# ------------------------------------------------------------------------------------------------ root
+[nodes.C_desk]
+label = "Operator desk"
+assembly = true
+
+[nodes.D_floor]
+parent = "C_desk"
+label = "Floor anchor: on the floor under the centre of the desktop's front edge; x forward (operator to displays), y to the operator's left, z up"
+
+[nodes.D_eye_seated]
+parent = "C_desk"
+label = "Seated eye reference (ASSUMED design reference, not a person): median adult, on the centre line; x forward, z up"
+pos = ["operator.eye_x", "0", "operator.eye_seated_z"]
+
+[nodes.D_eye_standing]
+parent = "C_desk"
+label = "Standing eye reference (ASSUMED design reference, not a person): median adult in shoes, on the centre line; meaningful only if the desk rises to a standing height, which is not known"
+pos = ["operator.eye_x", "0", "operator.eye_standing_z"]
+
+[nodes.D_desk_front_fixed]
+parent = "C_desk"
+label = "Front edge of the desktop, centre, on the surface, at the photographed height (fixed: does not follow the height adjustment)"
+pos = ["0", "0", "desk.height"]
+
+# ------------------------------------------------------------------------------------------------ desk: fixed legs
+[nodes.C_leg_L]
+parent = "C_desk"
+group = "desk"
+label = "Left leg (fixed: pale blade between bowed dark edges)"
+pos = ["leg.front_x", "leg.y", "0"]
+tags = ["structure", "floor"]
+
+[nodes.C_leg_R]
+parent = "C_desk"
+group = "desk"
+label = "Right leg (fixed: pale blade between bowed dark edges)"
+pos = ["leg.front_x", "-leg.y", "0"]
+tags = ["structure", "floor"]
+
+# ------------------------------------------------------------------------------------------------ desk: what rides on the lifting columns
+# Carriage frame = model frame at the photographed height (the joint is at its neutral value 0).
+[nodes.C_desk_carriage]
+parent = "C_desk"
+group = "desk"
+label = "Desktop and everything it carries (would move with the assumed height adjustment; real travel unknown)"
+assembly = true
+joints = ["J_desk_height"]
+tags = ["adjustable"]
+
+[nodes.C_desk_top]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Desktop (wood centre, grey wings, dark edge, two cable outlets)"
+pos = ["0", "0", "desk.height"]
+tags = ["structure", "body_contact", "hand"]
+
+[nodes.D_desk_front_edge]
+parent = "C_desk_carriage"
+label = "Front edge of the desktop, centre, on the surface (live: follows the height adjustment); x forward, z up"
+pos = ["0", "0", "desk.height"]
+
+[nodes.D_desk_surface]
+parent = "C_desk_carriage"
+label = "Desktop surface: middle of the working surface on the centre line, on the surface; z is the surface normal (live). Working surface about 0.60 m deep at the centre, top 2.41 m wide overall"
+pos = ["desk.depth_centre / 2", "0", "desk.height"]
+
+[nodes.C_desk_shelf]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Shelf behind the desktop that the small displays stand on"
+pos = ["0", "0", "desk.height - desk.shelf_drop"]
+tags = ["structure"]
+
+[nodes.C_desk_tray]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Front panel under the top, with the cable tray behind it"
+pos = ["panel.front_x", "0", "desk.height - desk.shelf_drop - desk.shelf_thickness"]
+tags = ["structure"]
+
+[nodes.C_desk_handset]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Wooden block under the left front edge (function not established)"
+pos = ["handset.xy[0]", "handset.xy[1]", "desk.height - desk.top_thickness"]
+
+[nodes.C_wing_L]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Left end screen (fabric outside, felt inside)"
+pos = ["0", "0", "desk.height - wing.top_gap"]
+tags = ["structure"]
+
+[nodes.C_wing_R]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Right end screen (fabric outside, felt inside)"
+pos = ["0", "0", "desk.height - wing.top_gap"]
+tags = ["structure"]
+
+[nodes.C_leg_column_L]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Left lifting column (assumed; inside the leg at the photographed height)"
+pos = ["leg.front_x", "leg.y", "0"]
+tags = ["structure", "adjustable"]
+
+[nodes.C_leg_column_R]
+parent = "C_desk_carriage"
+group = "desk"
+label = "Right lifting column (assumed; inside the leg at the photographed height)"
+pos = ["leg.front_x", "-leg.y", "0"]
+tags = ["structure", "adjustable"]
+
+# ------------------------------------------------------------------------------------------------ displays on the desk
+[nodes.C_small_mounts]
+parent = "C_desk_carriage"
+group = "displays"
+label = "Posts of the three small displays (wooden posts on metal feet, on the shelf)"
+tags = ["structure"]
+
+[nodes.C_small_display_1]
+parent = "C_desk_carriage"
+group = "displays"
+label = "Small display 1 (operator's left)"
+joints = ["J_small_tilt_1"]
+tags = ["display", "adjustable"]
+
+[nodes.S_small_screen_1]
+parent = "C_small_display_1"
+group = "displays"
+label = "Small display 1: lit area"
+pos = ["-(small.pivot[0] + small.thickness) - screen.lift", "0", "small.size[1] - small.border - (small.size[0] - 2 * small.border) * 9 / 32 - small.pivot[1]"]
+tags = ["display"]
+
+[nodes.D_small_center_1]
+parent = "S_small_screen_1"
+label = "Small display 1: centre of the lit area; -x is the outward normal (toward the viewer), z up the screen"
+
+[nodes.C_small_display_2]
+parent = "C_desk_carriage"
+group = "displays"
+label = "Small display 2 (middle)"
+joints = ["J_small_tilt_2"]
+tags = ["display", "adjustable"]
+
+[nodes.S_small_screen_2]
+parent = "C_small_display_2"
+group = "displays"
+label = "Small display 2: lit area"
+pos = ["-(small.pivot[0] + small.thickness) - screen.lift", "0", "small.size[1] - small.border - (small.size[0] - 2 * small.border) * 9 / 32 - small.pivot[1]"]
+tags = ["display"]
+
+[nodes.D_small_center_2]
+parent = "S_small_screen_2"
+label = "Small display 2: centre of the lit area; -x is the outward normal (toward the viewer), z up the screen"
+
+[nodes.C_small_display_3]
+parent = "C_desk_carriage"
+group = "displays"
+label = "Small display 3 (operator's right)"
+joints = ["J_small_tilt_3"]
+tags = ["display", "adjustable"]
+
+[nodes.S_small_screen_3]
+parent = "C_small_display_3"
+group = "displays"
+label = "Small display 3: lit area"
+pos = ["-(small.pivot[0] + small.thickness) - screen.lift", "0", "small.size[1] - small.border - (small.size[0] - 2 * small.border) * 9 / 32 - small.pivot[1]"]
+tags = ["display"]
+
+[nodes.D_small_center_3]
+parent = "S_small_screen_3"
+label = "Small display 3: centre of the lit area; -x is the outward normal (toward the viewer), z up the screen"
+
+# ------------------------------------------------------------------------------------------------ input devices (loose objects, as photographed)
+[nodes.C_keyboard]
+parent = "C_desk_carriage"
+group = "input"
+label = "Keyboard unit (palm rest, keys, loudspeaker blocks, touch panel housing)"
+pos = ["keyboard.front_xy[0]", "keyboard.front_xy[1]", "desk.height"]
+tags = ["control", "hand"]
+
+[nodes.S_keyboard_touch]
+parent = "C_keyboard"
+group = "input"
+label = "Touch panel of the keyboard unit: lit area"
+pos = ["keyboard.rest[0] + keyboard.deck[0] + keyboard.touch[1] / 2 * cos(keyboard.touch_slope) - (keyboard.touch[2] + screen.lift) * sin(keyboard.touch_slope)", "0", "keyboard.deck[2] + keyboard.touch[1] / 2 * sin(keyboard.touch_slope) + (keyboard.touch[2] + screen.lift) * cos(keyboard.touch_slope)"]
+rpy = ["0", "pi / 2 - keyboard.touch_slope", "0"]
+tags = ["display", "control", "hand"]
+
+[nodes.D_touch_center]
+parent = "S_keyboard_touch"
+label = "Touch panel of the keyboard unit: centre of the lit area; -x is the outward normal (toward the viewer), z up the panel"
+
+[nodes.D_keyboard]
+parent = "C_keyboard"
+label = "Keyboard datum: centre of the field of keys, on top of the keys; x forward, y to the operator's left, z up (level; the key field itself slopes a few degrees)"
+pos = ["keyboard.rest[0] + keyboard.deck[0] / 2", "0", "(keyboard.deck[1] + keyboard.deck[2]) / 2 + keyboard.keys[2]"]
+
+[nodes.C_mouse]
+parent = "C_desk_carriage"
+group = "input"
+label = "Mouse"
+pos = ["mouse.xy[0]", "mouse.xy[1]", "desk.height"]
+tags = ["control", "hand"]
+
+# ------------------------------------------------------------------------------------------------ rear wall (fixed)
+# Wall frame: on the floor, on the centre line, at the front edge of the lower (vertical) part of the side boards.
+[nodes.C_wall]
+parent = "C_desk"
+group = "wall"
+label = "Rear wall"
+assembly = true
+pos = ["wall.front_x", "0", "0"]
+tags = ["structure", "floor"]
+
+[nodes.C_wall_frame]
+parent = "C_wall"
+group = "wall"
+label = "Frame of the rear wall (two kinked wooden side boards, aluminium rails)"
+tags = ["structure"]
+
+[nodes.C_wall_upper]
+parent = "C_wall"
+group = "wall"
+label = "Upper field of the rear wall (blue fabric behind, dark felt toward the operator), leaning forward"
+tags = ["structure"]
+
+[nodes.C_wall_lower]
+parent = "C_wall"
+group = "wall"
+label = "Lower field of the rear wall (grey felt behind, dark felt toward the operator)"
+tags = ["structure"]
+
+[nodes.C_wall_base]
+parent = "C_wall"
+group = "wall"
+label = "Open equipment base of the rear wall"
+tags = ["structure", "floor"]
+
+[nodes.C_wall_equipment]
+parent = "C_wall"
+group = "wall"
+label = "Equipment in the open base (stand-in boxes)"
+
+[nodes.C_wall_rail]
+parent = "C_wall"
+group = "wall"
+label = "Slotted rail on the operator side of the rear wall"
+tags = ["structure"]
+
+# ------------------------------------------------------------------------------------------------ canopy (fixed, on the wall)
+# Canopy frame: at the wall's top, on the centre line, at the front edge of the side boards; the canopy runs toward -x.
+[nodes.C_canopy]
+parent = "C_wall"
+group = "canopy"
+label = "Canopy"
+assembly = true
+pos = ["-(wall.profile + wall.blue_length) * sin(wall.upper_lean)", "0", "wall.height"]
+tags = ["structure"]
+
+[nodes.C_canopy_body]
+parent = "C_canopy"
+group = "canopy"
+label = "Canopy body (wood edge, aluminium top strip, green light line, felt underside)"
+tags = ["structure"]
+
+[nodes.C_canopy_light]
+parent = "C_canopy"
+group = "canopy"
+label = "Light strip along the front of the canopy's underside"
+pos = ["-canopy.depth + canopy.light_inset + canopy.light_size[0] / 2", "0", "-canopy.band_height + canopy.felt_recess"]
+
+[nodes.C_canopy_spots]
+parent = "C_canopy"
+group = "canopy"
+label = "Two triangular spotlights under the canopy"
+pos = ["-canopy.depth", "0", "-canopy.band_height + canopy.felt_recess"]
+
+[nodes.C_canopy_fan]
+parent = "C_canopy"
+group = "canopy"
+label = "Fan grille under the canopy"
+pos = ["-canopy.depth + canopy.fan_x", "0", "-canopy.band_height + canopy.felt_recess"]
+
+[nodes.C_canopy_bar]
+parent = "C_canopy"
+group = "canopy"
+label = "Dark bar under the rear of the canopy (function not established)"
+pos = ["-canopy.depth + canopy.bar_x", "0", "-canopy.band_height + canopy.felt_recess"]
+
+# ------------------------------------------------------------------------------------------------ large displays (fixed, on the wall)
+[nodes.C_big_arm]
+parent = "C_wall"
+group = "displays"
+label = "Cross bar and brackets of the two large displays"
+pos = ["big.centre[0] - wall.front_x", "0", "big.centre[2]"]
+tags = ["structure"]
+
+[nodes.C_big_display_L]
+parent = "C_wall"
+group = "displays"
+label = "Large display, left"
+joints = ["J_big_tilt_L"]
+tags = ["display"]
+
+[nodes.S_big_screen_L]
+parent = "C_big_display_L"
+group = "displays"
+label = "Large display, left: lit area"
+pos = ["-(big.thickness + big.mount_gap) - screen.lift", "0", "0"]
+tags = ["display"]
+
+[nodes.D_big_center_L]
+parent = "S_big_screen_L"
+label = "Large display, left: centre of the lit area; -x is the outward normal (toward the viewer), z up the screen"
+
+[nodes.C_big_display_R]
+parent = "C_wall"
+group = "displays"
+label = "Large display, right"
+joints = ["J_big_tilt_R"]
+tags = ["display"]
+
+[nodes.S_big_screen_R]
+parent = "C_big_display_R"
+group = "displays"
+label = "Large display, right: lit area"
+pos = ["-(big.thickness + big.mount_gap) - screen.lift", "0", "0"]
+tags = ["display"]
+
+[nodes.D_big_center_R]
+parent = "S_big_screen_R"
+label = "Large display, right: centre of the lit area; -x is the outward normal (toward the viewer), z up the screen"
+
+# ------------------------------------------------------------------------------------------------ joints
+# Height adjustment. ASSUMED and LOCKED (rulings R4, R12): the legs are covers of the kind that hide lifting columns, a cable
+# chain hangs under the top and the touch panel shows a desk-control page, but no second height is in the photos.
+# Neutral = the photographed height. The upper limit is NOT evidence of the real range: it is the output of the clearance
+# solver on this model's assumed geometry (see desk.lift_travel). The real range is a question to the site.
+[joints.J_desk_height]
+type = "prismatic"
+axis = [0, 0, 1]
+lower = "0"
+upper = "desk.lift_travel"
+neutral = "0"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+# Tilt of the small displays about their bracket on the post. Evidence INFERRED: a pivoting bracket is seen from behind
+# (one position only). Value = lean back from vertical. The limits are NOT evidence of the brackets' range: they are
+# outputs of the clearance solver on assumed geometry (small.tilt_range).
+[joints.J_small_tilt_1]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["small.top_centre[0][0] - ((small.size[1] - small.pivot[1]) * sin(small.tilt) - (small.pivot[0] + small.thickness) * cos(small.tilt)) * cos(small.yaw)", "small.top_centre[0][1] - ((small.size[1] - small.pivot[1]) * sin(small.tilt) - (small.pivot[0] + small.thickness) * cos(small.tilt)) * sin(small.yaw)", "desk.height + small.top_centre[0][2] - ((small.pivot[0] + small.thickness) * sin(small.tilt) + (small.size[1] - small.pivot[1]) * cos(small.tilt))"]
+rpy = ["0", "0", "small.yaw"]
+lower = "small.tilt_range[0]"
+upper = "small.tilt_range[1]"
+neutral = "small.tilt"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_small_tilt_2]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["small.top_centre[1][0] - ((small.size[1] - small.pivot[1]) * sin(small.tilt) - (small.pivot[0] + small.thickness) * cos(small.tilt))", "small.top_centre[1][1]", "desk.height + small.top_centre[1][2] - ((small.pivot[0] + small.thickness) * sin(small.tilt) + (small.size[1] - small.pivot[1]) * cos(small.tilt))"]
+lower = "small.tilt_range[0]"
+upper = "small.tilt_range[1]"
+neutral = "small.tilt"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+[joints.J_small_tilt_3]
+type = "revolute"
+axis = [0, 1, 0]
+pos = ["small.top_centre[0][0] - ((small.size[1] - small.pivot[1]) * sin(small.tilt) - (small.pivot[0] + small.thickness) * cos(small.tilt)) * cos(small.yaw)", "-small.top_centre[0][1] + ((small.size[1] - small.pivot[1]) * sin(small.tilt) - (small.pivot[0] + small.thickness) * cos(small.tilt)) * sin(small.yaw)", "desk.height + small.top_centre[0][2] - ((small.pivot[0] + small.thickness) * sin(small.tilt) + (small.size[1] - small.pivot[1]) * cos(small.tilt))"]
+rpy = ["0", "0", "-small.yaw"]
+lower = "small.tilt_range[0]"
+upper = "small.tilt_range[1]"
+neutral = "small.tilt"
+kind = "adjustment"
+evidence = "inferred"
+locked = false
+
+# Tilt of the large displays in their wall brackets. Evidence ASSUMED (mechanism class only), probably set at installation:
+# locked. Value = forward tilt (top edge toward the operator). The limits are outputs of the clearance solver on assumed
+# geometry (big.tilt_range), not evidence of a range.
+[joints.J_big_tilt_L]
+type = "revolute"
+axis = [0, -1, 0]
+pos = ["big.centre[0] - wall.front_x + (big.thickness + big.mount_gap) * cos(big.tilt) * cos(big.yaw)", "big.centre[1] + (big.thickness + big.mount_gap) * cos(big.tilt) * sin(big.yaw)", "big.centre[2] + (big.thickness + big.mount_gap) * sin(big.tilt)"]
+rpy = ["0", "0", "big.yaw"]
+lower = "big.tilt_range[0]"
+upper = "big.tilt_range[1]"
+neutral = "big.tilt"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+[joints.J_big_tilt_R]
+type = "revolute"
+axis = [0, -1, 0]
+pos = ["big.centre[0] - wall.front_x + (big.thickness + big.mount_gap) * cos(big.tilt) * cos(big.yaw)", "-big.centre[1] - (big.thickness + big.mount_gap) * cos(big.tilt) * sin(big.yaw)", "big.centre[2] + (big.thickness + big.mount_gap) * sin(big.tilt)"]
+rpy = ["0", "0", "-big.yaw"]
+lower = "big.tilt_range[0]"
+upper = "big.tilt_range[1]"
+neutral = "big.tilt"
+kind = "adjustment"
+evidence = "assumed"
+locked = true
+
+# ------------------------------------------------------------------------------------------------ expected motion
+# When the desk height changes: the desktop, shelf, tray, block, side panels, lifting columns, the small displays with their
+# posts, the keyboard unit and the mouse move, with the frames on them. Legs, rear wall, canopy and large displays do not.
+[motion]
+J_desk_height = ["C_desk_carriage", "C_desk_top", "C_desk_shelf", "C_desk_tray", "C_desk_handset", "C_wing_*", "C_leg_column_*", "C_small_*", "S_small_*", "D_small_*", "C_keyboard", "S_keyboard_touch", "D_keyboard", "D_touch_center", "C_mouse", "D_desk_front_edge", "D_desk_surface"]
+J_small_tilt_1 = ["C_small_display_1", "S_small_screen_1", "D_small_center_1"]
+J_small_tilt_2 = ["C_small_display_2", "S_small_screen_2", "D_small_center_2"]
+J_small_tilt_3 = ["C_small_display_3", "S_small_screen_3", "D_small_center_3"]
+J_big_tilt_L = ["C_big_display_L", "S_big_screen_L", "D_big_center_L"]
+J_big_tilt_R = ["C_big_display_R", "S_big_screen_R", "D_big_center_R"]
+
+# ------------------------------------------------------------------------------------------------ left / right
+[symmetry]
+single = []
+free = []

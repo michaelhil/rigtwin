@@ -342,6 +342,8 @@ function buildMore() {
   const label = el('label', 'setting-row', 'Colours');
   modeSelect = el('select') as HTMLSelectElement; modeSelect.id = 'scene-colours';
   for (const [value, label] of MODES) modeSelect.append(new Option(label, value));
+  // an asset with an optional texture layer can be shown without it
+  if (Object.values(S.manifest.materials ?? {}).some((m) => (m as { texture?: unknown }).texture)) modeSelect.add(new Option('Plain materials (no photo textures)', 'plain'), 1);
   modeSelect.addEventListener('change', () => setMode(modeSelect.value));
   label.append(modeSelect); display.append(label); more.append(display);
   const agent = settingDisclosure('Agent access'); agent.id = 'settings-agent'; agent.hidden = true; more.append(agent);

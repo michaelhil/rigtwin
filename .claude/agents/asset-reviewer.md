@@ -21,7 +21,7 @@ You can read files and nothing else. You change nothing.
   of the build, and the component list (open that last, at step 3).
 - The reference photos and captioned crops named in the packet.
 - `.claude/skills/modeling-3d-assets-from-references/references/reviewing.md` (how to look, and
-  what a look cannot establish) and the playbook the packet names for this asset type.
+  what a look cannot establish) and the playbook the packet names for this asset type, if any.
 
 ## What you must not read
 

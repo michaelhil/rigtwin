@@ -21,8 +21,9 @@ Exercised: the observation kit; two independent review rounds on assembled model
 rejected, the second accepted after three small fixes); two independent usability reviews of
 the viewer. In both rounds the reviewer was a general agent with shell access, working in its
 own folder under a written brief: it made its own renders and wrote its own GLB reader and
-collision counts, and that is where its hardest findings came from. **Not exercised:** the
-read-only `asset-reviewer` definition as written; isolation enforced by tooling (it was by
+collision counts, and that is where its hardest findings came from. The read-only `asset-reviewer` on prepared packets was then
+exercised on a second object (three reviews): it worked, asked for more views each round, and
+could judge no size. **Not exercised:** isolation enforced by tooling (it was by
 instruction, and each reviewer stated what it had not read); a leak test; the planted-error
 test; human gates.
 
@@ -92,6 +93,8 @@ of the coordinator's conversation. It must not be one of the builders.
   `asset-reviewer`, the coordinator prepares this packet and renders more views on request.
 - The purpose, audience and budgets from intake, and the playbook for the asset type.
 - The component list (ids and labels), opened only at step 3 below.
+- The description file with the parameter evidence texts stripped; the comparison through a
+  hold-out photo's camera, named as such; the script-made clearance list at the joint limits.
 
 **What it must not get.** Builders' notes and final reports; the coordinator's notes and
 rulings; the builders' lists of signature features; known deviations; chat history; any

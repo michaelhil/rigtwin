@@ -1,0 +1,124 @@
+# Keyboard unit with its touch panel, and the mouse. Both are loose objects on the desktop: positions are as photographed.
+# Method words are explained at the top of desk.toml.
+
+[keyboard.size]
+value = [0.38, 0.47]
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "layout"
+evidence = "Rule photo: width 0.471 m between the front corners on the desktop plane (0.462 m by one ray in IMG_1795); depth 0.37-0.39 m from the front edge to the rear of the loudspeaker blocks, with their height assumed."
+
+[keyboard.front_xy]
+value = [0.165, 0.01]
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "layout"
+evidence = "Rule photo and one ray in IMG_1795: front edge 0.16-0.18 m behind the desktop's front edge, centre 1 cm left of the axis. A loose object; it had not moved by more than 2.5 cm between the two photos."
+
+[keyboard.rest]
+value = [0.06, 0.018]
+unit = "m"
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo, one ray with assumed heights: depth and height of the palm rest at the front of the unit."
+
+[keyboard.deck]
+value = [0.14, 0.022, 0.040]
+unit = "m"
+class = "photo"
+tier = "layout"
+evidence = "Rule photo, one ray with assumed heights: depth of the part that carries the keys, and its height at the front and at the rear. The key pitch on it measures 19.0 mm both ways."
+
+[keyboard.keys]
+value = [0.115, 0.435, 0.004]
+unit = "m"
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo: depth and width of the field of keys (keys are not modelled one by one); raised by the third number as a modelling device."
+
+[keyboard.rear]
+value = [0.18, 0.05]
+unit = "m"
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo, one ray with assumed heights: depth and height of the rear block with the two loudspeaker grilles."
+
+[keyboard.touch]
+value = [0.262, 0.165, 0.02]
+unit = "m"
+class = "photo"
+tier = "layout"
+evidence = "Rule photo, one ray with assumed heights: width, sloping length and thickness of the touch panel's housing between the loudspeakers. The lit area measures about 0.25 by 0.14 m."
+
+[keyboard.touch_slope]
+value = 19
+unit = "deg"
+range = 8
+class = "photo"
+tier = "layout"
+evidence = "Rule photo with assumed heights of the panel's lower and upper edge (4.5 and 10 cm above the desktop); the close photos (IMG_1799, IMG_1800) show a shallow slope. Weak."
+
+[keyboard.touch_border]
+value = 0.012
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Border round the touch panel's lit area (IMG_1800)."
+
+[mouse.xy]
+value = [0.22, -0.37]
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo: centre of the mouse on the desktop plane. A loose object."
+
+[mouse.size]
+value = [0.125, 0.075, 0.042]
+unit = "m"
+class = "assumed"
+basis = "standard_default"
+tier = "cosmetic"
+evidence = "A full-size mouse; length, width, height typical for the type seen (IMG_1800, rule photo)."
+
+[keyboard.grille]
+value = [0.095, 0.10, 0.004]
+unit = "m"
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo, one ray with assumed heights: the two loudspeaker grilles left and right of the touch panel are about 9.5 cm wide and 10 cm deep; shown as flat plates on the sloping tops of the blocks, raised by the third number. Slats are not modelled."
+
+[keyboard.lip]
+value = 0.008
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Height of the unit's front edge; the palm rest rises from it (IMG_1799, IMG_1800)."
+
+[keyboard.key_row_count]
+value = 6
+unit = "count"
+class = "assumed"
+basis = "convention"
+tier = "cosmetic"
+evidence = "The key field is drawn as six rows (a full keyboard with a function row) with a groove between them. Keys are not modelled one by one."
+
+[keyboard.key_row_depth]
+value = 0.0155
+unit = "m"
+class = "assumed"
+basis = "convention"
+tier = "cosmetic"
+evidence = "Depth of one drawn row; the row pitch of 19 mm is the measured key pitch."
+
+[keyboard.block_rise]
+value = 0.5
+unit = "ratio"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The two loudspeaker blocks beside the touch panel are boxes whose tops slope toward the operator like the panel and reach about half its height (IMG_1799, IMG_1793): height of a block's rear edge as a share of the touch panel's rise."

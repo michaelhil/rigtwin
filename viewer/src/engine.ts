@@ -39,7 +39,7 @@ export const hooks = {
   operatorGaze: [] as (() => number[] | null)[],
   operatorEye: [] as (() => number[] | null)[],
 };
-const CAMERAS_URL = '/private/evidence/cameras.json';
+const CAMERAS_URL = ASSET === 'rig-b' ? '/private/evidence/cameras.json' : `/private/evidence/${ASSET}/cameras.json`;   // each further asset keeps its own solved cameras
 export const DEG = Math.PI / 180;
 export const m2w = (p: number[]) => new THREE.Vector3(p[0], p[2], -p[1]);          // model frame -> three world
 export const w2m = (v: THREE.Vector3): number[] => [v.x, -v.z, v.y];
@@ -331,6 +331,8 @@ function applyMaterials() {
   for (const m of S.meshes) {
     const id: string = m.userData.comp, it = S.byId.get(id);
     let mat: THREE.Material = m.userData.orig;
+    // 'plain': the model without its optional texture layer (materials the GLB marks optional_texture lose their map and get their flat colour)
+    if (S.mode === 'plain' && mat.userData?.optional_texture) { const o = mat as THREE.MeshStandardMaterial; mat = variant(o, 'plain', () => { const c = o.clone(); c.map = null; c.color.multiplyScalar(Number(o.userData.texture_gain ?? 1)); return c; }); }
     if (S.mode === 'ids') mat = flat('id', id, idColor.get(id) ?? new THREE.Color('#888'));
     else if (S.mode === 'class') { const c = it?.class ?? S.byId.get(it?.parent ?? '')?.class ?? 'none'; mat = flat('class', c, CLASS_COLORS[c]); }
     const lit = mat as THREE.MeshStandardMaterial;
@@ -513,7 +515,7 @@ export function setView(name: string, opts: { ortho?: boolean; fit?: string[] | 
     useCamera(persp); persp.fov = 78; persp.up.set(0, 1, 0); persp.position.copy(eyeW); controls.target.copy(eyeW).addScaledVector(aim, LIMITS.minDistance * 1.2);
     persp.updateProjectionMatrix(); controls.update(); invalidate(); emit('view'); return;
   }
-  let box = wantOrtho ? STAGE_BOX : S.manifest.totals.bbox;
+  let box = wantOrtho ? S.manifest.stage ?? STAGE_BOX : S.manifest.totals.bbox;
   if (opts.fit) {
     const bs = expand(opts.fit).map((id) => S.byId.get(id)!.bbox).filter((b): b is Box => !!b);
     if (bs.length) box = { min: [0, 1, 2].map((k) => Math.min(...bs.map((b) => b.min[k]))), max: [0, 1, 2].map((k) => Math.max(...bs.map((b) => b.max[k]))) };
@@ -793,7 +795,7 @@ function refreshLegend() {
   else for (const [c, col] of Object.entries(CLASS_COLORS)) { const s = el('span'); const i = el('i'); i.style.background = col; s.append(i, document.createTextNode(c === 'none' ? 'no parameters' : CLASS_TEXT[c])); lg.append(s); }
 }
 export function setMode(mode: string) {
-  if (!['normal', 'ids', 'class'].includes(mode)) throw new Error(`unknown mode '${mode}'`);
+  if (!['normal', 'plain', 'ids', 'class'].includes(mode)) throw new Error(`unknown mode '${mode}'`);
   S.mode = mode;
   document.body.classList.toggle('mode-ids', S.mode === 'ids');
   document.body.classList.toggle('mode-class', S.mode === 'class');

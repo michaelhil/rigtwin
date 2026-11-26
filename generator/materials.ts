@@ -7,6 +7,12 @@ export interface Material {
   clearcoat?: number;
   clearcoatRoughness?: number;
   emissiveTexture?: "screen_main" | "screen_touch";
+  /** A surface that gives off light (a light strip, a lit ring): sRGB colour of the glow. Asset materials only. */
+  emissive?: [number, number, number];
+  /** Optional surface texture (an asset's own swatch, see a spec's [materials]): PNG or JPEG file under assets/<asset>/textures/, the size
+   *  of one tile in metres, and the swatch's mean in linear light. The colour above stays the authority: the swatch is neutral
+   *  and only modulates it, so the material looks the same on average with the texture switched off. */
+  texture?: { file: string; tile: number; gain: number };
   note: string;
 }
 

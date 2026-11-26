@@ -21,7 +21,7 @@ ROOT="$(cd "$SKILL_DIR/../../.." && pwd)"
 AGENTS_DIR="$ROOT/.claude/agents"
 
 # Words that mark text as being about one asset type. Extend when a new playbook is added.
-WORDS='seat|joystick|pedal|monitor|pod|armrest|backrest|headrest|touchscreen|soundbar|cushion|deck|rig'
+WORDS='seat|joystick|pedal|monitor|pod|armrest|backrest|headrest|touchscreen|soundbar|cushion|deck|rig|canopy|desktop|keyboard'
 FRONTMATTER_OK='rig'   # allowed only in SKILL.md's frontmatter (the list of object types that trigger the Skill)
 
 EXTRA_B64=""

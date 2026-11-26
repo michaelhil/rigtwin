@@ -1,36 +1,40 @@
-// bun run build [--only <group>[,<group>]] [--build <name>] [--asset rig-b] [--out <dir>] [--quiet]
+// bun run build [--only <group>[,<group>]] [--build <name>] [--asset rig-b] [--out <dir>] [--quiet] [--plain]
+// --plain leaves out an asset's optional texture layer (the swatches named in its spec's [materials]); the model is otherwise the same.
 // --build <name> (or SYNERGON_BUILD_DIR=<name>) names a build folder: the output goes to work/<name>/build/ instead of the
 // shared assets/<asset>/build/, so parallel builds do not overwrite each other.
 // params + spec + src  ->  assets/<asset>/build/<asset>.glb + <asset>.manifest.json
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { loadParams, CLASSES } from "./params.ts";
-import { loadSpec, assemble, NAME_PATTERN } from "./assemble.ts";
+import { loadSpec, assemble, paletteOf, NAME_PATTERN } from "./assemble.ts";
 import { writeGlb } from "./glb.ts";
-import { PALETTE } from "./materials.ts";
 import { screenTextures } from "./textures.ts";
 import { ROOT, timeline } from "../tools/timeline.ts";
 
 export interface BuildResult { ok: boolean; glbPath: string; manifestPath: string; sha256: string; seconds: number; manifest: any; messages: string[] }
 
-export async function build(opts: { asset?: string; paramsDir?: string; specDir?: string; only?: string[]; outDir?: string; buildFolder?: string; quiet?: boolean } = {}): Promise<BuildResult> {
+export async function build(opts: { asset?: string; paramsDir?: string; specDir?: string; only?: string[]; outDir?: string; buildFolder?: string; quiet?: boolean; plain?: boolean } = {}): Promise<BuildResult> {
   const t0 = performance.now();
   const asset = opts.asset ?? "rig-b", dir = join(ROOT, "assets", asset), outDir = opts.outDir ?? (opts.buildFolder ? join(ROOT, "work", opts.buildFolder, "build") : join(dir, "build"));
   const say = (m: string) => { if (!opts.quiet) console.log(m); };
   const messages: string[] = [];
   const spec = loadSpec(opts.specDir ?? join(dir, "spec"));
   const params = loadParams(opts.paramsDir ?? join(dir, "params"), spec.groups);
-  const asm = await assemble(spec, params, { srcDir: join(dir, "src"), only: opts.only });
+  const PALETTE = paletteOf(spec);   // the shared palette, plus this asset's own materials if its spec has any
+  const asm = await assemble(spec, params, { srcDir: join(dir, "src"), only: opts.only, palette: PALETTE });
   if (asm.errors.length) {
     for (const e of asm.errors) console.error("error: " + e);
     return { ok: false, glbPath: "", manifestPath: "", sha256: "", seconds: (performance.now() - t0) / 1000, manifest: null, messages: asm.errors };
   }
   const partial = !!opts.only?.length;
+  // an asset's optional texture layer: the swatches its own materials name (none for an asset without them)
+  const swatches: Record<string, Uint8Array> = {};
+  for (const m of Object.values(PALETTE)) if (m.texture && !opts.plain) swatches[m.texture.file] = new Uint8Array(readFileSync(join(dir, "textures", m.texture.file)));
   const { bytes, stats } = writeGlb(asm.root, PALETTE, screenTextures(), {
     asset, schema: "synergon-glb/1",
     frame: spec.frame ?? "children of the root node use: metres, Z up, X forward (operator to main display), Y to the operator's left; origin at the centre of the deck top. The root node rotation converts to glTF Y-up.",
-  });
+  }, swatches);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const unused = [...params.records.keys()].filter((k) => ![...params.usage.values()].some((s) => s.has(k)));
   const manifest = {
@@ -47,6 +51,7 @@ export async function build(opts: { asset?: string; paramsDir?: string; specDir?
     },
     build: { partial, only: opts.only ?? null },
     groups: spec.groups,
+    ...(spec.stage ? { stage: spec.stage } : {}),
     components: asm.components,
     surfaces: asm.surfaces,
     joints: asm.joints,
@@ -55,7 +60,7 @@ export async function build(opts: { asset?: string; paramsDir?: string; specDir?
     omitted: asm.omitted,
     missing: asm.missing,
     not_built: asm.notBuilt,
-    materials: Object.fromEntries(Object.entries(PALETTE).map(([k, m]) => [k, { color: m.color.map((c) => Math.round(c * 1000) / 1000), metallic: m.metallic, roughness: m.roughness, note: m.note }])),
+    materials: Object.fromEntries(Object.entries(PALETTE).map(([k, m]) => [k, { color: m.color.map((c) => Math.round(c * 1000) / 1000), metallic: m.metallic, roughness: m.roughness, note: m.note, ...(m.emissive ? { emissive: m.emissive.map((c) => Math.round(c * 1000) / 1000) } : {}), ...(m.texture && swatches[m.texture.file] ? { texture: m.texture } : {}) }])),
     parameters: Object.fromEntries([...params.records].map(([k, r]) => [k, r])),
     parameter_class_counts: params.classCounts(),
     parameters_unused: unused,
@@ -84,7 +89,7 @@ if (import.meta.main) {
   const opt = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
   try {
     const only = opt("--only")?.split(",").map((s) => s.trim()).filter(Boolean);
-    const res = await build({ asset: opt("--asset"), only, outDir: opt("--out"), buildFolder: opt("--build") ?? process.env.SYNERGON_BUILD_DIR, quiet: args.includes("--quiet") });
+    const res = await build({ asset: opt("--asset"), only, outDir: opt("--out"), buildFolder: opt("--build") ?? process.env.SYNERGON_BUILD_DIR, quiet: args.includes("--quiet"), plain: args.includes("--plain") });
     if (!args.includes("--no-timeline")) timeline(res.ok ? "build" : "build failed", res.seconds, res.ok ? `${res.manifest.totals.triangles} tris, ${res.manifest.glb.bytes} bytes${only ? `, only ${only.join(",")}` : ""}` : res.messages.slice(0, 3).join(" | "));
     process.exit(res.ok ? 0 : 1);
   } catch (e: any) {

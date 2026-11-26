@@ -1,0 +1,388 @@
+# Operator desk: desktop, legs, wing panels, shelf, parts under the top. Frame: X forward (operator -> displays), Y to the
+# operator's left, Z up; origin on the floor under the centre of the desktop's front edge.
+# How the photo values were made (the same words are used in every evidence text):
+#   "rule photo"   IMG_1820: ultra-wide photo from above with a metre rule on the desktop. The plane is rectified from the photo's own
+#                  gravity vector and focal length; scale from the rule's graduations (reproduced to 2 mm over 90 cm); depth scale
+#                  closed on the keyboard's key pitch (19.0 mm found, 19.05 mm standard).
+#   "one ray"      a sight line of a main-lens photo cut with a named plane; the three photo cameras (IMG_1794, 1795, 1796) have
+#                  roll and pitch from gravity and are placed on four desktop features taken from the rule photo (residuals 2-28 mm).
+#   "two-view"     the same feature in two or three of those photos, sight lines 50-110 degrees apart; gaps of 5-40 px (4-30 mm).
+#   "app label"    a size label of the phone's measuring app in a screenshot (IMG_1784-1792, 1802-1806, 1812-1819). Against the
+#                  rule and against repeated spans these labels read between 1.5 % and 17 % short, so +-3 cm is the least they carry.
+
+[desk.height]
+value = 0.77
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "critical"
+evidence = "Two-view (IMG_1795, IMG_1796): two floor corners of the right leg's front edge lie 0.769 and 0.771 m below the desktop plane (gaps 3-22 px). The three camera heights come out at 1.52-1.58 m above that floor, a plausible hand height. Not measured by the owner; this is the height as photographed (the desk is taken to be height-adjustable)."
+
+[desk.top_thickness]
+value = 0.032
+unit = "m"
+range = 0.008
+class = "photo"
+tier = "cosmetic"
+evidence = "One ray on the vertical line through the wood's front-left corner (IMG_1795): the lower edge of the edge band is 31 mm below the surface."
+
+[desk.depth_centre]
+value = 0.603
+unit = "m"
+range = 0.012
+class = "photo"
+tier = "critical"
+evidence = "Rule photo: front edge to the rear edge of the working surface (where the shelf for the small displays begins) on the centre line. Depth scale closed on the key pitch; 0.59-0.62 for a focal length 7 % either way."
+
+[desk.inlay_front_chord_app]
+value = 1.27
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "cosmetic"
+evidence = "STATED FIGURE from the phone's measuring app (an instrument reading of unknown quality, +-3 cm at best; not a tape value). App label in IMG_1786, from the left to the right end of the wood's front edge. Not modelled: the rule photo with IMG_1795 gives 1.304 m for the same two points (2.6 % more), and the rule's own graduations and the key pitch support the rule photo's scale. Kept as a stated figure."
+
+[desk.surface_layer]
+value = 0.002
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Modelling device: the grey surface of the wings is a thin layer on a dark body, so that the edge reads dark as in the photos."
+
+[desk.grommet_xy]
+value = [0.70, 1.11]
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo (left cable outlet) and one ray on the desktop plane in IMG_1795 (both): 0.70 m behind the front edge centre, 1.105 and 1.112 m from the axis."
+
+[desk.grommet_diameter]
+value = 0.083
+unit = "m"
+range = 0.01
+class = "photo"
+tier = "cosmetic"
+evidence = "Rule photo, width of the left cable outlet on the desktop plane."
+
+[desk.shelf_drop]
+value = 0.085
+unit = "m"
+range = 0.025
+class = "photo"
+tier = "layout"
+evidence = "The dark shelf the small displays stand on (IMG_1798, IMG_1807, IMG_1810). The displays' lower edges come out 6.7 cm below the desktop (top edge 28.5 cm above it by two-view, housing height assumed 36.6 cm, lean 16 degrees), and the rule photo shows their lower bezels sunk behind the rear edge of the working surface; the shelf must lie below them. Value: those 6.7 cm plus a gap of about 2 cm. Weak: an assumed housing height and a lean that was set within its range by the clearance check (small.tilt); this value inherits that."
+
+[desk.shelf_rear_x]
+value = 0.90
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "layout"
+evidence = "The shelf runs back to just short of the wall's base (IMG_1807, IMG_1810); 2.5 cm short of the base's front panel as modelled."
+
+[desk.shelf_thickness]
+value = 0.025
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Edge of the shelf as seen in IMG_1807."
+
+[desk.shelf_rear_half_width]
+value = 0.62
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The shelf's rear edge is about as wide as the rear wall (IMG_1809); its corners are cut back toward the ears."
+
+[desk.lift_travel]
+value = 0.05
+unit = "m"
+class = "assumed"
+basis = "convention"
+tier = "critical"
+evidence = "DERIVED BY THE CLEARANCE SOLVER (the basis list has no word for that; it is not a convention and not evidence). NOT A PROPERTY OF THE DESK. Upper limit of an ASSUMED, LOCKED height adjustment, upward from the photographed height (the neutral): the output of the clearance solver (tools/clearance.ts --solve J_desk_height: the small displays' tilts at every combination of their limits, smallest gap 2 cm) on this model's assumed and invented geometry; 0.052 m found. What stops it there is the foot plate of the middle display's post, which comes 19 mm from the rail on the wall once it has risen 6 cm (both sized by eye). The small displays themselves would allow about 0.12 m (17 mm from the large displays at 0.13 m with all three tilted fully back; 10 mm at 0.16 m, the earlier limit; 24 mm at 0.16 m with the tilts neutral). None of this says anything about the real range, which no photo shows; a typical sit-stand travel is 0.4-0.65 m. Because the limit is the solver's own output, the clearance check cannot fail on it. First question to the site."
+
+[leg.y]
+value = 0.77
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "Two-view (IMG_1795, IMG_1796): the right leg's front floor corners are 0.724 and 0.828 m right of the axis; one ray on the floor plane (IMG_1795): the left leg's are 0.709 and 0.817 m left. Centres at 0.776 and 0.763 m."
+
+[leg.thickness]
+value = 0.10
+unit = "m"
+range = 0.02
+class = "photo"
+tier = "layout"
+evidence = "Distance between the two front floor corners of each leg: 0.104 m (right, two-view) and 0.108 m (left, one ray on the floor plane)."
+
+[wing.top_gap]
+value = 0.045
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The side panel starts just under the top's dark edge (IMG_1794, IMG_1797)."
+
+[wing.lining]
+value = 0.006
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Thickness given to the grey felt face on the inner side of the side panel (seen in IMG_1795, IMG_1796)."
+
+[handset.size]
+value = [0.05, 0.21, 0.045]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Light wooden block under the front edge of the left wing (IMG_1795, IMG_1796, IMG_1797): depth, width, height by eye. Its function is not established (a pull-out or the desk's hand control). Present on the left only."
+
+[handset.xy]
+value = [-0.085, 0.81]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Under the front edge between the wood seam and the wing's front corner (IMG_1795)."
+
+[desk.shelf_underlap]
+value = 0.04
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "The shelf continues this far under the top so that no slot opens between the two."
+
+[detail.bevel]
+value = 0.003
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Chamfer on visible hard edges so that they catch light."
+
+[detail.bevel_soft]
+value = 0.008
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Larger chamfer for upholstered and rounded edges (side panels, desktop wood edge)."
+
+# ---------------------------------------------------------------------------------------------- form round (2026-11-26)
+
+[desk.half_width]
+value = 1.207
+unit = "m"
+range = 0.035
+class = "photo"
+tier = "critical"
+evidence = "Photo-derived on the rule-based scale; not measured by the owner; overall width 2.41 +-0.07 m. Two routes that SHARE ONE CAMERA: (a) one ray on the desktop plane in IMG_1795: ends 1.216 m (left) and 1.202 m (right) from the symmetry axis; (b) a plane homography of the app screenshot IMG_1784 on four points, checked on unused features (the wood seam and rear edge from the rule photo land within 4-7 mm): left end 1.207 m; two of its four points come from the IMG_1795 camera, so the agreement is partly built in. The left cable outlet that anchors the end lies at the edge of the ultra-wide rule photo, where the focal-length range alone gives 1.5-2.7 %."
+
+[desk.outline_half]
+value = [[0.0000, 0.0000], [-0.0100, 0.1657], [-0.0315, 0.2734], [-0.0597, 0.3720], [-0.0912, 0.4640], [-0.1161, 0.5360], [-0.1426, 0.5998], [-0.1658, 0.6628], [-0.1857, 0.7175], [-0.1973, 0.7622], [-0.2007, 0.7871], [-0.1924, 0.8078], [-0.1658, 0.8244], [-0.1194, 0.8335], [-0.0332, 0.8484], [0.0829, 0.8666], [0.2040, 0.8873], [0.3433, 0.9097], [0.4959, 0.9337], [0.6617, 0.9569], [0.8209, 0.9768], [0.9486, 0.9909], [1.0398, 0.9975], [1.1211, 1.0000], [1.1841, 0.9934], [1.2355, 0.9760], [1.2836, 0.9437], [1.3184, 0.9031], [1.3267, 0.8774], [1.3134, 0.8641], [1.2156, 0.8542], [1.0813, 0.8360], [0.9519, 0.8186], [0.8541, 0.8028], [0.8143, 0.7896], [0.7960, 0.7763], [0.7977, 0.7572], [0.8209, 0.6752], [0.8574, 0.5783], [0.9022, 0.4797], [0.9486, 0.3770], [0.9834, 0.2759], [0.9983, 0.1657], [1.0000, 0.0000]]
+unit = "ratio"
+class = "photo"
+tier = "layout"
+evidence = "Control points of the outline of the left half of the top, from the centre of the front edge (index 0) round the end to the centre of the rear edge (last), as [x / desk.depth_centre, y / desk.half_width]; a smooth curve is drawn through them (detail.curve_steps). Points 0-5 (front edge of the wood) and 36-43 (rear edge of the working surface): rule photo. Points 6-35 (wing front, front corner, end edge, ear): homography of IMG_1784 (boundary of the grey surface traced at 33 points, moved outward by desk.surface_inset), which agrees with the earlier one-ray outline from IMG_1795 within 1 cm along the end and corrects its front corner by 2 cm. Sensitivity: 1.4 cm per centimetre of error in one control point. The right half is the mirror image (the right end was not seen from above; in IMG_1795 it differs from the left by up to 3 cm). Index 5 and index 40 are the ends of the wood seam."
+
+[desk.inlay_seam]
+value = [[-0.1161, 0.5360], [-0.0779, 0.5418], [-0.0066, 0.5518], [0.0779, 0.5609], [0.1658, 0.5609], [0.2405, 0.5518], [0.3068, 0.5369], [0.3897, 0.5104], [0.4809, 0.4822], [0.5721, 0.4548], [0.6633, 0.4283], [0.7496, 0.4027], [0.8159, 0.3836], [0.8839, 0.3778], [0.9486, 0.3770]]
+unit = "ratio"
+class = "photo"
+tier = "cosmetic"
+evidence = "Control points of the S-shaped seam between the wood centre and the grey wing, from the front edge (a point of desk.outline_half) to the rear edge (another), same proportions; left and right seams of the rule photo averaged about the axis (they agree within 6 mm). Seen again in IMG_1784 within 7 mm."
+
+[desk.surface_inset]
+value = 0.009
+unit = "m"
+range = 0.004
+class = "photo"
+tier = "cosmetic"
+evidence = "Width of the dark rim between the grey surface and the outer edge of the wings, from the homography of IMG_1784 (about 12 px at 0.75 mm per px). Modelled as the soft top bevel of the dark body."
+
+[desk.grey_span]
+value = [5, 40]
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "Indices of the two points of desk.outline_half at which the wood seam meets the outline."
+
+[desk.shelf_span]
+value = [29, 43]
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "Which control points of desk.outline_half bound the shelf at the front: from the ear's inner rear corner along the ear's inner edge and the rear edge of the working surface to the centre."
+
+[wing.outline_span]
+value = [10, 28]
+unit = "count"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Which control points of desk.outline_half the end screen follows: it starts on the wing's front edge just before the front corner and wraps it (IMG_1793, IMG_1794: its front edge stands in front of the corner), runs along the end and wraps the rear corner of the ear in one piece (IMG_1810, IMG_1807)."
+
+[wing.clearance]
+value = 0.115
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "One ray on the end screen's own surface, seen face-on in IMG_1794 (right screen): its lower edge is 0.123, 0.108 and 0.119 m above the floor at three points along it. The left screen read 0.16 m (front) and 0.11 m (rear) by one ray on corner lines in IMG_1796. An earlier reading through IMG_1795, which sees the surface edge-on, was worthless and is dropped."
+
+[wing.corner_radius]
+value = 0.13
+unit = "m"
+range = 0.04
+class = "photo"
+tier = "cosmetic"
+evidence = "Radius of the end screen's two lower corners: in IMG_1794 (face-on) each corner takes 200-250 px of a screen 2070 px long, about 0.13 m; they read as quarter circles in IMG_1796 and IMG_1810 too."
+
+[wing.thickness]
+value = 0.035
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Upholstered panel seen edge-on in IMG_1796, IMG_1797 and IMG_1810."
+
+[wing.inset]
+value = 0.012
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "The end screen's outer face sits just inside the top's dark edge (IMG_1810, IMG_1784)."
+
+[leg.front_x]
+value = 0.165
+unit = "m"
+range = 0.03
+class = "photo"
+tier = "layout"
+evidence = "Front floor corners of both legs, 0.14-0.17 m behind the front edge centre (two-view right, one ray left); one ray on the right leg's inner face (IMG_1796) puts the front edge at the floor at 0.16-0.18 m."
+
+[leg.depth]
+value = 0.735
+unit = "m"
+range = 0.08
+class = "photo"
+tier = "layout"
+evidence = "Length of the leg on the floor. One ray on the plane of the right leg's inner face (IMG_1796): the lower edge of the pale blade runs on the floor from 0.18 m to at least 0.90 m behind the front edge centre (the point comes out 3 mm above the floor, which supports the plane). Its rear end is hidden by the panel under the top, so this is a lower bound."
+
+[leg.front_curve]
+value = [[0, 0], [0.13, 0.001], [0.27, 0.012], [0.42, 0.05], [0.57, 0.109], [0.73, 0.166], [0.82, 0.233], [1, 0.313]]
+unit = "ratio"
+class = "photo"
+tier = "cosmetic"
+evidence = "Front edge of the leg in side view, as [height / leg height, set-back / leg.depth]: upright for the first 0.15 m, then bowing back to about 0.23 m at the top. One ray on the plane of the right leg's inner face (IMG_1796), seven points up to 0.55 m; the last point is extrapolated (the desktop hides the top)."
+
+[leg.rear_curve]
+value = [[0, 0], [0.25, 0.03], [0.5, 0.045], [0.75, 0.0], [1, -0.14]]
+unit = "ratio"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Rear edge of the leg in side view, as [height / leg height, shift to the rear / leg.depth]: a bowed dark band, bulging to the rear at mid height and leaning forward to the top (IMG_1810, IMG_1809). Seen only from behind: no number can be taken."
+
+[leg.band_depth]
+value = 0.035
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Depth of the dark front and rear edges of the leg as seen on its side face (IMG_1796: the dark strip in that photo is mostly the front face, about 0.10 m wide, seen at an angle)."
+
+[leg.top_gap]
+value = 0.012
+unit = "m"
+class = "invented"
+tier = "cosmetic"
+evidence = "Gap left between the fixed leg and the underside of the shelf so that the two bodies do not share a face. The leg ends under the shelf (IMG_1810)."
+
+[leg.column]
+value = [0.62, 0.20, 0.06]
+unit = "m"
+class = "invented"
+tier = "layout"
+evidence = "The assumed lifting column: its centre behind the front edge centre, its depth and its thickness. Hidden inside the leg at the photographed height; it appears when the top is raised. No photo shows it."
+
+[panel.front_x]
+value = 0.60
+unit = "m"
+range = 0.07
+class = "photo"
+tier = "layout"
+evidence = "The dark panel under the top (front panel in front of the cable tray). One ray in IMG_1796 on an assumed plane for its right end (0.56-0.60 m from the axis): the end's lower corner lies 0.56-0.69 m behind the front edge centre. So the panel hangs under the rear edge of the working surface, not near the front; the blockout's box 0.30 m behind the front edge was wrong and is removed."
+
+[panel.bottom_z]
+value = 0.175
+unit = "m"
+range = 0.04
+class = "photo"
+tier = "layout"
+evidence = "Lower edge of the panel above the floor. One ray on the plane of the panel (x = panel.front_x) through three points of its lower edge in IMG_1795: 0.172, 0.178, 0.185 m; 4 cm lower or higher if the panel is 7 cm farther or nearer. The earlier ray through IMG_1796 gave 0.10-0.19 m. It does not reach the floor."
+
+[panel.size]
+value = [0.02, 1.16]
+unit = "m"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Thickness, and width between the legs' inner faces (IMG_1795, IMG_1793: it fills the space between the legs)."
+
+[panel.tray]
+value = [0.12, 0.10]
+unit = "m"
+class = "invented"
+tier = "layout"
+evidence = "Cable tray behind the panel, under the shelf: depth and height. Named in the request; no photo shows it."
+
+[detail.curve_steps]
+value = 3
+unit = "count"
+class = "invented"
+tier = "cosmetic"
+evidence = "Number of straight pieces drawn between two control points of a smooth outline."
+
+[detail.smooth_crease]
+value = 80
+unit = "1"
+class = "invented"
+tier = "cosmetic"
+evidence = "Crease angle in degrees for the end screens' shading: edges softer than this are shaded smooth, so the upholstered surface shows no bands (review round 2, F7)."
+
+# Operator reference points for sight lines and distances at this desk. DESIGN REFERENCES, not a person and not measured:
+# the asset has no seat. They are fixed to the floor frame (they do not follow the height adjustment).
+
+[operator.eye_x]
+value = -0.15
+unit = "m"
+range = 0.10
+class = "assumed"
+basis = "standard_default"
+tier = "critical"
+evidence = "Eye in front of the desktop's front edge (toward the operator), seated or standing at the centre of the desk: a person working at a desk has the trunk a few centimetres from the edge and the eyes roughly 0.05 to 0.25 m behind it. An assumption, not taken from a standard; a result assessed against a viewing-distance guideline inherits it."
+
+[operator.eye_seated_z]
+value = 1.21
+unit = "m"
+range = 0.09
+class = "assumed"
+basis = "standard_default"
+tier = "critical"
+evidence = "Seated eye height above the floor for a median adult: sitting eye height above the seat 0.765 m (the value this project already uses for its first asset: midway between the median woman, 740 mm, and man, 790 mm, of the British adult tables in Pheasant and Haslegrave, Bodyspace, quoted there from memory and not looked up) plus a seat height of about 0.445 m. The range spans roughly a small woman to a tall man (0.685 to 0.845 m above the seat) at seat heights of 0.40 to 0.50 m. Not looked up for this asset; a value filled from typical data cannot be assessed against a standard."
+
+[operator.eye_standing_z]
+value = 1.58
+unit = "m"
+range = 0.12
+class = "assumed"
+basis = "standard_default"
+tier = "critical"
+evidence = "Standing eye height above the floor for a median adult in shoes: about 1.52 m (women) and 1.63 m (men) for the median of European adult tables, plus about 2.5 cm of shoe, from memory and not looked up; the range spans roughly a small woman to a tall man. Only meaningful if the desk really rises to a standing height, which is not known."

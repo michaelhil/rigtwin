@@ -20,7 +20,7 @@
 //   overlay=none|photo|blend|outline       how the photo is shown with cam=
 //   only=a,b   hide=a,b                    visibility          fit=a,b   frame the view on these instead of the whole rig
 //   pose=J_x:val,...                       degrees for revolute, metres for prismatic, roll/pitch/yaw degrees for ball (J_b:0/25/0)
-//   mode=normal|ids|class   wire=1   frames=1   legend=1   hud=1   caption=text   ui=0
+//   mode=normal|plain|ids|class   wire=1   frames=1   legend=1   hud=1   caption=text   ui=0
 //   sel=<id>                               selected row, unit or part (the page shows its card)
 //   asset=<dir>  name=<asset name>         where the GLB and manifest are (default /asset/rig-b; a relative dir counts from the site root)
 // Wireframe, orthographic projection, reference frames and the id legend have no control on the page;

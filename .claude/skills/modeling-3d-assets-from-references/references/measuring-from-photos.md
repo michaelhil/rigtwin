@@ -7,6 +7,7 @@ supersede every earlier guess.
 ## Contents
 
 - Status
+- 0. When sizes or a scale object exist: measurement first
 - 1. Sort the evidence
 - 2. One camera set, tied to named gauge features
 - 3. Scale and closure
@@ -22,10 +23,37 @@ supersede every earlier guess.
 
 ## Status
 
-Exercised once: steps 1–10, by one measuring agent, on one object. Not exercised: hold-out
+Exercised on two objects: steps 1 and 3–10; step 2 as written once, section 0 once. On the
+second object the measurer was also the modeller, and an audit afterwards found the stated
+accuracy untested. Not exercised: hold-out
 points clicked by a person; machine-written records that stop a `photo` value being edited by
 hand; a frozen dimension table scored against tape values. Until tape values exist, every size
 verdict is "unverified", however small the residuals.
+
+## 0. When sizes or a scale object exist: measurement first
+
+Exercised once (second asset: a rule in one photo and a dozen labels from a phone's measuring
+app). Do this before any camera work; sections 2–3 remain the route when nothing is measured.
+
+1. **Register** every stated size: the photo, from which feature to which feature (say when an
+   end is ambiguous), the value, a cross-check wherever two sources give the same span. Count
+   measurements, not screenshots: an app leaves one measurement standing in several pictures.
+2. **A scale rule in the scene** sets the scale. One rule lying on a flat surface tests that
+   one direction only; depth and height need the rule lying the other way and standing upright,
+   or another known size. Say which directions have no independent test.
+3. **A phone's measuring app** gives instrument readings of unknown quality, not tape values:
+   record them as stated figures with ±3 cm at best. Observed once: within 1.5 % on two matt
+   edges, 9–17 % off on three others (two of them display surfaces). Never the scale reference.
+4. **Gravity-aided cameras (exercised once).** Some phones store the direction of gravity in each
+   original photo. With the focal length from the metadata that gives roll and pitch, so a
+   level plane is rectified without vanishing points and a camera needs only height, heading
+   and position from two or more known points on that plane. Preconditions: original files of
+   a phone that stores the vector; a plane known to be level; the sign convention validated on
+   a straight object. Limits found: the pitch itself has no test in such a photo set; sight
+   lines of two-view points then miss by tens of pixels unless the cameras are refined on the
+   picked points; record the miss and let the range cover it.
+5. A homography on four points of a plane serves a photo without metadata, if features it did
+   not use land where it predicts and its points do not all come from one camera.
 
 ## 1. Sort the evidence
 
@@ -72,7 +100,11 @@ small set of **gauge features** on fixed structure:
 2. In that frame, measure every other part whose true size is known. Build the closure table:
    part, measured, published, ratio, how it was measured, comment.
 3. Ratios within about 3 % of 1: the scale closes. Use the cleanest tests (two-view corners) as
-   the judge and mark model fits and one-ray results as weak.
+   the judge and mark model fits and one-ray results as weak. **A closure test must be able to
+   fail:** change the unknowns it is said to validate (focal length, camera pitch, an assumed
+   height) by their plausible error and see whether the figure moves. A scale object tested
+   against its own marks, or a size that depends on an assumed offset, validates nothing; report
+   it as self-consistency.
 4. A disagreement is investigated, never averaged:
    - Was the published size ever tied to the element actually measured?
    - Does the element lie on the plane the one-ray measurement assumed? (A 7 % conflict on the
@@ -93,7 +125,9 @@ small set of **gauge features** on fixed structure:
 | One ray on a measured plane | a sight line cut with a plane measured two-view | a range; state the plane |
 | One ray on an assumed plane | a sight line cut with a symmetry plane or a guessed side plane | a range that includes the plane error; state the sensitivity ("7 mm per 50 mm off-plane") |
 | Model fit | a parametric shape of known proportions fitted to its outline | weak when the free-size fit is barely better than the published size |
-| By eye | a proportion judged in a photo | no coverage |
+| One ray on a plane it grazes (under about 20°) | as above | nothing: state the error in cm per cm; three wrong sizes on the second asset came from this |
+| A physical bound | two solids cannot overlap; visible floor cannot be covered | a one-sided bound, only if larger than the noise of its inputs |
+| By eye | a proportion judged in a photo | no coverage; along a line of sight it can be wrong by tens of centimetres and no overlay shows it |
 | None | no route exists | nothing: record the gap as a gap |
 
 Wrong correspondences happen with rows of look-alike features. A pick whose sight lines miss by
@@ -107,6 +141,8 @@ many pixels is dropped and listed, not forced.
   cover every one that has not been shown wrong.
 - An untested explanation for an outlier is not a resolution. Re-derive by a route that shares
   neither the scale reference nor the assumed plane.
+- A fit with as many unknowns as data has no residual and no range, for any quantity, not only
+  cameras: check it on something it did not use.
 - Round to what the method supports (5–10 mm for photo values, coarser for assumptions).
 
 ## 6. What the photos cannot check
@@ -182,14 +218,18 @@ A stated figure that closes against purchased parts is used, as scale, and is th
 1. Ten to fifteen tape measurements, each photographed with the tape in frame. This beats every
    algorithm.
 2. Scale in the scene: a folding rule along each axis and one standing upright, or several
-   printed markers of known size taped flat.
-3. One instance; nothing moved during the session; main lens only.
+   printed markers of known size taped flat. Photograph the rule on the main flat surface
+   from above.
+3. One instance; nothing moved during the session; main lens for everything to be measured.
+   Send the camera's original files, unmodified. Take more whole-object photos than seem
+   needed: some are held back as tests.
 4. Rings of overlapping photos at knee, chest and overhead height, stepping sideways, with the
    surroundings in frame.
 5. Square-on views from the front, rear, left and right from as far back as possible; one from
    above; one from the user's eye position; one from the floor looking under.
 6. Each movable part at both extremes, photographed from the same spot.
-7. Close-ups of every control group with a ruler in frame, and of every model label.
+7. Close-ups of every control group with a ruler in frame, and of every model label (kept
+   private; they give maker drawings). Flat faces face-on: a face seen edge-on gives no size.
 8. Screens off or showing a static pattern; no people; diffuse light.
 9. Note which instance each photo shows; strip location data before sharing.
 

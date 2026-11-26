@@ -1,6 +1,9 @@
 // bun run render [--set ortho|sheet|ids|groups|matched|focus|ui|landing|selftest|wiki|all] [--only <group or id>[,…]] [--out <dir>]
 //                [--build <name>] [--pose J_x:val,...] [--cam <name>] [--fit <group or id>[,…]] [--mode ids|class] [--viewer <dir>]
-//                [--photos <dir>]
+//                [--photos <dir>] [--asset <id>] [--frames] [--plain]
+//   --set view --camera x,y,z,tx,ty,tz,fov [--name <file>] [--size w,h]   one free perspective view (model frame)
+// --asset <id> renders a further asset (assets/<id>/build/): output under work/<id>/renders/<set>/, images with photo pixels
+// under private/renders/<id>/, photo cameras from private/evidence/<id>/cameras.json. The sets wiki and landing are the first asset's.
 // Drives the real viewer page in headless Chromium (same renderer the user sees) and writes PNGs.
 // Output: work/renders/<set>/…  (or work/<build folder>/renders/<set>/…). Anything containing photo pixels
 // (matched side-by-side and outline images) goes to private/renders/matched/ instead.
@@ -146,14 +149,14 @@ export class Browser {
 /** One viewer session: server + browser + page with the viewer loaded and its UI hidden. */
 /** The viewer in headless Chromium on a throwaway server. The rig's pictures are of the rig alone: the person is left out
  *  (person=0) unless `person` is given (then the page loads the default person and waits for it). */
-export async function openViewer(opts: { buildFolder?: string; photos?: string; requests?: string[]; person?: boolean } = {}) {
+export async function openViewer(opts: { buildFolder?: string; photos?: string; requests?: string[]; person?: boolean; asset?: string } = {}) {
   // an empty temporary Playground: no pose of the shared scene reaches a picture
-  const server = await startServer({ port: 0, buildFolder: opts.buildFolder, photos: opts.photos, requests: opts.requests, data: "temp" });
+  const server = await startServer({ port: 0, buildFolder: opts.buildFolder, asset: opts.asset, photos: opts.photos, requests: opts.requests, data: "temp" });
   const origin = `http://127.0.0.1:${server.port}`;
   const browser = await Browser.launch();
   // the page of a workspace: the Playground the server made (its real id from the list, not the local alias)
   const playground = (await (await fetch(`${origin}/api/workspaces?limit=1`)).json()).workspaces?.[0]?.id;
-  const page = await browser.page(`${origin}/workspaces/${playground}?ui=0${opts.person ? "" : "&person=0"}`);
+  const page = await browser.page(`${origin}/workspaces/${playground}?ui=0${opts.person ? "" : "&person=0"}${opts.asset && opts.asset !== "rig-b" ? `&name=${encodeURIComponent(opts.asset)}` : ""}`);
   await page.viewport(1200, 900);
   await page.waitFor("window.viewerReady || window.viewerError", "the viewer to load");
   const err = await page.evaluate("window.viewerError || null");
@@ -219,17 +222,19 @@ if (import.meta.main) {
   const buildFolder = opt("--build") ?? process.env.SYNERGON_BUILD_DIR;
   if (opt("--viewer")) process.env.SYNERGON_VIEWER_DIR = opt("--viewer");   // viewer source directory (default "viewer")
   const sets = (opt("--set") ?? "sheet").split(",").flatMap((s) => (s === "all" ? ["ortho", "sheet", "ids", "groups", "matched"] : [s]));
-  const only = opt("--only"), pose = opt("--pose"), asset = "rig-b";
+  const only = opt("--only"), pose = opt("--pose"), asset = opt("--asset") ?? "rig-b", own = asset !== "rig-b";
+  if (own && sets.some((s) => s === "wiki" || s === "landing" || opt("--photos"))) { console.error(`error: the sets wiki and landing, and --photos, are the first asset's; not available with --asset ${asset}`); process.exit(1); }
   // masked photo copies: given with --photos, and always for the documentation set
   const photos = opt("--photos") ? resolve(ROOT, opt("--photos")!) : sets.includes("wiki") ? join(ROOT, "wiki", "img", "photos") : undefined;
   if (photos && !existsSync(photos)) { console.error(`error: no folder ${photos} (masked photo copies photo-<n>.jpg are expected there)`); process.exit(1); }
   const served: string[] = [];
-  const outBase = opt("--out") ?? (buildFolder ? join(ROOT, "work", buildFolder, "renders") : join(ROOT, "work", "renders"));
-  const privBase = join(ROOT, "private", "renders", ...(buildFolder ? [buildFolder] : []));
-  const manifestPath = join(buildDir(buildFolder), "rig-b.manifest.json");
+  const outBase = opt("--out") ?? (buildFolder ? join(ROOT, "work", buildFolder, "renders") : own ? join(ROOT, "work", asset, "renders") : join(ROOT, "work", "renders"));
+  const privBase = join(ROOT, "private", "renders", ...(own ? [asset] : []), ...(buildFolder ? [buildFolder] : []));
+  const manifestPath = join(buildDir(buildFolder, asset), `${asset}.manifest.json`);
   if (!existsSync(manifestPath)) { console.error(`error: no build found at ${manifestPath}. Run "bun run build" first.`); process.exit(1); }
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const common: Record<string, unknown> = { ...(only ? { only } : {}), ...(pose ? { pose } : {}) };
+  // --frames draws the reference frames; --plain shows the model without its optional texture layer (viewer mode 'plain')
+  const common: Record<string, unknown> = { ...(only ? { only } : {}), ...(pose ? { pose } : {}), ...(args.includes("--frames") ? { frames: "1" } : {}), ...(args.includes("--plain") ? { mode: "plain" } : {}) };
   const footer = [
     `${manifest.totals.triangles.toLocaleString("en")} triangles · ${manifest.totals.primitives} draw primitives · ${(manifest.glb.bytes / 1e6).toFixed(2)} MB · GLB ${manifest.glb.sha256.slice(0, 12)}${only ? ` · showing only: ${only}` : ""}${pose ? ` · pose: ${pose}` : ""}`,
     manifest.omitted.length ? "!Omitted: " + manifest.omitted.map((o: any) => `${o.id} (${o.reason})`).join("; ") : "Omitted: none",
@@ -238,7 +243,7 @@ if (import.meta.main) {
   ];
   const tStart = performance.now();
   let v: Awaited<ReturnType<typeof openViewer>>;
-  try { v = await openViewer({ buildFolder, photos, requests: served }); } catch (e: any) { console.error("error: " + e.message); process.exit(1); }
+  try { v = await openViewer({ buildFolder, photos, requests: served, asset }); } catch (e: any) { console.error("error: " + e.message); process.exit(1); }
   const launch = (performance.now() - tStart) / 1000;
   let failed = false;
   /** Photo comparisons that may be published: the photo layer is the masked copy, never the original. */
@@ -363,6 +368,11 @@ if (import.meta.main) {
         const file = join(out, `${name}.png`);
         await v.sheet({ title: `${manifest.title}: ${fit}`, sub: only ? `showing only ${only}` : "in context", cols: 3, tileWidth: 800, tiles, footer }, file);
         files.push(file);
+      } else if (set === "view") {
+        // one free view: --camera x,y,z,tx,ty,tz,fov (model frame: eye, target, vertical field of view) [--name <file name>] [--size w,h]
+        const cam = opt("--camera"); if (!cam) { console.error("view: give --camera x,y,z,tx,ty,tz,fov"); failed = true; continue; }
+        const [w, h] = (opt("--size") ?? "1400,1000").split(",").map(Number), f = join(out, `${(opt("--name") ?? "view").replace(/[^A-Za-z0-9_-]/g, "")}.png`);
+        await v.shot({ ...common, camera: cam, ...(opt("--mode") ? { mode: opt("--mode") } : {}) }, f, w, h); files.push(f);
       } else if (set === "ui") {
         // the page as a person sees it, panels included
         for (const [name, o] of [["default", {}], ["by_component", { mode: "ids" }], ["by_data_source", { mode: "class" }]] as [string, Record<string, unknown>][]) { const f = join(out, `${name}.png`); await v.shot({ ...common, ...o, ui: "1" }, f, 1600, 1000); files.push(f); }
@@ -389,7 +399,7 @@ if (import.meta.main) {
         console.log(`selftest: ${r.pass ? "PASS" : "FAIL"}: ${r.checked} points over ${r.cameras.length} camera(s), worst error ${Number(r.worst_px).toFixed(3)} px (tolerance ${r.tolerance_px} px)`);
         mkdirSync(out, { recursive: true }); writeFileSync(join(out, "selftest.json"), JSON.stringify(r, null, 1));
         if (!r.pass) failed = true;
-      } else { console.error(`unknown set '${set}' (ortho, sheet, ids, groups, matched, focus, ui, landing, selftest, wiki, all)`); failed = true; continue; }
+      } else { console.error(`unknown set '${set}' (ortho, sheet, ids, groups, matched, focus, view, ui, landing, selftest, wiki, all)`); failed = true; continue; }
       const sec = (performance.now() - t0) / 1000, kept = Page.kept; Page.kept = 0;
       const folders = [...new Set(files.map((f) => relative(ROOT, join(f, ".."))))];
       console.log(`${set}: ${files.length} image(s) in ${sec.toFixed(2)} s${files.length ? " → " + (files.length > 1 ? folders.map((d) => `${d}/ (${files.filter((f) => relative(ROOT, join(f, "..")) === d).length})`).join(", ") : relative(ROOT, files[0])) : ""}${kept ? `; ${kept} showed the same picture as before and were left untouched` : ""}`);
