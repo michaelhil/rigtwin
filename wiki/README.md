@@ -2,7 +2,7 @@
 title: How this wiki works
 tldr: Conventions for reading and extending the wiki. Every page has front matter with a TL;DR; the index and the HTML site are generated from the pages; the log is append-only.
 status: stable
-updated: 2026-11-23
+updated: 2026-11-27
 tags: [meta]
 ---
 
@@ -24,6 +24,7 @@ commit message or an agent's memory, the wiki wins; if the wiki is wrong, fix th
 | `50-implementation/` | Stack, timeline and performance data, measurement results, modeling rounds, viewer, deployment | What was actually built, and how long did it take? |
 | `60-lessons/` | Numbered lessons, failures and fixes, reusable patterns, ideas | What did we learn? |
 | `70-results/` | The asset's model card, gallery, critique, goal assessment | What is the result and how good is it? |
+| `75-operator-desk/` | A second object, a control-room desk built from photos: steps, accuracy, reviews, photo guide, questions for the site | Does the method work on another object, and which photos does it need? |
 | `80-reference/` | Skills and agents, tools, standards, research sources | Where is the detail? |
 | `90-next/` | Next steps and open questions | What now? |
 | `img/` | Images, by topic | — |

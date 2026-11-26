@@ -129,6 +129,8 @@ share a family.
 
 ## 3. The Skill on a second, different object
 
+A second object, a control-room desk, was built on 2026-11-26/27, though not under the sealed-tape rules below: see [Operator desk](../75-operator-desk/overview.md).
+
 **Owner and agents, size L** ([I-05](../60-lessons/ideas.md#i-05)). The condition for Skill 1.0,
 from its changelog ([skills and agents](../80-reference/skills-and-agents.md#version-010-and-what-makes-it-10)):
 
