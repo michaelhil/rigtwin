@@ -3,7 +3,7 @@ function publicPaths(text:string) {
   return text.replace(/\/api\/|\/workspaces(?=[/{"\x20])/g, path => path === "/api/" ? "/api/room/" : "/workspaces/room");
 }
 export function publicRoomHtml(html:string) {
-  return publicPaths(html).replace('<a href="/projects">Projects</a>', '<a href="/workspaces/manage">Station workspaces</a>');
+  return publicPaths(html).replace('<a href="/projects">Projects</a>', '');
 }
 export function publicRoomGuide(guide:string) {
   const publicGuide = guide.split("\n## Local projects")[0];

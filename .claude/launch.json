@@ -4,8 +4,24 @@
     {
       "name": "synergon-viewer",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["tools/serve.ts", "--port", "4180"],
+      "runtimeArgs": [
+        "tools/serve.ts",
+        "--port",
+        "4180"
+      ],
       "port": 4180
+    },
+    {
+      "name": "synergon-room",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "tools/room-serve.ts",
+        "--port",
+        "4290",
+        "--data",
+        "work/home-preview-data"
+      ],
+      "port": 4290
     }
   ]
 }

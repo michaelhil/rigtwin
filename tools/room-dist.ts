@@ -1,6 +1,6 @@
 // Build the public room release from the built-in asset editions and public screening guide.
 // The local room service, its data directory and project stores are never opened by this build.
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { loadRoomLibrary } from "../server/room-library.ts";
@@ -18,6 +18,12 @@ export async function buildRoomRelease(out: string, stationHtml: string, station
   if (!bundle.success) throw new Error(bundle.logs.map(String).join("\n"));
   for (const file of bundle.outputs) writeFileSync(join(out, basename(file.path)), new Uint8Array(await file.arrayBuffer()));
   for (const file of ["release-entry.js", "room.css", "room-view.css"]) copyFileSync(join(view, file), join(out, file));
+  // The homepage's own small script and its story pictures.
+  const home = await Bun.build({ entrypoints: [join(view, "src", "home.ts")], target: "browser", format: "esm", minify: true, naming: { entry: "home.[ext]" } });
+  if (!home.success) throw new Error(home.logs.map(String).join("\n"));
+  writeFileSync(join(out, "home.js"), new Uint8Array(await home.outputs[0].arrayBuffer()));
+  mkdirSync(join(out, "home"), { recursive: true });
+  for (const file of readdirSync(join(view, "home"))) if (file.endsWith(".jpg")) copyFileSync(join(view, "home", file), join(out, "home", file));
   const roomHtml = publicRoomHtml(readFileSync(join(view, "room.html"), "utf8")).replace('src="/room-entry.js"', 'src="/release-entry.js"');
   writeFileSync(join(out, "index.html"), roomHtml);
   writeFileSync(join(out, "llms.txt"), publicRoomGuide(readFileSync(join(view, "room-guide.txt"), "utf8")));

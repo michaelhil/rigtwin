@@ -1,5 +1,5 @@
 // Local, persistent room editor. Its SQLite store is independent of the single-station installation.
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { createRoomLibrary } from "../server/room-installed.ts";
 import { PROJECT_BODY_BYTES } from "../shared/project.ts";
@@ -25,6 +25,7 @@ export async function serveRoom({ port, dataDir, emptyLibrary = false }: { port:
   const staticFiles = new Map([
     ["/room.css", join(viewRoot, "room.css")], ["/room-view.css", join(viewRoot, "room-view.css")],
     ["/llms.txt", join(viewRoot, "room-guide.txt")],
+    ...readdirSync(join(viewRoot, "home")).filter(f => f.endsWith(".jpg")).map(f => ["/home/" + f, join(viewRoot, "home", f)] as [string, string]),
     ["/standards/workstation-screening.md", join(ROOT, "wiki", "85-standards", "workstation-screening.md")],
     ...["basis_transcoder.wasm","basis_transcoder.js"].map(f => ["/libs/basis/" + f, join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis", f)] as [string,string]),
   ]);

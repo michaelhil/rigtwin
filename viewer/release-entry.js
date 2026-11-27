@@ -18,3 +18,4 @@ if (station) {
   const { startRoomApp } = await import('/room-entry.js');
   await startRoomApp();
 }
+if (location.pathname === '/') await import('/home.js');

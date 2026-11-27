@@ -35,9 +35,10 @@ try {
   await page.evaluate("document.querySelector('.rm-workspace-link').click()");
   assert(
     await page.evaluate(
-      "document.querySelector('.rm-workspace-switcher').open && !!document.querySelector('.rm-workspace-menu a[href*=list]')",
+      "document.querySelector('.rm-workspace-switcher').open && !document.querySelector('.rm-workspace-menu a[href*=list]')",
     ),
   );
+  await wait(page, "document.querySelector('.rm-workspace-current')?.textContent.length > 0");
   await page.evaluate("document.querySelector('.rm-workspace-link').click()");
   await page.call("Page.setDownloadBehavior", { behavior: "allow", downloadPath: temp });
   await page.evaluate(

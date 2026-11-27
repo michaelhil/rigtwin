@@ -249,7 +249,7 @@ if (import.meta.main) {
         await directory.close();
         const roomPage = await browser.page(origin + roomPath);
         await roomPage.waitFor("document.querySelector('#room-controls') && document.querySelector('.rv-plan [data-instance]')", "the deployed room editor");
-        await roomPage.evaluate("Array.from(document.querySelectorAll('.rm-view-switch button')).find(b => b.textContent.trim() === '3D').click()");
+        await roomPage.evaluate("document.querySelector('.rm-mode-option[aria-label=\"3D view\"]').click()");
         await roomPage.waitFor("!!document.querySelector('[data-seated-host]')", "the operator and pinned geometry in the public room", process.env.CI ? 150000 : 60000);
         errors.push(...roomPage.errors.map(e => "room editor console: " + e));
         await roomPage.close();

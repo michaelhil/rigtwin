@@ -98,10 +98,6 @@
 .rm-distance output { font-variant-numeric: tabular-nums; font-size: 21px; font-weight: 600; color: var(--rm-accent); }
 .rm-panel-foot { min-height: 60px; flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 17px; border-top: 1px solid #d8ded3; background: #f4f6ef; }
 .rm-panel-foot > :last-child { margin-left: auto; }
-.rm-view-switch { display: flex; border: 1px solid #cdd5ca; padding: 2px; background: #e9ede5; border-radius: 5px; gap: 1px; }
-.rm-view-switch .rm-button { min-height: 29px; padding: 3px 9px; background: transparent; border: 0; color: var(--rm-muted); font-size: 12px; }
-.rm-view-switch .rm-icon { width: 14px; height: 14px; }
-.rm-view-switch .rm-button[aria-pressed=true] { background: #fff; box-shadow: 0 1px 3px #263a291b; color: #214f40; }
 .rm-drawing { position: relative; min-width: 0; grid-column: 2; grid-row: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--rm-board); }
 .rm-stage-head { display: flex; align-items: center; justify-content: space-between; flex: none; min-height: 82px; padding: 22px clamp(18px, 3vw, 48px) 0; }
 .rm-stage-title { font: 500 clamp(25px, 2.6vw, 36px)/1.08 "Iowan Old Style", "Palatino Linotype", Georgia, serif; letter-spacing: -.045em; color: #304438; }
@@ -112,7 +108,7 @@
 .rm-status { gap: 12px; white-space: nowrap; margin-left: auto; }
 .rm-connected::before { content: ''; background: #578362; }
 .rm-version { border-left: 1px solid #cbd4c8; padding-left: 12px; font-variant-numeric: tabular-nums; }
-.rm-notice { position: absolute; z-index: 6; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-width: 200px; width: max-content; max-width: min(530px, calc(100% - 24px)); padding: 8px 8px 8px 14px; background: #fff; color: var(--rm-ink); border: 1px solid #b4c3b4; border-radius: 6px; box-shadow: 0 4px 16px #233b2715; }
+.rm-notice { position: absolute; z-index: 6; bottom: 98px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-width: 200px; width: max-content; max-width: min(530px, calc(100% - 24px)); padding: 8px 8px 8px 14px; background: #fff; color: var(--rm-ink); border: 1px solid #b4c3b4; border-radius: 6px; box-shadow: 0 4px 16px #233b2715; }
 .rm-notice.rm-error { border-color: #c7a58c; background: #fff9ef; }
 .rm-notice .rm-icon-action { flex: none; }
 .rm-grip { position: absolute; z-index: 7; top: 0; bottom: 0; left: calc(var(--rm-panel-width) - 3px); width: 7px; touch-action: none; cursor: col-resize; }
@@ -205,6 +201,9 @@
 .rm-brand-row {position:relative}
 .rm-workspace-choice {display:flex;align-items:center;gap:6px;width:100%;padding:8px;text-align:left;border:0;background:transparent;color:var(--rm-ink);font-size:13px;text-decoration:none;border-radius:3px;}
 .rm-workspace-choice:hover,.rm-workspace-choice:focus-visible {background:#e8eee8}
+.rm-workspace-current {font-weight:600;color:#214f40;cursor:default}
+.rm-workspace-current::after {content:"open";margin-left:auto;font-weight:400;font-size:11px;color:var(--rm-muted)}
+.rm-workspace-note {color:var(--rm-muted);font-size:12px;cursor:default}
 .rm-workspace-choices:not(:empty) {border-bottom:1px solid var(--rm-faint);margin-bottom:4px}
 
 .rm-scope-head {position:relative;max-width:100%;z-index:3}

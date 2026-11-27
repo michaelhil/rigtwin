@@ -2,7 +2,7 @@
 title: Multi-asset room editor
 tldr: Arrange a room, edit its components and operators, and discover the same instance-qualified controls through HTTP, MCP or the CLI.
 status: living
-updated: 2026-11-26
+updated: 2026-11-27
 tags: [implementation, viewer, server, assets]
 ---
 
@@ -10,7 +10,7 @@ tags: [implementation, viewer, server, assets]
 
 ## TL;DR
 
-Open the Synergon homepage or run `bun run serve` for a local installation. Choose **Open viewer** to return to the last room. The workspace menu at the top of the panel switches rooms, opens the directory or creates an empty workspace. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
+Open the Synergon homepage or run `bun run serve` for a local installation. The homepage tells the story in five slides (photos, model, person, room, assessment). Choose **Open viewer** to return to the last room, or **Open a workspace** to pick one from the list of existing workspaces. The workspace menu at the top of the panel lists every workspace, marks the open one and creates an empty workspace. The **2D / 3D** switch at the left of the view controls in the lower right changes between the floor plan and the 3D view. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
 
 ## Arrange and measure
 

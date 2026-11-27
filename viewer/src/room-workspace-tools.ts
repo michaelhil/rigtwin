@@ -10,6 +10,8 @@ type View = ReturnType<typeof mountRoomView>;
 interface ToolsOptions {
   host: HTMLElement;
   cameraHost: HTMLElement;
+  /** Controls placed first in the view-controls group (the 2D/3D toggle). */
+  leading?: HTMLElement[];
   view: View;
   getScene: () => RoomScene;
   setMode: (m: RoomViewMode) => Promise<void>;
@@ -210,7 +212,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
       },
     });
   });
-  camera.append(viewMenu, eye, reset);
+  camera.append(...(o.leading ?? []), viewMenu, eye, reset);
   for (const b of [viewMenu, trace, cog]) b.setAttribute("aria-expanded", "false");
   async function operator(on: boolean) {
     const epoch = ++eyeEpoch;

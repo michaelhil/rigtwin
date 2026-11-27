@@ -139,17 +139,21 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   const resize = h('div', 'rm-grip');
   const wsLink=h('summary','rm-workspace-link',h('span',null,scene.name),icon('chevron'));
   wsLink.title='Switch workspace';
+  // The menu lists every workspace of this installation (newest first); the open one is marked.
   const recent=h('div','rm-workspace-choices');
-  const browse=link('Browse all workspaces',ROOM_DIRECTORY+'/?list=1','rm-workspace-choice');
-  const menu=h('div','rm-workspace-menu',recent,browse,
+  const menu=h('div','rm-workspace-menu',recent,
     action('New workspace',()=>void createRoom(),'plus','rm-workspace-choice'));
   const switcher=h('details','rm-workspace-switcher',wsLink,menu);
   switcher.addEventListener('toggle',async()=>{
     if (!switcher.open) return;
+    recent.replaceChildren(h('span','rm-workspace-choice rm-workspace-note','Loading workspaces…'));
     try {
-      const {workspaces}=await request<{workspaces:Workspace[]}>(ROOM_API+'/workspaces?limit=8');
-      recent.replaceChildren(...workspaces.filter(w=>w.id!==scene.id).map(w=>link(w.name,roomURL(w.id),'rm-workspace-choice')));
-    } catch { recent.replaceChildren(); }
+      const {workspaces,total}=await request<{workspaces:Workspace[];total:number}>(ROOM_API+'/workspaces?limit=100');
+      recent.replaceChildren(...workspaces.map(w=>{
+        if (w.id!==scene.id) return link(w.name,roomURL(w.id),'rm-workspace-choice');
+        const here=h('span','rm-workspace-choice rm-workspace-current',w.name);here.setAttribute('aria-current','page');return here;
+      }),...(total>workspaces.length?[h('span','rm-workspace-choice rm-workspace-note',(total-workspaces.length)+' older workspaces not shown')]:[]));
+    } catch { recent.replaceChildren(h('span','rm-workspace-choice rm-workspace-note','Workspaces could not be loaded.')); }
   });
   document.addEventListener('pointerdown',e=>{if(switcher.open && !switcher.contains(e.target as Node)) switcher.open=false;});
   switcher.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();switcher.open=false;wsLink.focus();}});
@@ -168,11 +172,18 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   const layoutTab = action('Layout', () => changeTab('layout'), 'layers'), measureTab = action('Measure', () => changeTab('measure'), 'measure');
   const assessTab = action('Assessment', () => changeTab('assessment'));
   tabs.append(layoutTab, measureTab, assessTab);
-  const plan = action('Plan', () => setMode('plan'), 'plan'), three = action('3D', () => setMode('3d'), 'cube');
+  // One toggle in the view controls switches the drawing between the 2D plan and the 3D view.
+  const modeButton = (label: string, target: typeof mode, name: string) => {
+    const b = h('button', 'rm-mode-option', label); b.type = 'button'; b.title = name; b.setAttribute('aria-label', name);
+    b.onclick = () => { if (mode !== target) void setMode(target); }; return b;
+  };
+  const plan2d = modeButton('2D', 'plan', '2D plan'), view3d = modeButton('3D', '3d', '3D view');
+  const modeToggle = h('div', 'rm-mode-toggle', plan2d, view3d);
+  modeToggle.setAttribute('role', 'group'); modeToggle.setAttribute('aria-label', 'View');
   const fit = iconAction('Fit room to view', () => view.fit(), 'fit');
   const undo = iconAction('Undo latest change', () => void write('undo', {}), 'undo');
   const toolbar=h('div','rm-workspace-toolbar');
-  const nav=h('div','rm-panel-foot',h('div','rm-view-switch',plan,three),fit,undo,!PUBLIC_ROOM && link('Project','/projects?scene='+encodeURIComponent(scene.id),'rm-link rm-project-link'));
+  const nav=h('div','rm-panel-foot',fit,undo,!PUBLIC_ROOM && link('Project','/projects?scene='+encodeURIComponent(scene.id),'rm-link rm-project-link'));
   pane.append(railTop,tabs,scroll,h('footer','rm-panel-tools',nav,toolbar));
   const shell = h('div', 'rm-shell', pane, resize, drawing, open); document.body.replaceChildren(shell);
   wirePanel(shell, pane, resize, open, hide);
@@ -210,7 +221,8 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     scope.update(scene,focused,mode);
     const fitLabel=focused?'Fit asset to view':'Fit room to view';
     fit.title=fitLabel;fit.setAttribute('aria-label',fitLabel);
-    plan.setAttribute('aria-pressed', String(mode === 'plan')); three.setAttribute('aria-pressed', String(mode === '3d'));
+    modeToggle.dataset.mode = mode;
+    plan2d.setAttribute('aria-pressed', String(mode === 'plan')); view3d.setAttribute('aria-pressed', String(mode === '3d'));
     viewHelp.textContent = mode === 'plan' ? 'Drag to place or pan · Scroll to zoom' : 'Drag to orbit · Scroll to zoom';
   }
   async function setMode(next: typeof mode) {
@@ -693,6 +705,6 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     }).catch(error => { if (token === measurementToken) output.querySelector('output')!.textContent = errorText(error); });
     return panel;
   }
-  const workspaceTools=mountRoomWorkspaceTools({host:toolbar,cameraHost:drawing,view,getScene:()=>scene,setMode,select:choose,command,write,notify:tell,apiRoot:api});
+  const workspaceTools=mountRoomWorkspaceTools({host:toolbar,cameraHost:drawing,leading:[modeToggle],view,getScene:()=>scene,setMode,select:choose,command,write,notify:tell,apiRoot:api});
   view.setScene(scene,releases); void setMode('plan').then(()=>workspaceTools.restoreLink()); renderPanel(); void updateUndo();
 }

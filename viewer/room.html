@@ -8,10 +8,39 @@
   <link rel="icon" href="data:,">
   <title>Synergon · Room layout</title>
   <style>
-    .room-home{margin:0;background:#f3f4f0;color:#243338;font:16px/1.5 system-ui,sans-serif;min-height:100svh;display:grid;place-items:center}
-    .room-home main{width:min(88%,780px);padding-block:3rem}.room-home h1{font:600 clamp(3rem,8vw,6rem)/1 system-ui,sans-serif;letter-spacing:-.07em;margin:0 0 1.5rem}
-    .room-home p{max-width:42ch;font-size:1.2rem}.room-home nav{display:flex;align-items:center;gap:1.3rem;margin-top:2rem}.room-home a{color:#22534e}.room-home nav a:first-child{background:#23534d;color:white;padding:.7rem 1.1rem;border-radius:.4rem;text-decoration:none}
+    .room-home{margin:0;background:#f3f4f0;color:#243338;font:16px/1.5 system-ui,sans-serif;min-height:100svh}
+    .room-home main{width:min(92%,1180px);margin:0 auto;padding:3rem 0 4rem;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:3rem;align-items:center}
+    .room-home h1{font:600 clamp(3rem,7vw,5.5rem)/1 system-ui,sans-serif;letter-spacing:-.07em;margin:0 0 1.3rem}
+    .room-home p{max-width:40ch;font-size:1.15rem;margin:0}
+    .room-home nav{display:flex;flex-wrap:wrap;align-items:center;gap:1rem 1.3rem;margin-top:2rem}.room-home a{color:#22534e}
+    .room-home nav>a:first-child{background:#23534d;color:#fff;padding:.7rem 1.1rem;border-radius:.4rem;text-decoration:none}
+    .home-ws{position:relative}.home-ws summary{cursor:pointer;color:#22534e;text-decoration:underline;list-style:none}
+    .home-ws summary::-webkit-details-marker{display:none}.home-ws summary::after{content:" \25BE"}
+    .home-ws-menu{position:absolute;z-index:5;top:calc(100% + 6px);left:0;min-width:260px;max-height:60vh;overflow:auto;padding:6px;background:#fbfcf8;border:1px solid #cdd5ca;border-radius:8px;box-shadow:0 8px 24px #243a2f26}
+    .home-ws-head{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#68756b;margin:8px 8px 4px}
+    .home-ws-item{display:block;padding:7px 8px;border-radius:5px;text-decoration:none;color:#243338}.home-ws-item:hover,.home-ws-item:focus-visible{background:#e8eee8}
+    .home-ws-note{font-size:.9rem;color:#68756b;padding:6px 8px}
+    .home-story{position:relative;border:1px solid #d3dacf;border-radius:14px;background:#fff;box-shadow:0 10px 30px #243a2f1c;overflow:hidden}
+    .home-viewport{display:grid}.home-slide{grid-area:1/1;margin:0;opacity:0;visibility:hidden;transition:opacity .35s ease,visibility 0s linear .35s}
+    .home-slide.on{opacity:1;visibility:visible;transition:opacity .35s ease}.home-slide:not(.on) figcaption{visibility:hidden}
+    .home-slide img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;background:#e9ede5}
+    .home-slide figcaption{display:grid;gap:.2rem;padding:1rem 1.2rem .4rem}.home-slide strong{font-size:1.15rem}
+    .home-slide figcaption span:last-child{color:#4d5b52}
+    .home-step{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2f6a5f;font-weight:600}
+    .home-controls{display:flex;align-items:center;gap:6px;padding:.4rem .8rem .9rem}
+    .home-control{width:36px;height:36px;border:1px solid transparent;border-radius:8px;background:transparent;color:#3c4b42;font-size:1.2rem;cursor:pointer}
+    .home-control:hover{background:#eef2ec}.home-toggle{font-size:.8rem}
+    .home-dots{display:flex;gap:4px;flex:1;min-width:0}
+    .home-dot{position:relative;flex:1;min-width:0;height:36px;border:0;background:transparent;cursor:pointer;padding:6px 2px 0;font:12px system-ui,sans-serif;color:#68756b}
+    .home-dot span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .home-dot::before,.home-dot::after{content:"";position:absolute;left:2px;right:2px;top:0;height:3px;border-radius:2px;background:#dbe2d8}
+    .home-dot::after{background:#23534d;transform:scaleX(0);transform-origin:left}
+    .home-dot[aria-current=true]{color:#214f40;font-weight:600}.home-dot[aria-current=true]::after{transform:scaleX(1)}
+    .rotating .home-dot[aria-current=true]::after{animation:home-progress 6s linear forwards}
+    @keyframes home-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+    .home-control:focus-visible,.home-dot:focus-visible,.home-ws summary:focus-visible{outline:2px solid #2f6a5f;outline-offset:2px}
+    @media(max-width:900px){.room-home main{grid-template-columns:1fr;gap:2rem;padding-top:2rem}.home-dot{padding:0}.home-dot span{display:none}.home-dot::before,.home-dot::after{top:16px;height:4px}}
   </style>
 </head>
-<body class="room-home"><main><h1>Synergon</h1><p>Design and evaluate work environments. Arrange stations and displays in a room, seat an operator and measure the layout.</p><nav><a href="/workspaces">Open viewer</a><a href="/projects">Projects</a><a href="/llms.txt">Agent guide</a></nav></main><script type="module" src="/room-entry.js"></script></body>
+<body class="room-home"><main><header><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a href="/workspaces">Open viewer</a><span id="home-workspaces"></span><a href="/projects">Projects</a><a href="/llms.txt">Agent guide</a></nav></header><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
 </html>

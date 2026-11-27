@@ -15,4 +15,5 @@ if (project || location.pathname.startsWith("/workspaces")) {
     await startRoomApp();
   }
 }
+if (location.pathname === "/") await import("./home.ts");
 export {};
