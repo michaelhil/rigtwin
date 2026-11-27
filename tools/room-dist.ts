@@ -1,6 +1,7 @@
 // Build the public room release from the built-in asset editions and public screening guide.
 // The local room service, its data directory and project stores are never opened by this build.
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { loadRoomLibrary } from "../server/room-library.ts";
@@ -24,7 +25,11 @@ export async function buildRoomRelease(out: string, stationHtml: string, station
   writeFileSync(join(out, "home.js"), new Uint8Array(await home.outputs[0].arrayBuffer()));
   mkdirSync(join(out, "home"), { recursive: true });
   for (const file of readdirSync(join(view, "home"))) if (file.endsWith(".jpg")) copyFileSync(join(view, "home", file), join(out, "home", file));
-  const roomHtml = publicRoomHtml(readFileSync(join(view, "room.html"), "utf8")).replace('src="/room-entry.js"', 'src="/release-entry.js"');
+  // A tag from the bytes of every page script and stylesheet: a new release gets new addresses, so browsers
+  // that cached the previous scripts (they are not marked no-cache) load the new ones.
+  const tagged = ["release-entry.js", "room-entry.js", "home.js", "room.css", "room-view.css", "app.js"].filter(f => existsSync(join(out, f)));
+  const tag = createHash("sha256").update(tagged.map(f => readFileSync(join(out, f))).reduce((a, b) => Buffer.concat([a, b]), Buffer.alloc(0))).digest("hex").slice(0, 12);
+  const roomHtml = publicRoomHtml(readFileSync(join(view, "room.html"), "utf8")).replace('src="/room-entry.js"', 'src="/release-entry.js?v=' + tag + '"');
   writeFileSync(join(out, "index.html"), roomHtml);
   writeFileSync(join(out, "llms.txt"), publicRoomGuide(readFileSync(join(view, "room-guide.txt"), "utf8")));
   writeFileSync(join(out, "station.html"), stationHtml.replaceAll('href="/llms.txt"', 'href="/station-guide.txt"'));
