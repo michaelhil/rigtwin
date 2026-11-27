@@ -6,7 +6,7 @@ const versions = ["2025-11-25", "2025-06-18", "2025-03-26"];
 const headers = { "cache-control": "no-store" };
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
-/** Stateless Streamable HTTP. The endpoint URL identifies the workspace. */
+/** Stateless Streamable HTTP. The endpoint URL identifies the scene. */
 export async function roomMcp(message: unknown, run: (wire: RoomWire) => Reply | Promise<Reply>): Promise<Response> {
   const m = record(message) ? message : {};
   function error(code: number, message: string, status = 200) {

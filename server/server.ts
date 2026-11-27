@@ -59,6 +59,7 @@
 // `idleTimeout: LIMITS.idleTimeoutS`. Bun's default of 10 s ends a quiet live stream before its first
 // heartbeat (15 s); measured on Bun 1.4.0.
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, statfsSync, writeSync } from "node:fs";
+import { visitorKey, blockKey, RateWindow, LOCAL_HOSTS } from "./http-guards.ts";
 import { basename, dirname, join, resolve } from "node:path";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { LIMITS, type Limits } from "./limits.ts";
@@ -99,43 +100,6 @@ export function identify(req: Request, secret: Buffer): Actor {
 /** The one place that decides who may run what. Step 1 (open sandbox): everything. */
 export function authorize(_actor: Actor, _command: string): CommandError | null { return null; }
 
-const isLoopback = (a: string) => a === "::1" || a.startsWith("127.") || a.startsWith("::ffff:127.");
-/** The visitor a request counts against: the address Caddy passes on (only when the request comes from
- *  loopback), IPv6 by its /64 block. */
-export function visitorKey(ip: string, forwardedFor: string | null): string {
-  let a = ip;
-  if (forwardedFor && isLoopback(ip)) a = forwardedFor.split(",").map((s) => s.trim()).filter(Boolean).at(-1) ?? ip;
-  a = a.replace(/^\[|\](:\d+)?$/g, "").replace(/%.*$/, "").replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i, "$1");
-  if (!a.includes(":")) return a;
-  const [head, tail] = a.toLowerCase().split("::"), h = head ? head.split(":") : [], t = tail ? tail.split(":") : [];
-  const full = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
-  return full.slice(0, 4).map((x) => parseInt(x || "0", 16).toString(16)).join(":") + "::/64";
-}
-
-/** The network block a visitor belongs to: an IPv6 /48 or an IPv4 /24 (security review S7). */
-export function blockKey(visitor: string): string {
-  if (visitor.endsWith("::/64")) return visitor.split(":").slice(0, 3).join(":") + "::/48";
-  const p = visitor.split(".");
-  return p.length === 4 ? `${p[0]}.${p[1]}.${p[2]}.0/24` : visitor;
-}
-
-/** At most `n` hits per `ms` for each key (a sliding window). */
-export class RateWindow {
-  private hits = new Map<string, number[]>();
-  constructor(private n: number, private ms: number) {}
-  hit(key: string, now = Date.now()) {
-    let a = this.hits.get(key);
-    if (!a) this.hits.set(key, (a = []));
-    while (a.length && a[0] <= now - this.ms) a.shift();
-    if (a.length >= this.n) return false;
-    a.push(now);
-    return true;
-  }
-  /** hits in the window, without adding one */
-  count(key: string, now = Date.now()) { return (this.hits.get(key) ?? []).filter((t) => t > now - this.ms).length; }
-  sweep(now = Date.now()) { for (const [k, a] of this.hits) if (!a.length || a[a.length - 1] <= now - this.ms) this.hits.delete(k); }
-}
-
 /** The body as bytes, or why not: larger than `max`, slower than `ms`, or the client went away. */
 async function readBytes(req: Request, max: number, ms: number): Promise<Uint8Array | "too_large" | "too_slow" | "aborted"> {
   const declared = Number(req.headers.get("content-length"));
@@ -166,7 +130,6 @@ async function readBody(req: Request, max: number, ms: number): Promise<string |
 
 const sse = (name: string, data: unknown, id?: number) => `${id !== undefined ? `id: ${id}\n` : ""}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
-export const LOCAL_HOSTS = /^(127\.0\.0\.1|localhost|\[::1\]|[a-z0-9.-]+\.localhost)(:\d+)?$/i;
 
 /** The person's packages in a folder (operator-m, operator-f, clay-m, clay-f, whichever are there), read once per process and
  *  folder while their manifests stay the same (tests start many servers). null when none can be read. */
@@ -739,6 +702,7 @@ export function createApi(opts: ApiOptions) {
   };
 }
 
+export { visitorKey, blockKey, RateWindow, LOCAL_HOSTS } from "./http-guards.ts";
 // ---------------------------------------------------------------------------------------------- run directly
 type AdditionalApi = {
   fetch(req: Request, ip: string, stationStreams: () => StreamPlace[]): Promise<Response | undefined>;

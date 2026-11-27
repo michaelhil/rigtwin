@@ -2,7 +2,7 @@
 // Static server for the viewer, laid out exactly like the deployed dist/, with the synergon server
 // (server/server.ts, local mode) mounted on the same port under /api/: the shared scenes (workspaces) are kept in
 // <data>/workspaces/<id>/doc.json, by default ../synergon-projects/ next to the repository. `bun run rig` talks
-// to it. render and ui-accept start it with an empty temporary data folder (data: "temp"), so no pose of
+// to it. render starts it with an empty temporary data folder (data: "temp"), so no pose of
 // the Playground reaches a published picture. The served files:
 //   /            the bundled page (index.html, viewer.css, app.js and its chunks), rebuilt in memory whenever
 //                a file under viewer/ or shared/ has changed; no manual bundling step. The same page answers

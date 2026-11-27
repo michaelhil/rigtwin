@@ -1,6 +1,6 @@
 ---
 title: Summary
-tldr: Synergon supports work environment layout, design and evaluation. Its first example is a photo-estimated remote operator’s station with an adjustable rig, a seated person, shared workspaces and agent control.
+tldr: Synergon supports work environment layout, design and evaluation, organised as Workspace → Project → Scene. Its first example is a photo-estimated remote operator’s station with an adjustable rig and a seated person, placed in scenes that people and AI agents edit together.
 status: living
 updated: 2026-11-26
 tags: [overview, summary, results]
@@ -8,7 +8,7 @@ tags: [overview, summary, results]
 
 # Summary
 
-The room editor supports independent placements, component and operator editing, and modular ergonomic screening. Local projects organize scenes, versioned assets and assessment records for transfer. [Room layout](../50-implementation/room-layout.md) · [Portable projects](../50-implementation/portable-projects.md) · [Screening criteria](../85-standards/workstation-screening.md)
+Synergon is organised as **Workspace → Project → Scene** ([workspaces, projects and scenes](../50-implementation/workspaces-projects-scenes.md)). A scene holds a room, its placed assets and optionally a seated operator; the scene editor supports independent placements, component and operator editing, and modular ergonomic screening. Projects carry scenes, named versions and assessment records, and on a local installation transfer between installations. [Scene editor](../50-implementation/room-layout.md) · [Portable projects](../50-implementation/portable-projects.md) · [Screening criteria](../85-standards/workstation-screening.md)
 
 
 Synergon is a tool for the layout, design and evaluation of work environments. Its first example is a seated remote operator’s station. The [platform plan](../30-plan/platform-plan.md) covers ergonomic assessment and layouts containing multiple assets.
@@ -122,9 +122,9 @@ As of 2026-11-25 (the model's rows unchanged since 2026-11-23, about 22:00 local
 | Skill | version 0.1.0; not yet tested on a second object |
 | Tape measurements, seat make and model, which adjustments exist | requested, not received |
 | GitHub repository | <https://github.com/michaelhil/synergon> (renamed on 2026-11-25; GitHub keeps a redirect from the earlier address); **public**, as GitHub reports it since its creation on 2026-11-23, although the request and [D-33](../20-decisions/decision-log.md#d-33) said private: the owner decides |
-| Public site | <https://synergon.mightwork.ai/>, live since 2026-11-25 (first release `998bd07` from this Mac, then `2f12241` from GitHub); the Playground is <https://synergon.mightwork.ai/workspaces/a850cb15-6246-4ce4-b8e5-7055d4650ab2>; the earlier address answers 404; every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
+| Public site | <https://synergon.mightwork.ai/>, live since 2026-11-25 (first release `998bd07` from this Mac, then `2f12241` from GitHub); since 2026-11-27 it serves only Workspace → Project → Scene (the single-station workspaces such as the Playground are retired); the earlier address answers 404; every push to `main` deploys automatically ([D-37](../20-decisions/decision-log.md#d-37)) |
 | Public wiki | <https://synergon.mightwork.ai/wiki/>, live since 2026-11-25 |
 | Platform step 1 (agent control) | live on the public site since 2026-11-24 (commit `ff90f30`): the server's health check reports the deployed revision, the checks on the host after the release passed, and the two-browser check on the live site passed and left the public scene as it found it. Open: the result of the ten-minute idle test, the owner's own trial, the re-forecast of the later steps ([next steps](../90-next/next-steps.md#0-platform-step-1-the-rollout-and-after)) |
-| Remote commands | Seven tools including scoped discovery, with an agent address per workspace (`/api/workspaces/<id>/mcp`); `.mcp.json` in the repository, pictures from the browser; the benchmark against the step-1 interface waits for a signed-in Claude Code command line ([agent interface](../80-reference/agent-interface.md)) |
-| Workspaces | live since 2026-11-25: a landing page, a random link per workspace, rename, delete and a Manage page; the earlier shared scene is the workspace "Playground", with its pose and its 51 changes ([D-57](../20-decisions/decision-log.md#d-57), [workspaces on the server](../50-implementation/workspaces.md)) |
+| Remote commands | Scene commands over HTTP, MCP (`/api/scenes/<id>/mcp`) and `bun run rig`, plus creation of workspaces, projects and scenes; the agent guide `/llms.txt` explains the hierarchy ([remote commands](../80-reference/remote-commands.md), [how-to](../80-reference/agent-how-to.md)) |
+| Workspaces | since 2026-11-27 the top of Workspace → Project → Scene, the same on both installations; the earlier single-station workspaces (2026-11-25 to 2026-11-27, [D-57](../20-decisions/decision-log.md#d-57)) are retired ([workspaces, projects and scenes](../50-implementation/workspaces-projects-scenes.md)) |
 | Manikin | live since 2026-11-25 (the dressed operator by default, the clay figure one click away), after the designer's pass and the owner's local preview ([D-44](../20-decisions/decision-log.md#d-44), [the person in the viewer](../50-implementation/person-in-viewer.md)) |

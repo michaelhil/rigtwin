@@ -1,21 +1,27 @@
-// Local room workspaces use their own file. An edit and its bounded undo history commit in one transaction.
+// The scene API of both installations. Workspace -> Project -> Scene, all in one folder-based store
+// (server/project-store.ts). A scene is the live layout: room, placed assets, optional seated operator, undo history.
+// An edit and its bounded undo history are written together in one synchronous step.
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { roomCommands } from "../shared/room-commands.ts";
 import { ROOM_SCHEMA, type RoomCatalog, type RoomScene } from "../shared/room.ts";
 import { LIMITS } from "./limits.ts";
-import { NameError, cleanName, isWorkspaceId } from "./workspaces.ts";
-import { RoomError, newRoom, parseRoom, roomCommand, type RoomWire } from "./room-model.ts";
+import { NameError, isId } from "./names.ts";
+import { RoomError, parseRoom, roomCommand, type RoomRecord, type RoomWire } from "./room-model.ts";
 import { PROJECT_BODY_BYTES } from "../shared/project.ts";
 import { projectCommands } from "../shared/project-commands.ts";
 import { ProjectError } from "./project-package.ts";
-import { ProjectStore } from "./project-store.ts";
+import { DEFAULT_WORKSPACE, ProjectStore } from "./project-store.ts";
 import { projectCommand, projectMcp } from "./project-api.ts";
 import { roomMcp } from "./room-mcp.ts";
 
-interface RoomApiOptions { dataDir: string; catalog: RoomCatalog; publicMode?: boolean; standardsPath?: string }
+interface RoomApiOptions {
+  dataDir: string; catalog: RoomCatalog; publicMode?: boolean; standardsPath?: string;
+  /** Called before a project command that creates something; false refuses it (the public rate limit). */
+  allowCreate?: (req: Request) => boolean;
+}
+const CREATES = new Set(["workspace.create", "project.create", "project.scene", "workspace_create", "project_create", "project_scene"]);
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
 const fail = (status: number, code: string, message: string, hint = "") => json({ ok: false, error: { code, message, hint } }, status);
 const method = () => fail(405, "method", "Method unavailable for this route.");
@@ -47,32 +53,8 @@ async function body(req: Request, limit: number = LIMITS.bodyBytes): Promise<unk
   } finally { clearTimeout(timer); reader.releaseLock(); }
 }
 
-export function createRoomApi({ dataDir, catalog, publicMode = false, standardsPath }: RoomApiOptions) {
+export function createRoomApi({ dataDir, catalog, publicMode = false, standardsPath, allowCreate }: RoomApiOptions) {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-  const db = new Database(join(dataDir, "rooms-v1.sqlite"), { create: true });
-  db.run("PRAGMA journal_mode=WAL");
-  db.run("PRAGMA busy_timeout=5000");
-  db.run("CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL, doc TEXT NOT NULL)");
-  const get = db.query<{ doc: string }, [string]>("SELECT doc FROM rooms WHERE id=?");
-  const list = db.query<{ id: string; name: string; version: number }, []>("SELECT id,name,version FROM rooms ORDER BY rowid DESC");
-  const insert = db.query("INSERT INTO rooms (id,name,version,doc) VALUES (?,?,?,?)");
-  const update = db.query("UPDATE rooms SET version=?, doc=? WHERE id=?");
-  db.run("CREATE TABLE IF NOT EXISTS room_assessments (workspace TEXT PRIMARY KEY REFERENCES rooms(id), attachment TEXT NOT NULL)");
-  const create = db.transaction((name: string, template: "empty" | "demo") => {
-    if (publicMode && (db.query("SELECT count(*) AS n FROM rooms").get() as {n:number}).n >= LIMITS.workspacesMax)
-      throw new RequestError(503,"full","The public workspace store is full.");
-    const id = randomUUID(), record = newRoom(id, name, catalog, template);
-    insert.run(id, name, 0, JSON.stringify(record));
-    return { id, name, version: 0 };
-  });
-  db.transaction(() => {
-    if (!db.query("SELECT 1 FROM rooms LIMIT 1").get()) {
-      const demo = catalog.releases.some(r => r.kind === "station") && catalog.releases.some(r => r.variant === "wall") &&
-        catalog.releases.some(r => r.variant === "freestanding" && r.version === "1");
-      create("Control room", demo ? "demo" : "empty");
-    }
-  }).immediate();
-
   const listeners = new Map<string, Set<(event: Uint8Array) => void>>();
   const encoder = new TextEncoder();
   const event = (scene: RoomScene) => encoder.encode("id: " + scene.version + "\nevent: snapshot\ndata: " + JSON.stringify(scene) + "\n\n");
@@ -112,68 +94,53 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
     const e = event(s);
     for (const send of group) send(e);
   }
-  const projects = publicMode ? undefined : new ProjectStore(dataDir, catalog, publish);
-  const missing = () => new RequestError(404, "no_workspace", "Unknown room workspace.");
+  const projects = new ProjectStore(dataDir, catalog, publish, publicMode);
+  migrateRooms(dataDir, projects, publicMode);
+  if (projects.empty()) {
+    // A new installation opens with one furnished example when the library has the parts for it.
+    const demo = catalog.releases.some(r => r.kind === "station") && catalog.releases.some(r => r.variant === "wall") &&
+      catalog.releases.some(r => r.variant === "freestanding" && r.version === "1");
+    void projects.run("project.create", { workspace: DEFAULT_WORKSPACE, name: "Examples", sceneName: "Control room", template: demo ? "demo" : "empty" });
+  }
+  const missing = () => new RequestError(404, "no_scene", "Unknown scene.");
   const read = (id: string) => {
-    const local = projects?.owns(id) ? projects.read(id) : undefined;
-    const row = local ? null : get.get(id);
-    if (!row && !local) throw missing();
-    const record = local ?? parseRoom(row!.doc);
+    if (!projects.owns(id)) throw missing();
+    const record = projects.read(id);
     for (const instance of record.scene.instances) {
       if (!catalog.releases.some(r => r.id === instance.release))
         throw new RoomError("missing_release", instance.id + " needs the exact release " + instance.release, "Restore this release to the installation before opening the room.");
     }
     return record;
   };
-  const change = db.transaction((id: string, wire: RoomWire) => {
+  const change = (id: string, wire: RoomWire) => {
     const current = read(id);
     try {
       const { record, result, recorded } = roomCommand(current, catalog, wire, listeners.get(id)?.size ?? 0);
-      if (recorded !== null) {
-        if (projects?.owns(id)) projects.edit(id, () => record);
-        else {
-          const doc = JSON.stringify(record);
-          if (publicMode && (record.scene.instances.length > 300 || Buffer.byteLength(doc) > 1024 * 1024))
-            throw new RoomError("workspace_limit", "The public workspace reached its storage limit.", "Remove objects or continue in a local project.");
-          update.run(record.scene.version, doc, id);
-        }
-      }
+      if (recorded !== null) projects.edit(id, () => record);
       return { scene: record.scene, receipt: { ok: true, version: record.scene.version, recorded, result } };
     } catch (e) {
       if (!(e instanceof RoomError)) throw e;
       return { scene: null, receipt: { ok: false, version: current.scene.version, error: e.wire() } };
     }
-  });
+  };
   const run = async (id: string, wire: RoomWire) => {
     if (wire.id.startsWith("assessment.")) {
       const { assessmentCommand } = await import("./assessment.ts");
-      // Reading, evaluating and saving form a single synchronous transaction after optional module loading.
-      return db.transaction(() => {
-        const record = read(id), owned = projects?.owns(id);
-        const storage = {
-          read: () => {
-            if (owned) return projects!.readAssessment(id);
-            const row = db.query<{attachment:string},[string]>("SELECT attachment FROM room_assessments WHERE workspace=?").get(id);
-            return row ? JSON.parse(row.attachment) : undefined;
-          },
-          write: (attachment: unknown) => {
-            if (owned) { projects!.writeAssessment(id, attachment); return; }
-            const value = JSON.stringify(attachment);
-            if (Buffer.byteLength(value) > 8 * 1024 * 1024) throw new RoomError("assessment_limit","Workspace assessment storage is full.","Export saved results and start another workspace.");
-            db.query("INSERT INTO room_assessments(workspace,attachment) VALUES(?,?) ON CONFLICT(workspace) DO UPDATE SET attachment=excluded.attachment").run(id,value);
-          },
-        };
+      // Reading, evaluating and saving form one synchronous step after optional module loading.
+      {
+        const record = read(id);
+        const storage = { read: () => projects.readAssessment(id), write: (attachment: unknown) => projects.writeAssessment(id, attachment) };
         try {
-          const scene = owned ? { ...record.scene, id:projects!.portableId(id) } : record.scene;
+          const scene = { ...record.scene, id: projects.portableId(id) };
           const result = assessmentCommand(scene,catalog,wire,storage,{ standardsPath,publicMode });
           return {ok:true,version:scene.version,recorded:null,result};
         } catch (e) {
           if (!(e instanceof RoomError)) throw e;
           return { ok:false,version:record.scene.version,error:e.wire() };
         }
-      }).immediate();
+      }
     }
-    const { scene, receipt } = change.immediate(id, wire);
+    const { scene, receipt } = change(id, wire);
     if (scene && receipt.recorded != null) publish(scene);
     return receipt;
   };
@@ -182,48 +149,45 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
     const url = new URL(req.url), path = url.pathname.replace(/\/$/, "");
     try {
       if (req.headers.has("origin") && req.headers.get("origin") !== url.origin) return fail(403, "origin", "Cross-origin room request refused.");
-      if (path === "/api/health") return json({ ok: true, format: ROOM_SCHEMA, mode: publicMode ? "public" : "local" });
+      if (path === "/api/health") return json({ ok: true, format: ROOM_SCHEMA, mode: publicMode ? "public" : "local", public: publicMode });
       if (path === "/api/catalog") return req.method === "GET" ? json({ releases: catalog.releases }) : method();
       if (path === "/api/commands") return req.method === "GET" ? json({ commands: roomCommands }) : method();
       if (req.method === "POST" && !path.endsWith("/mcp") && req.headers.get("x-synergon") !== "1") return fail(403, "header", "Supply the X-Synergon: 1 header.");
-      if (path.startsWith("/api/projects") && projects) {
-        if (path === "/api/projects") return req.method === "GET" ? json({projects:projects.list()}) : method();
-        if (path === "/api/projects/commands") return req.method === "GET" ? json({commands:projectCommands}) : method();
-        if (path === "/api/projects/command" || path === "/api/projects/mcp") {
-          if (req.method !== "POST") return method();
-          const data = await body(req,PROJECT_BODY_BYTES);
-          return path.endsWith("/mcp") ? await projectMcp(projects,data) : json(await projectCommand(projects,data));
-        }
+      if (path === "/api/projects") return req.method === "GET" ? json({projects:projects.listed()}) : method();
+      if (path === "/api/projects/commands") return req.method === "GET" ? json({commands:projectCommands}) : method();
+      if (path === "/api/projects/command" || path === "/api/projects/mcp") {
+        if (req.method !== "POST") return method();
+        const data = await body(req, publicMode ? LIMITS.bodyBytes : PROJECT_BODY_BYTES);
+        const named = obj(data) ? String(data.id ?? (obj(data.params) ? data.params.name : "")) : "";
+        if (CREATES.has(named) && allowCreate && !allowCreate(req)) return fail(429, "rate_limited", "The creation limit has been reached. Try again later.");
+        return path.endsWith("/mcp") ? await projectMcp(projects,data) : json(await projectCommand(projects,data));
       }
       if (path === "/api/workspaces") {
-        if (req.method === "GET") {
-          const q = (url.searchParams.get("search") ?? "").toLowerCase();
-          const all = [...list.all(), ...projects?.listWorkspaces() ?? []].filter(r => r.name.toLowerCase().includes(q));
-          const cursor = Math.max(0, Math.floor(Number(url.searchParams.get("cursor")) || 0));
-          const limit = Math.max(1, Math.min(LIMITS.workspaceListMax, Number(url.searchParams.get("limit")) || LIMITS.workspaceListDefault));
-          return json({ workspaces: all.slice(cursor, cursor + limit), total: all.length, next: cursor + limit < all.length ? String(cursor + limit) : null });
-        }
-        if (req.method !== "POST") return method();
-        const data = await body(req);
-        if (!obj(data) || Object.keys(data).some(k => k !== "name" && k !== "template") ||
-          (data.template !== undefined && data.template !== "demo" && data.template !== "empty"))
-          return fail(400, "invalid_args", "Create a room with name and optional template (empty or demo).");
-        return json(create.immediate(cleanName(data.name, "Untitled room"), data.template ?? "empty"), 201);
+        if (req.method !== "GET") return method();
+        // The public sandbox lists only the shared workspace; others open by their own links.
+        const all = projects.workspaces();
+        return json({ workspaces: publicMode ? all.filter(w => w.id === DEFAULT_WORKSPACE) : all });
       }
-      const m = /^\/api\/workspaces\/([^/]+)(?:\/(state|command|live|mcp|discover|meta))?$/.exec(path);
-      if (!m || !isWorkspaceId(m[1])) throw missing();
+      const w = /^\/api\/workspaces\/([^/]+)$/.exec(path);
+      if (w) {
+        if (req.method !== "GET") return method();
+        if (!isId(w[1])) throw missing();
+        return json(projects.tree(w[1]));
+      }
+      const m = /^\/api\/scenes\/([^/]+)(?:\/(state|command|live|mcp|discover|meta))?$/.exec(path);
+      if (!m || !isId(m[1])) throw missing();
       const [, id, action = "state"] = m;
       if (action === "state" || action === "live" || action === "discover" || action === "meta") {
         if (req.method !== "GET") return method();
         const record = read(id);
         const liveConnections = listeners.get(id)?.size ?? 0;
-        if (action === "meta") return json({id, name:record.scene.name, version:record.scene.version, liveConnections});
+        if (action === "meta") return json({id, name:record.scene.name, version:record.scene.version, liveConnections, ...projects.location(id)});
         if (action === "discover") return json(roomCommand(record, catalog, { id: "discover", args: Object.fromEntries(url.searchParams) },liveConnections).result);
         return action === "live" ? live(req, record.scene) : json(record.scene);
       }
       if (req.method !== "POST") return method();
       const data = await body(req);
-      if (action === "mcp") { if (!projects?.owns(id) && !get.get(id)) throw missing(); return await roomMcp(data, wire => run(id, wire)); }
+      if (action === "mcp") { if (!projects.owns(id)) throw missing(); return await roomMcp(data, wire => run(id, wire)); }
       if (!obj(data) || typeof data.id !== "string" || Object.keys(data).some(k => !["id", "args", "expectedVersion"].includes(k)))
         return fail(400, "invalid_command", "Send {id,args,expectedVersion?}.");
       return json(await run(id, { id: data.id, args: data.args, expectedVersion: data.expectedVersion }));
@@ -236,5 +200,38 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
       return fail(500, "internal", "The room request could not be completed.");
     }
   }
-  return { fetch, close() { for (const stop of ends) stop(); db.close(); } };
+  return { fetch, close() { for (const stop of ends) stop(); } };
+}
+
+/** Move scenes from the retired single-file room store into projects, once. Every scene keeps its ID (so its old link
+ *  works), revision, undo history and saved assessments. The oldest room named "Control room" becomes the example in
+ *  the default workspace (project "Examples"). The others go to project "Earlier layouts": in the default workspace
+ *  locally, in an unlisted workspace "Earlier rooms" on the public site. A room with saved assessments gets a project
+ *  of its own, because assessments are kept per project. "Untitled room" becomes "Untitled scene". The old file is
+ *  renamed, never deleted. */
+function migrateRooms(dataDir: string, projects: ProjectStore, publicMode: boolean) {
+  const file = join(dataDir, "rooms-v1.sqlite");
+  if (!existsSync(file)) return;
+  const db = new Database(file, { readonly: true });
+  try {
+    const hasAssessments = !!db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_assessments'").get();
+    const rows = db.query<{ id: string; doc: string }, []>("SELECT id, doc FROM rooms ORDER BY rowid").all().filter(r => !projects.owns(r.id));
+    const rooms = rows.map(row => {
+      const record: RoomRecord = parseRoom(row.doc);
+      if (record.scene.name === "Untitled room") record.scene = { ...record.scene, name: "Untitled scene" };
+      const saved = hasAssessments ? db.query<{ attachment: string }, [string]>("SELECT attachment FROM room_assessments WHERE workspace=?").get(row.id) : null;
+      return { record, assessment: saved ? JSON.parse(saved.attachment) : undefined };
+    });
+    const example = rooms.find(r => r.record.scene.name === "Control room" && r.assessment === undefined);
+    if (example) projects.adopt("Examples", [example.record], DEFAULT_WORKSPACE);
+    const rest = rooms.filter(r => r !== example);
+    if (!rest.length) return;
+    const workspace = publicMode ? projects.addWorkspace("Earlier rooms") : DEFAULT_WORKSPACE;
+    for (const r of rest.filter(r => r.assessment !== undefined)) projects.adopt(r.record.scene.name, [r.record], workspace, r.assessment);
+    const plain = rest.filter(r => r.assessment === undefined).map(r => r.record);
+    if (plain.length) projects.adopt("Earlier layouts", plain, workspace);
+  } finally {
+    db.close();
+    for (const suffix of ["", "-wal", "-shm"]) if (existsSync(file + suffix)) renameSync(file + suffix, file + ".migrated" + suffix);
+  }
 }

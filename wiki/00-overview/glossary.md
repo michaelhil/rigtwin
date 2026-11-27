@@ -2,7 +2,7 @@
 title: Glossary
 tldr: Plain-language meanings of every technical term this wiki uses - from asset contract, blockout and camera solve to tier, triangulate and build folder - in one alphabetical table, each with the page where it matters most.
 status: living
-updated: 2026-11-26
+updated: 2026-11-27
 tags: [overview, glossary, reference]
 ---
 
@@ -29,8 +29,8 @@ tags: [overview, glossary, reference]
 | Anthropometric | About human body sizes (stature, sitting eye height, reach). Used here for the small, median and large eye points | [standards](../80-reference/standards.md) |
 | Assembly | A node of the tree that groups parts and has no shape of its own (for example the seat assembly) | [decomposition](../40-method/decomposition.md) |
 | Asset | The deliverable 3D object: a model file (GLB) plus its description file, built from parameter files and code | [pipeline](../40-method/pipeline.md) |
-| Asset definition and instance | A definition describes reusable rig geometry and capabilities. An instance is one placement in a workspace. Each current workspace has one implicit rig instance. | [Remote command design](../50-implementation/remote-command-design.md#data-model-and-evolution) |
 | Asset contract | The written specification every asset must meet: units, axes, names, parameter records, joints, reference frames, file conventions, budgets | [asset contract](../40-method/asset-contract.md) |
+| Asset definition and instance | A definition describes reusable rig geometry and capabilities. An instance is one placement in a workspace. Each current workspace has one implicit rig instance. | [Remote command design](../50-implementation/remote-command-design.md#data-model-and-evolution) |
 | Assumed | A size class: a value chosen without a measurement (by eye from a photo, or taken from another rig of the same product). Carries a range where possible | [filling gaps](../40-method/filling-gaps.md) |
 | Assumed adjustment, assumed range | A movement no photo shows (for example the seat's slide). It is in the model and usable in the viewer, tagged "assumed range" with a notice; the description file records it as assumed | [viewer](../50-implementation/viewer.md) |
 | Ball joint | A joint that turns about three axes, given as roll, pitch and yaw (the touchscreen arm) | [decomposition](../40-method/decomposition.md) |
@@ -41,6 +41,7 @@ tags: [overview, glossary, reference]
 | Blockout | A first version of the whole object in simple solids of the right size and place, with every component, both sides and all joints, before any shaping | [modelling rounds](../50-implementation/modeling-rounds.md#the-first-complete-blockout) |
 | Budget | Fixed upper limits for the model: 150,000 triangles, 4 MB, 80 draw primitives; build well under 5 s | [asset contract](../40-method/asset-contract.md) |
 | Build | Running the generator: parameter files and code become the model file and the description file (about 0.2 s) | [tool reference](../80-reference/tools.md) |
+| Build folder | A separate output folder per agent (`work/<name>/`) so parallel builds and renders do not overwrite each other; set with `--build` or `SYNERGON_BUILD_DIR` | [tool reference](../80-reference/tools.md#build-folders-and-environment-variables) |
 | Build hash | The SHA-256 fingerprint of the model file. Ties a render, a review and a deployed copy to exactly one build | |
 | Bundle adjustment | A calculation that adjusts camera positions, camera settings and 3D points together until the points' projections match the picked pixels as closely as possible | [measuring from photos](../40-method/measuring-from-photos.md) |
 | By eye | A basis: a proportion judged in a photo, with no measurement behind it and no range claimed | [measurement results](../50-implementation/measurement-results.md#counts-per-class) |
@@ -49,8 +50,8 @@ tags: [overview, glossary, reference]
 | Check | A script that verifies one property of every build (coverage, geometry, determinism, budgets and so on); 20 run in `bun run check` | [checks](../40-method/checks.md) |
 | Chord | The straight width of a curved monitor from edge to edge, as makers list it; shorter than the length along the curve (the arc) | [measurement results](../50-implementation/measurement-results.md#corrections-the-modellers-made-later) |
 | Class (size class, provenance class) | How a value is known, in order of trust: measured, vendor, photo, assumed, invented. A component takes the least certain class among the non-cosmetic values it uses | [filling gaps](../40-method/filling-gaps.md) |
-| Closure, scale closure | After fixing the scale on one large feature, measuring other parts of known size in the same frame to see whether they come out right. Here: within 0–2 % | [measurement results](../50-implementation/measurement-results.md#scale-and-closure) |
 | Closure check | In planning: a final fresh agent checking that the adversarial reviewers' findings were actually dealt with | [patterns](../60-lessons/patterns.md#p-04) |
+| Closure, scale closure | After fixing the scale on one large feature, measuring other parts of known size in the same frame to see whether they come out right. Here: within 0–2 % | [measurement results](../50-implementation/measurement-results.md#scale-and-closure) |
 | Component | A named part of the model with its own node (`C_…`), for example the seat pan or the left joystick lever | [decomposition](../40-method/decomposition.md) |
 | Contact sheet | One image with six standard views of the model and a footer with its counts and any omitted parts | [tool reference](../80-reference/tools.md#render-sets) |
 | Coordinator | The main session: writes briefs, makes rulings, assembles and checks results, writes notes. It modelled nothing | [agent process](../40-method/agent-process.md) |
@@ -111,9 +112,10 @@ tags: [overview, glossary, reference]
 | Playbook | Part of the Skill holding knowledge for one type of object (here seated stations), as opposed to universal rules | [skills and agents](../80-reference/skills-and-agents.md) |
 | Pod | One of the two armrest units beside the seat: a white shell, a black top plate with a joystick and buttons, and an armrest pad. They move with the seat | [decomposition](../40-method/decomposition.md) |
 | Pose, pose function | A set of joint values; the one shared piece of code (`shared/pose.ts`) that turns a joint value into a movement, used by both generator and viewer | [viewer](../50-implementation/viewer.md#from-javascript-to-typescript-with-one-pose-function) |
+| Progressive discovery | Look up only the capabilities and targets needed for a task. | [Remote commands](../80-reference/remote-commands.md#discover-only-what-the-task-needs) |
+| Project | The middle level: a named set of scenes with its record, named versions and saved assessments, which can be exported to another installation | [portable projects](../50-implementation/portable-projects.md) |
 | Provenance | Where a value comes from; recorded as class, basis and evidence | [filling gaps](../40-method/filling-gaps.md) |
 | Range (±) | The interval meant to contain the true value about nine times in ten; a judgment, not a computed confidence interval. No range may exclude a derivation not shown wrong | [measuring from photos](../40-method/measuring-from-photos.md#the-three-honest-classes-and-what--means) |
-| Progressive discovery | Look up only the capabilities and targets needed for a task. | [Remote commands](../80-reference/remote-commands.md#discover-only-what-the-task-needs) |
 | Render | An image of the model made by the viewer page | [tool reference](../80-reference/tools.md#render-sets) |
 | Residual | How far, in pixels, a point predicted by the solved camera lands from where it was picked in the photo. Small residuals on features *not* used in the solve are evidence | [measurement results](../50-implementation/measurement-results.md#cameras-solved-and-their-residuals) |
 | Reviewer (independent) | An agent that did not build the model, makes its own renders and measurements, does not read the builders' notes, and gives a verdict per component | [patterns](../60-lessons/patterns.md#p-15) |
@@ -121,6 +123,7 @@ tags: [overview, glossary, reference]
 | Round | One pass of shaping by the modellers followed by a review. Three rounds were run | [modelling rounds](../50-implementation/modeling-rounds.md) |
 | Runtime control | A movement made during use, such as joystick deflection or pedal travel; would be driven by a signal in a simulator | [asset contract](../40-method/asset-contract.md#10-three-kinds-of-variable) |
 | Scale | The factor that turns photo measurements into metres; here set by the deck width of 1.50 m | [measurement results](../50-implementation/measurement-results.md#scale-and-closure) |
+| Scene | The lowest level and the thing you edit: a room, its placed assets and optionally a seated operator, with its own revision and undo. Opens at /workspaces/{scene} | [workspaces, projects and scenes](../50-implementation/workspaces-projects-scenes.md) |
 | Seat index point | A standardised reference point of a seat defined by ISO 5353 with a test device. Not available here; the model carries estimated seat references instead | [standards](../80-reference/standards.md) |
 | Seat reference (estimated) | Two reference frames where the seat surface meets the backrest: one fixed on the pedestal, one that moves with every seat adjustment | [standards](../80-reference/standards.md#what-the-asset-carries-instead) |
 | Shape points | Named 3D points measured from the photos to support outlines and profiles (215 of them) | [measuring from photos](../40-method/measuring-from-photos.md) |
@@ -139,4 +142,4 @@ tags: [overview, glossary, reference]
 | Two-view | A basis: a point triangulated from two photos whose sight lines meet within a few pixels; the most reliable photo measurement | [filling gaps](../40-method/filling-gaps.md) |
 | Vendor | A class: a value from a maker's published data (monitor size, pedal pitch) | [filling gaps](../40-method/filling-gaps.md) |
 | Viewer | The web page that shows the model to people and makes every render for the agents | [viewer](../50-implementation/viewer.md) |
-| Build folder | A separate output folder per agent (`work/<name>/`) so parallel builds and renders do not overwrite each other; set with `--build` or `SYNERGON_BUILD_DIR` | [tool reference](../80-reference/tools.md#build-folders-and-environment-variables) |
+| Workspace | The top level of the hierarchy Workspace → Project → Scene: a named collection of projects. (Before 2026-11-27 the word meant one shared scene; that product is retired.) | [workspaces, projects and scenes](../50-implementation/workspaces-projects-scenes.md) |

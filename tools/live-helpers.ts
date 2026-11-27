@@ -1,5 +1,5 @@
 // Helpers for driving viewer pages of the shared scene in headless Chromium with real pointer input, used by
-// tools/live-accept.ts (a local server) and tools/live-site-check.ts (a deployed site).
+// tools/live-accept.ts (a local server).
 import { join } from "node:path";
 import { ROOT } from "./timeline.ts";
 import type { Page } from "./render.ts";

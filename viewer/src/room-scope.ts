@@ -4,15 +4,15 @@ import { h } from "./dom.ts";
 import { action, icon } from "./room-controls.ts";
 
 export function roomScope(open:(instance:string | null)=>Promise<void>) {
-  const name=h("span",null,"Full room");
+  const name=h("span",null,"Whole scene");
   const heading=h("h1","rm-stage-title",name,icon("chevron"));
   const summary=h("summary","rm-scope-trigger",heading);
   summary.setAttribute("aria-label","View scope");
-  summary.title="View the full room or focus on one asset";
+  summary.title="View the whole scene or show one asset";
   const choices=h("div","rm-scope-menu");
   const selector=h("details","rm-scope-selector",summary,choices);
-  const back=action("Full room",()=>activate(null),"room","rm-scope-back");
-  back.setAttribute("aria-label","Return to full room");
+  const back=action("Whole scene",()=>activate(null),"room","rm-scope-back");
+  back.setAttribute("aria-label","Return to whole scene");
   const divider=icon("next"), path=h("nav","rm-scope-path",back,divider,selector);
   path.setAttribute("aria-label","View navigation");
   const subtitle=h("p","rm-stage-size");
@@ -25,7 +25,7 @@ export function roomScope(open:(instance:string | null)=>Promise<void>) {
   }
   function option(label:string,id:string|null) {
     const button=action(label,()=>activate(id),id===null?"room":"cube","rm-scope-option");
-    button.setAttribute("aria-label",id===null?"View full room":"Focus on "+label);
+    button.setAttribute("aria-label",id===null?"View whole scene":"Focus on "+label);
     button.setAttribute("aria-pressed",String(id===focus));
     if(id===focus) button.append(icon("check"));
     return button;
@@ -33,9 +33,9 @@ export function roomScope(open:(instance:string | null)=>Promise<void>) {
   function list() {
     if (!menuDirty) return;
     menuDirty=false;
-    choices.replaceChildren(option("Full room",null));
+    choices.replaceChildren(option("Whole scene",null));
     if (objects.length) {
-      choices.append(h("div","rm-scope-caption","Focus on an asset"),...objects.map(item=>option(item.label,item.id)));
+      choices.append(h("div","rm-scope-caption","Show one asset"),...objects.map(item=>option(item.label,item.id)));
     }
   }
   selector.addEventListener("toggle",()=>{if(selector.open) list();});
@@ -55,7 +55,7 @@ export function roomScope(open:(instance:string | null)=>Promise<void>) {
     focus=id;objects=scene.instances;
     const item=objects.find(i=>i.id===id);
     back.hidden=!item;divider.style.display=item?"":"none";
-    name.textContent=item?.label ?? "Full room";
+    name.textContent=item?.label ?? "Whole scene";
     const view=mode==="3d"?"3D view":"Floor plan";
     subtitle.textContent=item?view:view+" · "+scene.room.width+" × "+scene.room.depth+" m";
     if(changed) menuDirty=true;

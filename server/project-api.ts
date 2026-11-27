@@ -28,9 +28,9 @@ export async function projectMcp(store: ProjectStore, message: unknown): Promise
     return json({
       protocolVersion: supported.includes(wanted) ? wanted : supported[0],
       capabilities: { tools: {} },
-      serverInfo: { name: "synergon-projects", version: "1" },
+      serverInfo: { name: "synergon-workspaces", version: "1" },
       instructions:
-        "List and open a local project. Its scene entries contain workspace IDs for the room MCP endpoint. Project folders and criteria stay on this installation.",
+        "Synergon is organised as Workspace -> Project -> Scene. Create and rename workspaces, projects and scenes here; open a scene at /workspaces/{scene} and edit it through /api/scenes/{scene}/mcp. Names repeat, so act by ID and ask when a name matches more than one item.",
     });
   }
   if (m.method === "ping") return json({});

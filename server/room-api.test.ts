@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
@@ -31,10 +31,10 @@ function setup() {
   const post = (url: string, data: unknown) => api.fetch(new Request("http://localhost/api/" + url, { method: "POST",
     headers: { "Content-Type": "application/json", "X-Synergon": "1" }, body: JSON.stringify(data) }));
   const create = async () => {
-    const response = await post("workspaces", { name: "New layout" });
-    expect(response.status).toBe(201);
-    const { id } = await response.json() as { id: string };
-    const path = "workspaces/" + id;
+    const response = await post("projects/command", { id: "workspace.create", args: { name: "New layout" } });
+    expect(response.status).toBe(200);
+    const { scene: id } = await response.json() as { scene: string };
+    const path = "scenes/" + id;
     return {
       id, path, state: async () => (await get(path + "/state")).json() as Promise<RoomScene>,
       command: async (id: string, args = {}, expectedVersion?: number) =>
@@ -54,9 +54,13 @@ afterEach(() => {
 describe("room workspace", () => {
   test("first-run example, empty creation, exact pins, ordinary names and instance-qualified discovery", async () => {
     const app = setup(), ws = await app.create();
-    const index = await (await app.get("workspaces?search=control")).json() as any;
-    expect(index.total).toBe(1);
-    const demo = await (await app.get("workspaces/" + index.workspaces[0].id + "/state")).json() as RoomScene;
+    const index = await (await app.get("workspaces")).json() as any;
+    expect(index.workspaces.map((w: any) => w.name)).toEqual(["My workspace", "New layout"]);
+    const tree = await (await app.get("workspaces/" + index.workspaces[0].id)).json() as any;
+    expect(tree.projects.map((p: any) => [p.name, p.scenes.map((s: any) => s.name)])).toEqual([["Examples", ["Control room"]]]);
+    const demo = await (await app.get("scenes/" + tree.projects[0].scenes[0].id + "/state")).json() as RoomScene;
+    const meta = await (await app.get(ws.path + "/meta")).json() as any;
+    expect([meta.workspace.name, meta.project.name, meta.name]).toEqual(["New layout", "My project", "Scene 1"]);
     expect(demo.instances.map(i => i.release)).toEqual([station.id, station.id, display.id, wall.id]);
     expect(demo.person?.host).toBe("station-a");
     expect((await ws.state()).instances).toEqual([]);
@@ -213,16 +217,41 @@ describe("room workspace", () => {
     } finally { missing.close(); }
   });
 
-  test("unsupported local scene format fails without rewriting the row", async () => {
-    const app = setup(), ws = await app.create(), db = new Database(join(app.dir, "rooms-v1.sqlite"));
-    try {
-      const raw = '{"scene":{"schema":"other/1"}}';
-      db.query("UPDATE rooms SET doc=? WHERE id=?").run(raw, ws.id);
-      const response = await app.get(ws.path + "/state");
-      expect(response.status).toBe(422);
-      expect(((await response.json()) as any).error.code).toBe("unsupported_format");
-      expect((db.query("SELECT doc FROM rooms WHERE id=?").get(ws.id) as any).doc).toBe(raw);
-    } finally { db.close(); }
+  test("unsupported scene format fails without rewriting the file", async () => {
+    const app = setup(), ws = await app.create();
+    const file = (readdirSync(join(app.dir, "projects"), { recursive: true }) as string[]).find(f => f.endsWith(ws.id + ".json"))!;
+    const path = join(app.dir, "projects", file), stored = JSON.parse(readFileSync(path, "utf8"));
+    const raw = JSON.stringify({ ...stored, record: { scene: { schema: "other/1" } } });
+    writeFileSync(path, raw);
+    const response = await app.get(ws.path + "/state");
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as any).error.code).toBe("unsupported_format");
+    expect(readFileSync(path, "utf8")).toBe(raw);
+  });
+
+  test("rooms from the retired single-file store become projects once, keeping ID, revision and undo", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "synergon-room-migrate-")); dirs.push(dir);
+    const first = setup(), ws = await first.create();
+    await ws.command("instances.add", { instance: "display", release: display.id });
+    const record = JSON.parse(readFileSync(join(first.dir, "projects", (readdirSync(join(first.dir, "projects"), { recursive: true }) as string[])
+      .find(f => f.endsWith(ws.id + ".json"))!), "utf8")).record;
+    const db = new Database(join(dir, "rooms-v1.sqlite"), { create: true });
+    db.run("CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL, doc TEXT NOT NULL)");
+    const other = "11111111-1111-4111-8111-111111111111";
+    db.query("INSERT INTO rooms VALUES (?,?,?,?)").run(ws.id, "Control room", 1, JSON.stringify({ ...record, scene: { ...record.scene, name: "Control room" } }));
+    db.query("INSERT INTO rooms VALUES (?,?,?,?)").run(other, "Untitled room", 0, JSON.stringify({ scene: { ...record.scene, id: other, name: "Untitled room", version: 0, instances: [] }, history: [] }));
+    db.close();
+    const api = createRoomApi({ dataDir: dir, catalog, publicMode: true }); servers.push(api);
+    const get = async (url: string) => (await api.fetch(new Request("http://localhost/api/" + url))).json() as Promise<any>;
+    const state = await get("scenes/" + ws.id + "/state");
+    expect([state.name, state.version, state.instances.length]).toEqual(["Control room", 1, 1]);
+    const where = await get("scenes/" + ws.id + "/meta");
+    expect([where.workspace.name, where.project.name]).toEqual(["Shared", "Examples"]);
+    // Every other room keeps its link but sits in a workspace the public list does not show.
+    const earlier = await get("scenes/" + other + "/meta");
+    expect([earlier.name, earlier.workspace.name, earlier.project.name]).toEqual(["Untitled scene", "Earlier rooms", "Earlier layouts"]);
+    expect((await get("workspaces")).workspaces.map((w: any) => w.name)).toEqual(["Shared"]);
+    expect(readdirSync(dir).filter(f => f.startsWith("rooms-v1"))).toEqual(["rooms-v1.sqlite.migrated"]);
   });
 
   test("door approach and clipped opening handle jamb overlap, rotation, successive blockers and undo", async () => {

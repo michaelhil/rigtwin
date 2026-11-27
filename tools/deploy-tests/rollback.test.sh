@@ -32,23 +32,28 @@ release() {
   REV=$2 SRV=$3 bun -e '
     const v = JSON.parse(await Bun.file(process.argv[1]).text());
     v.revision = process.env.REV; v.short = "test " + process.env.REV;
-    if (process.env.SRV !== "1") delete v.server; else v.server = { format: "synergon-scene/1" };
+    if (process.env.SRV !== "1") delete v.server;
     await Bun.write(process.argv[2], JSON.stringify(v, null, 1) + "\n");' "$DIST/version.json" "$d/version.json"
 }
 switch_to() { ln -sfn "$T/srv/synergon/releases/$1" "$T/srv/synergon/current"; }
 live() { basename "$(readlink "$T/srv/synergon/current")"; }
 
-# the site: like Caddy, with the API answered by a stand-in that reports the live release's revision, lists one
-# workspace and returns its metadata row (the checks a deploy or rollback makes of a server, tools/deploy.ts)
+# the site: like Caddy, with the API answered by a stand-in that reports the live release's revision and answers the
+# read-only scene API (the shared workspace, its tree, a scene's meta, the catalog, the commands: the checks a deploy
+# or rollback makes of a server, tools/deploy.ts)
 cat >"$T/site.ts" <<EOF
 import { serveFolder } from "$REPO/tools/dist.ts";
 import { readFileSync } from "node:fs";
-const WS = { id: "00000000-0000-4000-8000-000000000001", name: "Playground", created: "2026-11-25T00:00:00.000Z", changed: "2026-11-25T00:00:00.000Z" };
+const WS = { id: "00000000-0000-4000-8000-000000000001", name: "Shared" }, PROJECT = "6f1c2a3e-5b7d-4c9a-8e0f-1a2b3c4d5e6f", SCENE = "7a2d3b4f-6c8e-4dab-9f10-2b3c4d5e6f70";
+const live = () => JSON.parse(readFileSync("$T/srv/synergon/current/version.json", "utf8"));
 const api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (req) => {
   const path = new URL(req.url).pathname;
-  if (path === "/api/health") return Response.json({ ok: true, revision: JSON.parse(readFileSync("$T/srv/synergon/current/version.json", "utf8")).revision, format: "synergon-scene/1", mode: "deployed" });
-  if (path === "/api/workspaces") return Response.json({ workspaces: [WS], next: null, total: 1 });
-  if (path === "/api/workspaces/" + WS.id) return Response.json(WS);
+  if (path === "/api/health") return Response.json({ ok: true, revision: live().revision, format: live().server?.format, mode: "deployed" });
+  if (path === "/api/workspaces") return Response.json({ workspaces: [WS] });
+  if (path === "/api/workspaces/" + WS.id) return Response.json({ ...WS, projects: [{ id: PROJECT, name: "Control room", scenes: [{ id: SCENE, name: "Control room" }] }] });
+  if (path === "/api/scenes/" + SCENE + "/meta") return Response.json({ id: SCENE, name: "Control room", version: 0, liveConnections: 0, workspace: WS, project: { id: PROJECT, name: "Control room" } });
+  if (path === "/api/catalog") return Response.json({ releases: (live().server?.releases ?? []).map((r) => ({ ...r, modelUrl: "/api/library/" + r.digest + "/model.glb" })) });
+  if (path === "/api/commands") return Response.json({ commands: [{ id: "instances.move" }, { id: "assessment.run" }] });
   return new Response("no", { status: 404 });
 } });
 const s = serveFolder("$T/srv/synergon/current", "/", { api: "http://127.0.0.1:" + api.port });
@@ -81,6 +86,7 @@ expect "exit 0" '[[ $(cat "$T/both.rc") == 0 ]]'
 expect "current is the older server release" '[[ $(live) == 20261122T000000Z-ccccccc ]]'
 expect "health check ran and passed" 'grep -q "ok   server: api/health reports revision ccccccc within 20 s" "$T/both.log"'
 expect "server.js not served" 'grep -q "ok   server code not served" "$T/both.log"'
+expect "scene API checks ran and passed" 'grep -q "ok   server: api/workspaces lists the shared workspace" "$T/both.log" && grep -q "ok   server: installed public room editions" "$T/both.log"'
 expect "summary names the server" 'grep -q "server: running revision ccccccc" "$T/both.log"'
 
 echo "3. neither with a server: rolled back as before, no health check"

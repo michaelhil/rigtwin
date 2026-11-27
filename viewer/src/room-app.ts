@@ -1,17 +1,17 @@
-import { ROOM_API, ROOM_DIRECTORY, PUBLIC_ROOM, roomURL, apiRoot } from './room-paths.ts';
-// Local room editor. The same command endpoint and event stream serve the UI and remote clients.
+// The scene editor. The same command endpoint and event stream serve the UI and remote clients.
+import { API, apiRoot, publicSite, sceneURL } from './room-paths.ts';
 import { h, link } from './dom.ts';
-import { ask } from './dialog.ts';
-import { action, brand, displayNumber, field, icon, iconAction, section, select, store, stored, wirePanel, type Glyph } from './room-controls.ts';
+import { action, brand, displayNumber, field, icon, iconAction, section, select, wirePanel, type Glyph } from './room-controls.ts';
 import { sliderRow, type SliderSpec, type Drag } from "./room-slider.ts";
 import { componentCard, componentPanel, floatingCard, placeFloatingCard, replaceComponentCard, type BeginPoseGesture } from './room-component-card.ts';
 import {mountRoomWorkspaceTools} from './room-workspace-tools.ts';
 import { roomScope } from './room-scope.ts';
 import { mountRoomView } from './room-view.ts';
+import { readRoomViewLink } from './room-camera-state.ts';
+import { createWorkspace, firstNote, forgetScene, hierarchy, lastScene, rememberScene, rememberWorkspace, type Place } from './hierarchy.ts';
 import type { RoomInstance, RoomJoint, RoomPoint, RoomRef, RoomRelease, RoomScene } from '../../shared/room.ts';
 import {roomOperatorControls} from './room-operator-controls.ts';
 
-type Workspace = Pick<RoomScene, 'id' | 'name'>;
 type PanelTab = 'layout' | 'measure' | 'assessment';
 type Args = Record<string, unknown>;
 interface Receipt<T> { ok: boolean; version: number; recorded: number | null; result: T }
@@ -35,73 +35,49 @@ async function request<T>(url: string, body?: Args): Promise<T> {
   return json as T;
 }
 function errorText(error: unknown) { return error instanceof Error ? error.message : String(error); }
-async function directories() {
-  const workspaces: Workspace[] = [], seen = new Set<string>();
-  let cursor = '';
-  for (;;) {
-    const params = new URLSearchParams({ limit: '50' }); if (cursor) params.set('cursor', cursor);
-    const page = await request<{ workspaces: Workspace[]; next?: string | null }>(ROOM_API + '/workspaces?' + params);
-    workspaces.push(...page.workspaces);
-    if (!page.next || seen.has(page.next)) break;
-    cursor = page.next; seen.add(cursor);
-  }
-  return workspaces;
+/** A page of its own: the start screen, a missing scene or an error. */
+function page(title: string, ...content: (Node | string | false)[]) {
+  document.title = title.replace(/\.$/, '') + ' · Synergon';
+  document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main rm-start', h('h1', null, title), ...content)));
 }
-async function createRoom() {
-  await ask({
-    title: 'New workspace', field: { label: 'Workspace name', max: 80, placeholder: 'e.g. Control room' }, confirm: 'Create empty room',
-    run: async name => {
-      try { const ws = await request<Workspace>(ROOM_API + '/workspaces', { name: name.trim() || 'Untitled room', template: 'empty' }); location.assign(roomURL(ws.id)); return null; }
-      catch (error) { return errorText(error); }
-    },
-  });
-}
-function directory(workspaces: Workspace[], message = '') {
-  document.title = 'Room workspaces · Synergon';
-  const list = h('div', 'rm-directory-list');
-  for (const ws of workspaces) {
-    const row = link('', roomURL(ws.id), 'rm-directory-row'); row.append(icon('room'), h('span', null, ws.name), icon('next')); list.append(row);
-  }
-  if (!workspaces.length) list.append(h('p', 'rm-help', 'Create a workspace to start with an empty room.'));
-  document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main',
-    h('h1', null, 'Room workspaces'), message && h('p', 'rm-error', message),
-    action('New workspace', () => void createRoom(), 'plus', 'rm-primary'), !PUBLIC_ROOM && link('Projects', '/projects', 'rm-link'), list)));
+/** One button that makes a furnished first scene on its click (never on a GET) and opens it. */
+function startButton(label: string, ...beside: Node[]) {
+  const error = h('p', 'rm-error'); error.hidden = true; error.setAttribute('role', 'alert');
+  const start = action(label, () => {
+    start.disabled = true; error.hidden = true; start.querySelector('span')!.textContent = 'Opening your scene…';
+    void createWorkspace('demo').then(made => location.replace(sceneURL(made.scene))).catch(e => {
+      error.textContent = errorText(e); error.hidden = false; start.disabled = false; start.querySelector('span')!.textContent = label;
+    });
+  }, undefined, 'rm-primary rm-start-button');
+  return h('div', 'rm-start-actions', h('div', 'rm-start-row', start, ...beside), error);
 }
 export async function startRoomApp() {
   document.body.className = 'room-app'; document.documentElement.classList.remove('page');
-  const path = location.pathname.replace(/\/+$/, '');
-  let id = '';
-  document.body.replaceChildren(h('main', 'rm-loading', brand(), h('p', null, 'Opening workspace…')));
+  // Earlier public links: /workspaces/room/{id} is now /workspaces/{id}; the retired directory went to the homepage.
+  let path = location.pathname.replace(/\/+$/, '');
+  const earlier = /^\/workspaces\/room(\/.*)?$/.exec(path);
+  if (earlier) { path = '/workspaces' + (earlier[1] ?? ''); history.replaceState(history.state, '', path + location.search + location.hash); }
+  if (path === '/workspaces' && new URLSearchParams(location.search).has('list')) { location.replace('/'); return; }
+  const id = path.startsWith('/workspaces/') ? decodeURIComponent(path.slice('/workspaces/'.length)) : '';
+  document.body.replaceChildren(h('main', 'rm-loading', brand(), h('p', null, 'Opening your scene…')));
   try {
-    id = path.startsWith(ROOM_DIRECTORY + '/') ? decodeURIComponent(path.slice(ROOM_DIRECTORY.length + 1)) : '';
     if (!id) {
-      const all = await directories();
-      if (!new URLSearchParams(location.search).has('list')) {
-        let recent: string[] = [];
-        try { recent = JSON.parse(stored('synergon.roomRecents') || '[]'); } catch { /* corrupt browser storage */ }
-        for (const key of Array.isArray(recent) ? recent : []) {
-          if (!all.some(ws => ws.id === key)) continue;
-          try {
-            await request<RoomScene>(apiRoot(key) + '/state');
-            location.replace(roomURL(key)); return;
-          } catch (error) {
-            // A listed workspace can require a release that is no longer installed.
-            if (!(error instanceof RoomApiError) || ![404, 422].includes(error.status)) throw error;
-          }
-        }
-      }
-      directory(all); return;
+      const last = await lastScene();
+      if (last) { location.replace(sceneURL(last)); return; }
+      page('Your first scene', h('p', 'rm-help rm-start-text', 'A furnished control room opens in 3D. Move, adjust and measure anything in it; every change can be undone.'), startButton('Open the control room'));
+      return;
     }
-    const [scene, { releases }] = await Promise.all([request<RoomScene>(apiRoot(id) + '/state'), request<{ releases: RoomRelease[] }>(ROOM_API + '/catalog')]);
-    let recents: unknown = []; try { recents = JSON.parse(stored('synergon.roomRecents') || '[]'); } catch { /* ignore */ }
-    store('synergon.roomRecents', JSON.stringify([scene.id, ...(Array.isArray(recents) ? recents.filter(x => typeof x === 'string' && x !== scene.id) : [])].slice(0, 12)));
-    editor(scene, releases);
+    const [scene, { releases }, where, isPublic] = await Promise.all([request<RoomScene>(apiRoot(id) + '/state'), request<{ releases: RoomRelease[] }>(API + '/catalog'),
+      request<Omit<Place, 'scene'>>(apiRoot(id) + '/meta'), publicSite()]);
+    rememberScene(scene.id); rememberWorkspace(where.workspace.id);
+    editor(scene, releases, { workspace: where.workspace, project: where.project, scene: { id: scene.id, name: scene.name } }, isPublic);
   } catch (error) {
-    if (id && error instanceof RoomApiError && error.status === 404) {
-      try { directory(await directories(), 'This room could not be found. Choose another workspace or create a room.'); return; } catch { /* show retry */ }
+    if (id && error instanceof RoomApiError && [400, 404].includes(error.status)) {
+      forgetScene(id);
+      page('This scene no longer exists.', h('p', 'rm-help rm-start-text', 'Its link may be mistyped, or the scene was removed.'), startButton('Start a new scene', link('Homepage', '/', 'rm-link')));
+      return;
     }
-    document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main', h('h1', null, 'Workspace unavailable'),
-      h('p', 'rm-error', errorText(error)), action('Try again', () => location.reload()), link('Browse workspaces', ROOM_DIRECTORY + '/?list=1', 'rm-link'))));
+    page('Scene unavailable', h('p', 'rm-error', errorText(error)), action('Try again', () => location.reload()));
   }
 }
 
@@ -125,7 +101,7 @@ function initialPlacement(scene: RoomScene, asset: RoomRelease, releases: Map<st
   return { x: width / 2, y: depth / 2 };
 }
 
-function editor(first: RoomScene, releases: RoomRelease[]) {
+function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPublic: boolean) {
   let scene = first, selected: string | null = null, member = '', tab: PanelTab = 'layout', library = false;
   let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases[0]?.id ?? '', newLabel = '';
   let undoable = scene.version > 0, undoToken = 0, addId = '';
@@ -133,32 +109,14 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   const expanded = new Set<string>(), chosenJoints = new Map<string, string>();
   const from: RoomRef = { instance: '', member: 'floor' }, to: RoomRef = { instance: '', member: 'floor' };
   const current = () => scene.instances.find(i => i.id === selected);
-  const pane = h('aside', 'rm-panel'); pane.id = 'room-controls'; pane.setAttribute('aria-label', 'Workspace panel');
-  const hide = iconAction('Collapse panel', () => {}, 'collapse'), open = iconAction('Open workspace panel', () => {}, 'expand');
+  const pane = h('aside', 'rm-panel'); pane.id = 'room-controls'; pane.setAttribute('aria-label', 'Scene panel');
+  const hide = iconAction('Collapse panel', () => {}, 'collapse'), open = iconAction('Open scene panel', () => {}, 'expand');
   open.classList.add('rm-reopen'); open.setAttribute('aria-controls', pane.id);
   const resize = h('div', 'rm-grip');
-  const wsLink=h('summary','rm-workspace-link',h('span',null,scene.name),icon('chevron'));
-  wsLink.title='Switch workspace';
-  // The menu lists every workspace of this installation (newest first); the open one is marked.
-  const recent=h('div','rm-workspace-choices');
-  const menu=h('div','rm-workspace-menu',recent,
-    action('New workspace',()=>void createRoom(),'plus','rm-workspace-choice'));
-  const switcher=h('details','rm-workspace-switcher',wsLink,menu);
-  switcher.addEventListener('toggle',async()=>{
-    if (!switcher.open) return;
-    recent.replaceChildren(h('span','rm-workspace-choice rm-workspace-note','Loading workspaces…'));
-    try {
-      const {workspaces,total}=await request<{workspaces:Workspace[];total:number}>(ROOM_API+'/workspaces?limit=100');
-      recent.replaceChildren(...workspaces.map(w=>{
-        if (w.id!==scene.id) return link(w.name,roomURL(w.id),'rm-workspace-choice');
-        const here=h('span','rm-workspace-choice rm-workspace-current',w.name);here.setAttribute('aria-current','page');return here;
-      }),...(total>workspaces.length?[h('span','rm-workspace-choice rm-workspace-note',(total-workspaces.length)+' older workspaces not shown')]:[]));
-    } catch { recent.replaceChildren(h('span','rm-workspace-choice rm-workspace-note','Workspaces could not be loaded.')); }
-  });
-  document.addEventListener('pointerdown',e=>{if(switcher.open && !switcher.contains(e.target as Node)) switcher.open=false;});
-  switcher.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();switcher.open=false;wsLink.focus();}});
+  // Workspace › Project on a muted first line, the scene as the panel's heading.
+  const selector = hierarchy({ place: 'editor', here: where, renamed: s => { if (s.id === scene.id) { scene = { ...scene, name: s.name }; document.title = s.name + ' · Synergon'; } } });
   const home=brand();home.classList.add('rm-home-symbol');
-  const railTop=h('div','rm-brand-row',home,switcher,hide);
+  const railTop=h('div','rm-brand-row',home,selector.node,hide);
   const scroll = h('div', 'rm-scroll'), stage = h('div', 'room-viewport'), live = h('span', 'rm-live', 'Connecting');
   const scope = roomScope(focusAsset);
   const viewHelp = h('span', 'rm-view-help');
@@ -183,7 +141,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
   const fit = iconAction('Fit room to view', () => view.fit(), 'fit');
   const undo = iconAction('Undo latest change', () => void write('undo', {}), 'undo');
   const toolbar=h('div','rm-workspace-toolbar');
-  const nav=h('div','rm-panel-foot',fit,undo,!PUBLIC_ROOM && link('Project','/projects?scene='+encodeURIComponent(scene.id),'rm-link rm-project-link'));
+  const nav=h('div','rm-panel-foot',fit,undo);
   pane.append(railTop,tabs,scroll,h('footer','rm-panel-tools',nav,toolbar));
   const shell = h('div', 'rm-shell', pane, resize, drawing, open); document.body.replaceChildren(shell);
   wirePanel(shell, pane, resize, open, hide);
@@ -435,7 +393,9 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     row.addEventListener("room-edit-end",()=>queueMicrotask(()=>{if(row.isConnected)refresh();}),{once:true});
   }
   function accept(next: RoomScene) {
-    if (next.id !== scene.id || next.version <= scene.version) return;
+    if (next.id !== scene.id || next.version < scene.version) return;
+    // A rename keeps the revision: take the new name only.
+    if (next.version === scene.version) { if (next.name !== scene.name) { scene = { ...scene, name: next.name }; selector.scene(next.name); document.title = next.name + ' · Synergon'; } return; }
     cancelLayoutDrag?.();
     scene = next;
     poseGesture?.accept(next);
@@ -495,7 +455,7 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     undo.disabled = !undoable || !scene.version;
     scope.update(scene,view.focusedAsset(),mode);
     versionText.textContent = 'Revision ' + scene.version; document.title = scene.name + ' · Synergon';
-    wsLink.querySelector('span')!.textContent = scene.name;
+    selector.scene(scene.name);
     view.setMeasurement(null); ++measurementToken;
     if (tab === 'assessment') {
       if (assessment) scroll.replaceChildren(assessment.render());
@@ -706,5 +666,11 @@ function editor(first: RoomScene, releases: RoomRelease[]) {
     return panel;
   }
   const workspaceTools=mountRoomWorkspaceTools({host:toolbar,cameraHost:drawing,leading:[modeToggle],view,getScene:()=>scene,setMode,select:choose,command,write,notify:tell,apiRoot:api});
-  view.setScene(scene,releases); void setMode('plan').then(()=>workspaceTools.restoreLink()); renderPanel(); void updateUndo();
+  // A link without a view opens the scene in 3D.
+  view.setScene(scene,releases); void setMode(readRoomViewLink(location.hash)?.mode ?? '3d').then(()=>workspaceTools.restoreLink()); renderPanel(); void updateUndo();
+  if (isPublic && firstNote()) {
+    const text = 'This is your scene. Changes save automatically. Anyone with the link can open it.';
+    tell(text); notice.classList.add('rm-notice-top');
+    setTimeout(() => { if (notice.textContent === text) notice.hidden = true; notice.classList.remove('rm-notice-top'); }, 12000);
+  }
 }

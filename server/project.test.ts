@@ -49,9 +49,9 @@ function installation(name: string, lib: ReturnType<typeof createRoomLibrary>, p
   };
   return {
     dataDir,
-    run: (id: string, args: object = {}) => req("projects/command", { id: "project." + id, args }),
+    run: (id: string, args: object = {}) => req("projects/command", { id: id.includes(".") ? id : "project." + id, args }),
     room: async (ws: string, id: string, args: object = {}) =>
-      (await req("workspaces/" + ws + "/command", { id, args })).result,
+      (await req("scenes/" + ws + "/command", { id, args })).result,
     fetch: (req: Request) => api.fetch(req),
     get: async (path: string) => (await api.fetch(new Request("http://localhost/api/" + path))).json() as Promise<any>,
     post,
@@ -81,13 +81,13 @@ test("moved and renamed two-scene folder, frozen revisions, comparison, offline 
     a = project.scenes[0];
   const second: ProjectDetail = await src.run("scene", { project: projectId, name: "South" });
   const b = second.scenes.find((s) => s.id !== a.id)!;
-  await src.room(a.workspace, "instances.add", { instance: "left", release: one, x: 0, y: 0 });
-  await src.room(a.workspace, "instances.add", { instance: "right", release: one, x: 3, y: 4 });
-  await src.room(b.workspace, "instances.add", { instance: "wall", release: two, x: 7 });
-  expect((await src.room(a.workspace, "measure.distance", metric)).metres).toBe(5);
+  await src.room(a.id, "instances.add", { instance: "left", release: one, x: 0, y: 0 });
+  await src.room(a.id, "instances.add", { instance: "right", release: one, x: 3, y: 4 });
+  await src.room(b.id, "instances.add", { instance: "wall", release: two, x: 7 });
+  expect((await src.room(a.id, "measure.distance", metric)).metres).toBe(5);
   const saved = await src.run("save", { project: projectId, scene: a.id, name: "Surveyed", expectedVersion: 2 });
   const version = saved.versions[0].id;
-  await src.room(a.workspace, "instances.move", { instance: "right", x: 0 });
+  await src.room(a.id, "instances.move", { instance: "right", x: 0 });
   const later = await src.run("save", { project: projectId, scene: a.id, name: "Adjusted" });
   const other = later.versions.find((v: any) => v.id !== version).id;
   expect((await src.run("compare", { project: projectId, version, other })).changes).toEqual([
@@ -103,43 +103,43 @@ test("moved and renamed two-scene folder, frozen revisions, comparison, offline 
   expect(readFileSync(join(folder, "Control centre", "project.md"), "utf8")).toBe(record);
   const pkg: ProjectPackage = await src.run("export", { project: projectId });
   expect(pkg.dependencies.map((d) => d.mode)).toEqual(["embed", "embed"]);
-  expect(JSON.stringify(pkg)).not.toContain(a.workspace);
+  expect(JSON.stringify(pkg)).not.toContain(a.id);
   expect(JSON.stringify(pkg.project)).not.toMatch(/"history"|"actor"|"workspace"/);
   const transfer = await receiver.run("import", { package: pkg });
   const received = transfer.project as ProjectDetail;
   expect(received.id).toBe(projectId);
   expect(received.markdown).toBe(record);
-  const destA = received.scenes.find((s) => s.id === a.id)!,
-    destB = received.scenes.find((s) => s.id === b.id)!;
-  expect(destA.workspace).not.toBe(a.workspace);
+  const destA = received.scenes.find((s) => s.portable === a.portable)!,
+    destB = received.scenes.find((s) => s.portable === b.portable)!;
+  expect(destA.id).not.toBe(a.id);
   expect(destA.revision).toBe(0);
-  expect((await receiver.room(destA.workspace, "state")).undoable).toEqual([]);
-  const beforeB = await receiver.room(destB.workspace, "state");
+  expect((await receiver.room(destA.id, "state")).undoable).toEqual([]);
+  const beforeB = await receiver.room(destB.id, "state");
   const same = await receiver.run("import", { package: pkg });
   expect(same.status).toBe("unchanged");
   expect((await receiver.run("export", { project: projectId })).project).toEqual(pkg.project);
   await receiver.run("restore", { project: projectId, version, expectedVersion: 0 });
-  expect((await receiver.room(destA.workspace, "measure.distance", metric)).metres).toBe(5);
-  await receiver.room(destA.workspace, "instances.move", { instance: "right", x: 0 });
-  expect((await receiver.room(destA.workspace, "measure.distance", metric)).metres).toBe(4);
-  await receiver.room(destA.workspace, "undo");
-  expect((await receiver.room(destA.workspace, "measure.distance", metric)).metres).toBe(5);
+  expect((await receiver.room(destA.id, "measure.distance", metric)).metres).toBe(5);
+  await receiver.room(destA.id, "instances.move", { instance: "right", x: 0 });
+  expect((await receiver.room(destA.id, "measure.distance", metric)).metres).toBe(4);
+  await receiver.room(destA.id, "undo");
+  expect((await receiver.room(destA.id, "measure.distance", metric)).metres).toBe(5);
   receiver.restart(createRoomLibrary());
-  expect((await receiver.room(destA.workspace, "measure.distance", metric)).metres).toBe(5);
-  expect(await receiver.room(destB.workspace, "state")).toEqual(beforeB);
+  expect((await receiver.room(destA.id, "measure.distance", metric)).metres).toBe(5);
+  expect(await receiver.room(destB.id, "state")).toEqual(beforeB);
   await expect(receiver.run("import", { package: pkg })).rejects.toHaveProperty("code", "project_conflict");
   const copied = await receiver.run("import", { package: pkg, separateCopy: true });
   expect(copied.status).toBe("copied");
   expect((await receiver.run("import", { package: pkg, separateCopy: true })).project.id).toBe(copied.project.id);
   expect(copied.project.id).not.toBe(projectId);
-  expect(copied.project.scenes.find((s: any) => s.id === a.id).workspace).not.toBe(destA.workspace);
-  expect((await receiver.room(destA.workspace, "measure.distance", metric)).metres).toBe(5);
+  expect(copied.project.scenes.find((s: any) => s.portable === a.portable).id).not.toBe(destA.id);
+  expect((await receiver.room(destA.id, "measure.distance", metric)).metres).toBe(5);
 });
 
 test("linked and mixed packages require the exact local pin, including a release used only by a saved version", async () => {
   const app = installation("linked-source", library),
     p = await app.run("create", { name: "Pins" }),
-    ws = p.scenes[0].workspace;
+    ws = p.scenes[0].id;
   await app.room(ws, "instances.add", { instance: "screen", release: one });
   await app.run("save", { project: p.id, scene: p.scenes[0].id, name: "First edition" });
   await app.room(ws, "instances.swap", { instance: "screen", release: two });
@@ -149,7 +149,8 @@ test("linked and mixed packages require the exact local pin, including a release
   destLib.catalog.transfer!.prepare([{ pin: two, files: library.catalog.transfer!.pack(two) }]).commit();
   const dest = installation("linked-target", destLib);
   await expect(dest.run("import", { package: linked })).rejects.toThrow(one);
-  expect((await dest.run("list")).projects).toEqual([]);
+  // Only the example project that every new installation starts with.
+  expect((await dest.run("list")).projects.map((x: any) => x.name)).toEqual(["Examples"]);
   const mixed: ProjectPackage = await app.run("export", {
     project: p.id,
     defaultMode: "link",
@@ -169,7 +170,7 @@ test("project and workspace handles keep their owner after a folder is replaced 
   const folders = join(app.dataDir, "projects");
   renameSync(join(folders, "A"), join(folders, "Moved"));
   renameSync(join(folders, "B"), join(folders, "A"));
-  expect((await app.run("open", { workspace: a.scenes[0].workspace })).folder).toBe("Moved");
+  expect((await app.run("open", { scene: a.scenes[0].id })).folder).toBe("Moved");
   await app.run("rename", { project: a.id, name: "Moved first" });
   expect((await app.run("open", { project: b.id })).markdown).toBe("Second record");
   expect((await app.run("open", { project: a.id })).markdown).toBe("First record");
@@ -178,17 +179,17 @@ test("project and workspace handles keep their owner after a folder is replaced 
 test("an embedded re-import restores a previously linked release for the same workspace across restart", async () => {
   const source = installation("link-recovery-source", library);
   const p = await source.run("create", { name: "Link recovery" });
-  await source.room(p.scenes[0].workspace, "instances.add", { instance: "display", release: one });
-  await source.room(p.scenes[0].workspace, "instances.add", { instance: "second", release: two });
+  await source.room(p.scenes[0].id, "instances.add", { instance: "display", release: one });
+  await source.room(p.scenes[0].id, "instances.add", { instance: "second", release: two });
   const linked = await source.run("export", { project: p.id, modes: { [one]: "link" } });
   const embedded = await source.run("export", { project: p.id, modes: { [two]: "link" } });
   const target = installation("link-recovery-target", library);
-  const ws = (await target.run("import", { package: linked })).project.scenes[0].workspace;
+  const ws = (await target.run("import", { package: linked })).project.scenes[0].id;
   target.restart(createRoomLibrary());
   await expect(target.room(ws, "state")).rejects.toHaveProperty("code", "missing_release");
   const same = await target.run("import", { package: embedded });
   expect(same.status).toBe("updated");
-  expect(same.project.scenes[0].workspace).toBe(ws);
+  expect(same.project.scenes[0].id).toBe(ws);
   expect((await target.room(ws, "state")).scene.instances[0].release).toBe(one);
   target.restart(createRoomLibrary());
   expect((await target.room(ws, "state")).scene.instances.map((i: { release: string }) => i.release)).toEqual([
@@ -201,8 +202,8 @@ test("an embedded re-import restores a previously linked release for the same wo
 test("refused or interrupted transfers leave catalog and existing files intact; restricted releases can travel as links", async () => {
   const src = installation("adversarial-source", library),
     p = await src.run("create", { name: "Checked" });
-  await src.room(p.scenes[0].workspace, "instances.add", { instance: "first", release: one });
-  await src.room(p.scenes[0].workspace, "instances.add", { instance: "second", release: two });
+  await src.room(p.scenes[0].id, "instances.add", { instance: "first", release: one });
+  await src.room(p.scenes[0].id, "instances.add", { instance: "second", release: two });
   const pkg = (await src.run("export", { project: p.id })) as ProjectPackage;
   const targetLib = createRoomLibrary(),
     target = installation("protected", targetLib);
@@ -295,14 +296,16 @@ test("project MCP discovers and edits the same folder, while a public installati
   expect((await mcp("tools/list")).result.tools.map((x: any) => x.name)).toContain("project_restore");
   const built = await mcp("tools/call", { name: "project_create", arguments: { name: "Agent room" } });
   const p = built.result.structuredContent.result;
-  expect((await local.run("open", { workspace: p.scenes[0].workspace })).id).toBe(p.id);
-  const publicData = join(root, "public");
-  mkdirSync(publicData);
-  symlinkSync(join(local.dataDir, "projects"), join(publicData, "projects"));
+  expect((await local.run("open", { scene: p.scenes[0].id })).id).toBe(p.id);
   const publicApi = installation("public", createRoomLibrary(), true);
-  expect((await publicApi.get("projects")).error.code).toBe("no_workspace");
-  expect((await publicApi.get("workspaces")).workspaces.some((s: any) => s.id === p.scenes[0].workspace)).toBe(false);
-  expect((await publicApi.get("commands")).commands.map((s: any) => s.id)).not.toContain("project.list");
+  // The public sandbox has its own store: the local project is unknown there, file commands are refused, and the
+  // workspace list shows only the shared workspace.
+  await expect(publicApi.run("open", { scene: p.scenes[0].id })).rejects.toHaveProperty("code", "not_found");
+  await expect(publicApi.run("export", { project: p.id })).rejects.toHaveProperty("code", "local_only");
+  const made = await publicApi.run("workspace.create", { name: "Visitor" });
+  expect((await publicApi.get("workspaces")).workspaces.map((w: any) => w.name)).toEqual(["Shared"]);
+  expect((await publicApi.get("workspaces/" + made.workspace)).projects[0].scenes[0].id).toBe(made.scene);
+  expect((await publicApi.get("scenes/" + made.scene + "/meta")).workspace.name).toBe("Visitor");
 });
 
 test("offline copy replays a saved operator assessment and preserves its independent geometry after those assets leave the scene", async () => {
@@ -310,25 +313,25 @@ test("offline copy replays a saved operator assessment and preserves its indepen
   const p = await source.run("create", { name: "Assessed study" });
   const added = await source.run("scene", { project: p.id, name: "Operator layout", template: "demo" });
   const scene = added.scenes.find((s: any) => s.name === "Operator layout");
-  await source.room(scene.workspace, "assessment.configure", {
+  await source.room(scene.id, "assessment.configure", {
     profile: "customer-layout",
     jurisdiction: "us-general-industry",
     task: "seated-display-reading",
     exitAccess: "yes",
     customer: { minimum: 1.1, reference: "Field survey 4" },
   });
-  const result = await source.room(scene.workspace, "assessment.run", { saveName: "Before relocation" });
-  const before = await source.room(scene.workspace, "person.measure", {
+  const result = await source.room(scene.id, "assessment.run", { saveName: "Before relocation" });
+  const before = await source.room(scene.id, "person.measure", {
     to: { instance: "wall-display", member: "D_screen_center" },
   });
   await source.run("save", { project: p.id, scene: scene.id, name: "Seated operator" });
-  await source.room(scene.workspace, "person.set", { host: null });
+  await source.room(scene.id, "person.set", { host: null });
   for (const instance of ["station-a", "station-b", "display-a", "wall-display"])
-    await source.room(scene.workspace, "instances.remove", { instance });
+    await source.room(scene.id, "instances.remove", { instance });
   const pkg = await source.run("export", { project: p.id });
   const receiver = installation("assessed-after", createRoomLibrary());
   const received = (await receiver.run("import", { package: pkg })).project;
-  const ws = received.scenes.find((s: any) => s.id === scene.id).workspace;
+  const ws = received.scenes.find((s: any) => s.portable === scene.portable).id;
   const replay = await receiver.room(ws, "assessment.replay", { id: result.saved.id });
   expect(replay.report).toEqual(result.report);
   await receiver.run("restore", { project: received.id, version: received.versions[0].id, expectedVersion: 0 });

@@ -35,10 +35,6 @@
 .rm-button.rm-text-action { padding: 0; min-height: 24px; color: var(--rm-accent); text-decoration: underline; text-underline-offset: 3px; }
 .rm-button.rm-danger { color: #8f453b; background: transparent; border-color: transparent; }
 .rm-kicker, .rm-section-title { font-size: 10px; line-height: 1.4; letter-spacing: .11em; font-weight: 680; text-transform: uppercase; color: var(--rm-muted); }
-.rm-workspace-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--rm-ink); padding: 4px 0 2px; font-size: clamp(19px, 1.6vw, 24px); font-weight: 620; letter-spacing: -.045em; }
-.rm-workspace-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rm-workspace-link .rm-icon { width: 15px; color: var(--rm-muted); }
-.rm-workspace-link:hover { color: var(--rm-accent); }
 .rm-tabs { display: flex; gap: 20px; padding: 0 21px; border-bottom: 1px solid var(--rm-faint); }
 .rm-tabs .rm-button { min-height: 38px; position: relative; padding: 0 2px 7px; font-size: 12px; font-weight: 600; border: 0; border-radius: 0; background: none; gap: 7px; color: var(--rm-muted); }
 .rm-tabs .rm-button .rm-icon { width: 15px; height: 15px; }
@@ -110,6 +106,8 @@
 .rm-version { border-left: 1px solid #cbd4c8; padding-left: 12px; font-variant-numeric: tabular-nums; }
 .rm-notice { position: absolute; z-index: 6; bottom: 98px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-width: 200px; width: max-content; max-width: min(530px, calc(100% - 24px)); padding: 8px 8px 8px 14px; background: #fff; color: var(--rm-ink); border: 1px solid #b4c3b4; border-radius: 6px; box-shadow: 0 4px 16px #233b2715; }
 .rm-notice.rm-error { border-color: #c7a58c; background: #fff9ef; }
+/* The first-visit note sits under the stage title, clear of the furnished room. */
+@media (min-width: 761px) { .rm-notice.rm-notice-top { top: 96px; bottom: auto; } }
 .rm-notice .rm-icon-action { flex: none; }
 .rm-grip { position: absolute; z-index: 7; top: 0; bottom: 0; left: calc(var(--rm-panel-width) - 3px); width: 7px; touch-action: none; cursor: col-resize; }
 .rm-grip::before { content: ''; position: absolute; top: 47%; left: 2px; width: 3px; height: 28px; background: #b9c5b7; border-radius: 3px; }
@@ -147,7 +145,7 @@
   .rm-button.rm-reopen { top: 17px; }
   .rm-stage-foot { padding: 0 12px; gap: 7px; min-height: 35px; }
   .rm-view-help { font-size: 10px; }
-  .rm-brand-row { min-height: 50px; }
+  .rm-brand-row { min-height: 58px; }
   .rm-notice { position: fixed; z-index: 9; bottom: 9px; width: calc(100% - 20px); }
 }
 @media (max-height: 580px) {
@@ -157,8 +155,12 @@
   .rm-panel-foot { min-height: 43px; padding-top: 4px; padding-bottom: 4px; }
 }
 
-.rm-project-link { margin-left:auto; font-size:.82rem; }
-.rm-directory-main > .rm-link { margin-left:1rem; }
+/* The start screen and the page for a missing scene. */
+.rm-start .rm-start-text { max-width: 44ch; margin: -6px 0 26px; font-size: 15px; line-height: 1.55; color: var(--rm-muted); }
+.rm-start-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
+.rm-start-row .rm-link { margin: 0; font-size: 14px; }
+.rm-button.rm-start-button { min-height: 44px; padding: 10px 24px; font-size: 15px; }
+.rm-start-actions .rm-error { margin-top: 14px; }
 .rm-tabs button { min-width:0; }
 
 .rm-component-card { padding:18px 20px; background:var(--rm-paper); color:var(--rm-ink); }
@@ -194,17 +196,34 @@
 .rm-direction-pad i {position:absolute;width:11px;height:11px;border-radius:50%;background:var(--rm-accent);transform:translate(-50%,-50%);pointer-events:none}
 
 .rm-home-symbol {font-size:0;gap:0}
-.rm-workspace-switcher {min-width:0;flex:1;margin:0 4px;}
-.rm-workspace-link {cursor:pointer;list-style:none;font-size:19px;min-height:44px;}
-.rm-workspace-link::-webkit-details-marker {display:none}
-.rm-workspace-menu {position:absolute;z-index:8;top:calc(100% - 2px);left:8px;right:8px;max-height:55vh;overflow:auto;padding:5px;border:1px solid var(--rm-faint);background:var(--rm-paper);border-radius:6px;box-shadow:0 5px 15px #243a2f20}
-.rm-brand-row {position:relative}
-.rm-workspace-choice {display:flex;align-items:center;gap:6px;width:100%;padding:8px;text-align:left;border:0;background:transparent;color:var(--rm-ink);font-size:13px;text-decoration:none;border-radius:3px;}
-.rm-workspace-choice:hover,.rm-workspace-choice:focus-visible {background:#e8eee8}
-.rm-workspace-current {font-weight:600;color:#214f40;cursor:default}
-.rm-workspace-current::after {content:"open";margin-left:auto;font-weight:400;font-size:11px;color:var(--rm-muted)}
-.rm-workspace-note {color:var(--rm-muted);font-size:12px;cursor:default}
-.rm-workspace-choices:not(:empty) {border-bottom:1px solid var(--rm-faint);margin-bottom:4px}
+/* Workspace › Project (muted) above the scene name; the menus open across the panel's width. */
+/* The logo and the collapse button sit on the scene line; Workspace › Project may run above the collapse button. */
+.rm-brand-row:has(.hy-editor) {position:relative;align-items:flex-end;padding-right:12px}
+.rm-brand-row:has(.hy-editor) > .rm-brand {margin-bottom:12px}
+.rm-brand-row:has(.hy-editor) > .rm-icon-action {margin-bottom:6px}
+.hy-editor {flex:1;min-width:0;display:grid;padding:10px 0 9px;margin:0 2px}
+.hy-editor .hy-parents {display:flex;align-items:center;min-width:0;margin-right:-38px;font-size:12px;line-height:1.3;color:var(--rm-muted)}
+.hy-editor .hy-menu {min-width:0}
+.hy-trigger {display:flex;align-items:center;gap:4px;min-width:0;cursor:pointer;list-style:none;border-radius:4px}
+.hy-trigger::-webkit-details-marker {display:none}
+.hy-label {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hy-editor .hy-parents .hy-trigger {min-height:24px;padding:2px}
+.hy-editor .hy-parents .hy-label {max-width:120px}
+.hy-editor .hy-parents .rm-icon {width:12px;height:12px;stroke-width:1.8}
+.hy-editor .hy-sep {flex:none;padding:0 6px;color:#a6b2a9}
+.hy-editor .hy-scene>.hy-trigger {gap:8px;min-height:30px;font-size:19px;font-weight:620;letter-spacing:-.045em;color:var(--rm-ink)}
+.hy-editor .hy-scene>.hy-trigger .rm-icon {width:15px;color:var(--rm-muted)}
+.hy-trigger:hover,.hy-menu[open]>.hy-trigger {color:var(--rm-accent)}
+.hy-editor .hy-list {position:absolute;z-index:8;top:calc(100% - 4px);left:8px;right:8px;max-height:55vh;overflow:auto;padding:5px;border:1px solid var(--rm-faint);background:var(--rm-paper);border-radius:6px;box-shadow:0 5px 15px #243a2f20;font-size:13px;line-height:1.45;color:var(--rm-ink)}
+.hy-editor .hy-item {display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:7px 8px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--rm-ink);font-weight:450;text-decoration:none}
+.hy-editor .hy-item span {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hy-editor .hy-item:hover,.hy-editor .hy-item:focus-visible {background:var(--rm-tint)}
+.room-app .hy-editor .hy-item:focus-visible {outline:none;box-shadow:inset 0 0 0 2px #207b68}
+.hy-editor .hy-item[aria-current] {font-weight:600;color:#214f40}
+.hy-editor .hy-item .rm-icon {width:15px;height:15px;color:var(--rm-accent)}
+.hy-editor .hy-action {color:var(--rm-accent)}
+.hy-editor .hy-divider {border-top:1px solid var(--rm-faint);margin:4px 2px}
+.hy-editor .hy-note {padding:7px 8px;color:var(--rm-muted);font-size:12px}
 
 .rm-scope-head {position:relative;max-width:100%;z-index:3}
 .rm-scope-path,.rm-scope-trigger h1 {display:flex;align-items:center;gap:8px;min-width:0}

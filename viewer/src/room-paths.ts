@@ -1,7 +1,11 @@
-// The public room installation has its own namespace beside the earlier station workspaces.
-export const PUBLIC_ROOM = /^\/workspaces\/room(?:\/|$)/.test(location.pathname) ||
-  document.querySelector('link[rel="service-desc"]')?.getAttribute("href") === "/api/room/commands";
-export const ROOM_API = PUBLIC_ROOM ? "/api/room" : "/api";
-export const ROOM_DIRECTORY = PUBLIC_ROOM ? "/workspaces/room" : "/workspaces";
-export const roomURL = (id:string) => ROOM_DIRECTORY + "/" + encodeURIComponent(id);
-export const apiRoot = (id:string) => ROOM_API + "/workspaces/" + encodeURIComponent(id);
+// One address scheme on both installations: the API under /api, a scene's page at /workspaces/{sceneId}.
+export const API = "/api";
+export const sceneURL = (id:string) => "/workspaces/" + encodeURIComponent(id);
+export const apiRoot = (id:string) => API + "/scenes/" + encodeURIComponent(id);
+/** True on the public site once publicSite() has answered (GET /api/health reports public: true there). */
+export let PUBLIC_ROOM = false;
+let probe: Promise<boolean> | undefined;
+export function publicSite(): Promise<boolean> {
+  return probe ??= fetch(API + "/health", { cache: "no-store" }).then(r => r.json())
+    .then((j: { public?: boolean }) => (PUBLIC_ROOM = j?.public === true)).catch(() => false);
+}

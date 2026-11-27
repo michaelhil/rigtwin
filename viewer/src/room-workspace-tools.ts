@@ -82,7 +82,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
   o.cameraHost.append(camera);
   o.host.classList.add("rw-toolbar");
   o.host.setAttribute("role", "group");
-  o.host.setAttribute("aria-label", "Workspace tools");
+  o.host.setAttribute("aria-label", "Scene tools");
   const pop = h("div", "rw-pop");
   pop.hidden = true;
   pop.setAttribute("role", "region");
@@ -196,12 +196,12 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
       title: "Reset adjustments and view?",
       body:
         "Restore neutral joint settings for " +
-        (label ?? "all room objects") +
+        (label ?? "every object in the scene") +
         " and reset this view. Undo restores the joint settings.",
       confirm: "Reset all",
       run: async () => {
         if (!(await o.write("scene.reset", focused ? { instance: focused } : {}, o.getScene().version)))
-          return "The reset could not be applied. Read the workspace message for details.";
+          return "The reset could not be applied. Read the message in the view for details.";
         eyeMode = false;
         ++eyeEpoch;
         view.showAllComponents();
@@ -333,12 +333,12 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
     const copyEndpoint = h("button", "rm-button", "Copy MCP endpoint");
     copyEndpoint.onclick = () =>
       void copy(endpoint)
-        .then(() => o.notify("Workspace endpoint copied."))
+        .then(() => o.notify("Scene endpoint copied."))
         .catch(report);
     body.append(
       section(
         "Agent access",
-        field("Workspace MCP endpoint", input),
+        field("Scene MCP endpoint", input),
         copyEndpoint,
         link("Agent guide", "/llms.txt", "rw-guide"),
       ),
@@ -370,7 +370,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
                   h("span", null, e.command, e.key && h("small", null, e.key)),
                 ),
               )
-            : [h("p", null, "No recorded edits in this workspace.")]),
+            : [h("p", null, "No recorded edits in this scene.")]),
         );
       })
       .catch((e) => {
@@ -397,7 +397,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
     if (state.labels !== undefined) view.setDisplay({ ...view.display(), labels: state.labels });
     if (state.focused) {
       if (!o.getScene().instances.some((i) => i.id === state.focused)) {
-        o.notify("The shared asset is no longer in this room. Showing the layout.");
+        o.notify("The shared asset is no longer in this scene. Showing the whole scene.");
         return;
       }
       await view.focusAsset(state.focused);

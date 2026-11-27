@@ -47,7 +47,7 @@ export function openPublicRoomLibrary(release: string, data: string) {
   const { catalog } = loadInstalledRoomLibrary([...pins.values()], archive, { retainPayload: false });
   const files = new Map<string, string>();
   for (const item of catalog.releases) {
-    const folder = join(archive, item.digest), url = "/api/room/library/" + item.digest + "/";
+    const folder = join(archive, item.digest), url = "/api/library/" + item.digest + "/";
     const inventory = JSON.parse(readFileSync(join(folder, "inventory.json"), "utf8")) as {path: string}[];
     for (const name of ["inventory.json", ...inventory.map(f => f.path)]) files.set(url + name, join(folder, name));
     item.modelUrl = url + "model.glb";

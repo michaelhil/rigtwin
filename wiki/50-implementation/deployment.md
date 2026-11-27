@@ -22,20 +22,27 @@ tags: [deployment, implementation, wiki, viewer, server]
 The script is `tools/deploy.ts`, its settings `deploy.config.json`; how the viewer itself works is on the
 [viewer page](viewer.md), the checks it runs are on the [checks page](../40-method/checks.md).
 
-## Public rooms and existing station workspaces
+<a id="public-rooms-and-existing-station-workspaces"></a>
 
-The homepage opens the room editor at `/workspaces/room/`. Existing station links at
-`/workspaces/<id>` keep their original viewer, command API and database. Caddy forwards both APIs
-through its existing `/api/*` route. The service starts both from the release selected by
-`/srv/synergon/current`. A rollback selects the earlier application and leaves workspace storage in place.
+## What the public site serves
+
+Since 2026-11-27 the public site serves one product, organised as Workspace → Project → Scene
+([workspaces, projects and scenes](workspaces-projects-scenes.md)). Caddy forwards `/api/*` unchanged to the
+service and rewrites `/workspaces/*` to the page of the release; the paths are the same as on a local installation.
+The service (`server/room-public.ts`, bundled as `server/server.js`) runs only the scene API; it no longer contains
+the single-station server. At its first start it moves the rooms of the retired room database into projects and
+renames that file `rooms-v1.sqlite.migrated`. The single-station data under the data folder is left untouched and is
+not served. A rollback selects the earlier application and leaves the store in place.
 
 | Address | Contents |
 |---|---|
-| `/`, `/llms.txt` | Room homepage and guide to room and station discovery |
-| `/workspaces/room/<id>`, `/api/room/workspaces/<id>` | Room editor, state, commands, events and workspace MCP |
-| `/api/room/catalog`, `/api/room/library/<digest>/` | Installed editions and their verified, immutable dependency files |
+| `/`, `/llms.txt` | Homepage and the guide for agents |
+| `/workspaces/<scene>`, `/workspaces/` | Scene editor; without an ID the last scene of this browser, or a start screen |
+| `/api/workspaces`, `/api/workspaces/<id>` | The shared workspace; one workspace's projects and scenes |
+| `/api/scenes/<scene>/state\|command\|live\|mcp\|discover\|meta` | One scene: state, commands, live events, MCP |
+| `/api/projects/command`, `/api/projects/mcp` | Create and rename workspaces, projects and scenes |
+| `/api/catalog`, `/api/library/<digest>/` | Installed editions and their verified, immutable dependency files |
 | `/standards/workstation-screening.md` | Public criteria read by the assessment engine, also rendered in the [standards wiki](../85-standards/workstation-screening.md) |
-| `/workspaces/<id>`, `/api/workspaces/<id>` | Original station editor, metadata, commands, events and workspace MCP |
 | `/wiki/` | Public project documentation |
 
 The public room store lives under `/var/lib/synergon/rooms`. Its SQLite database holds public rooms

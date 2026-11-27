@@ -42,7 +42,7 @@ says nothing about the host. On the host the visitors' connections end at Caddy,
 # copied to the host with the setup files: scp tools/deploy-tests/stream-load.ts <host>:synergon-setup/
 # a throwaway server from the live release's bundle, on a free loopback port, with a temporary data folder
 /opt/synergon/runtime/bun ~/synergon-setup/stream-load.ts --seconds 60 \
-  --bundle /srv/synergon/current/server/server.js --asset /srv/synergon/current/asset
+  --bundle /srv/synergon/current/server/server.js
 cat /proc/net/sockstat          # before and during: "TCP: ... mem" in pages
 ```
 (Before the first release with `server/` there is no bundle on the host: build one on the laptop with
@@ -73,7 +73,7 @@ The script prints the TCP memory every 5 s itself (from `/proc/net/sockstat`, ag
 3. `--probe` (H7) and H14. After any later change of the unit: `--apply` (it installs the new unit and restarts the
    service) and `--probe` again, before a release relies on it.
 4. Only then: deploy the first release (`bun run deploy`, or merge to `main`). The deploy first asks `api/health` (with no release live yet): a 404 would mean the route is missing, and it stops without uploading or switching anything.
-5. After the deploy: `--check` again (H8, H12), then `bun tools/live-idle-test.ts --url https://synergon.mightwork.ai`.
+5. After the deploy: `--check` again (H8, H12). (The idle test of the retired single-station API was removed on 2026-11-27; the scene stream's idle behaviour is covered by H14.)
 6. Once the new site is live and the data is moved: `--retire-apex` (mightwork.ai then answers 404 for everything; the
    script refuses unless `https://synergon.mightwork.ai/` and `/api/health` answer 200, and puts the file from before
    at `/var/backups/synergon-setup/mightwork-apex.caddy.before-retire`; `--restore-apex` reverses it). Then `--check`

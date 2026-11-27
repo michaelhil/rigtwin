@@ -1,10 +1,10 @@
 // bun run dist [--out dist] [--no-verify] [--strict-wiki]
-// Build the self-contained public room and station site for the existing Caddy root.
-// The release contains both browser shells, the station model, immutable library editions,
-// the wiki and the public screening source. server/server.js runs both APIs from separate
-// data stores. Caddy refuses the server/ tree. The local proxy below mirrors these routes.
-// Unless --no-verify is given, exercise the installed bundle in Chromium and test release
-// replacement with disposable workspace data. Private project stores are outside this build.
+// Build the self-contained public site for the existing Caddy root: the homepage, the room editor, the agent
+// guide, immutable library editions, the rig's model (checked by the deploy), the wiki and the public screening
+// source. server/server.js is the public scene API (server/room-public.ts). Caddy refuses the server/ tree. The
+// local proxy below mirrors these routes. Unless --no-verify is given, exercise the installed bundle in Chromium
+// and test release replacement with disposable scene data. Private project stores are outside this build.
+// The station viewer (viewer/index.html, server/server.ts) is the asset render harness and is not in the release.
 import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync, readFileSync, mkdtempSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -12,11 +12,10 @@ import { spawnSync } from "node:child_process";
 import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
 import { ROOT, timeline } from "./timeline.ts";
-import { bundleViewer } from "./bundle.ts";
 import { buildWiki, lintWiki } from "./wiki.ts";
 import { buildRoomRelease, verifyDisposableRoom } from "./room-dist.ts";
 import { currentVersion } from "./version.ts";
-import { personEntry } from "./serve.ts";
+import { ROOM_SCHEMA } from "../shared/room.ts";
 
 const TYPES: Record<string, string> = { ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".gif": "image/gif", ".webp": "image/webp", ".wasm": "application/wasm", ".ktx2": "image/ktx2", ".bin": "application/octet-stream" };
 
@@ -84,12 +83,12 @@ export function buildServer(out: string, entry = "server/room-public.ts"): { fil
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
-/** Starts the built server like the host does, but in local mode, on a free port, with an empty temporary data folder and the release's own asset
- *  folder; resolves once it prints its {"listening": port} line. */
+/** Starts the built server like the host does, but in local mode (unless asked for deployed), on a free port, with an empty temporary data folder;
+ *  resolves once it prints its {"listening": port} line. */
 export async function startBuiltServer(out: string, options: { data?: string; mode?: "local" | "deployed" } = {}) {
   const free = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response() }), port = free.port; free.stop(true);
   const data = options.data ?? mkdtempSync(join(tmpdir(), "synergon-dist-data-"));
-  const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", options.mode ?? "local", "--port", String(port), "--host", "127.0.0.1", "--data", data, "--asset", join(out, "asset")], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([process.execPath, join(out, "server", "server.js"), "--mode", options.mode ?? "local", "--port", String(port), "--host", "127.0.0.1", "--data", data], { cwd: tmpdir(), stdout: "pipe", stderr: "pipe" });
   let said = "";
   const collect = async (s: ReadableStream<Uint8Array>, onText?: (t: string) => void) => { const d = new TextDecoder(), r = s.getReader(); for (;;) { const { done, value } = await r.read(); if (done) return; const t = d.decode(value, { stream: true }); said += t; onText?.(t); } };
   const stop = async () => {
@@ -141,28 +140,20 @@ if (import.meta.main) {
   if (manifest.build.partial) { console.error(`error: the current build is partial (only ${manifest.build.only.join(", ")}). Run a full "bun run build" first.`); process.exit(1); }
   if (manifest.missing.length) { console.error(`error: components without geometry and not declared omitted: ${manifest.missing.join(", ")}`); process.exit(1); }
 
-  const bundle = await bundleViewer();
-  // the server goes into the release once its source exists (server/server.ts); until then the release has no server/ and version.json no server entry
-  const hasServer = existsSync(join(ROOT, "server", "server.ts"));
-  const sceneFormat: string | null = hasServer ? (await import("../shared/commands/doc.ts")).SCENE_FORMAT : null;
-  const version: ReturnType<typeof currentVersion> & { server?: { format: string; room?: Awaited<ReturnType<typeof buildRoomRelease>> }; person?: { package: string } } = { ...currentVersion({ buildDir, asset }), ...(sceneFormat ? { server: { format: sceneFormat } } : {}) };
+  const version: ReturnType<typeof currentVersion> & { server?: Awaited<ReturnType<typeof buildRoomRelease>> } = currentVersion({ buildDir, asset });
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, "asset"), { recursive: true });
-  for (const [name, f] of Object.entries(bundle.files)) writeFileSync(join(out, name), f.body);
-  let serverBuild: ReturnType<typeof buildServer> | null = null;
-  if (hasServer) {
-    try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
-    version.server!.room = await buildRoomRelease(out, bundle.files["index.html"].body, bundle.files["llms.txt"].body);
-    console.log(`room: bundled browser and ${version.server!.room.releases.length} verified editions`);
-    console.log(`server: bundled station and public room APIs into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${sceneFormat}`);
-  } else console.log("server: server/server.ts does not exist yet; skipped (the release has no server/, version.json no server entry, the verify step no /api/)");
-  if (existsSync(join(ROOT, "viewer", "landing-rig.webp"))) copyFileSync(join(ROOT, "viewer", "landing-rig.webp"), join(out, "landing-rig.webp"));   // the landing's picture
+  let serverBuild: ReturnType<typeof buildServer>;
+  try { serverBuild = buildServer(out); } catch (e: any) { console.error(`error: ${e.message}`); process.exit(1); }
+  version.server = await buildRoomRelease(out);
+  console.log(`room: bundled the homepage, the room editor and ${version.server.releases.length} verified editions`);
+  console.log(`server: bundled the public scene API into server/server.js (${serverBuild.modules} modules from server/ and shared/, ${serverBuild.bytes.toLocaleString("en")} bytes); version.json server.format ${version.server.format}`);
+  // the model the deploy checks by size and SHA-256 (version.json model)
   for (const f of [`${asset}.glb`, `${asset}.manifest.json`]) copyFileSync(join(buildDir, f), join(out, "asset", f));
-  // The person chunk loads the transcoder after the page is ready.
+  // The operator's chunk loads the transcoder after the page is ready.
   const basis = join(ROOT, "node_modules", "three", "examples", "jsm", "libs", "basis");
   mkdirSync(join(out, "libs", "basis"), { recursive: true });
   for (const f of ["basis_transcoder.js", "basis_transcoder.wasm"]) copyFileSync(join(basis, f), join(out, "libs", "basis", f));
-  Object.assign(version, personEntry(join(out, "asset", "manikin")));
   writeFileSync(join(out, "version.json"), JSON.stringify(version, null, 1) + "\n");
   const wiki = buildWiki({ out: join(out, "wiki"), version });
 
@@ -195,84 +186,75 @@ if (import.meta.main) {
   }
 
   if (!args.includes("--no-verify")) {
-    let api: Awaited<ReturnType<typeof startBuiltServer>> | null = null, serverSummary = "no server in this release";
-    if (serverBuild) {
-      try { api = await startBuiltServer(out); } catch (e: any) { fail(`server: ${e.message}`); }
-    }
+    let api: Awaited<ReturnType<typeof startBuiltServer>> | null = null, serverSummary = "no server answered";
+    try { api = await startBuiltServer(out); } catch (e: any) { fail(`server: ${e.message}`); }
     const idleTimeout = api ? (await import("../server/limits.ts")).LIMITS.idleTimeoutS : undefined;
     const { server, log, origin, base } = serveFolder(out, "/", { api: api?.origin, idleTimeout });
     const errors: string[] = [];
-    let wsId = "";
-    // the server, through the sub-path as the viewer reaches it: health, the live channel, and its own code not served
+    let sceneId = "", seated = false, homeSummary = "homepage not checked";
+    // the server, through the proxy as the browser reaches it: health, the shared workspace and its tree, a scene's
+    // live channel, writes on a throwaway workspace, and its own code not served
     if (api) {
+      try { await verifyDisposableRoom(origin, version.server!); } catch (e: any) { errors.push(`server: ${e.message}`); }
       try {
-        if (version.server?.room) await verifyDisposableRoom(origin, version.server.room);
         const probe = { headers: { "x-synergon-probe": "1" } };
         const h = await fetch(`${origin}${base}api/health`, { signal: AbortSignal.timeout(10000) }), health: any = h.ok ? await h.json() : null;
         if (!health?.ok) errors.push(`server: ${base}api/health answered HTTP ${h.status}${health ? " without ok: true" : ""}`);
-        else if (health.format !== sceneFormat) errors.push(`server: health reports format ${health.format}, version.json says ${sceneFormat}`);
+        else if (health.format !== ROOM_SCHEMA || health.format !== version.server!.format) errors.push(`server: health reports format ${health.format}, version.json says ${version.server!.format}`);
         else if (health.mode !== "local") errors.push(`server: health reports mode ${health.mode}, expected local`);
         else if (health.revision !== version.revision) errors.push(`server: health reports revision ${health.revision}, version.json says ${version.revision}`);
         const wsList: any = await (await fetch(`${origin}${base}api/workspaces`, { signal: AbortSignal.timeout(10000) })).json().catch(() => null);
-        wsId = wsList?.workspaces?.[0]?.id ?? "";
-        if (!wsId) errors.push("server: no workspace on a fresh data folder (the Playground should have been made)");
-        const live = await fetch(`${origin}${base}api/workspaces/${wsId}/live`, { signal: AbortSignal.timeout(10000) });
+        const shared = wsList?.workspaces?.[0];
+        if (wsList?.workspaces?.length !== 1 || !shared?.id) errors.push(`server: ${base}api/workspaces should list the shared workspace alone, it lists ${JSON.stringify(wsList?.workspaces ?? null)}`);
+        const tree: any = shared?.id ? await (await fetch(`${origin}${base}api/workspaces/${shared.id}`, { signal: AbortSignal.timeout(10000) })).json().catch(() => null) : null;
+        sceneId = tree?.projects?.flatMap((p: any) => p.scenes ?? [])[0]?.id ?? "";
+        if (!sceneId) errors.push(`server: the shared workspace's tree has no scene on a fresh data folder (${JSON.stringify(tree).slice(0, 200)})`);
+        const live = await fetch(`${origin}${base}api/scenes/${sceneId}/live`, { signal: AbortSignal.timeout(10000) });
         const type = live.headers.get("content-type") ?? "", ev = live.ok && type.includes("text/event-stream") ? await waitEvent(live, "snapshot", 5000) : null;
-        if (!live.ok || !type.includes("text/event-stream")) errors.push(`server: ${base}api/workspaces/<id>/live answered HTTP ${live.status} (${type || "no content-type"}), expected an event stream`);
-        else if (!ev?.data) errors.push(`server: no snapshot event on ${base}api/workspaces/<id>/live within 5 s (events seen: ${ev?.seen.join(", ") || "none"})`);
-        else { try { if (JSON.parse(ev.data)?.doc?.schema !== sceneFormat) errors.push(`server: the snapshot is not a ${sceneFormat} document`); } catch { errors.push("server: the snapshot event carries no JSON"); } }
+        if (!live.ok || !type.includes("text/event-stream")) errors.push(`server: ${base}api/scenes/<id>/live answered HTTP ${live.status} (${type || "no content-type"}), expected an event stream`);
+        else if (!ev?.data) errors.push(`server: no snapshot event on ${base}api/scenes/<id>/live within 5 s (events seen: ${ev?.seen.join(", ") || "none"})`);
+        else { try { if (JSON.parse(ev.data)?.id !== sceneId) errors.push("server: the snapshot is not the scene asked for"); } catch { errors.push("server: the snapshot event carries no JSON"); } }
         for (const p of ["server/server.js", "server/", "server"]) {
           const r = await fetch(`${origin}${base}${p}`, { ...probe, redirect: "manual" }), body = await r.text();
           if (r.status !== 404 || body.includes("listening")) errors.push(`server: ${base}${p} answered HTTP ${r.status}; the server's code must never be served`);
         }
-        serverSummary = `server ${health?.revision ?? "?"} (${health?.format ?? "?"}) answered health and streamed ${ev?.seen.join(", ") || "nothing"} through ${base}api/; ${base}server/ refused`;
+        serverSummary = `server ${health?.revision ?? "?"} (${health?.format ?? "?"}) answered health, listed ${shared?.name ?? "no workspace"} and streamed ${ev?.seen.join(", ") || "nothing"} through ${base}api/; ${base}server/ refused`;
       } catch (e: any) { errors.push(`server: ${e.message}`); }
     }
     const { Browser } = await import("./render.ts");
     const browser = await Browser.launch();
     try {
-      // The room is the default entry. Exercise both editors through the installed proxy routes;
-      // all workspaces used here belong to the throwaway data directory.
-      if (api && version.server?.room) {
-        const land = await browser.page(origin + base);
-        await land.waitFor("document.querySelector('a[href^=\"/workspaces/room\"]')", "the public room directory link");
-        const about = await land.evaluate(`(async () => {
-          const guide = document.querySelector('link[rel=help]')?.href;
-          return { guide: guide && await (await fetch(guide)).text(), scripts: performance.getEntriesByType('resource').filter(e=>e.name.endsWith('.js')).reduce((n,e)=>n+e.decodedBodySize,0), canvas:!!document.querySelector('canvas') };
-        })()`);
-        if (!about.guide?.includes('/api/room/workspaces') || about.scripts > 40_000 || about.canvas) errors.push('room landing must link to the public agent guide and load without the 3D engine');
-        errors.push(...land.errors.map(e => "room landing console: " + e));
-        await land.close();
-        const directory = await browser.page(origin + base + "workspaces/room/?list=1");
-        const roomPath = await directory.waitFor("document.querySelector('a[href^=\"/workspaces/room/\"][class*=directory-row]')?.pathname", "a public room in the directory");
-        errors.push(...directory.errors.map(e => "room directory console: " + e));
-        await directory.close();
-        const roomPage = await browser.page(origin + roomPath);
-        await roomPage.waitFor("document.querySelector('#room-controls') && document.querySelector('.rv-plan [data-instance]')", "the deployed room editor");
-        await roomPage.evaluate("document.querySelector('.rm-mode-option[aria-label=\"3D view\"]').click()");
-        await roomPage.waitFor("!!document.querySelector('[data-seated-host]')", "the operator and pinned geometry in the public room", process.env.CI ? 150000 : 60000);
+      // 1. the homepage: release-entry, the story carousel and the Workspaces menu, the agent guide, no 3D engine,
+      //    and every link on it answers (the proxy serves index.html only under /workspaces/)
+      const land = await browser.page(origin + base);
+      await land.viewport(1280, 900);
+      await land.waitFor("document.querySelectorAll('#home-story .home-slide').length > 1 && /workspaces/i.test(document.querySelector('header')?.textContent ?? '')", "the homepage's carousel and Workspaces menu");
+      const about = await land.evaluate(`(async () => {
+        const guide = document.querySelector('link[rel=help]')?.href;
+        const links = [...new Set([...document.querySelectorAll('a[href]')].map(a => a.href).filter(h => h.startsWith(location.origin + '/') && !h.includes('#')))];
+        return { entry: [...document.scripts].some(s => s.src.includes('/release-entry.js?v=')), guide: guide && await (await fetch(guide)).text(), links,
+          scripts: performance.getEntriesByType('resource').filter(e=>e.name.endsWith('.js')).reduce((n,e)=>n+e.decodedBodySize,0), canvas:!!document.querySelector('canvas') };
+      })()`);
+      if (!about.entry) errors.push("homepage: does not load /release-entry.js?v=<tag>");
+      if (!about.guide?.includes("/api/scenes/") || about.guide.includes("/api/room")) errors.push("homepage: the agent guide (link rel=help) does not describe /api/scenes/");
+      if (about.scripts > 40_000 || about.canvas) errors.push(`homepage: loads ${about.scripts} bytes of script${about.canvas ? " and a canvas" : ""}; it must load without the 3D engine`);
+      const dead: string[] = [];
+      for (const href of about.links as string[]) { const r = await fetch(href, { headers: { "x-synergon-probe": "1" } }); await r.arrayBuffer(); if (!r.ok) dead.push(`${new URL(href).pathname} (HTTP ${r.status})`); }
+      if (dead.length) errors.push(`homepage: link(s) that do not answer through the proxy (it serves index.html only under /workspaces/, as Caddy does): ${dead.join(", ")}`);
+      homeSummary = `homepage with the carousel, the Workspaces menu and ${about.links.length - dead.length} of ${about.links.length} links answering`;
+      errors.push(...land.errors.map(e => "homepage console: " + e));
+      await land.close();
+      // 2. a scene page opens the room editor, then the operator in 3D on the pinned geometry
+      if (sceneId) {
+        const roomPage = await browser.page(`${origin}${base}workspaces/${sceneId}`);
+        await roomPage.viewport(1600, 1000);
+        await roomPage.waitFor("document.querySelector('#room-controls') && document.querySelector('.rv-plan [data-instance]')", "the room editor on a scene page");
+        await roomPage.evaluate("document.querySelector('.rm-mode-option[aria-label=\"3D view\"]')?.click()");
+        seated = !!(await roomPage.waitFor("!!document.querySelector('[data-seated-host]')", "the operator and pinned geometry in the scene", process.env.CI ? 150000 : 60000).catch((e: any) => { errors.push("scene page: " + e.message); return false; }));
         errors.push(...roomPage.errors.map(e => "room editor console: " + e));
         await roomPage.close();
       }
-      // 1. the viewer (in the first workspace when there is a server), its Documentation link and its version line
-      const page = await browser.page(`${origin}${base}${api ? `workspaces/${wsId}` : ""}`);
-      await page.viewport(1600, 1000);
-      await page.waitFor("window.viewerReady || window.viewerError", "the deployed viewer");
-      const err = await page.evaluate("window.viewerError || null"), st = await page.evaluate("window.viewerReady ? viewer.state() : null");
-      if (err) errors.push("viewer: " + err);
-      if (version.person) {   // the person chunk, its package and the transcoder load after the page is ready: wait for them, so their requests are checked too
-        const ps = await page.waitFor("viewer.person ? viewer.person.ready.then((ok) => viewer.person.state()) : null", "the person", process.env.CI ? 150000 : 60000)   // software rendering on a CI runner: the person took over a minute there.catch((e: any) => ({ error: e.message }));
-        if (!ps?.loaded || !ps?.shown) errors.push(`person: not shown (${ps?.error ?? "unknown"})`);
-      }
-      if (!(st?.render.triangles > 0)) errors.push("viewer: nothing drawn");
-      await page.evaluate("document.getElementById('more-btn').click()");
-      const shown = await page.waitFor("(() => { const v = document.querySelector('#more .about .version'); return v && v.textContent ? v.textContent : null; })()", "the version line in Settings", 5000).catch(() => null);
-      const docHref = await page.evaluate("document.querySelector('#more .about a')?.href ?? null");
-      if (shown !== `Version ${version.short}`) errors.push(`viewer: Settings shows '${shown}', expected 'Version ${version.short}'`);
-      if (docHref !== `${origin}${base}wiki/`) errors.push(`viewer: the Documentation link leads to ${docHref}`);
-      errors.push(...page.errors.map((e) => "viewer console: " + e));
-      await page.close();
-      // 2. wiki pages: the index (also without its trailing slash), then a spread of pages
+      // 3. wiki pages: the index (also without its trailing slash), then a spread of pages
       const has = (re: RegExp) => wiki.pageUrls.filter((u) => re.test(u));
       // the page with the most images (each must load), besides the index, the summary and this deployment page
       const imgCount = (u: string) => (readFileSync(join(out, "wiki", u), "utf8").match(/<img\b/g) ?? []).length;
@@ -310,7 +292,7 @@ if (import.meta.main) {
             if (!after) { errors.push(`${name}: the ${what} did not lead anywhere`); break; }
             clicked += `${clicked ? ", " : ""}${what} → ${after.replace(base, "") || "viewer"}`;
           }
-          if (clicked.endsWith("viewer")) { await p.waitFor("window.viewerReady || window.viewerError || document.querySelector('.room-home main, main.pg')", "the page behind the wiki's link (the landing, or the viewer on a server without workspaces)"); if (await p.evaluate("window.viewerError || null")) errors.push("viewer reached from the wiki failed to load"); }
+          if (clicked.endsWith("viewer")) await p.waitFor("document.querySelector('.room-home main')", "the homepage behind the wiki's link");
         }
         errors.push(...p.errors.map((e) => `${name} console: ${e}`));
         await p.close();
@@ -320,20 +302,20 @@ if (import.meta.main) {
       for (const l of failed) errors.push(`request failed: ${l.path} (${l.status})`);
       for (const l of stray) errors.push(`stray request: ${l.path}`);
       const good = log.filter((l) => l.status === 200).length;
-      console.log(`verify from ${base}: ${errors.length ? "FAILED" : "ok"}: viewer drew ${st?.render.triangles ?? 0} triangles and links to the documentation; ${sample.length} wiki pages loaded (${sample.map((u) => u || "index").join(", ")}) with ${images} images; followed ${clicked || "no links"}; ${serverSummary}; ${good} requests answered, ${failed.length} failed, ${[...new Set(errors)].length} problem(s)`);
+      console.log(`verify from ${base}: ${errors.length ? "FAILED" : "ok"}: ${homeSummary}; scene page ${seated ? "opened the editor and seated the operator" : "FAILED"}; ${sample.length} wiki pages loaded (${sample.map((u) => u || "index").join(", ")}) with ${images} images; followed ${clicked || "no links"}; ${serverSummary}; ${good} requests answered, ${failed.length} failed, ${[...new Set(errors)].length} problem(s)`);
       for (const e of [...new Set(errors)]) fail(e);
     } catch (e: any) { fail("verify: " + e.message); }
     await browser.close(); server.stop(true); await api?.stop();
   }
-  if (!args.includes("--no-verify") && version.server?.room && ok) {
+  if (!args.includes("--no-verify") && ok) {
     try {
       const { verifyRoomRestart } = await import("./deploy-tests/room-restart.ts");
       await verifyRoomRestart(out, startBuiltServer);
-      console.log("room restart: public pins, geometry, room and legacy station metadata survived a replacement release");
+      console.log("room restart: public pins, geometry, scene and operator survived a replacement release");
     } catch (e: any) { fail("room restart: " + e.message); }
   }
   const seconds = (performance.now() - t0) / 1000;
   console.log(`dist ${ok ? "done" : "FAILED"} in ${seconds.toFixed(2)} s`);
-  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), page bundle ${bundle.files["app.js"].body.length} bytes (app.js) in ${bundle.seconds.toFixed(2)} s, ${serverBuild ? `server bundle ${serverBuild.bytes} bytes` : "no server"}, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
+  timeline(ok ? "dist" : "dist failed", seconds, `${files.length} files, ${total} bytes (wiki ${size(wikiFiles)} bytes, ${wiki.pages} pages), server bundle ${serverBuild.bytes} bytes, wiki built in ${wiki.seconds.toFixed(2)} s; wiki ${wiki.problems.length} broken links, lint ${lint.errors} errors`);
   process.exit(ok ? 0 : 1);
 }

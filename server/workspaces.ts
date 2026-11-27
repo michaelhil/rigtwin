@@ -16,26 +16,14 @@ import { LIMITS } from "./limits.ts";
 export interface Workspace { id: string; name: string; created: string; changed: string }
 
 /** A random (version 4) UUID in lower case: 122 random bits, so a link cannot be guessed. The server answers 404 to anything else. */
-export const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-export const isWorkspaceId = (s: unknown): s is string => typeof s === "string" && s.length === 36 && ID_PATTERN.test(s);
+export { ID_PATTERN, isWorkspaceId } from "./names.ts";
+import { isWorkspaceId } from "./names.ts";
 export const DEFAULT_NAME = "Untitled workspace";
 /** The name of the workspace made on an empty data folder (and the one the local tools look for). */
 export const PLAYGROUND = "Playground";
 
-export class NameError extends Error {}
-/** Controls (Cc), line and paragraph separators, and the invisible direction marks that could make a name read differently from what it is. */
-const INVISIBLE = [0x2028, 0x2029, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069].map((c) => String.fromCodePoint(c)).join("");
-const STRIP = new RegExp(`[\\p{Cc}${INVISIBLE}]`, "gu");
-/** A name as stored: control characters removed, trimmed, 1 to LIMITS.workspaceNameChars characters (counted as characters, not bytes).
- *  Missing or empty gives `fallback` when one is given, otherwise an error. */
-export function cleanName(v: unknown, fallback?: string): string {
-  if (v === undefined || v === null) { if (fallback !== undefined) return fallback; throw new NameError("a name is needed"); }
-  if (typeof v !== "string") throw new NameError("a name is text");
-  const name = v.replace(STRIP, "").trim();
-  if (!name) { if (fallback !== undefined) return fallback; throw new NameError("a name needs at least one character"); }
-  if (Array.from(name).length > LIMITS.workspaceNameChars) throw new NameError(`a name is at most ${LIMITS.workspaceNameChars} characters`);
-  return name;
-}
+export { NameError, cleanName } from "./names.ts";
+import { cleanName } from "./names.ts";
 
 export const workspaceDir = (dataDir: string, id: string) => {
   if (!isWorkspaceId(id)) throw new Error("not a workspace id");     // never build a path from anything else

@@ -8,7 +8,7 @@ import { operatorFields,type OperatorPatch } from "../shared/room-person.ts";
 import { roomCommands } from "../shared/room-commands.ts";
 import { ROOM_SCHEMA, roomPoint, type RoomCatalog, type RoomDimensions, type RoomInstance,
   type RoomPerson, type RoomPoint, type RoomRef, type RoomRelease, type RoomScene } from "../shared/room.ts";
-import { cleanName } from "./workspaces.ts";
+import { cleanName } from "./names.ts";
 
 export const ROOM_HISTORY = 200;
 export class RoomError extends Error {

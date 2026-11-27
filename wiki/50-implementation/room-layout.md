@@ -1,16 +1,16 @@
 ---
-title: Multi-asset room editor
-tldr: Arrange a room, edit its components and operators, and discover the same instance-qualified controls through HTTP, MCP or the CLI.
+title: Scene editor
+tldr: Arrange a scene's room, edit its assets and operator, and discover the same instance-qualified controls through HTTP, MCP or the CLI.
 status: living
 updated: 2026-11-27
 tags: [implementation, viewer, server, assets]
 ---
 
-# Multi-asset room editor
+# Scene editor
 
 ## TL;DR
 
-Open the Synergon homepage or run `bun run serve` for a local installation. The homepage tells the story in seven slides (photos, model, person, room, assessment, AI control, wiki). Choose **Open viewer** to return to the last room, or **Open a workspace** in the bar at the top to pick one from the list of existing workspaces; **Wiki** at the right of that bar opens this wiki. The workspace menu at the top of the panel lists every workspace, marks the open one and creates an empty workspace. The **2D / 3D** switch at the left of the view controls in the lower right changes between the floor plan and the 3D view. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
+Open the Synergon homepage or run `bun run serve` for a local installation. The homepage tells the story in seven slides (photos, model, person, room, assessment, AI control, wiki). Choose **Open viewer** to return to the last scene (a new visitor gets a furnished scene in one click), or pick a workspace, project and scene from **Workspaces ▾** in the bar at the top; **Wiki** at the right of that bar opens this wiki. In the editor the head of the left panel shows `Workspace ▾ › Project ▾` and the scene's name, each with its list and **New …** ([workspaces, projects and scenes](workspaces-projects-scenes.md)). The view title **Whole scene ▾** shows one asset on its own when you choose it. The **2D / 3D** switch at the left of the view controls in the lower right changes between the floor plan and the 3D view. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
 
 ## Arrange and measure
 
@@ -38,23 +38,24 @@ Asset labels start hidden. Turn on **Object labels** in the left panel’s **Set
 
 ## Agent entry point
 
-The homepage links to `/llms.txt` and advertises the command catalogue. The guide opens by saying that it is written for AI agents acting on their user's requests. In production, rooms open under `/workspaces/room/{id}` and the table below uses `/api/room/` in place of `/api/`. The local room server uses the paths as printed. Existing single-station links on the public installation have a separate catalogue. The guide describes discovery, target qualification, units, writes and undo. All paths in this table are relative to that installation. Substitute the workspace UUID for `{id}`.
+The homepage links to `/llms.txt`, the guide written for AI agents acting on their user's requests. The same paths work locally and on the public site. Substitute the scene's ID for `{id}`.
 
 | Operation | Interface |
 |---|---|
-| Find a room by name | GET `/api/workspaces?search=Control%20room` |
-| Read the scene revision and objects | GET `/api/workspaces/{id}/state` |
-| Read revision and live connection count | GET `/api/workspaces/{id}/meta` |
-| Resolve names or inspect one placement | GET `/api/workspaces/{id}/discover?query=monitor` or supply `instance` |
+| Find a scene | GET `/api/workspaces`, then GET `/api/workspaces/{workspace}` for its projects and scenes |
+| Read the scene revision and objects | GET `/api/scenes/{id}/state` |
+| Read revision, live viewers, workspace and project | GET `/api/scenes/{id}/meta` |
+| Resolve names or inspect one placement | GET `/api/scenes/{id}/discover?query=monitor` or supply `instance` |
 | Inspect installed pins or command schemas | GET `/api/catalog` or GET `/api/commands` |
-| Run one operation | POST `/api/workspaces/{id}/command` with JSON, `X-Synergon: 1`, `id`, `args` and optional `expectedVersion` |
-| Subscribe or reconnect | GET `/api/workspaces/{id}/live` for authoritative scene snapshots |
-| Use MCP | JSON-RPC at `/api/workspaces/{id}/mcp`; set `SYNERGON_WORKSPACE_MCP` to that full address for the repository configuration |
-| Use the command line | `bun run rig discover '{"query":"monitor"}' --workspace <room URL>` |
+| Run one operation | POST `/api/scenes/{id}/command` with JSON, `X-Synergon: 1`, `id`, `args` and optional `expectedVersion` |
+| Subscribe or reconnect | GET `/api/scenes/{id}/live` for authoritative scene snapshots |
+| Use MCP | JSON-RPC at `/api/scenes/{id}/mcp`; set `SYNERGON_SCENE_MCP` to that full address for the repository configuration |
+| Create workspaces, projects and scenes | POST `/api/projects/command` ([remote commands](../80-reference/remote-commands.md#create-and-rename)) |
+| Use the command line | `bun run rig discover '{"query":"monitor"}' --scene <scene link>` |
 
 ## Place or adjust an asset remotely
 
-Start with the homepage's agent guide. An unfiltered workspace discovery returns the room dimensions, current revision, placed instances with their positions and yaws, and the installed release IDs. Narrow discovery with `instance` and `query` before editing.
+Start with the homepage's agent guide. An unfiltered scene discovery returns the room dimensions, current revision, placed instances with their positions and yaws, and the installed release IDs. Narrow discovery with `instance` and `query` before editing.
 
 | Intent | Command and arguments |
 |---|---|
@@ -70,13 +71,15 @@ For a prismatic joint the positive room axis gives its direction of travel. For 
 
 A release identifies its asset, version and SHA-256 digest of its ordered file inventory. Model geometry, manifest and operator package dependencies belong to the release. Fetch `inventory.json` next to its model URL to inspect file digests. An instance owns its placement and joint overrides. Address a point with an instance and its local member ID. The operator carries an explicit host and host-local targets. Each viewer owns its own camera and selection.
 
-An accepted edit writes the scene and its undo record in the same SQLite transaction. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. The local milestone uses newly authored rooms.
+An accepted edit writes the scene and its undo record together in one atomic file write in the project folder. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. 
 
-## Camera and workspace tools
+<a id="camera-and-workspace-tools"></a>
+
+## Camera and scene tools
 
 **Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
 
-The panel footer holds **Copy view link**, **Save picture**, **Trace** and **Settings**. A view link opens this workspace with its plan centre and zoom or its 3D camera, selected object and component. Pictures are PNGs of the visible plan or 3D drawing. Trace lists recorded layout edits newest first. Settings controls object labels, the floor grid, colours and component visibility. **Agent access** gives the workspace MCP endpoint.
+The panel footer holds **Copy view link**, **Save picture**, **Trace** and **Settings**. A view link opens this scene with its plan centre and zoom or its 3D camera, selected object and component. Pictures are PNGs of the visible plan or 3D drawing. Trace lists recorded layout edits newest first. Settings controls object labels, the floor grid, colours and component visibility. **Agent access** gives the scene MCP endpoint.
 
 **Reset all** restores neutral joint settings, component visibility and the camera. Undo restores the affected joint settings. To transfer a layout and saved versions to a colleague, see [Portable room projects](portable-projects.md).
 

@@ -1,12 +1,14 @@
 ---
-title: Workspaces on the server
+title: Single-station workspaces (retired)
 tldr: The server keeps many shared scenes, called workspaces, instead of one. Each has a random link, its own history and undo, its own live view, activity line and agent address. Anyone with a link can use, rename or delete it; making new ones is rate-limited; nothing is ever deleted for good by the server. Live on the public site since 2026-11-25.
-status: living
-updated: 2026-11-25
+status: stable
+updated: 2026-11-27
 tags: [server, workspaces, api, storage, limits, implementation]
 ---
 
-# Workspaces on the server
+# Single-station workspaces (retired)
+
+> **Superseded on 2026-11-27** by [Workspaces, projects and scenes](workspaces-projects-scenes.md). This page describes the earlier product, in which a "workspace" was one shared scene with one rig. The public site no longer serves it; the record below is kept for history.
 
 ## TL;DR
 

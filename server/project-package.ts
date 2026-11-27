@@ -11,7 +11,7 @@ import {
 } from "../shared/project.ts";
 import { ROOM_SCHEMA, type RoomCatalog, type RoomScene } from "../shared/room.ts";
 import { validateInstance, parseRoom } from "./room-model.ts";
-import { cleanName, isWorkspaceId } from "./workspaces.ts";
+import { cleanName, isWorkspaceId } from "./names.ts";
 
 export class ProjectError extends Error {
   constructor(

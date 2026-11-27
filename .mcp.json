@@ -2,7 +2,7 @@
   "mcpServers": {
     "synergon": {
       "type": "http",
-      "url": "${SYNERGON_WORKSPACE_MCP}"
+      "url": "${SYNERGON_SCENE_MCP}"
     }
   }
 }

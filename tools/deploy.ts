@@ -21,7 +21,10 @@
 //       pages are 200;
 //       <publicUrl>server/server.js does not answer 200 (the server's code is in the release but never served); and for
 //       a release with a server (version.json has a `server` entry) <publicUrl>api/health reports the deployed revision
-//       within 20 s, polled every second (any 404 or other answer after 20 s fails and switches back). Before the
+//       within 20 s, polled every second (any 404 or other answer after 20 s fails and switches back), then, read only,
+//       the scene API: the health's format, GET api/workspaces (the shared workspace), its tree with a scene, that
+//       scene's meta, api/catalog (the editions pinned in version.json), api/commands, llms.txt and the homepage's
+//       release-entry (sceneChecks; a rollback target from before the scene API is checked by its health). Before the
 //       switch, a release with a server first asks <publicUrl>api/health: a 404 means the web server has no route for
 //       the API, hence no 404 rule for server/ either, and the deploy stops before the upload (run setup-server.sh
 //       --apply on the host first). On any failure the symlink goes back to the previous release, that is checked again, and the command
@@ -55,6 +58,7 @@ import { join, resolve } from "node:path";
 import { ROOT, timeline } from "./timeline.ts";
 import { sourceRevision } from "./version.ts";
 import { lintWiki, formatFinding } from "./wiki.ts";
+import { ROOM_SCHEMA } from "../shared/room.ts";
 
 interface Config { host: string; remoteRoot: string; publicUrl: string; keepReleases: number }
 interface Check { what: string; url: string; ok: boolean; detail: string; required: boolean }
@@ -176,41 +180,9 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
   if (expect.version.server) {
     const health = await serverHealth(u, expect.version.revision);
     out.push(health);
-    if (health.ok) {
-      out.push(...(await workspaceChecks(u)));
-      const room = expect.version.server.room;
-      if (room) {
-        const base = u + "api/room/";
-        await attempt("room API revision and format", base + "health", true, async () => {
-          const status = await (await get(base + "health")).json();
-          return status.ok && status.revision === expect.version.revision && status.format === room.format ? true : "room API does not match the installed release";
-        });
-        await attempt("installed public room editions", base + "catalog", true, async () => {
-          const { releases } = await (await get(base + "catalog")).json();
-          return Array.isArray(releases) && room.releases.every((pin: { id: string; digest: string }) =>
-            releases.some(r => r.id === pin.id && r.digest === pin.digest)) ? true : "public catalog differs from version.json";
-        });
-        await attempt("public room command catalogue", base + "commands", true, async () => {
-          const { commands } = await (await get(base + "commands")).json();
-          return Array.isArray(commands) && ["instances.move", "assessment.run"].every(id => commands.some(c => c.id === id)) &&
-            commands.every(c => !c.id.startsWith("project.")) ? true : "room or assessment commands missing, or local project commands exposed";
-        });
-        await attempt("room directory available", base + "workspaces?limit=1", true, async () => {
-          const page = await (await get(base + "workspaces?limit=1")).json();
-          return Array.isArray(page.workspaces) && typeof page.total === "number" ? true : "invalid room directory";
-        });
-        await attempt("public screening source and homepage", u, true, async () => {
-          const home = await (await get(u)).text();
-          const source = await get(u + "standards/workstation-screening.md");
-          return home.includes('href="/workspaces/room') && home.includes('/release-entry.js') && source.ok && (await source.text()).includes('#')
-            ? true : "room homepage, routing entry or public criteria source missing";
-        });
-        await attempt("local project directory excluded", base + "projects", true, async () => {
-          const status = (await get(base + "projects")).status;
-          return status === 404 || status === 403 ? true : "public server returned HTTP " + status;
-        });
-      }
-    }
+    // the scene API of this release (read only: the deploy never writes to the live site). A release from before it
+    // (a rollback target whose version.json names another format) is checked by its health alone.
+    if (health.ok && expect.version.server.format === ROOM_FORMAT) out.push(...(await sceneChecks(u, expect.version.server)));
   }
   // server behaviour the site relies on; reported, but not a reason to roll back
   const base = u.replace(/\/$/, "");
@@ -220,8 +192,8 @@ export async function verifySite(cfg: Config, expect: { version: any; glb: { pat
       return r.status >= 301 && r.status <= 308 && new URL(to, base).href === u ? true : `HTTP ${r.status}${to ? ` to ${to}` : ""}`;
     });
   }
-  // a workspace's address is a page of the viewer (the web server hands out index.html for workspaces/*)
-  await attempt("workspaces/<id> gives the viewer page", u + "workspaces/deploy-check", false, async () => {
+  // a scene's address is a page of the viewer (the web server hands out index.html for workspaces/*)
+  await attempt("workspaces/<scene id> gives the viewer page", u + "workspaces/deploy-check", false, async () => {
     const r = await get(u + "workspaces/deploy-check"), type = r.headers.get("content-type") ?? "", body = await r.text();
     return r.status === 200 && type.includes("text/html") && /<html/i.test(body) ? true : `HTTP ${r.status}${type ? `, ${type}` : ""}`;
   });
@@ -265,25 +237,61 @@ async function serverHealth(u: string, revision: string): Promise<Check> {
     await sleep(1000);
   }
 }
-/** Read only the legacy index and row. Opening a live station can initialize its doc.json. */
-async function workspaceChecks(u: string): Promise<Check[]> {
-  const listUrl = u + "api/workspaces?limit=1", opts = { headers: { "cache-control": "no-cache", "user-agent": "synergon-deploy-check" } };
-  const what = "server: api/workspaces lists the workspaces", fail = (url: string, detail: string, w = what): Check[] => [{ what: w, url, ok: false, detail, required: true }];
-  let id = "", total = 0;
-  try {
-    const r = await fetch(listUrl, { ...opts, signal: AbortSignal.timeout(10000) }), body: any = r.status === 200 ? await r.json().catch(() => null) : null;
-    if (r.status !== 200) return fail(listUrl, `HTTP ${r.status}`);
-    if (!Array.isArray(body?.workspaces) || typeof body?.total !== "number") return fail(listUrl, "HTTP 200 but not a list of workspaces");
-    if (!body.workspaces.length || typeof body.workspaces[0]?.id !== "string") return fail(listUrl, "the server lists no workspace (it makes the Playground at its first start)");
-    id = body.workspaces[0].id; total = body.total;
-  } catch (e: any) { return fail(listUrl, e?.message ?? String(e)); }
-  const out: Check[] = [{ what, url: listUrl, ok: true, detail: `${total} workspace${total === 1 ? "" : "s"}`, required: true }];
-  const metadataUrl = u + "api/workspaces/" + encodeURIComponent(id), w2 = "server: station workspace metadata";
-  try {
-    const r = await get(metadataUrl), row = r.ok ? await r.json() : null;
-    if (row?.id !== id || typeof row?.name !== "string") out.push(...fail(metadataUrl, "station metadata unavailable, HTTP " + r.status, w2));
-    else out.push({ what: w2, url: metadataUrl, ok: true, detail: "ok", required: true });
-  } catch (e: any) { out.push(...fail(metadataUrl, e?.message ?? String(e), w2)); }
+/** The format of the scene API whose routes sceneChecks reads. */
+export const ROOM_FORMAT = ROOM_SCHEMA;
+/** The public scene API, read only: health format, the shared workspace and one of its scenes, the installed editions, the command
+ *  catalogue, the agent guide and the homepage. Every check is required. */
+async function sceneChecks(u: string, server: { format: string; releases: { id: string; digest: string }[] }): Promise<Check[]> {
+  const out: Check[] = [];
+  const read = async (url: string) => {
+    const r = await get(url), body: any = r.status === 200 ? await r.json().catch(() => null) : (await r.arrayBuffer(), null);
+    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+    if (body === null) throw new Error("HTTP 200 but not JSON");
+    return body;
+  };
+  const check = async (what: string, url: string, fn: () => Promise<string | true>) => {
+    try { const r = await fn(); out.push({ what, url, ok: r === true, detail: r === true ? "ok" : r, required: true }); return r === true; }
+    catch (e: any) { out.push({ what, url, ok: false, detail: e?.message ?? String(e), required: true }); return false; }
+  };
+  await check(`server: api/health reports the format ${server.format}`, u + "api/health", async () => {
+    const h = await read(u + "api/health");
+    return h.format === server.format ? true : `reports format ${h.format}`;
+  });
+  let ws = "", scene = "";
+  const listed = await check("server: api/workspaces lists the shared workspace", u + "api/workspaces", async () => {
+    const body = await read(u + "api/workspaces");
+    if (!Array.isArray(body?.workspaces)) return "HTTP 200 but not a list of workspaces";
+    if (body.workspaces.length !== 1 || typeof body.workspaces[0]?.id !== "string") return `expected the shared workspace alone, got ${body.workspaces.length} workspace(s)`;
+    ws = body.workspaces[0].id;
+    return true;
+  });
+  if (listed) await check("server: the shared workspace's tree has a scene", u + "api/workspaces/" + ws, async () => {
+    const tree = await read(u + "api/workspaces/" + encodeURIComponent(ws));
+    if (tree?.id !== ws || !Array.isArray(tree?.projects)) return "not the tree of the shared workspace";
+    scene = tree.projects.flatMap((p: any) => Array.isArray(p?.scenes) ? p.scenes : [])[0]?.id ?? "";
+    return scene ? true : "the shared workspace holds no scene (the server makes one at its first start)";
+  });
+  if (scene) await check("server: scene metadata names its workspace", u + "api/scenes/" + scene + "/meta", async () => {
+    const meta = await read(u + "api/scenes/" + encodeURIComponent(scene) + "/meta");
+    return meta?.id === scene && meta?.workspace?.id === ws && typeof meta?.project?.id === "string" ? true : "metadata does not match the scene";
+  });
+  await check("server: installed public room editions", u + "api/catalog", async () => {
+    const { releases } = await read(u + "api/catalog");
+    return Array.isArray(releases) && server.releases.every((pin) => releases.some((r: any) => r.id === pin.id && r.digest === pin.digest && String(r.modelUrl).startsWith("/api/library/")))
+      ? true : "the catalog differs from version.json or its files are not under /api/library/";
+  });
+  await check("server: public scene command catalogue", u + "api/commands", async () => {
+    const { commands } = await read(u + "api/commands");
+    return Array.isArray(commands) && ["instances.move", "assessment.run"].every((id) => commands.some((c: any) => c.id === id)) &&
+      commands.every((c: any) => !c.id.startsWith("project.")) ? true : "room or assessment commands missing, or project commands in the scene catalogue";
+  });
+  await check("agent guide, homepage and public screening source", u + "llms.txt", async () => {
+    const guide = await get(u + "llms.txt"), text = guide.ok ? await guide.text() : "";
+    const home = await (await get(u)).text(), source = await get(u + "standards/workstation-screening.md");
+    if (!text.includes("/api/scenes/") || text.includes("/api/room")) return `the agent guide (HTTP ${guide.status}) does not describe /api/scenes/`;
+    if (!home.includes("/release-entry.js?v=")) return "the homepage does not load /release-entry.js?v=<tag>";
+    return source.ok && (await source.text()).includes("#") ? true : `public criteria source HTTP ${source.status}`;
+  });
   return out;
 }
 /** What the receipt records about the server, from the checks of one release. */
@@ -298,8 +306,14 @@ const failedRequired = (checks: Check[]) => checks.filter((c) => !c.ok && c.requ
 function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], source = "dist/version.json", server: { revision: string } | null | "if it has one" = null) {
   const u = cfg.publicUrl;
   for (const [what, url] of [["200, HTML", u], [`equals ${source}`, u + "version.json"], [`size and SHA-256 given in ${source}`, u + glbPath], ["200, HTML", u + "wiki/"], ...pages.map((p) => ["200, HTML", u + "wiki/" + p]), ["anything but 200 (the server's code is never served)", u + "server/server.js"], ["anything but 200 (also without the file name)", u + "server/"], ["anything but 200 (also without the slash)", u + "server"]]) say(`  would check: GET ${url}  → ${what}`);
-  if (server) say(`  would check: GET ${u}api/workspaces?limit=1  → at least one workspace, then GET ${u}api/workspaces/<its id>  → matching station metadata; deployed room release checks read its catalog, commands, screening source and directory`);
   if (server) say(`  would check: GET ${u}api/health  → ${server === "if it has one" ? "for a release with a server: its revision" : `revision ${server.revision}`} within 20 s, asked every second (404 at once, or 502 or another revision after 20 s: a failure)`);
+  if (server) {
+    const which = server === "if it has one" ? `for a release with server.format ${ROOM_FORMAT}: ` : "";
+    for (const [what, url] of [[`format ${ROOM_FORMAT}`, u + "api/health"], ["the shared workspace alone", u + "api/workspaces"], ["its projects, at least one scene", u + "api/workspaces/<shared id>"],
+      ["the scene's workspace and project", u + "api/scenes/<scene id>/meta"], [`the editions pinned in ${source}, files under /api/library/`, u + "api/catalog"],
+      ["instances.move and assessment.run, no project.* command", u + "api/commands"], ["describes /api/scenes/", u + "llms.txt"], ["loads /release-entry.js?v=<tag>", u], ["200 with the criteria", u + "standards/workstation-screening.md"]])
+      say(`  would check: GET ${url}  → ${which}${what} (read only)`);
+  }
   else say(`  (no api/health check: ${source} has no server entry)`);
   for (const [what, url] of [...(new URL(u).pathname !== "/" ? [["redirect to " + u + " (warning only)", u.replace(/\/$/, "")]] : []), ["the viewer page, 200 HTML (warning only)", u + "workspaces/deploy-check"], ["redirect to wiki/ (warning only)", u + "wiki"], ["X-Robots-Tag noindex (warning only)", u]]) say(`  would check: GET ${url}  → ${what}`);
 }

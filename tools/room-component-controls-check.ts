@@ -10,6 +10,10 @@ import { serveRoom } from "./room-serve.ts";
 type Point = { x: number; y: number };
 const inspector = ".rm-scroll .rm-component-card";
 const element = (selector: string) => `document.querySelector(${JSON.stringify(selector)})`;
+// A scene page is /workspaces/{id}; its API is /api/scenes/{id}. A link without a view opens in 3D, so the
+// floor-plan checks open a link that asks for the plan.
+const sceneApi = (path: string) => path.replace(/^\/workspaces\//, "/api/scenes/");
+const planView = "#" + new URLSearchParams({ view: JSON.stringify({ mode: "plan", selected: null, member: null }) });
 
 async function pointer(page: Page, type: string, at: Point, count = 1) {
   await page.call("Input.dispatchMouseEvent", {
@@ -305,7 +309,7 @@ async function checkScope(page: Page, browser: Browser, base: string, path: stri
   const before = await read();
   const camera = await copyCamera(page);
   const scope = element(".rv-stage") + ".dataset.focusedAsset",
-    back = '[aria-label="Return to full room"]';
+    back = '[aria-label="Return to whole scene"]';
   const isolated = async (p: Page) => {
     await p.waitFor(
       scope +
@@ -371,11 +375,11 @@ async function checkScope(page: Page, browser: Browser, base: string, path: stri
   await wide.close();
 
   // A separate browser tab opens the full floor plan. Its collapsed navigation must be usable on a phone.
-  const mobile = await browser.page(base + path);
+  const mobile = await browser.page(base + path + planView);
   await mobile.viewport(390, 844);
   await mobile.waitFor(
     element('.rm-panel-closed .rv-plan [data-instance="station-a"] .rv-part'),
-    "the full room on a phone",
+    "the whole scene on a phone",
   );
   assert(!(await mobile.evaluate(scope)), "Focus leaked to another viewer");
   assert(
@@ -410,7 +414,7 @@ async function checkScope(page: Page, browser: Browser, base: string, path: stri
   for (const key of ["zoom", "halfWidth", "halfHeight"])
     assert(Math.abs(restored.orbit[key] - camera.orbit[key]) < 1e-6);
   await labelSetting(page, true, false);
-  assert.deepEqual(await read(), before, "Inspecting an individual asset altered the shared workspace");
+  assert.deepEqual(await read(), before, "Inspecting an individual asset altered the shared scene");
 }
 
 // Place a browser camera above the demo so world X/Y project directly onto the canvas.
@@ -451,7 +455,7 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   async function pickDatum(station: typeof a, datum: string, part: string) {
     const isEye = datum === "eye",
       ref = { instance: station.id, member: isEye ? "floor" : datum };
-    const response = await fetch(base + "/api" + path + "/command", {
+    const response = await fetch(base + sceneApi(path) + "/command", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Synergon": "1" },
       body: JSON.stringify({
@@ -490,7 +494,7 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
     assert.equal(await page.evaluate(element(inspector) + ".dataset.instance"), station.id);
     return point;
   }
-  const read = async (): Promise<RoomScene> => (await fetch(base + "/api" + path + "/state")).json();
+  const read = async (): Promise<RoomScene> => (await fetch(base + sceneApi(path) + "/state")).json();
   const seat = await pickDatum(b, "C_seat_pan", "C_seat_pan");
   const seatPixels = canvasStamp(seat, Math.ceil(scale * 0.9));
   await heldSeatSlider(page, read, inspector, seatPixels, "commit");
@@ -599,14 +603,15 @@ try {
   service = await serveRoom({ port: 0, dataDir: temp });
   const base = service.url.origin,
     port = Number(service.url.port);
-  const { workspaces } = (await (await fetch(base + "/api/workspaces")).json()) as {
-    workspaces: { id: string; name: string }[];
+  const { workspaces } = (await (await fetch(base + "/api/workspaces")).json()) as { workspaces: { id: string }[] };
+  const tree = (await (await fetch(base + "/api/workspaces/" + workspaces[0].id)).json()) as {
+    projects: { scenes: { id: string; name: string }[] }[];
   };
-  const id = workspaces.find((w) => w.name === "Control room")!.id,
+  const id = tree.projects.flatMap((p) => p.scenes).find((s) => s.name === "Control room")!.id,
     path = "/workspaces/" + id;
-  const state = async (): Promise<RoomScene> => (await fetch(base + "/api" + path + "/state")).json();
+  const state = async (): Promise<RoomScene> => (await fetch(base + sceneApi(path) + "/state")).json();
   browser = await Browser.launch();
-  const page = await browser.page(base + path);
+  const page = await browser.page(base + path + planView);
   await page.viewport(1440, 900);
   const ready = () => page.waitFor(element('[data-instance="station-b"] .rv-part'), "the station geometry");
   await ready();
@@ -631,7 +636,7 @@ try {
   const planSeat = element('[data-instance="station-b"] path[data-member="C_seat_pan"]') + '.getAttribute("d")';
   await clickControl(page, inspector + ' [title="Pop out component controls"]');
   await heldSeatSlider(page, state, ".rm-floating-card", planSeat, "cancel");
-  await simultaneousEdits(page, state, base + "/api" + path + "/command", planSeat);
+  await simultaneousEdits(page, state, base + sceneApi(path) + "/command", planSeat);
   snapshot = await state();
   await clickControl(page, '.rm-floating-card [title="Dock component controls"]');
   await exact(page, "J_seat_slide", "18");
@@ -718,7 +723,7 @@ try {
   await page.waitFor(element('.rw-pop[aria-label="Activity"]:not([hidden])'), "the activity panel");
   await clickControl(page, '[aria-label="Close activity"]');
   await clickControl(page, '[title="Collapse panel"]');
-  await clickControl(page, '[title="Open workspace panel"]');
+  await clickControl(page, '[title="Open scene panel"]');
   assert(await page.evaluate(element(inspector) + ".dataset.component === 'C_stand_monitor'"));
 
   const saved = snapshot;

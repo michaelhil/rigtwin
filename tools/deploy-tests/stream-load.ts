@@ -1,6 +1,7 @@
 // bun tools/deploy-tests/stream-load.ts [--seconds 60] [--streams 300] [--edits 50] [--limit-mb 150] [--budget-kb 512]
-//                                       [--bundle <server.js> --asset <dir>]
-// The security review's load (M2), as host check H14 runs it: the built server in deployed mode, 300 attempts at a
+//                                       [--bundle <release>/server/server.js]
+// The security review's load (M2), as host check H14 runs it: the built public server (default dist/server/server.js,
+// so run `bun run dist` first; it reads the library of its own release) in deployed mode, 300 attempts at a
 // live stream that never reads (6 per visitor key, one visitor per /24, through X-Forwarded-For from loopback, as
 // Caddy sends them; the server takes 150, server/limits.ts streamsTotal) and 50 full-pose edits a second from 50
 // other visitors. Every 5 s it prints the server's resident memory and CPU, how fast health answers, and, where
@@ -21,12 +22,15 @@ const str = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i +
 const SECONDS = opt("--seconds", 60), STREAMS = opt("--streams", 300), EDITS = opt("--edits", 50), LIMIT_MB = opt("--limit-mb", 150);
 const BUDGET = opt("--budget-kb", 512) * 1024, ONE_EVENT = 16 * 1024;     // a full-pose applied event is about 2 kB; 16 kB is generous
 const ROOT = join(import.meta.dir, "..", ".."), data = mkdtempSync(join(tmpdir(), "synergon-load-"));
-// the server under test: the repository's source, or (on the host, host check H14) a release's bundle and asset
-const ASSET = str("--asset") ?? join(ROOT, "assets", "rig-b", "build");
-const srv = Bun.spawn([process.execPath, str("--bundle") ?? join(ROOT, "server", "server.ts"), "--mode", "deployed", "--port", "0", "--data", data, "--asset", ASSET, "--revision", "load"], { stdout: "pipe", stderr: "inherit" });
+// the server under test: the release in dist/, or (on the host, host check H14) a release's bundle
+const bundle = str("--bundle") ?? join(ROOT, "dist", "server", "server.js");
+if (!existsSync(bundle)) { console.error(`no ${bundle}: run bun run dist first, or pass --bundle <release>/server/server.js`); process.exit(2); }
+const srv = Bun.spawn([process.execPath, bundle, "--mode", "deployed", "--port", "0", "--data", data, "--revision", "load"], { stdout: "pipe", stderr: "inherit" });
 const port: number = JSON.parse(new TextDecoder().decode((await srv.stdout.getReader().read()).value)).listening;
-// the workspace the load goes to: the Playground the server made in its empty data folder
-const WS: string = ((await (await fetch(`http://127.0.0.1:${port}/api/workspaces?search=Playground`)).json()) as any).workspaces[0].id;
+// the scene the load goes to: the furnished scene the server made in the shared workspace of its empty data folder
+const api = (path: string) => fetch(`http://127.0.0.1:${port}/api/${path}`).then((r) => r.json()) as Promise<any>;
+const shared = (await api("workspaces")).workspaces[0].id;
+const WS: string = (await api(`workspaces/${shared}`)).projects.flatMap((p: any) => p.scenes)[0].id;
 const rss = () => Number(spawnSync("ps", ["-o", "rss=", "-p", String(srv.pid)], { encoding: "utf8" }).stdout.trim()) / 1024;
 const cpu = () => spawnSync("ps", ["-o", "%cpu=", "-p", String(srv.pid)], { encoding: "utf8" }).stdout.trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -46,7 +50,7 @@ for i in range(${STREAMS}):
     s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
     s.connect(("127.0.0.1", ${port}))
     v = "10.%d.%d.1" % ((i // 6) % 250, i // 6)
-    s.sendall(("GET /api/workspaces/${WS}/live HTTP/1.1\\r\\nHost: mightwork.ai\\r\\nX-Forwarded-For: %s\\r\\n\\r\\n" % v).encode())
+    s.sendall(("GET /api/scenes/${WS}/live HTTP/1.1\\r\\nHost: mightwork.ai\\r\\nX-Forwarded-For: %s\\r\\n\\r\\n" % v).encode())
     head = s.recv(64)
     if not head.startswith(b"HTTP/1.1 200"): refused += 1; s.close()
     else: socks.append(s)
@@ -72,17 +76,18 @@ const refused = Number(dec.decode((await lines.read()).value).trim()), taken = S
 await sleep(1500);
 console.log(`${STREAMS} streams asked for, ${taken} taken, ${refused} refused; ${rss().toFixed(0)} MB`);
 
-// full-pose edits: every movable joint in one pose.set, spread over 50 visitors (each well under 60 a minute)
-const m = await Bun.file(join(ASSET, "rig-b.manifest.json")).json();
-const movable = m.joints.filter((j: any) => j.type !== "ball");
+// full-pose edits: every movable joint of the scene's station in one pose.apply, spread over 50 visitors (each well under 60 a minute)
+const scene = await api(`scenes/${WS}/state`), releases: any[] = (await api("catalog")).releases;
+const host = scene.instances.find((i: any) => releases.find((r) => r.id === i.release)?.kind === "station");
+const movable = releases.find((r) => r.id === host.release).joints.filter((j: any) => j.type !== "ball" && !j.locked);
 let sent = 0, ok = 0, peak = 0, k = 0, peakTcp = 0, slowHealth = 0;
 const refusals: Record<string, number> = {};
 const t0 = Date.now();
 const tick = setInterval(async () => {
   for (let e = 0; e < EDITS / 10; e++) {
     k++; sent++;
-    const joints = Object.fromEntries(movable.map((j: any) => { const f = (k % 7) / 7, v = j.lower + f * (j.upper - j.lower); return [j.id, j.type === "prismatic" ? v : (v * 180) / Math.PI]; }));
-    fetch(`http://127.0.0.1:${port}/api/workspaces/${WS}/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.set", args: { joints, allowAssumed: true } }) })
+    const values = Object.fromEntries(movable.map((j: any) => { const f = (k % 7) / 7; return [j.id, j.lower + f * (j.upper - j.lower)]; }));
+    fetch(`http://127.0.0.1:${port}/api/scenes/${WS}/command`, { method: "POST", headers: { "x-synergon": "1", "content-type": "application/json", "x-forwarded-for": `172.${16 + (k % 50)}.${k % 50}.9` }, body: JSON.stringify({ id: "pose.apply", args: { instance: host.id, values, allowAssumed: true } }) })
       .then((r) => r.json()).then((r) => { if (r.ok) ok++; else refusals[r.error?.code] = (refusals[r.error?.code] ?? 0) + 1; }).catch(() => {});
   }
 }, 100);

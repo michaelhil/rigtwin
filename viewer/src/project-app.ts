@@ -1,4 +1,4 @@
-// Local project directory. Workspace links enter the same room editor used by the agent interface.
+// Local project pages (Project details…). Scene links open the same editor that agents use.
 import { h, link } from "./dom.ts";
 import { action, brand, field, icon, select } from "./room-controls.ts";
 import {
@@ -7,6 +7,7 @@ import {
   type ProjectPackage,
   type ProjectSummary,
   type ReleaseMode,
+  type WorkspaceSummary,
 } from "../../shared/project.ts";
 
 class ProjectRequestError extends Error {
@@ -68,7 +69,7 @@ export async function startProjectApp() {
   status.setAttribute("role", "status");
   const contents = h("div");
   main.append(
-    h("nav", null, link("Projects", "/projects"), link("Workspaces", "/workspaces?list=1")),
+    h("nav", null, link("Projects", "/projects")),
     status,
     contents,
   );
@@ -112,17 +113,29 @@ export async function startProjectApp() {
     };
     return f;
   }
+  // Workspace names, read once: the pages say which workspace holds a project.
+  let workspaces: WorkspaceSummary[] = [];
+  const workspaceName = (id: string) => workspaces.find((w) => w.id === id)?.name ?? "Workspace";
   function directory(projects: ProjectSummary[]) {
     document.title = "Projects · Synergon";
     const title = textField("", "Control room study"),
-      folder = textField("", "Customer/Study");
+      folder = textField("", "Customer/Study"),
+      workspace = select(
+        "Workspace",
+        workspaces.map((w) => ({ value: w.id, label: w.name })),
+      );
     folder.required = false;
     const create = form(
       "Create project",
-      [field("Project name", title), field("Folder (optional)", folder)],
+      [
+        field("Project name", title),
+        ...(workspaces.length > 1 ? [field("Workspace", workspace)] : []),
+        field("Folder (optional)", folder),
+      ],
       async () => {
         const p = await call<ProjectDetail>("create", {
           name: title.value,
+          ...(workspaces.length > 1 ? { workspace: workspace.value } : {}),
           ...(folder.value ? { folder: folder.value } : {}),
         });
         location.assign(url(p.id));
@@ -176,7 +189,11 @@ export async function startProjectApp() {
     contents.replaceChildren(
       h("h1", null, "Projects"),
       projects.length
-        ? h("div", "rm-directory-list", ...projects.map((p) => row(p.name, url(p.id), p.folder)))
+        ? h(
+            "div",
+            "rm-directory-list",
+            ...projects.map((p) => row(p.name, url(p.id), workspaceName(p.workspace) + " · " + p.folder)),
+          )
         : h("p", "rm-help", "Create a project or import a colleague’s package."),
       disclosure("New project", create),
       disclosure("Import project", upload, copy),
@@ -188,11 +205,16 @@ export async function startProjectApp() {
       detail(await call<ProjectDetail>(cmd, { project: p.id, ...args }));
       report(message);
     };
-    const sceneName = textField(),
+    let next = 1;
+    while (p.scenes.some((s) => s.name === "Scene " + next)) next++;
+    const sceneName = textField("", "Scene " + next),
       template = select("Starting layout", [
         { value: "empty", label: "Empty room" },
         { value: "demo", label: "Furnished control room" },
       ]);
+    sceneName.required = false;
+    // Named versions refer to a scene by its portable ID.
+    const sceneOf = (key: string) => p.scenes.find((s) => s.portable === key || s.id === key);
     const first = p.scenes[0],
       sceneChoice = () =>
         select(
@@ -206,7 +228,7 @@ export async function startProjectApp() {
       "Named version",
       p.versions.map((v) => ({
         value: v.id,
-        label: (p.scenes.find((s) => s.id === v.scene)?.name ?? "Scene") + " · " + v.name + " · r" + v.revision,
+        label: (sceneOf(v.scene)?.name ?? "Scene") + " · " + v.name + " · r" + v.revision,
       })),
     );
     const other = h("select");
@@ -235,7 +257,7 @@ export async function startProjectApp() {
     });
     const restore = button("Restore selected version", async () => {
       const v = p.versions.find((v) => v.id === version.value)!,
-        scene = p.scenes.find((s) => s.id === v.scene)!;
+        scene = sceneOf(v.scene)!;
       if (
         !window.confirm(
           "Restore “" +
@@ -300,17 +322,21 @@ export async function startProjectApp() {
     );
     contents.replaceChildren(
       h("h1", null, p.name),
-      h("p", "rm-help", p.folder),
+      h("p", "rm-help", "In " + workspaceName(p.workspace) + " · folder " + p.folder),
       h("h2", null, "Scenes"),
       h(
         "div",
         "rm-directory-list",
-        ...p.scenes.map((s) => row(s.name, "/workspaces/" + s.workspace, "Revision " + s.revision)),
+        ...p.scenes.map((s) => row(s.name, "/workspaces/" + encodeURIComponent(s.id), "Revision " + s.revision)),
       ),
       disclosure(
         "Add scene",
         form("Create scene", [field("Scene name", sceneName), field("Starting layout", template)], () =>
-          update("scene", { name: sceneName.value, template: template.value }, "Scene added."),
+          update(
+            "scene",
+            { ...(sceneName.value.trim() ? { name: sceneName.value.trim() } : {}), template: template.value },
+            "Scene added.",
+          ),
         ),
       ),
       disclosure("Named versions", versions),
@@ -334,11 +360,15 @@ export async function startProjectApp() {
   }
   try {
     const project = location.pathname.replace(/^\/projects\/?/, "").replace(/\/$/, ""),
-      workspace = new URLSearchParams(location.search).get("scene");
+      scene = new URLSearchParams(location.search).get("scene");
+    workspaces = await fetch("/api/workspaces", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { workspaces?: WorkspaceSummary[] }) => j.workspaces ?? [])
+      .catch(() => []);
     if (project) detail(await call<ProjectDetail>("open", { project }));
-    else if (workspace) {
+    else if (scene) {
       try {
-        const p = await call<ProjectDetail>("open", { workspace });
+        const p = await call<ProjectDetail>("open", { scene });
         history.replaceState(null, "", url(p.id));
         detail(p);
       } catch (e) {

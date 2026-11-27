@@ -10,18 +10,33 @@
   <style>
     .room-home{margin:0;background:#f3f4f0;color:#243338;font:16px/1.5 system-ui,sans-serif;min-height:100svh}
     .home-bar{border-bottom:1px solid #dde3d9;background:#f8f9f5}.home-bar>div{width:min(92%,1180px);margin:0 auto;height:52px;display:flex;align-items:center;justify-content:space-between}
-    .home-bar a{text-decoration:none;font-weight:500}.home-bar a:hover{text-decoration:underline}.home-ws summary{text-decoration:none!important;font-weight:500}
+    .home-bar>div>a{text-decoration:none;font-weight:500;flex:none}.home-bar>div>a:hover{text-decoration:underline}
     .room-home main{width:min(92%,1180px);margin:0 auto;padding:3rem 0 4rem;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:3rem;align-items:center}
     .room-home h1{font:600 clamp(3rem,7vw,5.5rem)/1 system-ui,sans-serif;letter-spacing:-.07em;margin:0 0 1.3rem}
     .room-home p{max-width:40ch;font-size:1.15rem;margin:0}
-    .room-home nav{display:flex;flex-wrap:wrap;align-items:center;gap:1rem 1.3rem;margin-top:2rem}.room-home a{color:#22534e}
-    .room-home nav>a:first-child{background:#23534d;color:#fff;padding:.7rem 1.1rem;border-radius:.4rem;text-decoration:none}
-    .home-ws{position:relative}.home-ws summary{cursor:pointer;color:#22534e;text-decoration:underline;list-style:none}
-    .home-ws summary::-webkit-details-marker{display:none}.home-ws summary::after{content:" \25BE"}
-    .home-ws-menu{position:absolute;z-index:5;top:calc(100% + 6px);left:0;min-width:260px;max-height:60vh;overflow:auto;padding:6px;background:#fbfcf8;border:1px solid #cdd5ca;border-radius:8px;box-shadow:0 8px 24px #243a2f26}
-    .home-ws-head{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#68756b;margin:8px 8px 4px}
-    .home-ws-item{display:block;padding:7px 8px;border-radius:5px;text-decoration:none;color:#243338}.home-ws-item:hover,.home-ws-item:focus-visible{background:#e8eee8}
-    .home-ws-note{font-size:.9rem;color:#68756b;padding:6px 8px}
+    .room-home main nav{display:flex;flex-wrap:wrap;align-items:center;gap:1rem 1.3rem;margin-top:2rem}.room-home a{color:#22534e}
+    .room-home main nav>a:first-child{background:#23534d;color:#fff;padding:.7rem 1.1rem;border-radius:.4rem;text-decoration:none}
+    .room-home main nav>a[aria-busy]{background:#4d6f68;cursor:progress}
+    .room-home .hy-home{display:flex;align-items:center;gap:.15rem;min-width:0;flex:1;margin-left:-.5rem}
+    .room-home .hy-menu{position:relative;min-width:0;flex:0 1 auto}
+    .room-home .hy-trigger{display:flex;align-items:center;gap:.3rem;cursor:pointer;list-style:none;padding:.35rem .5rem;border-radius:6px;font-weight:500;color:#22534e;white-space:nowrap}
+    .room-home .hy-trigger::-webkit-details-marker{display:none}.room-home .hy-trigger:hover,.room-home .hy-menu[open]>.hy-trigger{background:#e8eee8}
+    .room-home .hy-label{min-width:0;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+    .room-home .hy .rm-icon{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    .room-home .hy-trigger .rm-icon{color:#68756b}.room-home .hy-sep{color:#9aa69c;flex:none}
+    .room-home .hy-list{position:absolute;z-index:5;top:calc(100% + 6px);left:0;min-width:260px;max-width:min(360px,calc(100vw - 32px));max-height:60vh;overflow:auto;padding:6px;background:#fbfcf8;border:1px solid #cdd5ca;border-radius:8px;box-shadow:0 8px 24px #243a2f26}
+    .room-home .hy-item{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:6px 8px;border:0;border-radius:5px;background:transparent;font:inherit;font-size:.95rem;text-align:left;color:#243338;text-decoration:none;cursor:pointer}
+    .room-home .hy-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .room-home .hy-item:hover,.room-home .hy-item:focus-visible{background:#e8eee8;outline:none}.room-home .hy-item[aria-current]{font-weight:600;color:#214f40}
+    .room-home .hy-item[aria-current] .rm-icon{color:#2f6a5f}.room-home .hy .hy-action{color:#22534e}.room-home .hy-action .rm-icon{color:#2f6a5f}
+    .room-home .hy-divider{border-top:1px solid #dde3d9;margin:5px 2px}.room-home .hy-note{font-size:.9rem;color:#68756b;padding:6px 8px;margin:0;max-width:none}
+    .room-home .dlg{width:min(380px,calc(100vw - 28px));padding:24px;border:1px solid #c8d1c3;border-radius:10px;background:#fbfcf8;color:#243338;box-shadow:0 8px 40px #20332c33}
+    .room-home .dlg::backdrop{background:#1a322747}.room-home .dlg h2{margin:0 0 18px;font-size:20px;font-weight:600;letter-spacing:-.02em}
+    .room-home .dlg-field{display:grid;gap:5px;font-size:.9rem;color:#4d5b52}
+    .room-home .dlg input{font:inherit;font-size:1rem;color:#243338;min-height:38px;padding:6px 10px;border:1px solid #c5d0c4;border-radius:5px;background:#fff}
+    .room-home .dlg-acts{margin-top:20px;display:flex;gap:8px;justify-content:flex-end}.room-home .dlg-err{color:#864330;margin:8px 0;font-size:.95rem}
+    .room-home .dlg-acts button{font:inherit;min-height:38px;padding:6px 14px;background:#fff;border:1px solid #cbd4c9;border-radius:5px;color:#243338;cursor:pointer}
+    .room-home .dlg-acts .primary{background:#23534d;border-color:#23534d;color:#fff}
     .home-story{position:relative;border:1px solid #d3dacf;border-radius:14px;background:#fff;box-shadow:0 10px 30px #243a2f1c;overflow:hidden}
     .home-viewport{display:grid}.home-slide{grid-area:1/1;margin:0;opacity:0;visibility:hidden;transition:opacity .35s ease,visibility 0s linear .35s}
     .home-slide.on{opacity:1;visibility:visible;transition:opacity .35s ease}.home-slide:not(.on) figcaption{visibility:hidden}
@@ -40,9 +55,13 @@
     .home-dot[aria-current=true]{color:#214f40;font-weight:600}.home-dot[aria-current=true]::after{transform:scaleX(1)}
     .rotating .home-dot[aria-current=true]::after{animation:home-progress 6s linear forwards}
     @keyframes home-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-    .home-control:focus-visible,.home-dot:focus-visible,.home-ws summary:focus-visible{outline:2px solid #2f6a5f;outline-offset:2px}
+    .home-control:focus-visible,.home-dot:focus-visible,.room-home .hy-trigger:focus-visible,.room-home .dlg :focus-visible{outline:2px solid #2f6a5f;outline-offset:2px}
+    .room-home .hy-item:focus-visible{box-shadow:inset 0 0 0 2px #2f6a5f}
+    @media(max-width:600px){.home-bar>div{position:relative;gap:.6rem}.home-bar>div>a[href="/wiki/"]{display:none}.home-hero-wiki{display:inline!important}.room-home .hy-label{max-width:34vw}.room-home .hy-home{gap:0;margin-left:-.3rem;font-size:15px}
+      .room-home .hy-menu{position:static}.room-home .hy-scene{flex-shrink:0}.room-home .hy-list{left:0;right:0;max-width:none;min-width:0}
+      .room-home .hy-trigger{gap:.1rem;padding:.35rem .3rem}.room-home .hy .hy-trigger .rm-icon{width:12px;height:12px}.room-home .hy-sep{padding:0 .1rem}}
     @media(max-width:900px){.room-home main{grid-template-columns:1fr;gap:2rem;padding-top:2rem}.home-dot{padding:0}.home-dot span{display:none}.home-dot::before,.home-dot::after{top:16px;height:4px}}
   </style>
 </head>
-<body class="room-home"><header class="home-bar"><div><span id="home-workspaces"></span><a href="/wiki/">Wiki</a></div></header><main><div><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a href="/workspaces">Open viewer</a><a href="/projects">Projects</a><a href="/llms.txt">Agent guide</a></nav></div><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
+<body class="room-home"><header class="home-bar"><div><span id="home-location"></span><a href="/wiki/">Wiki</a></div></header><main><div><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a id="home-open" href="/workspaces/">Open viewer</a><a href="/llms.txt">Agent guide</a><a class="home-hero-wiki" href="/wiki/" style="display:none">Wiki</a></nav></div><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
 </html>

@@ -1,4 +1,4 @@
-// The HTTP, CLI and local project MCP endpoint use the same contract.
+// The HTTP, CLI and project MCP endpoint use the same contract. The hierarchy is Workspace -> Project -> Scene.
 const text = { type: "string" },
   uuid = { type: "string", format: "uuid" };
 const folder = {
@@ -6,25 +6,31 @@ const folder = {
   description: "Folder relative to the local projects directory, e.g. Client/Control room.",
 };
 const mode = { type: "string", enum: ["link", "embed"] };
+const template = { enum: ["empty", "demo"], description: "empty (default) or demo, a furnished control room." };
 function command(id: string, description: string, properties: Record<string, unknown>, required: string[] = []) {
   return {
-    id: "project." + id,
+    id: id.includes(".") ? id : "project." + id,
     description,
     inputSchema: { type: "object", properties, required, additionalProperties: false },
   };
 }
 export const projectCommands = [
-  command("list", "List local projects and their folders.", {}),
+  command(
+    "workspace.create",
+    "Create a workspace with a first project and scene. Returns the workspace, project and scene IDs; open the scene at /workspaces/{scene}.",
+    { name: text, template },
+  ),
+  command("workspace.rename", "Rename a workspace.", { workspace: uuid, name: text }, ["workspace", "name"]),
+  command("list", "List projects with their workspace and folder.", {}),
   command(
     "open",
-    "Open the project by stable project ID or its local workspace ID. Lists scene/workspace IDs, revisions and dependencies.",
-    { project: uuid, workspace: uuid },
+    "Open a project by project ID, or the project that holds a scene. Lists its scenes (id, name, revision), named versions and dependencies.",
+    { project: uuid, scene: uuid },
   ),
   command(
     "create",
-    "Create a local project and its first empty scene. Markdown is the entire project record.",
-    { name: text, folder, markdown: text, sceneName: text },
-    ["name"],
+    "Create a project with its first scene in a workspace. Returns the project and the new scene ID. Markdown is the entire project record.",
+    { workspace: uuid, name: text, sceneName: text, template, folder, markdown: text },
   ),
   command("move", "Move the project folder and its subprojects. IDs remain stable.", { project: uuid, folder }, [
     "project",
@@ -39,10 +45,11 @@ export const projectCommands = [
   ),
   command(
     "scene",
-    "Add a named scene to this project. Open its workspace link to edit or measure.",
-    { project: uuid, name: text, template: { enum: ["empty", "demo"] } },
-    ["project", "name"],
+    "Add a scene to this project. Returns the project and the new scene ID; open it at /workspaces/{scene}.",
+    { project: uuid, name: text, template },
+    ["project"],
   ),
+  command("scene.rename", "Rename a scene.", { scene: uuid, name: text }, ["scene", "name"]),
   command(
     "save",
     "Freeze the chosen scene at its current revision under a version name.",
@@ -70,7 +77,7 @@ export const projectCommands = [
   command(
     "import",
     "Validate a complete package and import it atomically. Choose separateCopy for a divergent project. Existing identical content is reused.",
-    { package: { type: "object" }, folder, separateCopy: { type: "boolean" } },
+    { package: { type: "object" }, workspace: uuid, folder, separateCopy: { type: "boolean" } },
     ["package"],
   ),
 ];

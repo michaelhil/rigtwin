@@ -1,7 +1,8 @@
-// The homepage: a story carousel (photo -> model -> person -> room -> assessment -> agent -> wiki) and a menu of the
-// installation's workspaces. No three.js: the homepage loads only this small script and the pictures.
+// The homepage: a story carousel (photo -> model -> person -> room -> assessment -> agent -> wiki) and the
+// Workspaces › Projects › Scenes selector. No three.js: the homepage loads only this small script and the pictures.
 import { h, link } from './dom.ts';
-import { PUBLIC_ROOM, ROOM_API, roomURL } from './room-paths.ts';
+import { sceneURL } from './room-paths.ts';
+import { createWorkspace, hierarchy, lastScene } from './hierarchy.ts';
 
 interface Slide { step: string; title: string; text: string; image: string; alt: string; link?: { text: string; href: string } }
 const SLIDES: Slide[] = [
@@ -88,35 +89,21 @@ function carousel(host: HTMLElement) {
   show(0);
 }
 
-interface Listed { id: string; name: string }
-async function list(url: string): Promise<Listed[]> {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(String(response.status));
-  return ((await response.json()) as { workspaces: Listed[] }).workspaces;
-}
-/** "Open a workspace": every room of this installation and, on the public site, the older single-station workspaces. */
-function workspaceMenu(host: HTMLElement) {
-  const menu = h('div', 'home-ws-menu');
-  const details = h('details', 'home-ws', h('summary', null, 'Open a workspace'), menu);
-  host.replaceWith(details);
-  let loaded = false;
-  details.addEventListener('toggle', async () => {
-    if (!details.open || loaded) return;
-    menu.replaceChildren(h('p', 'home-ws-note', 'Loading…'));
-    try {
-      const [rooms, stations] = await Promise.all([list(ROOM_API + '/workspaces?limit=100'), PUBLIC_ROOM ? list('/api/workspaces?limit=100').catch(() => []) : Promise.resolve([])]);
-      const group = (title: string, items: Listed[], href: (id: string) => string) =>
-        items.length ? [h('p', 'home-ws-head', title), ...items.map(w => link(w.name, href(w.id), 'home-ws-item'))] : [];
-      menu.replaceChildren(...group('Rooms', rooms, roomURL), ...group('Single stations (earlier workspaces)', stations, id => '/workspaces/' + encodeURIComponent(id)));
-      if (!rooms.length && !stations.length) menu.replaceChildren(h('p', 'home-ws-note', 'No workspaces yet. Open the viewer to start one.'));
-      loaded = true;
-    } catch { menu.replaceChildren(h('p', 'home-ws-note', 'Workspaces could not be loaded. Try again later.')); }
+/** "Open viewer": the last scene this browser opened, else a new furnished one, created on this click (never on a GET). */
+function openViewer(a: HTMLAnchorElement) {
+  a.addEventListener('click', async e => {
+    if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if (a.getAttribute('aria-busy')) return;
+    const text = a.textContent; a.setAttribute('aria-busy', 'true'); a.textContent = 'Opening your scene…';
+    try { location.assign(sceneURL((await lastScene()) ?? (await createWorkspace('demo')).scene)); }
+    catch { location.assign(a.href); }   // the start screen offers the same, with the reason when it fails again
+    finally { addEventListener('pageshow', () => { a.textContent = text; a.removeAttribute('aria-busy'); }, { once: true }); }
   });
-  document.addEventListener('pointerdown', e => { if (details.open && !details.contains(e.target as Node)) details.open = false; });
-  details.addEventListener('keydown', e => { if (e.key === 'Escape') { details.open = false; details.querySelector('summary')?.focus(); } });
 }
 
-const story = document.getElementById('home-story'), picker = document.getElementById('home-workspaces');
+const story = document.getElementById('home-story'), picker = document.getElementById('home-location'), viewer = document.getElementById('home-open');
 if (story) carousel(story);
-if (picker) workspaceMenu(picker);
+if (picker) picker.replaceWith(hierarchy({ place: 'home' }).node);
+if (viewer instanceof HTMLAnchorElement) openViewer(viewer);
 export {};

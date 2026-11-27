@@ -1,11 +1,12 @@
-// Local, persistent room editor. Its SQLite store is independent of the single-station installation.
+// The local Synergon installation: homepage, scene editor, project pages and the scene API (Workspace -> Project ->
+// Scene) over one folder-based store under --data.
 import { mkdtempSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { createRoomLibrary } from "../server/room-installed.ts";
 import { PROJECT_BODY_BYTES } from "../shared/project.ts";
 import { loadRoomLibrary } from "../server/room-library.ts";
 import { createRoomApi } from "../server/room-api.ts";
-import { LOCAL_HOSTS } from "../server/server.ts";
+import { LOCAL_HOSTS } from "../server/http-guards.ts";
 import { runtimeParams } from "./bundle.ts";
 import { ROOT } from "./timeline.ts";
 
@@ -36,7 +37,7 @@ export async function serveRoom({ port, dataDir, emptyLibrary = false }: { port:
       if (!LOCAL_HOSTS.test(request.headers.get("host") ?? "") || (request.headers.has("origin") && request.headers.get("origin") !== origin)) return new Response("Local access only", { status: 403 });
       if (pathname.startsWith("/api/") || pathname === "/mcp") return api.fetch(request);
       if (!["GET","HEAD"].includes(request.method)) return new Response(null, { status: 405 });
-      if (pathname === "/" || /^\/(?:workspaces|projects)(?:\/[^/]+)?\/?$/.test(pathname)) {
+      if (pathname === "/" || /^\/(?:workspaces(?:\/room)?|projects)(?:\/[^/]+)?\/?$/.test(pathname)) {
         return new Response(html, { headers: { "Link": '</llms.txt>; rel="help", </api/commands>; rel="service-desc"', "Cache-Control": "no-cache" } });
       }
       if (pathname.startsWith("/wiki/")) {

@@ -10,27 +10,27 @@ import { serveFolder } from "../dist.ts";
 
 const dist = process.env.SYNERGON_DIST_TEST_DIR || join(import.meta.dir, "..", "..", "dist");
 const version = JSON.parse(readFileSync(join(dist, "version.json"), "utf8"));
-if (!version.server?.format) throw new Error("dist/version.json has no server entry: run bun run dist with server/server.ts present");
+if (!version.server?.format) throw new Error("dist/version.json has no server entry: run bun run dist first");
 const glbBuf = readFileSync(join(dist, "asset", `${version.model.asset}.glb`));
 const glb = { path: `asset/${version.model.asset}.glb`, bytes: glbBuf.length, sha256: createHash("sha256").update(glbBuf).digest("hex") };
 const wikiPages = ["README.html"];
 let pass = 0, fail = 0;
 const expect = (what: string, cond: boolean, detail = "") => { cond ? pass++ : fail++; console.log(`  ${cond ? "ok  " : "FAIL"} ${what}${!cond && detail ? `: ${detail}` : ""}`); };
 
-/** A stand-in Synergon server: answers /api/health with `status` and `revision()`, lists one workspace and returns its metadata
- *  (what the checks of the live site ask besides the health). `workspaces` false: no list (404), as the server of a release before them. */
-const WS = "6f1c2a3e-5b7d-4c9a-8e0f-1a2b3c4d5e6f";
+/** A stand-in Synergon server: answers /api/health with `status` and `revision()`, and the read-only scene API that the checks of the live
+ *  site ask besides the health: the shared workspace, its tree, one scene's meta, the catalog and the command catalogue. `workspaces` false:
+ *  no hierarchy (404), as the server of a release before it. */
+const WS = "00000000-0000-4000-8000-000000000001", PROJECT = "6f1c2a3e-5b7d-4c9a-8e0f-1a2b3c4d5e6f", SCENE = "7a2d3b4f-6c8e-4dab-9f10-2b3c4d5e6f70";
 function fakeApi(status: () => number, revision: () => string, workspaces = true) {
   return Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
     const p = new URL(req.url).pathname;
-    if (p === "/api/health") return Response.json({ ok: true, revision: revision(), format: "synergon-scene/1", mode: "deployed" }, { status: status() });
-    if (p === "/api/room/health") return Response.json({ ok: true, revision: revision(), format: version.server?.room?.format });
-    if (p === "/api/room/catalog") return Response.json({ releases: version.server?.room?.releases });
-    if (p === "/api/room/commands") return Response.json({ commands: ["instances.move", "assessment.run"].map(id => ({id})) });
-    if (p === "/api/room/workspaces") return Response.json({ workspaces: [], total: 0 });
+    if (p === "/api/health") return Response.json({ ok: true, revision: revision(), format: version.server?.format, mode: "deployed" }, { status: status() });
+    if (p === "/api/catalog") return Response.json({ releases: version.server?.releases.map((r: { id: string; digest: string }) => ({ ...r, modelUrl: `/api/library/${r.digest}/model.glb` })) });
+    if (p === "/api/commands") return Response.json({ commands: ["instances.move", "assessment.run"].map(id => ({id})) });
     if (!workspaces) return new Response("not found", { status: 404 });
-    if (p === "/api/workspaces") return Response.json({ workspaces: [{ id: WS, name: "Playground", created: "2026-11-25T00:00:00.000Z", changed: "2026-11-25T00:00:00.000Z" }], next: null, total: 1 });
-    if (p === `/api/workspaces/${WS}`) return Response.json({ id: WS, name: "Playground" });
+    if (p === "/api/workspaces") return Response.json({ workspaces: [{ id: WS, name: "Shared" }] });
+    if (p === `/api/workspaces/${WS}`) return Response.json({ id: WS, name: "Shared", projects: [{ id: PROJECT, name: "Control room", scenes: [{ id: SCENE, name: "Control room" }] }] });
+    if (p === `/api/scenes/${SCENE}/meta`) return Response.json({ id: SCENE, name: "Control room", version: 0, liveConnections: 0, workspace: { id: WS, name: "Shared" }, project: { id: PROJECT, name: "Control room" } });
     return new Response("not found", { status: 404 });
   } });
 }
@@ -118,25 +118,41 @@ writeFileSync(join(oldDist, "version.json"), JSON.stringify(noServer, null, 1) +
   expect("it is the only failure", r.failed.length === 1, r.failed.map((x) => x.what).join("; "));
   files.stop(true);
 }
-// 7. a server that answers its health but has no workspaces (a release before them): the deploy must not call it good
+// 7. a server that answers its health but has no workspace hierarchy (a release before it): the deploy must not call it good
 {
   const api = fakeApi(() => 200, () => version.revision, false);
   const s = serveFolder(dist, "/", { api: `http://127.0.0.1:${api.port}` });
-  const r = await run("7. a server without the workspaces' API", s, version);
+  const r = await run("7. a server without the workspace hierarchy", s, version);
   const w = r.get("server: api/workspaces");
   expect("the list of workspaces fails and is required", w?.ok === false && w.required && /HTTP 404/.test(w.detail), w?.detail);
-  expect("health itself is fine", r.get("server: api/health")?.ok === true);
+  expect("health itself is fine", r.get("server: api/health reports revision")?.ok === true);
   s.server.stop(true); api.stop(true);
 }
-// 8. the workspace check in a good server: the list and one metadata row, and the removed addresses are not asked
+// 8. the scene API in a good server: every read passes, the deploy only reads, and no removed address is asked
 {
-  const asked: string[] = [], inner = fakeApi(() => 200, () => version.revision), api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) { asked.push(new URL(req.url).pathname); return inner.fetch(req); } });
+  const asked: string[] = [], inner = fakeApi(() => 200, () => version.revision), api = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) { asked.push(`${req.method} ${new URL(req.url).pathname}`); return inner.fetch(req); } });
   const s = serveFolder(dist, "/", { api: `http://127.0.0.1:${api.port}` });
   const r = await run("8. what the checks ask of the server", s, version);
-  expect("the list and metadata are checked and ok", r.get("server: api/workspaces")?.ok === true && r.get("server: station workspace metadata")?.ok === true, r.checks.map((c) => `${c.what}: ${c.detail}`).join("; "));
-  expect("the deploy never opens a legacy station scene", !asked.some(p => p.endsWith("/live") || p.endsWith("/command")), asked.join(", "));
-  expect("the single-scene addresses are not asked", !asked.some((p) => ["/api/live", "/api/command", "/api/mcp"].includes(p)), asked.join(", "));
+  const names = ["server: api/health reports the format", "server: api/workspaces", "server: the shared workspace's tree", "server: scene metadata", "server: installed public room editions", "server: public scene command catalogue", "agent guide, homepage"];
+  expect("the hierarchy, a scene's meta, catalog, commands and guide are checked and ok", names.every((n) => r.get(n)?.ok === true), r.checks.map((c) => `${c.what}: ${c.detail}`).join("; "));
+  expect("all required checks pass", r.failed.length === 0, r.failed.map((c) => c.what + ": " + c.detail).join("; "));
+  expect("the deploy only reads", asked.every((a) => a.startsWith("GET ")), asked.join(", "));
+  expect("no scene is opened live or edited", !asked.some((a) => /\/(live|command|mcp|state)$/.test(a)), asked.join(", "));
+  expect("no removed address is asked", !asked.some((a) => a.includes("/api/room") || ["/api/live", "/api/command", "/api/mcp"].some((p) => a.endsWith(" " + p))), asked.join(", "));
   s.server.stop(true); api.stop(true); inner.stop(true);
+}
+// 9. a rollback target from before the scene API (another server.format): its health alone is checked
+{
+  const older = { ...version, server: { format: "synergon-scene/1" } }, olderDist = mkdtempSync(join(tmpdir(), "deploy-checks-older-"));
+  for (const f of readdirSync(dist)) if (f !== "version.json") symlinkSync(join(dist, f), join(olderDist, f));
+  writeFileSync(join(olderDist, "version.json"), JSON.stringify(older, null, 1) + "\n");
+  const api = fakeApi(() => 200, () => version.revision, false);
+  const s = serveFolder(olderDist, "/", { api: `http://127.0.0.1:${api.port}` });
+  const r = await run("9. an older release's server", s, older);
+  expect("health checked and ok", r.get("server: api/health reports revision")?.ok === true);
+  expect("no scene API check", !r.get("server: api/workspaces") && !r.get("server: installed public room editions"), r.checks.map((c) => c.what).join("; "));
+  expect("all required checks pass", r.failed.length === 0, r.failed.map((c) => c.what + ": " + c.detail).join("; "));
+  s.server.stop(true); api.stop(true); rmSync(olderDist, { recursive: true, force: true });
 }
 rmSync(oldDist, { recursive: true, force: true });
 console.log(`\ndeploy checks test: ${pass} passed, ${fail} failed`);

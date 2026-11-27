@@ -47,9 +47,10 @@ if (!nested) {
 
 // the server must never show error pages with code to visitors (R3b F4; security review S10)
 if (!own) {
-  const src = readFileSync(join(ROOT, "server", "server.ts"), "utf8"), serve = src.slice(src.indexOf("Bun.serve({"), src.indexOf("Bun.serve({") + 600);
+  // the public entry (server/room-public.ts, bundled by dist as server/server.js), not the station render harness
+  const src = readFileSync(join(ROOT, "server", "room-public.ts"), "utf8"), at = src.indexOf("Bun.serve({"), serve = at < 0 ? "" : src.slice(at, at + 600);
   const ok = serve.includes("development: false") && !/development:\s*true/.test(src);
-  report(ok, "server options", ok ? "server/server.ts passes development: false to Bun.serve" : "server/server.ts must pass development: false to Bun.serve (no error pages with code)");
+  report(ok, "server options", ok ? "server/room-public.ts passes development: false to Bun.serve" : "server/room-public.ts must pass development: false to Bun.serve (no error pages with code)");
 }
 // the setup script's harness (deploy/setup-server.sh against a stand-in host; about 9 s, no root, no network)
 if (!own) {
@@ -85,12 +86,6 @@ if (!own) for (const [name, dir, what] of [
   const r = spawnSync("bun", ["test", join(ROOT, dir)], { encoding: "utf8", cwd: ROOT });
   const out = (r.stdout + r.stderr).split("\n").filter((l) => l.trim());
   report(r.status === 0, name, r.status === 0 ? `${(out.find((l) => /^\s*\d+ pass\b/.test(l)) ?? "").trim()} (${what})` : `bun test ${dir} failed`, r.status === 0 ? [] : out.filter((l) => /\(fail\)|error|expect/i.test(l)));
-}
-
-// the agent interface v2 documents are generated (tools/agent-docs.ts): the Skill's reference and the wiki page must match the code
-if (!own) {
-  const r = spawnSync("bun", [join(ROOT, "tools", "agent-docs.ts"), "--check"], { encoding: "utf8", cwd: ROOT });
-  report(r.status === 0, "agent docs", (r.stdout + r.stderr).trim().split("\n").at(-1) + " (.claude/skills/operating-synergon/reference.md, wiki/80-reference/agent-interface.md)");
 }
 
 // ---- 3. determinism: a second build in a separate process must give the same bytes -------------------

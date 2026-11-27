@@ -1,4 +1,5 @@
-// Exercise the actual local viewer, its two renderers and its project directory with temporary data.
+// Exercise the actual local viewer, its two renderers, the Workspace › Project › Scene selector, the first run and the
+// project pages with temporary data.
 import { strict as assert } from "node:assert";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,21 +26,38 @@ async function wait(page: Page, test: string) {
   );
 }
 const click = (p: Page, label: string) => p.evaluate(`document.querySelector('[aria-label="${label}"]').click()`);
+const key = (p: Page, key: string, code: number) =>
+  p.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code: key, windowsVirtualKeyCode: code }).then(() =>
+    p.call("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: code }));
+const workspaceList = async () => ((await (await fetch(site + "/api/workspaces")).json()) as any).workspaces as { id: string; name: string }[];
 try {
-  const { workspaces } = (await (await fetch(site + "/api/workspaces")).json()) as any;
-  const ws = workspaces[0].id,
+  const workspaces = await workspaceList();
+  const tree = (await (await fetch(site + "/api/workspaces/" + workspaces[0].id)).json()) as any;
+  const ws = tree.projects[0].scenes[0].id,
     path = "/workspaces/" + ws;
   const page = await browser.page(site + path);
   await page.viewport(1280, 880);
   await wait(page, "document.querySelector('.rw-toolbar')");
-  await page.evaluate("document.querySelector('.rm-workspace-link').click()");
-  assert(
-    await page.evaluate(
-      "document.querySelector('.rm-workspace-switcher').open && !document.querySelector('.rm-workspace-menu a[href*=list]')",
-    ),
-  );
-  await wait(page, "document.querySelector('.rm-workspace-current')?.textContent.length > 0");
-  await page.evaluate("document.querySelector('.rm-workspace-link').click()");
+  // The panel head: Workspace › Project on the first line, the scene as the heading; the current entries are marked.
+  assert.equal(await page.evaluate("document.querySelector('nav[aria-label=Location] .hy-scene .hy-label').textContent"), "Control room");
+  assert.equal(await page.evaluate("document.querySelector('.hy-workspace summary').getAttribute('aria-label')"), "Workspace: My workspace");
+  assert(await page.evaluate("[...document.querySelectorAll('.hy-sep')].every(s=>s.getAttribute('aria-hidden')==='true')"));
+  await page.evaluate("document.querySelector('.hy-workspace summary').focus()");
+  await key(page, "ArrowDown", 40);
+  await wait(page, "document.querySelector('.hy-workspace').open && document.activeElement?.closest('.hy-workspace .hy-list')");
+  assert.equal(await page.evaluate("document.activeElement.getAttribute('aria-current')"), "page");
+  await key(page, "Escape", 27);
+  await wait(page, "!document.querySelector('.hy-workspace').open && document.activeElement===document.querySelector('.hy-workspace summary')");
+  await page.evaluate("document.querySelector('.hy-project summary').click()");
+  await wait(page, "document.querySelector('.hy-project .hy-item[aria-current]') && [...document.querySelectorAll('.hy-project a')].some(a=>a.textContent==='Project details…')");
+  await page.evaluate("document.querySelector('.hy-scene summary').click()");
+  await wait(page, "!document.querySelector('.hy-project').open && document.querySelector('.hy-scene a.hy-item[aria-current]')");
+  assert(!(await page.evaluate("document.body.innerText")).match(/Open a workspace|Room workspaces|Untitled room|Full room/));
+  await page.evaluate("document.querySelector('.hy-scene summary').click()");
+  // A link without a view opens in 3D; the floor plan is one click away.
+  assert.equal(await page.evaluate("document.querySelector('.rv-stage').dataset.view"), "3d");
+  await click(page, "2D plan");
+  await wait(page, "document.querySelector('.rv-stage').dataset.view==='plan'");
   await page.call("Page.setDownloadBehavior", { behavior: "allow", downloadPath: temp });
   await page.evaluate(
     `Object.defineProperty(navigator.clipboard,'writeText',{value:async text=>{window.__copied=text;}})`,
@@ -47,6 +65,7 @@ try {
   assert(await page.evaluate(`document.querySelector('.rw-pop').hidden`));
   await click(page, "Settings");
   assert(await page.evaluate(`document.querySelector('.rw-pop').textContent.includes('Agent access')`));
+  assert(await page.evaluate(`document.querySelector('.rw-pop').textContent.includes('Scene MCP endpoint') && document.querySelector('.rw-pop input[readonly]').value.endsWith('/api/scenes/${ws}/mcp')`));
   await page.evaluate(
     `[...document.querySelectorAll('.rw-check')].find(e=>e.textContent==='Floor grid').querySelector('input').click()`,
   );
@@ -86,7 +105,7 @@ try {
       `document.querySelector('.rv-stage').dataset.focusedAsset==='${id}' && document.querySelector('.rv-stage').dataset.view==='3d' && !!document.querySelector('[aria-label="Fit asset to view"]')`,
     );
   }
-  const api = site + "/api/workspaces/" + ws + "/command";
+  const api = site + "/api/scenes/" + ws + "/command";
   const command = async (id: string, args: object) =>
     (await (
       await fetch(api, {
@@ -128,7 +147,7 @@ try {
     focusedPage,
     "document.querySelector('.rv-stage')?.dataset.focusedAsset==='display-a' && document.querySelector('.rv-orbit-tag')?.dataset.instance==='display-a'",
   );
-  await click(page, "Return to full room");
+  await click(page, "Return to whole scene");
   await wait(
     page,
     "document.querySelector('.rv-stage').dataset.view==='plan' && !document.querySelector('.rv-stage').dataset.focusedAsset",
@@ -146,7 +165,7 @@ try {
   assert(!(await page.evaluate(`document.querySelector('[aria-label="Operator’s eye"]').disabled`)));
   const assetOrbit = (await sharedView()).state;
   assert(assetOrbit.orbit.halfWidth < roomOrbit.orbit.halfWidth);
-  await click(page, "Return to full room");
+  await click(page, "Return to whole scene");
   await wait(
     page,
     "!document.querySelector('.rv-stage').dataset.focusedAsset && document.querySelector('.rv-stage').dataset.view==='3d'",
@@ -188,9 +207,56 @@ try {
   assert((await command("instances.remove", { instance: "display-a" })).ok);
   await wait(
     focusedPage,
-    "!document.querySelector('.rv-stage')?.dataset.focusedAsset && document.querySelector('.rv-stage')?.dataset.view==='plan'",
+    "!document.querySelector('.rv-stage')?.dataset.focusedAsset && document.querySelector('.rv-stage')?.dataset.view==='3d'",
   );
   assert((await command("undo", {})).ok);
+  // "New scene" asks for a name only, prefilled with the next default, and opens the new, empty scene.
+  await page.evaluate("document.querySelector('.hy-scene summary').click()");
+  await wait(page, "[...document.querySelectorAll('.hy-scene .hy-action')].some(b=>b.textContent==='New scene')");
+  await page.evaluate("[...document.querySelectorAll('.hy-scene .hy-action')].find(b=>b.textContent==='New scene').click()");
+  // The project already holds one scene, so the next default is "Scene 2".
+  await wait(page, "document.querySelector('dialog[open] input')?.value==='Scene 2'");
+  await page.evaluate("document.querySelector('dialog[open] input').value='Option B';document.querySelector('dialog[open] form').requestSubmit()");
+  await wait(page, `location.pathname!=='${path}' && document.querySelector('.hy-scene .hy-label')?.textContent==='Option B'`);
+  const created = (await page.evaluate("location.pathname")).split("/").pop();
+  const createdScene = (await (await fetch(site + "/api/scenes/" + created + "/state")).json()) as any;
+  assert.equal(createdScene.instances.length, 0, "A scene made from the menu starts empty");
+
+  // First run: "Open viewer" goes to the last scene; with none, its click (not the page load) creates a furnished one.
+  const home = await browser.page(site + "/");
+  await wait(home, "document.querySelector('#home-open')");
+  await home.evaluate("localStorage.clear()");
+  const known = (await workspaceList()).length;
+  await home.call("Page.navigate", { url: site + "/workspaces" });
+  await wait(home, "document.querySelector('.rm-start-button')");
+  assert.equal((await workspaceList()).length, known, "Visiting /workspaces created a workspace");
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('.hy-home') && document.querySelector('#home-open')");
+  assert(!(await home.evaluate("document.body.innerText")).match(/Open a workspace|Rooms|Projects\n/));
+  await home.evaluate("document.querySelector('#home-open').click()");
+  await wait(home, "/^\\/workspaces\\/[0-9a-f-]{36}$/.test(location.pathname) && document.querySelector('.rv-stage')?.dataset.view==='3d' && document.querySelector('.rv-orbit canvas')");
+  assert.equal((await workspaceList()).length, known + 1);
+  const first = await home.evaluate("location.pathname");
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('#home-open')");
+  await home.evaluate("document.querySelector('#home-open').click()");
+  await wait(home, `location.pathname==='${first}' && document.querySelector('.rw-toolbar')`);
+  assert.equal((await workspaceList()).length, known + 1, "Open viewer created a second workspace");
+  // The homepage cascade: a workspace with one project picks it; choosing a scene opens it.
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('.hy-home .hy-workspace summary')");
+  assert(await home.evaluate("document.querySelector('.hy-project').hidden && document.querySelector('.hy-scene').hidden"));
+  await home.evaluate("document.querySelector('.hy-workspace summary').click()");
+  await wait(home, "[...document.querySelectorAll('.hy-workspace .hy-item')].some(b=>b.textContent==='My workspace')");
+  await home.evaluate("[...document.querySelectorAll('.hy-workspace .hy-item')].find(b=>b.textContent==='My workspace').click()");
+  await wait(home, "!document.querySelector('.hy-scene').hidden && document.querySelector('.hy-project .hy-label').textContent==='Examples' && document.activeElement===document.querySelector('.hy-scene summary')");
+  await home.evaluate("document.querySelector('.hy-scene summary').click()");
+  await wait(home, "[...document.querySelectorAll('.hy-scene a.hy-item')].length===2");
+  await home.evaluate("[...document.querySelectorAll('.hy-scene a.hy-item')].find(a=>a.textContent==='Option B').click()");
+  await wait(home, `location.pathname==='/workspaces/${created}' && document.querySelector('.rw-toolbar')`);
+  await home.call("Page.navigate", { url: site + "/workspaces/00000000-0000-4000-8000-00000000abcd" });
+  await wait(home, "document.querySelector('h1')?.textContent==='This scene no longer exists.'");
+
   const projects = await browser.page(site + "/projects");
   await wait(projects, "document.querySelector('.pr-shell h1')?.textContent==='Projects'");
   await projects.evaluate(
@@ -201,8 +267,11 @@ try {
     `[...document.querySelectorAll('summary')].find(s=>s.textContent==='Named versions').click();const v=[...document.querySelectorAll('form')].find(f=>f.textContent.includes('Save named version'));v.querySelector('input').value='Before changes';v.requestSubmit()`,
   );
   await wait(projects, "document.body.textContent.includes('Version saved.')");
+  await projects.call("Page.navigate", { url: site + "/projects?scene=" + ws });
+  await wait(projects, "document.querySelector('.pr-shell h1')?.textContent==='Examples' && document.querySelector('.pr-shell').textContent.includes('In My workspace')");
+  assert(await projects.evaluate(`[...document.querySelectorAll('.pr-shell a')].some(a=>a.getAttribute('href')==='/workspaces/${ws}')`));
   console.log(
-    "Passed Chromium project creation and version save, asset isolation and sharing, room camera restoration, focused asset removal, operator POV, PNG export, reset/undo, trace and settings.",
+    "Passed the Workspace › Project › Scene selector (keyboard, marks, new scene), first run (start screen, Open viewer creates once on click), a missing scene, project creation and version save, asset isolation and sharing, room camera restoration, focused asset removal, operator POV, PNG export, reset/undo, trace and settings.",
   );
 } finally {
   await browser.close();
