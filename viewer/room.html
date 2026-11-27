@@ -9,6 +9,8 @@
   <title>Synergon · Room layout</title>
   <style>
     .room-home{margin:0;background:#f3f4f0;color:#243338;font:16px/1.5 system-ui,sans-serif;min-height:100svh}
+    .home-bar{border-bottom:1px solid #dde3d9;background:#f8f9f5}.home-bar>div{width:min(92%,1180px);margin:0 auto;height:52px;display:flex;align-items:center;justify-content:space-between}
+    .home-bar a{text-decoration:none;font-weight:500}.home-bar a:hover{text-decoration:underline}.home-ws summary{text-decoration:none!important;font-weight:500}
     .room-home main{width:min(92%,1180px);margin:0 auto;padding:3rem 0 4rem;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:3rem;align-items:center}
     .room-home h1{font:600 clamp(3rem,7vw,5.5rem)/1 system-ui,sans-serif;letter-spacing:-.07em;margin:0 0 1.3rem}
     .room-home p{max-width:40ch;font-size:1.15rem;margin:0}
@@ -25,13 +27,13 @@
     .home-slide.on{opacity:1;visibility:visible;transition:opacity .35s ease}.home-slide:not(.on) figcaption{visibility:hidden}
     .home-slide img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;background:#e9ede5}
     .home-slide figcaption{display:grid;gap:.2rem;padding:1rem 1.2rem .4rem}.home-slide strong{font-size:1.15rem}
-    .home-slide figcaption span:last-child{color:#4d5b52}
+    .home-text{color:#4d5b52}.home-text a{white-space:nowrap}
     .home-step{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2f6a5f;font-weight:600}
     .home-controls{display:flex;align-items:center;gap:6px;padding:.4rem .8rem .9rem}
     .home-control{width:36px;height:36px;border:1px solid transparent;border-radius:8px;background:transparent;color:#3c4b42;font-size:1.2rem;cursor:pointer}
     .home-control:hover{background:#eef2ec}.home-toggle{font-size:.8rem}
-    .home-dots{display:flex;gap:4px;flex:1;min-width:0}
-    .home-dot{position:relative;flex:1;min-width:0;height:36px;border:0;background:transparent;cursor:pointer;padding:6px 2px 0;font:12px system-ui,sans-serif;color:#68756b}
+    .home-dots{display:flex;gap:3px;flex:1;min-width:0}
+    .home-dot{position:relative;flex:1;min-width:0;height:36px;border:0;background:transparent;cursor:pointer;padding:6px 1px 0;font:11.5px system-ui,sans-serif;color:#68756b}
     .home-dot span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .home-dot::before,.home-dot::after{content:"";position:absolute;left:2px;right:2px;top:0;height:3px;border-radius:2px;background:#dbe2d8}
     .home-dot::after{background:#23534d;transform:scaleX(0);transform-origin:left}
@@ -42,5 +44,5 @@
     @media(max-width:900px){.room-home main{grid-template-columns:1fr;gap:2rem;padding-top:2rem}.home-dot{padding:0}.home-dot span{display:none}.home-dot::before,.home-dot::after{top:16px;height:4px}}
   </style>
 </head>
-<body class="room-home"><main><header><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a href="/workspaces">Open viewer</a><span id="home-workspaces"></span><a href="/projects">Projects</a><a href="/llms.txt">Agent guide</a></nav></header><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
+<body class="room-home"><header class="home-bar"><div><span id="home-workspaces"></span><a href="/wiki/">Wiki</a></div></header><main><div><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a href="/workspaces">Open viewer</a><a href="/projects">Projects</a><a href="/llms.txt">Agent guide</a></nav></div><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
 </html>

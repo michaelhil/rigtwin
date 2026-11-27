@@ -10,7 +10,7 @@ tags: [implementation, viewer, server, assets]
 
 ## TL;DR
 
-Open the Synergon homepage or run `bun run serve` for a local installation. The homepage tells the story in five slides (photos, model, person, room, assessment). Choose **Open viewer** to return to the last room, or **Open a workspace** to pick one from the list of existing workspaces. The workspace menu at the top of the panel lists every workspace, marks the open one and creates an empty workspace. The **2D / 3D** switch at the left of the view controls in the lower right changes between the floor plan and the 3D view. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
+Open the Synergon homepage or run `bun run serve` for a local installation. The homepage tells the story in seven slides (photos, model, person, room, assessment, AI control, wiki). Choose **Open viewer** to return to the last room, or **Open a workspace** in the bar at the top to pick one from the list of existing workspaces; **Wiki** at the right of that bar opens this wiki. The workspace menu at the top of the panel lists every workspace, marks the open one and creates an empty workspace. The **2D / 3D** switch at the left of the view controls in the lower right changes between the floor plan and the 3D view. A fresh installation also creates the furnished **Control room**. The local room store lives under `work/room-layout`. Set `--data <folder>` and `--port <number>` to run another independent installation.
 
 ## Arrange and measure
 
@@ -38,7 +38,7 @@ Asset labels start hidden. Turn on **Object labels** in the left panel’s **Set
 
 ## Agent entry point
 
-The homepage links to `/llms.txt` and advertises the command catalogue. In production, rooms open under `/workspaces/room/{id}` and the table below uses `/api/room/` in place of `/api/`. The local room server uses the paths as printed. Existing single-station links on the public installation have a separate catalogue. The guide describes discovery, target qualification, units, writes and undo. All paths in this table are relative to that installation. Substitute the workspace UUID for `{id}`.
+The homepage links to `/llms.txt` and advertises the command catalogue. The guide opens by saying that it is written for AI agents acting on their user's requests. In production, rooms open under `/workspaces/room/{id}` and the table below uses `/api/room/` in place of `/api/`. The local room server uses the paths as printed. Existing single-station links on the public installation have a separate catalogue. The guide describes discovery, target qualification, units, writes and undo. All paths in this table are relative to that installation. Substitute the workspace UUID for `{id}`.
 
 | Operation | Interface |
 |---|---|

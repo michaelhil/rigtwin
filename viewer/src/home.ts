@@ -1,9 +1,9 @@
-// The homepage: a story carousel (photo -> model -> person -> room -> assessment) and a menu of the
+// The homepage: a story carousel (photo -> model -> person -> room -> assessment -> agent -> wiki) and a menu of the
 // installation's workspaces. No three.js: the homepage loads only this small script and the pictures.
 import { h, link } from './dom.ts';
 import { PUBLIC_ROOM, ROOM_API, roomURL } from './room-paths.ts';
 
-interface Slide { step: string; title: string; text: string; image: string; alt: string }
+interface Slide { step: string; title: string; text: string; image: string; alt: string; link?: { text: string; href: string } }
 const SLIDES: Slide[] = [
   { step: '1 · Photos', title: 'Start from photos of the real workplace',
     text: 'Phone photos with a ruler in view and a few measured spans are enough to begin.',
@@ -20,6 +20,14 @@ const SLIDES: Slide[] = [
   { step: '5 · Assessment', title: 'Measure and assess',
     text: 'Check viewing distances and clearances against cited guidelines, with an honest status for every finding.',
     image: '/home/5-assessment.jpg', alt: 'The floor plan with a viewing distance drawn at one station and the assessment findings beside it.' },
+  { step: '6 · AI control', title: 'Direct it with an AI agent',
+    text: 'Ask an agent such as Claude to move, adjust, measure or assess. It uses the same commands as the buttons; every change shows live and can be undone.',
+    image: '/home/6-agent.jpg', alt: 'The 3D viewer with an operator station and the Activity list showing three adjustments made by an agent.',
+    link: { text: 'Agent guide', href: '/llms.txt' } },
+  { step: '7 · Wiki', title: 'Every step documented',
+    text: 'The wiki records the method, the decisions, the measurements and how accurate they are, and what is still uncertain.',
+    image: '/home/7-wiki.jpg', alt: 'The Synergon wiki: an index of all pages grouped in sections such as overview, decisions, method and results.',
+    link: { text: 'Open the wiki', href: '/wiki/' } },
 ];
 const INTERVAL = 6000;
 
@@ -28,7 +36,9 @@ function carousel(host: HTMLElement) {
   const slides = SLIDES.map((s, i) => {
     const img = h('img'); img.src = s.image; img.alt = s.alt; img.width = 1440; img.height = 900;
     img.loading = i === 0 ? 'eager' : 'lazy'; img.decoding = 'async';
-    const slide = h('figure', 'home-slide', img, h('figcaption', null, h('span', 'home-step', s.step), h('strong', null, s.title), h('span', null, s.text)));
+    const text = h('span', 'home-text', s.text);
+    if (s.link) text.append(' ', link(s.link.text + '\u00a0→', s.link.href));
+    const slide = h('figure', 'home-slide', img, h('figcaption', null, h('span', 'home-step', s.step), h('strong', null, s.title), text));
     slide.setAttribute('role', 'group'); slide.setAttribute('aria-roledescription', 'slide');
     slide.setAttribute('aria-label', `${i + 1} of ${SLIDES.length}: ${s.title}`);
     return slide;
@@ -41,7 +51,7 @@ function carousel(host: HTMLElement) {
   const toggle = h('button', 'home-control home-toggle'); toggle.type = 'button';
   toggle.onclick = () => { stopped = !stopped; held = false; show(index); };
   const dots = SLIDES.map((s, i) => {
-    const d = h('button', 'home-dot', h('span', null, s.step)); d.type = 'button';
+    const d = h('button', 'home-dot', h('span', null, s.step.replace(/^\d+ · /, ''))); d.type = 'button';
     d.setAttribute('aria-label', `Show ${s.step}: ${s.title}`); d.onclick = () => { stopped = true; show(i); };
     return d;
   });

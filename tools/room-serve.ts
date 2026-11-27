@@ -40,7 +40,8 @@ export async function serveRoom({ port, dataDir, emptyLibrary = false }: { port:
         return new Response(html, { headers: { "Link": '</llms.txt>; rel="help", </api/commands>; rel="service-desc"', "Cache-Control": "no-cache" } });
       }
       if (pathname.startsWith("/wiki/")) {
-        const relative = decodeURIComponent(pathname.slice(5)) || "index.html";
+        let relative = decodeURIComponent(pathname.slice(6));
+        if (relative === "" || relative.endsWith("/")) relative += "index.html";
         if (!relative.split("/").every(p => /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(p))) return new Response("Invalid page", {status:400});
         if (!wikiDirectory) {
           const {buildWiki} = await import("./wiki.ts");

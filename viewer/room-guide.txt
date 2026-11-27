@@ -1,5 +1,7 @@
 # Synergon · Room layout
 
+This guide is written for AI agents. It helps an agent carry out what its user asks for in Synergon, for example: open a named workspace, place, move or swap a station, desk or display in the room, adjust a seat or monitor, seat an operator, measure a viewing distance or clearance, run an assessment, or show a view of the room. People working by hand can ignore it and open the viewer at /workspaces.
+
 Synergon is a work environment layout, design and evaluation tool. A workspace opens one live, saved scene. Each scene contains a room, zero or more placed assets and optionally one seated operator. This installation provides layout editing, measurements and ergonomic screening.
 
 ## Find the requested object

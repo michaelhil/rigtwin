@@ -562,3 +562,7 @@ A new section, [Operator desk](75-operator-desk/overview.md), explains the secon
 
 The homepage now has a carousel of five captioned screenshots that tells the story from photos to a measured model, a seated operator, a room and an assessment, and an **Open a workspace** list of the existing workspaces in place of the link to the management page. In a room, the workspace menu lists every workspace instead of offering a directory page, and one **2D / 3D** switch in the view controls replaces the Plan and 3D buttons in the panel ([room editor](50-implementation/room-layout.md)). An independent UX review led to a clearer selected state on the switch, a visible step marker on phones and tighter crops of two slides.
 
+
+## 2026-11-27 · Homepage: AI control and wiki slides, a top bar
+
+The carousel has two more slides: an agent adjusting Station A through the workspace's agent address, with the Activity list showing each change, and the wiki. Each links on (agent guide, wiki). **Open a workspace** moved into a new bar at the top of the homepage, with **Wiki** at its right. Both agent guides (`/llms.txt` for rooms and the station guide) now open by saying they are written for AI agents acting on a user's requests, with examples. The local server now opens `/wiki/` itself (it answered "Invalid page" before).
