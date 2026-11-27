@@ -23,7 +23,7 @@ const SLIDES: Slide[] = [
   { step: '6 · AI control', title: 'Direct it with an AI agent',
     text: 'Ask an agent such as Claude to move, adjust, measure or assess. It uses the same commands as the buttons; every change shows live and can be undone.',
     image: '/home/6-agent.jpg', alt: 'The 3D viewer with an operator station and the Activity list showing three adjustments made by an agent.',
-    link: { text: 'Agent guide', href: '/llms.txt' } },
+    link: { text: 'How to work with an agent', href: '/wiki/80-reference/agent-how-to.html' } },
   { step: '7 · Wiki', title: 'Every step documented',
     text: 'The wiki records the method, the decisions, the measurements and how accurate they are, and what is still uncertain.',
     image: '/home/7-wiki.jpg', alt: 'The Synergon wiki: an index of all pages grouped in sections such as overview, decisions, method and results.',

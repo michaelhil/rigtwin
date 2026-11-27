@@ -566,3 +566,7 @@ The homepage now has a carousel of five captioned screenshots that tells the sto
 ## 2026-11-27 · Homepage: AI control and wiki slides, a top bar
 
 The carousel has two more slides: an agent adjusting Station A through the workspace's agent address, with the Activity list showing each change, and the wiki. Each links on (agent guide, wiki). **Open a workspace** moved into a new bar at the top of the homepage, with **Wiki** at its right. Both agent guides (`/llms.txt` for rooms and the station guide) now open by saying they are written for AI agents acting on a user's requests, with examples. The local server now opens `/wiki/` itself (it answered "Invalid page" before).
+
+## 2026-11-27 · How-to: working with Synergon through an AI agent
+
+New page [How to work with Synergon through an AI agent](80-reference/agent-how-to.md): seven steps with screenshots and example requests for Claude Code or Codex, including what the Agent guide is and how to point an agent at it, the optional MCP connection, watching changes in Activity, and undo. The homepage's AI control slide now links only to this page.
