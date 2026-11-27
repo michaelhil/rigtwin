@@ -16,6 +16,11 @@ function command(id: string, description: string, properties: Record<string, unk
 }
 export const projectCommands = [
   command(
+    "demo.open",
+    "Open the demo: a furnished control room. With the scene a previous demo.open returned, it is reset to the default first; without, a new demo scene is made. Demo scenes are never listed.",
+    { scene: uuid },
+  ),
+  command(
     "workspace.create",
     "Create a workspace with a first project and scene. Returns the workspace, project and scene IDs; open the scene at /workspaces/{scene}.",
     { name: text, template },

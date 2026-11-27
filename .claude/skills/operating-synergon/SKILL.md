@@ -44,6 +44,7 @@ Over HTTP: `POST /api/scenes/<id>/command` with `Content-Type: application/json`
 | Measure | `measure.distance {"from", "to"}`, `measure.clearance {"instance"}` (door approach) |
 | Assess | use [assessing-synergon](../assessing-synergon/SKILL.md) |
 | Undo | `undo {"version": <recorded>}` or `undo {}` for the latest |
+| "let me try it" / a sandbox | `POST /api/projects/command` `demo.open {}` → a furnished demo scene of its own; `demo.open {"scene": <that id>}` resets it first |
 | New workspace, project or scene | `POST /api/projects/command` with `workspace.create`, `project.create {"workspace"}`, `project.scene {"project"}`; renames with `workspace.rename`, `project.rename`, `scene.rename` |
 
 - **The reply is the check.** An edit returns `ok`, `version`, `recorded` (the number to undo) and the result.

@@ -217,6 +217,29 @@ describe("room workspace", () => {
     } finally { missing.close(); }
   });
 
+  test("the demo is a furnished scene per browser, reset each time it is opened and never listed", async () => {
+    const app = setup();
+    const call = async (args: object) => (await app.post("projects/command", { id: "demo.open", args })).json() as Promise<any>;
+    const first = await call({});
+    expect(first.reset).toBe(false);
+    const path = "scenes/" + first.scene;
+    const fresh = await (await app.get(path + "/state")).json() as RoomScene;
+    expect(fresh.instances.length).toBe(4);
+    const removed = await (await app.post(path + "/command", { id: "instances.remove", args: { instance: fresh.instances.at(-1)!.id } })).json() as any;
+    expect(removed.ok).toBe(true);
+    const again = await call({ scene: first.scene });
+    expect([again.scene, again.reset]).toEqual([first.scene, true]);
+    const reset = await (await app.get(path + "/state")).json() as RoomScene;
+    expect([reset.instances.length, reset.version]).toEqual([4, 2]);
+    expect((await (await app.get(path + "/meta")).json() as any).workspace.name).toBe("Demo");
+    const demoWorkspace = (await (await app.get(path + "/meta")).json() as any).workspace.id;
+    await call({});
+    expect(((await (await app.get("workspaces/" + demoWorkspace)).json()) as any).projects).toEqual([]);
+    expect(((await (await app.get("workspaces")).json()) as any).workspaces.map((w: any) => w.name)).not.toContain("Demo");
+    const other = await app.create();
+    expect((await call({ scene: other.id })).error.code).toBe("not_demo");
+  });
+
   test("unsupported scene format fails without rewriting the file", async () => {
     const app = setup(), ws = await app.create();
     const file = (readdirSync(join(app.dir, "projects"), { recursive: true }) as string[]).find(f => f.endsWith(ws.id + ".json"))!;

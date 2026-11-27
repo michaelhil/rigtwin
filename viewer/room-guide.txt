@@ -18,6 +18,7 @@ Synergon is a work environment layout, design and evaluation tool. All paths bel
 
 ## Create a workspace, project or scene
 POST /api/projects/command with Content-Type: application/json and X-Synergon: 1, body {"id":"<command>","args":{...}}. GET /api/projects/commands lists the schemas.
+- {"id":"demo.open","args":{}} gives a demo scene (a furnished control room) of its own and returns {scene}; pass that scene again ({"scene":"<id>"}) to reset it to the default first. Use it when the user wants to try something without touching their own scenes. Demo scenes are never listed.
 - {"id":"workspace.create","args":{"name":"Study"}} creates a workspace with a first project and an empty scene and returns {workspace, project, scene}. Add "template":"demo" for a furnished control room.
 - {"id":"project.create","args":{"workspace":"<id>","name":"Phase 2"}} adds a project with a first scene; the answer's scene is its ID.
 - {"id":"project.scene","args":{"project":"<id>","name":"Option B"}} adds a scene to a project.

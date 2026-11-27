@@ -108,6 +108,7 @@
 .rm-notice.rm-error { border-color: #c7a58c; background: #fff9ef; }
 /* The first-visit note sits under the stage title, clear of the furnished room. */
 @media (min-width: 761px) { .rm-notice.rm-notice-top { top: 96px; bottom: auto; } }
+@media (max-width: 760px) { .rm-notice.rm-notice-top { top: 72px; bottom: auto; } }
 .rm-notice .rm-icon-action { flex: none; }
 .rm-grip { position: absolute; z-index: 7; top: 0; bottom: 0; left: calc(var(--rm-panel-width) - 3px); width: 7px; touch-action: none; cursor: col-resize; }
 .rm-grip::before { content: ''; position: absolute; top: 47%; left: 2px; width: 3px; height: 28px; background: #b9c5b7; border-radius: 3px; }

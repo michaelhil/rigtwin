@@ -222,32 +222,74 @@ try {
   const createdScene = (await (await fetch(site + "/api/scenes/" + created + "/state")).json()) as any;
   assert.equal(createdScene.instances.length, 0, "A scene made from the menu starts empty");
 
-  // First run: "Open viewer" goes to the last scene; with none, its click (not the page load) creates a furnished one.
+  // The homepage creates nothing on load. "Open demo" opens this browser's demo scene, reset to the furnished default
+  // on every click; the demo is never prefilled or remembered. The breadcrumb starts at the last real scene, and Play opens it.
+  const projectCount = async () => (((await (await fetch(site + "/api/projects")).json()) as any).projects as unknown[]).length;
   const home = await browser.page(site + "/");
-  await wait(home, "document.querySelector('#home-open')");
+  await wait(home, "document.querySelector('#home-demo')");
   await home.evaluate("localStorage.clear()");
-  const known = (await workspaceList()).length;
+  const known = (await workspaceList()).length, made = await projectCount();
   await home.call("Page.navigate", { url: site + "/workspaces" });
-  await wait(home, "document.querySelector('.rm-start-button')");
-  assert.equal((await workspaceList()).length, known, "Visiting /workspaces created a workspace");
+  await wait(home, "document.querySelector('.rm-start-button')?.textContent==='Open demo'");
   await home.call("Page.navigate", { url: site + "/" });
-  await wait(home, "document.querySelector('.hy-home') && document.querySelector('#home-open')");
-  assert(!(await home.evaluate("document.body.innerText")).match(/Open a workspace|Rooms|Projects\n/));
-  await home.evaluate("document.querySelector('#home-open').click()");
+  await wait(home, "document.querySelector('.hy-home') && document.querySelector('#home-demo')");
+  await Bun.sleep(300);
+  assert.equal(await projectCount(), made, "Loading the homepage or /workspaces created something");
+  assert(!(await home.evaluate("document.body.innerText")).match(/Open a workspace|Open viewer|Rooms|Projects\n/));
+  assert(await home.evaluate("document.querySelector('.hy-play').hidden && document.querySelector('.hy-workspace .hy-label').textContent==='Workspaces'"));
+  await home.evaluate("document.querySelector('#home-demo').click()");
   await wait(home, "/^\\/workspaces\\/[0-9a-f-]{36}$/.test(location.pathname) && document.querySelector('.rv-stage')?.dataset.view==='3d' && document.querySelector('.rv-orbit canvas')");
-  assert.equal((await workspaceList()).length, known + 1);
-  const first = await home.evaluate("location.pathname");
-  await home.call("Page.navigate", { url: site + "/" });
-  await wait(home, "document.querySelector('#home-open')");
-  await home.evaluate("document.querySelector('#home-open').click()");
-  await wait(home, `location.pathname==='${first}' && document.querySelector('.rw-toolbar')`);
-  assert.equal((await workspaceList()).length, known + 1, "Open viewer created a second workspace");
-  // The homepage cascade: a workspace with one project picks it; choosing a scene opens it.
-  await home.call("Page.navigate", { url: site + "/" });
-  await wait(home, "document.querySelector('.hy-home .hy-workspace summary')");
-  assert(await home.evaluate("document.querySelector('.hy-project').hidden && document.querySelector('.hy-scene').hidden"));
+  await wait(home, "document.querySelector('.rm-notice span')?.textContent==='This demo resets each time you open it from the homepage. Your changes here are not kept.'");
+  // A demo shows only "Demo ▾" above its scene; its workspace menu offers the visitor's own workspaces and "New workspace".
+  assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-editor .hy-label')].filter(e=>!e.closest('[hidden]')).map(e=>e.textContent).join(' › ')"), "Demo › Control room");
   await home.evaluate("document.querySelector('.hy-workspace summary').click()");
   await wait(home, "[...document.querySelectorAll('.hy-workspace .hy-item')].some(b=>b.textContent==='My workspace')");
+  assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-workspace .hy-action')].map(b=>b.textContent).join('|')"), "New workspace");
+  await home.evaluate("document.querySelector('.hy-workspace summary').click()");
+  assert.equal((await workspaceList()).length, known, "The demo appeared in the workspace list");
+  const demoPath = await home.evaluate("location.pathname"), demoApi = site + demoPath.replace("/workspaces/", "/api/scenes/");
+  const removed = (await (await fetch(demoApi + "/command", { method: "POST", headers: { "content-type": "application/json", "x-synergon": "1" },
+    body: JSON.stringify({ id: "instances.remove", args: { instance: "display-a" } }) })).json()) as any;
+  assert(removed.ok);
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('#home-demo')");
+  await Bun.sleep(300);
+  assert(await home.evaluate("document.querySelector('.hy-play').hidden"), "The demo was prefilled as the last scene");
+  assert(!(await home.evaluate("(localStorage.getItem('synergon.roomRecents')||'')+(localStorage.getItem('synergon.workspaces')||'')")).includes(demoPath.split("/").pop()),
+    "The demo was remembered as a recent scene");
+  await home.evaluate("document.querySelector('#home-demo').click()");
+  await wait(home, `location.pathname==='${demoPath}' && document.querySelector('.rw-toolbar')`);
+  const reset = (await (await fetch(demoApi + "/state")).json()) as any;
+  assert(reset.instances.some((i: any) => i.id === "display-a") && reset.version > removed.version, "Open demo did not reset the demo scene");
+  assert.equal(await projectCount(), made + 1, "Open demo made more than one demo scene");
+  // A real scene becomes the last scene: the breadcrumb starts there and Play opens it.
+  await home.call("Page.navigate", { url: site + path });
+  await wait(home, "document.querySelector('.rw-toolbar')");
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('.hy-scene .hy-label')?.textContent==='Control room' && document.querySelector('.hy-play')?.hidden===false");
+  assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-home .hy-label')].map(e=>e.textContent).join(' › ')"), "My workspace › Examples › Control room");
+  assert.equal(await home.evaluate("document.querySelector('.hy-play').getAttribute('aria-label')"), "Open Control room");
+  // The homepage menus offer "New …" but no "Rename …".
+  await home.evaluate("document.querySelector('.hy-scene summary').click()");
+  await wait(home, "document.querySelector('.hy-scene a.hy-item')");
+  assert(!(await home.evaluate("document.querySelector('.hy-home').textContent")).includes("Rename"));
+  await home.evaluate("document.querySelector('.hy-scene summary').click()");
+  // Opening the demo again leaves the last real scene in place: the breadcrumb still starts at the person's own work.
+  await home.evaluate("document.querySelector('#home-demo').click()");
+  await wait(home, `location.pathname==='${demoPath}' && document.querySelector('.rw-toolbar')`);
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('.hy-scene .hy-label')?.textContent==='Control room' && document.querySelector('.hy-play')?.hidden===false");
+  assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-home .hy-label')].map(e=>e.textContent).join(' › ')"), "My workspace › Examples › Control room");
+  await home.evaluate("document.querySelector('.hy-play').click()");
+  await wait(home, `location.pathname==='${path}' && document.querySelector('.rw-toolbar')`);
+  await home.call("Page.navigate", { url: site + "/workspaces" });
+  await wait(home, `location.pathname==='${path}' && document.querySelector('.rw-toolbar')`);
+  // The homepage cascade: choosing another workspace clears the scene; a single project is picked; choosing a scene opens it.
+  await home.call("Page.navigate", { url: site + "/" });
+  await wait(home, "document.querySelector('.hy-play')?.hidden===false");
+  await home.evaluate("document.querySelector('.hy-workspace summary').click()");
+  await wait(home, "[...document.querySelectorAll('.hy-workspace .hy-item')].some(b=>b.textContent==='My workspace')");
+  assert(!(await home.evaluate("[...document.querySelectorAll('.hy-workspace .hy-item')].some(b=>b.textContent==='Demo')")));
   await home.evaluate("[...document.querySelectorAll('.hy-workspace .hy-item')].find(b=>b.textContent==='My workspace').click()");
   await wait(home, "!document.querySelector('.hy-scene').hidden && document.querySelector('.hy-project .hy-label').textContent==='Examples' && document.activeElement===document.querySelector('.hy-scene summary')");
   await home.evaluate("document.querySelector('.hy-scene summary').click()");
@@ -271,7 +313,7 @@ try {
   await wait(projects, "document.querySelector('.pr-shell h1')?.textContent==='Examples' && document.querySelector('.pr-shell').textContent.includes('In My workspace')");
   assert(await projects.evaluate(`[...document.querySelectorAll('.pr-shell a')].some(a=>a.getAttribute('href')==='/workspaces/${ws}')`));
   console.log(
-    "Passed the Workspace › Project › Scene selector (keyboard, marks, new scene), first run (start screen, Open viewer creates once on click), a missing scene, project creation and version save, asset isolation and sharing, room camera restoration, focused asset removal, operator POV, PNG export, reset/undo, trace and settings.",
+    "Passed the Workspace › Project › Scene selector (keyboard, marks, new scene), Open demo (no creation on load, the same demo scene reset on each click, never prefilled), the prefilled breadcrumb and Play, a missing scene, project creation and version save, asset isolation and sharing, room camera restoration, focused asset removal, operator POV, PNG export, reset/undo, trace and settings.",
   );
 } finally {
   await browser.close();

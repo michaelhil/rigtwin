@@ -29,6 +29,10 @@
     .room-home .hy-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .room-home .hy-item:hover,.room-home .hy-item:focus-visible{background:#e8eee8;outline:none}.room-home .hy-item[aria-current]{font-weight:600;color:#214f40}
     .room-home .hy-item[aria-current] .rm-icon{color:#2f6a5f}.room-home .hy .hy-action{color:#22534e}.room-home .hy-action .rm-icon{color:#2f6a5f}
+    .room-home .hy-play{flex:none;display:inline-flex;align-items:center;gap:.3rem;height:30px;margin-left:.5rem;padding:0 .8rem 0 .6rem;border:0;border-radius:15px;background:#23534d;color:#fff;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer}
+    .room-home .hy-play svg{width:14px;height:14px;fill:currentColor}.room-home .hy-play:hover{background:#173f3a}.room-home .hy-play[hidden]{display:none}
+    .room-home .hy-play:focus-visible{outline:2px solid #2f6a5f;outline-offset:2px}
+    .room-home .home-error{margin-top:1rem;font-size:.95rem;color:#864330}
     .room-home .hy-divider{border-top:1px solid #dde3d9;margin:5px 2px}.room-home .hy-note{font-size:.9rem;color:#68756b;padding:6px 8px;margin:0;max-width:none}
     .room-home .dlg{width:min(380px,calc(100vw - 28px));padding:24px;border:1px solid #c8d1c3;border-radius:10px;background:#fbfcf8;color:#243338;box-shadow:0 8px 40px #20332c33}
     .room-home .dlg::backdrop{background:#1a322747}.room-home .dlg h2{margin:0 0 18px;font-size:20px;font-weight:600;letter-spacing:-.02em}
@@ -57,11 +61,11 @@
     @keyframes home-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
     .home-control:focus-visible,.home-dot:focus-visible,.room-home .hy-trigger:focus-visible,.room-home .dlg :focus-visible{outline:2px solid #2f6a5f;outline-offset:2px}
     .room-home .hy-item:focus-visible{box-shadow:inset 0 0 0 2px #2f6a5f}
-    @media(max-width:600px){.home-bar>div{position:relative;gap:.6rem}.home-bar>div>a[href="/wiki/"]{display:none}.home-hero-wiki{display:inline!important}.room-home .hy-label{max-width:34vw}.room-home .hy-home{gap:0;margin-left:-.3rem;font-size:15px}
+    @media(max-width:600px){.home-bar>div{position:relative;gap:.6rem;height:auto;min-height:52px;padding:5px 0}.home-bar>div>a[href="/wiki/"]{display:none}.home-hero-wiki{display:inline!important}.room-home .hy-label{max-width:none}.room-home .hy-home{flex-wrap:wrap;row-gap:2px}.room-home .hy-home{padding-right:40px}.room-home .hy-play{position:absolute;right:0;top:50%;transform:translateY(-50%);width:30px;margin:0;padding:0;justify-content:center}.room-home .hy-play span{display:none}.room-home .hy-play svg{margin-left:2px}.room-home .hy-home{gap:0;margin-left:-.3rem;font-size:15px}
       .room-home .hy-menu{position:static}.room-home .hy-scene{flex-shrink:0}.room-home .hy-list{left:0;right:0;max-width:none;min-width:0}
       .room-home .hy-trigger{gap:.1rem;padding:.35rem .3rem}.room-home .hy .hy-trigger .rm-icon{width:12px;height:12px}.room-home .hy-sep{padding:0 .1rem}}
     @media(max-width:900px){.room-home main{grid-template-columns:1fr;gap:2rem;padding-top:2rem}.home-dot{padding:0}.home-dot span{display:none}.home-dot::before,.home-dot::after{top:16px;height:4px}}
   </style>
 </head>
-<body class="room-home"><header class="home-bar"><div><span id="home-location"></span><a href="/wiki/">Wiki</a></div></header><main><div><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a id="home-open" href="/workspaces/">Open viewer</a><a href="/llms.txt">Agent guide</a><a class="home-hero-wiki" href="/wiki/" style="display:none">Wiki</a></nav></div><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
+<body class="room-home"><header class="home-bar"><div><span id="home-location"></span><a href="/wiki/">Wiki</a></div></header><main><div><h1>Synergon</h1><p>Design and evaluate work environments. Model a workplace from photos, arrange it in a room, seat an operator and measure the layout.</p><nav><a id="home-demo" href="/workspaces/">Open demo</a><a href="/llms.txt">Agent guide</a><a class="home-hero-wiki" href="/wiki/" style="display:none">Wiki</a></nav></div><section id="home-story" class="home-story" aria-label="How Synergon works"></section></main><script type="module" src="/room-entry.js"></script></body>
 </html>

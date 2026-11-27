@@ -1,6 +1,8 @@
 // Workspace › Project › Scene: one selector for the homepage bar and the editor's panel head. A level appears once its
-// parent is chosen, a workspace with a single project picks it, and choosing a scene opens it. Each list ends with
-// "New …" (a name only; menus create empty scenes) and "Rename …". No import from the engine: the homepage uses it.
+// parent is chosen, a workspace with a single project picks it, and choosing a scene opens it. On the homepage it starts
+// at the last scene this browser opened, and a Play button opens the chosen scene. Each list ends with "New …" (a name
+// only; menus create empty scenes) and, in the editor, "Rename …". The demo is apart from all of it: its scenes are never listed,
+// prefilled or remembered. No import from the engine: the homepage uses it.
 import { h, link } from './dom.ts';
 import { ask } from './dialog.ts';
 import { icon } from './room-controls.ts';
@@ -12,7 +14,9 @@ export interface Place { workspace: Named; project: Named; scene: Named }
 type Level = 'workspace' | 'project' | 'scene';
 
 // Browser storage: the scenes this browser opened (newest first) and, for the public list, the workspaces it made or opened.
-const RECENTS = 'synergon.roomRecents', KNOWN = 'synergon.workspaces';
+const RECENTS = 'synergon.roomRecents', KNOWN = 'synergon.workspaces', DEMO = 'synergon.demoScene';
+/** The workspace that holds every browser's demo scene; GET /api/workspaces never lists it. */
+export const DEMO_WORKSPACE = '00000000-0000-4000-8000-000000000002';
 function ids(key: string): string[] {
   try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; }
   catch { return []; }
@@ -20,7 +24,7 @@ function ids(key: string): string[] {
 function keep(key: string, list: string[], max: number) { try { localStorage.setItem(key, JSON.stringify(list.slice(0, max))); } catch { /* storage blocked */ } }
 export const rememberScene = (id: string) => keep(RECENTS, [id, ...ids(RECENTS).filter(x => x !== id)], 12);
 export const forgetScene = (id: string) => keep(RECENTS, ids(RECENTS).filter(x => x !== id), 12);
-export const rememberWorkspace = (id: string) => keep(KNOWN, [id, ...ids(KNOWN).filter(x => x !== id)], 20);
+export const rememberWorkspace = (id: string) => { if (id !== DEMO_WORKSPACE) keep(KNOWN, [id, ...ids(KNOWN).filter(x => x !== id)], 20); };
 const forgetWorkspace = (id: string) => keep(KNOWN, ids(KNOWN).filter(x => x !== id), 20);
 /** True once: the public note has not been shown in this browser yet (and is now marked as shown). */
 export function firstNote() {
@@ -37,20 +41,42 @@ async function api<T>(url: string, body?: unknown): Promise<T> {
   return json as T;
 }
 const command = <T>(id: string, args: Record<string, unknown>) => api<T>(API + '/projects/command', { id, args });
+function svg(d: string) {
+  const ns = 'http://www.w3.org/2000/svg', el = document.createElementNS(ns, 'svg'), p = document.createElementNS(ns, 'path');
+  el.setAttribute('viewBox', '0 0 24 24'); el.setAttribute('aria-hidden', 'true'); p.setAttribute('d', d); el.append(p); return el;
+}
 const problem = (e: unknown) => e instanceof Error ? e.message : String(e);
 const gone = (e: unknown) => e instanceof ApiError && (e.status === 404 || e.status === 400);
 
-/** The newest scene this browser opened that still exists, or null. */
-export async function lastScene(): Promise<string | null> {
+/** The newest scene this browser opened that still exists (never a demo scene), with its place, or null. */
+export async function lastPlace(): Promise<Place | null> {
   for (const id of ids(RECENTS)) {
-    try { await api(API + '/scenes/' + encodeURIComponent(id) + '/meta'); return id; }
+    try {
+      const m = await api<Omit<Place, 'scene'> & { name: string }>(API + '/scenes/' + encodeURIComponent(id) + '/meta');
+      if (m.workspace.id === DEMO_WORKSPACE) { forgetScene(id); continue; }
+      return { workspace: m.workspace, project: m.project, scene: { id, name: m.name } };
+    }
     catch (e) { if (gone(e)) forgetScene(id); else if (!(e instanceof ApiError && e.status === 422)) throw e; }
   }
   return null;
 }
-/** A new workspace with its first project and scene (furnished for a first visit, empty from the menus). */
-export async function createWorkspace(template: 'empty' | 'demo', name?: string) {
-  const made = await command<{ workspace: string; project: string; scene: string }>('workspace.create', { ...(name ? { name } : {}), template });
+export const lastScene = async () => (await lastPlace())?.scene.id ?? null;
+/** "Open demo": this browser's demo scene, reset to the furnished default; a new one when it has none (or it is gone). */
+export async function openDemo(): Promise<string> {
+  let known: string | null = null;
+  try { known = localStorage.getItem(DEMO); } catch { /* storage blocked: a new demo each time */ }
+  let scene = '';
+  if (known) {
+    try { scene = (await command<{ scene: string }>('demo.open', { scene: known })).scene; }
+    catch (e) { if (!gone(e)) throw e; }
+  }
+  if (!scene) scene = (await command<{ scene: string }>('demo.open', {})).scene;
+  try { localStorage.setItem(DEMO, scene); } catch { /* as above */ }
+  return scene;
+}
+/** A new workspace with its first project and an empty first scene. */
+async function createWorkspace(name?: string) {
+  const made = await command<{ workspace: string; project: string; scene: string }>('workspace.create', { ...(name ? { name } : {}), template: 'empty' });
   rememberWorkspace(made.workspace);
   return made;
 }
@@ -65,9 +91,11 @@ const WORDS: Record<Level, { many: string; one: string; first: string; stem: str
   scene: { many: 'Scenes', one: 'Scene', first: 'Scene 1', stem: 'Scene' },
 };
 
-/** The selector. `here` is the open scene in the editor; the homepage starts with nothing chosen. */
+const PLAY = 'M8 5.5v13l10.5-6.5z';
+/** The selector. `here` is the open scene in the editor, or on the homepage the scene it starts at (see prefill). */
 export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?: (scene: Named) => void }) {
-  const editor = o.place === 'editor', here = o.here;
+  const editor = o.place === 'editor';
+  let here = o.here;
   let ws: Named | null = here ? { ...here.workspace } : null, project: Named | null = here ? { ...here.project } : null;
   let workspaces: Named[] | null = null, local = false;
   const trees = new Map<string, Tree>();
@@ -85,8 +113,14 @@ export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?:
   const toProject = sep(), toScene = sep();
   const nav = h('nav', 'hy hy-' + o.place);
   nav.setAttribute('aria-label', 'Location');
+  // The homepage's Play button opens the chosen scene.
+  const play = h('button', 'hy-play');
+  play.type = 'button';
+  play.append(svg(PLAY), h('span', null, 'Open'));
+  play.onclick = () => { const s = chosen('scene'); if (s) location.assign(sceneURL(s.id)); };
   if (editor) nav.append(h('div', 'hy-parents', wsMenu.details, toProject, projectMenu.details), sceneMenu.details);
-  else nav.append(wsMenu.details, toProject, projectMenu.details, toScene, sceneMenu.details);
+  else nav.append(wsMenu.details, toProject, projectMenu.details, toScene, sceneMenu.details, play);
+  const demo = () => ws?.id === DEMO_WORKSPACE;
 
   const chosen = (level: Level): Named | null => level === 'workspace' ? ws : level === 'project' ? project : here && project?.id === here.project.id ? here.scene : null;
   function update() {
@@ -96,8 +130,12 @@ export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?:
       m.summary.setAttribute('aria-label', item ? w.one + ': ' + item.name : 'Choose a ' + w.one.toLowerCase());
       m.summary.title = item ? w.one + ': ' + item.name : '';
     }
-    projectMenu.details.hidden = toProject.hidden = !ws;
+    // A demo scene shows only "Demo ▾": its project is not the visitor's to choose.
+    projectMenu.details.hidden = toProject.hidden = !ws || (editor && demo());
     sceneMenu.details.hidden = toScene.hidden = !editor && !project;
+    const scene = chosen('scene');
+    play.hidden = !scene;
+    if (scene) { play.setAttribute('aria-label', 'Open ' + scene.name); play.title = 'Open ' + scene.name; }
   }
   async function tree(id: string, fresh = false) {
     if (!fresh && trees.has(id)) return trees.get(id)!;
@@ -128,9 +166,10 @@ export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?:
   }
   function render(m: typeof menus[number], entries: Named[] | null, error?: string) {
     const w = WORDS[m.level], picked = chosen(m.level), orphan = m.level === 'scene' && !project;
-    const actions: HTMLElement[] = orphan ? [] : [act('New ' + w.one.toLowerCase(), () => void create(m), true)];
-    if (picked) actions.push(act('Rename ' + w.one.toLowerCase() + '…', () => rename(m, picked)));
-    if (m.level === 'project' && project && local) actions.push(link('Project details…', '/projects/' + encodeURIComponent(project.id), 'hy-item hy-action'));
+    // The demo takes no new projects or scenes and keeps its names; a new workspace is always possible.
+    const actions: HTMLElement[] = orphan || (demo() && m.level !== 'workspace') ? [] : [act('New ' + w.one.toLowerCase(), () => void create(m), true)];
+    if (picked && editor && !demo()) actions.push(act('Rename ' + w.one.toLowerCase() + '…', () => rename(m, picked)));
+    if (m.level === 'project' && project && local && !demo()) actions.push(link('Project details…', '/projects/' + encodeURIComponent(project.id), 'hy-item hy-action'));
     const body = error ? [note(error)] : !entries ? [note('Loading…')]
       : entries.length ? entries.map(e => item(m, e)) : [note(orphan ? 'Choose a project first.' : 'None yet.')];
     m.list.replaceChildren(h('div', 'hy-entries', ...body), ...(actions.length ? [h('div', 'hy-divider'), ...actions] : []));
@@ -183,7 +222,7 @@ export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?:
       run: async value => {
         const name = value.trim(), args = name ? { name } : {};
         try {
-          const scene = m.level === 'workspace' ? (await createWorkspace('empty', name || undefined)).scene
+          const scene = m.level === 'workspace' ? (await createWorkspace(name || undefined)).scene
             : m.level === 'project' ? (await command<{ scene: string }>('project.create', { workspace: ws!.id, ...args, template: 'empty' })).scene
             : (await command<{ scene: string }>('project.scene', { project: project!.id, ...args, template: 'empty' })).scene;
           location.assign(sceneURL(scene));
@@ -244,5 +283,11 @@ export function hierarchy(o: { place: 'home' | 'editor'; here?: Place; renamed?:
     node: nav,
     /** The open scene's name changed (a live snapshot). */
     scene(name: string) { if (here && here.scene.name !== name) { here.scene.name = name; update(); } },
+    /** Homepage: start at this scene (the last one this browser opened), unless the person has already chosen. */
+    prefill(place: Place) {
+      if (editor || here || ws) return;
+      here = { workspace: { ...place.workspace }, project: { ...place.project }, scene: { ...place.scene } };
+      ws = { ...here.workspace }; project = { ...here.project }; update();
+    },
   };
 }

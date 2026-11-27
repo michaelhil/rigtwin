@@ -159,7 +159,10 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
         if (req.method !== "POST") return method();
         const data = await body(req, publicMode ? LIMITS.bodyBytes : PROJECT_BODY_BYTES);
         const named = obj(data) ? String(data.id ?? (obj(data.params) ? data.params.name : "")) : "";
-        if (CREATES.has(named) && allowCreate && !allowCreate(req)) return fail(429, "rate_limited", "The creation limit has been reached. Try again later.");
+        const args = obj(data) ? (obj(data.args) ? data.args : obj(data.params) && obj(data.params.arguments) ? data.params.arguments : {}) : {};
+        // Resetting a browser's existing demo scene creates nothing; making one counts like any other creation.
+        const creates = CREATES.has(named) || ((named === "demo.open" || named === "demo_open") && args.scene === undefined);
+        if (creates && allowCreate && !allowCreate(req)) return fail(429, "rate_limited", "The creation limit has been reached. Try again later.");
         return path.endsWith("/mcp") ? await projectMcp(projects,data) : json(await projectCommand(projects,data));
       }
       if (path === "/api/workspaces") {

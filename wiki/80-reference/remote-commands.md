@@ -34,6 +34,7 @@ Send `{"id": "<command>", "args": {…}}` to `POST /api/projects/command` with `
 
 | Command | Arguments | Returns |
 |---|---|---|
+| `demo.open` | `scene?` (a demo scene returned before) | `{scene, reset}`: a furnished demo scene, reset to the default when `scene` is given; never listed |
 | `workspace.create` | `name?`, `template?` (`empty` or `demo`) | `{workspace, project, scene}` |
 | `project.create` | `workspace`, `name?`, `template?` | the project, with `scene` = its first scene |
 | `project.scene` | `project`, `name?`, `template?` | the project, with `scene` = the new scene |

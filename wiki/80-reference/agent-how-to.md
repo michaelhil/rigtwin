@@ -24,10 +24,10 @@ tags: [how-to, agents, mcp, claude-code, codex]
 
 ## Step 1 · Open your scene
 
-On the Synergon homepage choose **Open viewer**: it reopens your last scene, or makes a new one with a furnished control room. To pick another, use **Workspaces ▾** in the bar at the top, then the project and the scene. The address in the browser, `…/workspaces/<scene>`, is the scene's link. Copy it: it tells the agent exactly which scene you mean.
+On the Synergon homepage, the breadcrumb at the top (**Workspaces ▾ › Projects ▾ › Scenes ▾**) shows your last scene; press **Play** to open it, or choose another scene from the menus. To try things out, **Open demo** opens a furnished demo scene, reset every time. The address in the browser, `…/workspaces/<scene>`, is the scene's link. Copy it: it tells the agent exactly which scene you mean.
 
 ![The Synergon homepage with the Workspaces, Projects and Scenes menus](../img/agent-how-to/home.jpg)
-*The homepage. **Workspaces ▾**, then the project, then the scene.*
+*The homepage. **Workspaces ▾**, then the project, then the scene (this picture was taken before the Play button and Open demo were added).*
 
 ## Step 2 · Start the conversation: goal, Agent guide, scene
 

@@ -8,7 +8,7 @@ import {mountRoomWorkspaceTools} from './room-workspace-tools.ts';
 import { roomScope } from './room-scope.ts';
 import { mountRoomView } from './room-view.ts';
 import { readRoomViewLink } from './room-camera-state.ts';
-import { createWorkspace, firstNote, forgetScene, hierarchy, lastScene, rememberScene, rememberWorkspace, type Place } from './hierarchy.ts';
+import { DEMO_WORKSPACE, firstNote, forgetScene, hierarchy, lastScene, openDemo, rememberScene, rememberWorkspace, type Place } from './hierarchy.ts';
 import type { RoomInstance, RoomJoint, RoomPoint, RoomRef, RoomRelease, RoomScene } from '../../shared/room.ts';
 import {roomOperatorControls} from './room-operator-controls.ts';
 
@@ -40,12 +40,12 @@ function page(title: string, ...content: (Node | string | false)[]) {
   document.title = title.replace(/\.$/, '') + ' · Synergon';
   document.body.replaceChildren(h('main', 'rm-directory', brand(), h('div', 'rm-directory-main rm-start', h('h1', null, title), ...content)));
 }
-/** One button that makes a furnished first scene on its click (never on a GET) and opens it. */
+/** "Open demo": this browser's demo scene, reset to the furnished default on the click (never on a GET), and opened. */
 function startButton(label: string, ...beside: Node[]) {
   const error = h('p', 'rm-error'); error.hidden = true; error.setAttribute('role', 'alert');
   const start = action(label, () => {
-    start.disabled = true; error.hidden = true; start.querySelector('span')!.textContent = 'Opening your scene…';
-    void createWorkspace('demo').then(made => location.replace(sceneURL(made.scene))).catch(e => {
+    start.disabled = true; error.hidden = true; start.querySelector('span')!.textContent = 'Opening the demo…';
+    void openDemo().then(scene => location.replace(sceneURL(scene))).catch(e => {
       error.textContent = errorText(e); error.hidden = false; start.disabled = false; start.querySelector('span')!.textContent = label;
     });
   }, undefined, 'rm-primary rm-start-button');
@@ -64,17 +64,20 @@ export async function startRoomApp() {
     if (!id) {
       const last = await lastScene();
       if (last) { location.replace(sceneURL(last)); return; }
-      page('Your first scene', h('p', 'rm-help rm-start-text', 'A furnished control room opens in 3D. Move, adjust and measure anything in it; every change can be undone.'), startButton('Open the control room'));
+      page('Start with the demo', h('p', 'rm-help rm-start-text', 'A furnished control room in 3D. Move, adjust and measure anything in it; it resets each time you open it.'),
+        startButton('Open demo', link('Homepage', '/', 'rm-link')));
       return;
     }
     const [scene, { releases }, where, isPublic] = await Promise.all([request<RoomScene>(apiRoot(id) + '/state'), request<{ releases: RoomRelease[] }>(API + '/catalog'),
       request<Omit<Place, 'scene'>>(apiRoot(id) + '/meta'), publicSite()]);
-    rememberScene(scene.id); rememberWorkspace(where.workspace.id);
-    editor(scene, releases, { workspace: where.workspace, project: where.project, scene: { id: scene.id, name: scene.name } }, isPublic);
+    // A demo scene is never the "last scene" and never joins the browser's list of workspaces.
+    const demo = where.workspace.id === DEMO_WORKSPACE;
+    if (!demo) { rememberScene(scene.id); rememberWorkspace(where.workspace.id); }
+    editor(scene, releases, { workspace: where.workspace, project: where.project, scene: { id: scene.id, name: scene.name } }, isPublic, demo);
   } catch (error) {
     if (id && error instanceof RoomApiError && [400, 404].includes(error.status)) {
       forgetScene(id);
-      page('This scene no longer exists.', h('p', 'rm-help rm-start-text', 'Its link may be mistyped, or the scene was removed.'), startButton('Start a new scene', link('Homepage', '/', 'rm-link')));
+      page('This scene no longer exists.', h('p', 'rm-help rm-start-text', 'Its link may be mistyped, or the scene was removed.'), startButton('Open demo', link('Homepage', '/', 'rm-link')));
       return;
     }
     page('Scene unavailable', h('p', 'rm-error', errorText(error)), action('Try again', () => location.reload()));
@@ -101,7 +104,7 @@ function initialPlacement(scene: RoomScene, asset: RoomRelease, releases: Map<st
   return { x: width / 2, y: depth / 2 };
 }
 
-function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPublic: boolean) {
+function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPublic: boolean, demo: boolean) {
   let scene = first, selected: string | null = null, member = '', tab: PanelTab = 'layout', library = false;
   let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases[0]?.id ?? '', newLabel = '';
   let undoable = scene.version > 0, undoToken = 0, addId = '';
@@ -370,7 +373,7 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
     view.select(selected, member || undefined); renderPanel();
   }
   function tell(message: string, error = false) {
-    notice.classList.toggle('rm-error', error); notice.setAttribute('role', error ? 'alert' : 'status');
+    notice.classList.toggle('rm-error', error); notice.classList.remove('rm-notice-top'); notice.setAttribute('role', error ? 'alert' : 'status');
     notice.replaceChildren(h('span', null, message), iconAction('Dismiss message', () => { notice.hidden = true; }, 'close'));
     notice.hidden = false;
   }
@@ -668,9 +671,11 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
   const workspaceTools=mountRoomWorkspaceTools({host:toolbar,cameraHost:drawing,leading:[modeToggle],view,getScene:()=>scene,setMode,select:choose,command,write,notify:tell,apiRoot:api});
   // A link without a view opens the scene in 3D.
   view.setScene(scene,releases); void setMode(readRoomViewLink(location.hash)?.mode ?? '3d').then(()=>workspaceTools.restoreLink()); renderPanel(); void updateUndo();
-  if (isPublic && firstNote()) {
-    const text = 'This is your scene. Changes save automatically. Anyone with the link can open it.';
-    tell(text); notice.classList.add('rm-notice-top');
-    setTimeout(() => { if (notice.textContent === text) notice.hidden = true; notice.classList.remove('rm-notice-top'); }, 12000);
+  // A demo says so each time it opens; a public scene says once that it is the visitor's own and shared by its link.
+  const note = demo ? 'This demo resets each time you open it from the homepage. Your changes here are not kept.'
+    : isPublic && firstNote() ? 'This is your scene. Changes save automatically. Anyone with the link can open it.' : '';
+  if (note) {
+    tell(note); notice.classList.add('rm-notice-top');
+    setTimeout(() => { if (notice.querySelector('span')?.textContent === note) notice.hidden = true; notice.classList.remove('rm-notice-top'); }, 12000);
   }
 }

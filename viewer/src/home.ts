@@ -2,7 +2,7 @@
 // Workspaces › Projects › Scenes selector. No three.js: the homepage loads only this small script and the pictures.
 import { h, link } from './dom.ts';
 import { sceneURL } from './room-paths.ts';
-import { createWorkspace, hierarchy, lastScene } from './hierarchy.ts';
+import { hierarchy, lastPlace, openDemo } from './hierarchy.ts';
 
 interface Slide { step: string; title: string; text: string; image: string; alt: string; link?: { text: string; href: string } }
 const SLIDES: Slide[] = [
@@ -89,21 +89,30 @@ function carousel(host: HTMLElement) {
   show(0);
 }
 
-/** "Open viewer": the last scene this browser opened, else a new furnished one, created on this click (never on a GET). */
-function openViewer(a: HTMLAnchorElement) {
+/** "Open demo": always this browser's demo scene, freshly reset to the furnished default (a new one the first time). */
+function demoButton(a: HTMLElement, onError: (message: string) => void = () => {}) {
   a.addEventListener('click', async e => {
     if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     if (a.getAttribute('aria-busy')) return;
-    const text = a.textContent; a.setAttribute('aria-busy', 'true'); a.textContent = 'Opening your scene…';
-    try { location.assign(sceneURL((await lastScene()) ?? (await createWorkspace('demo')).scene)); }
-    catch { location.assign(a.href); }   // the start screen offers the same, with the reason when it fails again
-    finally { addEventListener('pageshow', () => { a.textContent = text; a.removeAttribute('aria-busy'); }, { once: true }); }
+    const text = a.textContent; a.setAttribute('aria-busy', 'true'); a.textContent = 'Opening the demo…';
+    const restore = () => { a.textContent = text; a.removeAttribute('aria-busy'); };
+    try { location.assign(sceneURL(await openDemo())); addEventListener('pageshow', restore, { once: true }); }
+    catch (error) { restore(); onError(error instanceof Error ? error.message : String(error)); }
   });
 }
 
-const story = document.getElementById('home-story'), picker = document.getElementById('home-location'), viewer = document.getElementById('home-open');
+const story = document.getElementById('home-story'), picker = document.getElementById('home-location'), demo = document.getElementById('home-demo');
 if (story) carousel(story);
-if (picker) picker.replaceWith(hierarchy({ place: 'home' }).node);
-if (viewer instanceof HTMLAnchorElement) openViewer(viewer);
+if (picker) {
+  const selector = hierarchy({ place: 'home' });
+  picker.replaceWith(selector.node);
+  // Start the breadcrumb at the last scene this browser opened (a read only; the homepage creates nothing on load).
+  void lastPlace().then(place => { if (place) selector.prefill(place); }).catch(() => {});
+}
+if (demo) {
+  const problem = h('p', 'home-error'); problem.hidden = true; problem.setAttribute('role', 'alert');
+  demo.closest('nav')?.after(problem);
+  demoButton(demo, message => { problem.textContent = 'The demo could not open. ' + message; problem.hidden = false; });
+}
 export {};

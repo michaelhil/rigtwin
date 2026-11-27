@@ -13,8 +13,11 @@ interface StoredScene { portableId: string; sourceRevision: number; record: Room
 interface Location extends ProjectSummary { copiedFrom?:string; dir: string; device: number; inode: number; workspaces: string[] }
 /** Projects written before workspaces existed belong to this one. */
 export const DEFAULT_WORKSPACE = "00000000-0000-4000-8000-000000000001";
+/** Demo scenes live here, one per browser, reset to the furnished default each time they are opened. Never listed. */
+export const DEMO_WORKSPACE = "00000000-0000-4000-8000-000000000002";
+const DEMO = {id:DEMO_WORKSPACE,name:"Demo"};
 /** What an open public sandbox may do: navigate and create, nothing that reads or writes files outside the store. */
-const PUBLIC_COMMANDS = new Set(["workspace.create","workspace.rename","project.list","project.open","project.create","project.rename","project.scene","scene.rename"]);
+const PUBLIC_COMMANDS = new Set(["demo.open","workspace.create","workspace.rename","project.list","project.open","project.create","project.rename","project.scene","scene.rename"]);
 const byName = (a:{name:string},b:{name:string}) => a.name.localeCompare(b.name,"en",{numeric:true});
 /** "My project" when there is none yet, then the count plus one ("Project 3" beside two others), skipping names in use. */
 function nextName(first:string, stem:string, used:string[]) {
@@ -150,13 +153,15 @@ export class ProjectStore {
     return all;
   }
   private workspace(key:unknown) {
-    const wsId=id(key), w=this.workspaces().find(x=>x.id===wsId);
+    const wsId=id(key), w=wsId===DEMO_WORKSPACE?DEMO:this.workspaces().find(x=>x.id===wsId);
     if (!w) throw missing("workspace");
     return w;
   }
   /** A workspace with its projects and their scenes, for the menus. */
   tree(key:unknown):WorkspaceTree {
     const w=this.workspace(key);
+    // Every browser's demo scene sits in the demo workspace: never list them, or visitors could open each other's.
+    if (w.id===DEMO_WORKSPACE) return {...w,projects:[]};
     const projects=[...this.index.values()].filter(p=>p.workspace===w.id).map(p=>({id:p.id,name:p.name,
       scenes:this.scenes(this.project(p.id)).map(s=>({id:s.record.scene.id,name:s.record.scene.name})).sort(byName)})).sort(byName);
     return {...w,projects};
@@ -164,7 +169,7 @@ export class ProjectStore {
   /** The workspace and project that hold a scene. */
   location(ws:string):SceneLocation {
     const p=this.owner(ws); if(!p) throw missing("scene");
-    const w=this.workspaces().find(x=>x.id===p.workspace) ?? {id:p.workspace,name:"Workspace"};
+    const w=p.workspace===DEMO_WORKSPACE?DEMO:this.workspaces().find(x=>x.id===p.workspace) ?? {id:p.workspace,name:"Workspace"};
     return {workspace:w,project:{id:p.id,name:p.name}};
   }
   private meta(p:Location, change:Partial<Pick<Location,"name"|"workspace">>={}) {
@@ -320,6 +325,20 @@ export class ProjectStore {
       throw new ProjectError("local_only","This command is available on a local installation only.","Run Synergon locally to manage project files, versions and transfers.",403);
     if(command==="project.list") return {projects:this.listed()};
     if(command==="project.import") return this.import(a);
+    if(command==="demo.open") {
+      // With the browser's own demo scene: reset it to the furnished default (a new revision, an empty undo history)
+      // and return it. Without one: make a demo scene for this browser.
+      if(a.scene!==undefined) {
+        const ws=id(a.scene), p=this.owner(ws);
+        if(!p || p.workspace!==DEMO_WORKSPACE) throw new ProjectError("not_demo","That scene is not a demo scene.","Call demo.open without a scene for a new demo.",404);
+        const stored=this.scene(p,ws), next=stored.record.scene.version+1, fresh=newRoom(ws,"Control room",this.catalog,"demo");
+        const record:RoomRecord={scene:{...fresh.scene,id:ws,version:next},history:[],historyStart:next};
+        atom(join(p.dir,"scenes",ws+".json"),JSON.stringify({...stored,sourceRevision:next,record}));
+        this.publish(record.scene);
+        return {scene:ws,reset:true};
+      }
+      return {scene:this.createProject(DEMO_WORKSPACE,"Demo","Control room","demo").scene,reset:false};
+    }
     if(command==="workspace.create") {
       this.roomForCreation();
       const listed=this.workspaces();

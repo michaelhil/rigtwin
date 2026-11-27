@@ -13,7 +13,7 @@ tags: [implementation, server, viewer, workspaces, projects, scenes]
 - **Workspace → Project → Scene.** A workspace holds projects; a project holds scenes plus its record, named versions and saved assessments; a scene is what you see and edit.
 - **A scene** is a room (walls, door, window), zero or more placed assets and optionally one seated operator, with its own revision and undo. Inside a scene, **Show one asset** views one asset on its own; that changes only the view.
 - **Links name the scene only**: `/workspaces/{scene}`. The API is `/api/scenes/{scene}/…`. The same paths work locally and on the public site.
-- **New users start in one click**: Open viewer reopens the last scene, or creates a workspace, a project and a furnished scene and opens it in 3D.
+- **New users start in one click**: **Open demo** on the homepage always opens a freshly reset, furnished demo scene. Your own scenes are in the breadcrumb at the top, with a **Play** button that opens the selected one.
 - **Retired**: the single-station workspaces of the public site, the `/api/room` and `/workspaces/room` prefixes and the separate room database.
 
 ## The model
@@ -24,15 +24,19 @@ tags: [implementation, server, viewer, workspaces, projects, scenes]
 | Project | scenes, project record, named versions, saved assessments | `project.create` (also makes a first scene) | My project, then Project 2 … |
 | Scene | room, placed assets, optional seated operator, undo history | `project.scene` | Scene 1, Scene 2 … |
 
-Scenes made from the menus start as an empty room. Only the scene that **Open viewer** makes for a new visitor is the furnished example (two operator stations, a freestanding display and a wall display). Names may repeat; agents act by ID and ask when a name matches more than one item.
+Scenes made from the menus start as an empty room. Only the demo scene is the furnished example (two operator stations, a freestanding display and a wall display). Names may repeat; agents act by ID and ask when a name matches more than one item.
 
 ## In the viewer
 
-- **Homepage**: the bar at the top shows **Workspaces ▾**. Choosing a workspace shows **Projects ▾** next to it (a single project is chosen for you), then **Scenes ▾**; choosing a scene opens it. **Wiki** is at the right.
+- **Homepage**: **Open demo** opens the demo scene, reset to the furnished default every time. The bar at the top is a breadcrumb of three menus, **Workspaces ▾ › Projects ▾ › Scenes ▾**, filled in with your last scene when you have one, followed by an **Open** button (a play symbol) that appears once a scene is selected and opens it. Choosing a scene in its menu opens it directly; a single project is chosen for you. **Wiki** is at the right.
 - **Editor**: the head of the left panel shows `Workspace ▾ › Project ▾` on a small first line and `Scene ▾` as the heading. Each menu lists its items, marks the current one, and ends with **New …** and **Rename …**; the project menu adds **Project details…** on a local installation.
 - **New …** asks only for a name, filled in with the next default; Enter accepts.
-- **Open viewer** and `/workspaces` reopen the last scene this browser opened. If there is none, a new scene is created on the click, never by merely loading a page, so crawlers create nothing.
-- On the public site a one-time note says: "This is your scene. Changes save automatically. Anyone with the link can open it."
+- `/workspaces/` reopens the last scene this browser opened; without one it offers **Open demo**. Nothing is ever created by merely loading a page, so crawlers create nothing.
+- On the public site a one-time note in a visitor's own scene says: "This is your scene. Changes save automatically. Anyone with the link can open it." A demo scene says each time: "This demo resets each time you open it from the homepage. Your changes here are not kept."
+
+## The demo
+
+Each browser has its own demo scene (`demo.open`), kept in a workspace "Demo" that no list shows. Opening the demo from the homepage resets that scene to the furnished default (a new revision with an empty undo history) and opens it, so a demo always starts fresh and one visitor never resets another's. The demo workspace never lists its scenes, so no visitor can find another's demo. Only making a browser's first demo scene counts against the creation limit.
 
 ## On the public site
 
@@ -52,7 +56,7 @@ One store for both installations: the project folders of [portable room projects
 
 ## Deferred
 
-Duplicating and deleting scenes, projects and workspaces; removing unused sandbox workspaces after a while; a phone layout with a drill-down sheet; an asset editor.
+Keeping a copy of the demo as a scene of one's own; duplicating and deleting scenes, projects and workspaces; removing unused sandbox workspaces after a while; a phone layout with a drill-down sheet; an asset editor.
 
 ## Related
 
