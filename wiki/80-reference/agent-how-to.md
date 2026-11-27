@@ -38,6 +38,9 @@ You will talk to the agent and watch the room at the same time.
 
 Changes made by the agent appear in every open viewer of that workspace within a second, so it does not matter which browser shows the room.
 
+![The Claude Code desktop app in split screen: the conversation on the left, the Synergon viewer with Station A on the right](../img/agent-how-to/split-1.jpg)
+*The Claude Code desktop app, conversation left, viewer right (a local installation). Asked to lower Station A's monitor by 6 cm, the agent read the Agent guide, found that only 2 cm of travel was left, reported the eye-to-screen distance (85.2 cm) and asked before changing anything. The viewer still shows Revision 0.*
+
 ## Step 3 · Introduce Synergon to the agent with the Agent guide
 
 The **Agent guide** is a short plain-text page at `/llms.txt` (https://synergon.mightwork.ai/llms.txt). It is written for AI agents, not for people. It tells an agent what a workspace contains, how to find a workspace by name, how to look up the exact names of parts and adjustments, how to send a command, how to check that it worked and how to undo it. The homepage links to it (**Agent guide**), and so does the viewer under **Settings → Agent access**.
@@ -89,7 +92,12 @@ If a request is ambiguous, for example two stations both have a monitor, the age
 
 ## Step 6 · Watch the change and check it
 
-The viewer updates as soon as the agent's command is accepted. To see what was done, open **Activity** (the button with the wave symbol at the bottom left). Each change has a number (r1, r2, …), the command and the object it changed.
+The viewer updates as soon as the agent's command is accepted.
+
+![The same split screen after the reply "Lower it 2 cm": the agent reports the monitor height and eye-to-screen distance before and after, and the viewer shows Revision 1](../img/agent-how-to/split-2.jpg)
+*After the reply "Lower it 2 cm": the agent lowered the monitor to its lowest setting, measured again (85.2 cm before, 85.1 cm after) and explained why the distance hardly changes. The viewer's footer now reads Revision 1.*
+
+To see what was done, open **Activity** (the button with the wave symbol at the bottom left). Each change has a number (r1, r2, …), the command and the object it changed.
 
 ![The viewer with the Activity list open, showing three changes to Station A made by an agent](../img/agent-how-to/activity.jpg)
 *Three adjustments to Station A made by an agent, listed in Activity with their numbers.*
