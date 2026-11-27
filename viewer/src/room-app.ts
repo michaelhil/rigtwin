@@ -18,7 +18,7 @@ interface Receipt<T> { ok: boolean; version: number; recorded: number | null; re
 interface Distance { metres: number; from: RoomRef & { point: RoomPoint }; to: RoomRef & { point: RoomPoint } }
 interface Span { metres: number; edges: [string, string] }
 interface Clearance extends Span { opening: Span }
-const shortRelease = (release: RoomRelease) => release.label + ' · v' + release.version;
+const shortRelease = (release: RoomRelease) => release.label + ' · v' + release.version + (release.retained ? ' (earlier build)' : '');
 const distanceFormat = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 3, useGrouping: false });
 const metres = (n: number) => distanceFormat.format(n) + ' m';
 
@@ -106,7 +106,7 @@ function initialPlacement(scene: RoomScene, asset: RoomRelease, releases: Map<st
 
 function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPublic: boolean, demo: boolean) {
   let scene = first, selected: string | null = null, member = '', tab: PanelTab = 'layout', library = false;
-  let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases[0]?.id ?? '', newLabel = '';
+  let mode: 'plan' | '3d' = 'plan', measurementToken = 0, chosenRelease = releases.find(r => !r.retained)?.id ?? '', newLabel = '';
   let undoable = scene.version > 0, undoToken = 0, addId = '';
   const api = apiRoot(scene.id), byRelease = new Map(releases.map(r => [r.id, r]));
   const expanded = new Set<string>(), chosenJoints = new Map<string, string>();
@@ -507,7 +507,7 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
     panel.append(h('div', 'rm-section-head', h('h2', 'rm-heading', 'Add object'), iconAction('Close object library', () => { library = false; renderPanel(); }, 'close')));
     if (!releases.length) { panel.append(h('p', 'rm-help', 'No installed releases are available.')); return panel; }
     const picker = h('div', 'rm-library-list');
-    for (const r of releases) {
+    for (const r of releases.filter(r => !r.retained)) {
       const row = action(r.label, () => { chosenRelease = r.id; renderPanel(); }, r.kind, 'rm-library-row');
       row.setAttribute('aria-pressed', String(chosenRelease === r.id)); row.querySelector('span')!.append(h('small', null, (r.kind === 'station' ? 'Operator station' : r.kind === 'desk' ? 'Operator desk' : 'Display') + ' · v' + r.version));
       if (chosenRelease === r.id) row.append(icon('check')); picker.append(row);
@@ -581,7 +581,7 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
       controls.append(details(prefix + 'joints', 'Adjustments', [field('Joint', picker), jointForm(item, joint)], String(joints.length)));
     }
     if (release.seat) controls.append(roomOperatorControls({item,release,scene,apiRoot:api,write,bodySlider:f=>bodySlider(item,version,f),details}));
-    const versions = select('Installed release', releases.map(r => ({ value: r.id, label: shortRelease(r) })), release.id);
+    const versions = select('Installed release', releases.filter(r => !r.retained || r.id === release.id).map(r => ({ value: r.id, label: shortRelease(r) })), release.id);
     const swap = action('Swap release', () => {
       void write('instances.swap', { instance: item.id, release: versions.value }, version).then(ok => { if (!ok) { versions.value = item.release; swap.disabled = true; } });
     }); swap.disabled = true; versions.onchange = () => { swap.disabled = versions.value === item.release; };

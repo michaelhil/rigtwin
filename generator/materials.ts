@@ -6,7 +6,7 @@ export interface Material {
   roughness: number;
   clearcoat?: number;
   clearcoatRoughness?: number;
-  emissiveTexture?: "screen_main" | "screen_touch";
+  emissiveTexture?: "screen_main" | "screen_touch" | "screen_process" | "screen_process_b" | "screen_trend" | "screen_trend_b" | "screen_overview" | "screen_console";
   /** A surface that gives off light (a light strip, a lit ring): sRGB colour of the glow. Asset materials only. */
   emissive?: [number, number, number];
   /** Optional surface texture (an asset's own swatch, see a spec's [materials]): PNG or JPEG file under assets/<asset>/textures/, the size
@@ -32,6 +32,13 @@ export const PALETTE: Record<string, Material> = {
   estop_yellow:  { color: hex("#e9bd16"), metallic: 0, roughness: 0.5, note: "emergency stop base" },
   screen_main:   { color: hex("#000000"), metallic: 0, roughness: 0.6, emissiveTexture: "screen_main", note: "main display active area (emissive test image, anti-glare surface)" },
   screen_touch:  { color: hex("#000000"), metallic: 0, roughness: 0.6, emissiveTexture: "screen_touch", note: "touchscreen active area (emissive test image, anti-glare surface)" },
+  // Control-room displays: abstract process content (generator/textures.ts), lit, no text.
+  screen_process:   { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_process", note: "display active area: an abstract plant mimic (emissive, no text)" },
+  screen_process_b: { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_process_b", note: "display active area: a second plant mimic (emissive, no text)" },
+  screen_trend:     { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_trend", note: "display active area: abstract trends and gauges (emissive, no text)" },
+  screen_trend_b:   { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_trend_b", note: "display active area: a second trend layout (emissive, no text)" },
+  screen_overview:  { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_overview", note: "wall display active area: an abstract site overview (emissive, no text)" },
+  screen_console:   { color: hex("#000000"), metallic: 0, roughness: 0.5, emissiveTexture: "screen_console", note: "touch panel active area: abstract control keys and sliders (emissive, no text)" },
 };
 
 export const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

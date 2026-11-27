@@ -29,7 +29,7 @@ export const components: GroupModule["components"] = {
   },
   S_keyboard_touch: (c) => {
     const [tw, tl] = c.arr("keyboard.touch") as number[], b = c.p("keyboard.touch_border");
-    return c.kit.part("glass_black", c.kit.sheet(tw - 2 * b, tl - 2 * b));
+    return c.kit.part("screen_console", c.kit.sheet(tw - 2 * b, tl - 2 * b));
   },
   // a low rounded block; nothing else of the mouse matters to the asset's purpose
   C_mouse: (c) => {

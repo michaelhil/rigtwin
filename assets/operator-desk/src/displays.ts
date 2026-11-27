@@ -14,9 +14,10 @@ function housing(c: Ctx, size: number[], thickness: number, edge: number, back: 
 }
 const big = (c: Ctx) => housing(c, c.arr("big.size"), c.p("big.thickness"), c.p("big.edge"), c.arr("big.back"), c.p("big.mount_gap"), c.arr("big.size")[1] / 2, c.arr("big.stub"));
 const small = (c: Ctx) => housing(c, c.arr("small.size"), c.p("small.thickness"), c.p("small.edge"), c.arr("small.back"), c.arr("small.pivot")[0], c.arr("small.pivot")[1], c.arr("small.stub"));
-const bigScreen = (c: Ctx) => { const [w, h] = c.arr("big.size") as number[], b = c.p("big.border"); return c.kit.part("glass_black", c.kit.sheet(w - 2 * b, h - 2 * b)); };
+// Each lit area shows abstract process content (generator/textures.ts), a different picture per screen.
+const bigScreen = (material: string) => (c: Ctx) => { const [w, h] = c.arr("big.size") as number[], b = c.p("big.border"); return c.kit.part(material, c.kit.sheet(w - 2 * b, h - 2 * b)); };
 // lit area 16:9 inside the side borders (the housing's extra height is its lower border)
-const smallScreen = (c: Ctx) => { const [w] = c.arr("small.size") as number[], b = c.p("small.border"); return c.kit.part("glass_black", c.kit.sheet(w - 2 * b, ((w - 2 * b) * 9) / 16)); };
+const smallScreen = (material: string) => (c: Ctx) => { const [w] = c.arr("small.size") as number[], b = c.p("small.border"); return c.kit.part(material, c.kit.sheet(w - 2 * b, ((w - 2 * b) * 9) / 16)); };
 
 /** Tilt axes of the three small displays in the model frame: [x, y, z, yaw] (the same expressions as the spec's joints). */
 function smallAxes(c: Ctx): number[][] {
@@ -28,8 +29,8 @@ function smallAxes(c: Ctx): number[][] {
 }
 
 export const components: GroupModule["components"] = {
-  C_big_display_L: big, C_big_display_R: big, S_big_screen_L: bigScreen, S_big_screen_R: bigScreen,
-  C_small_display_1: small, C_small_display_2: small, C_small_display_3: small, S_small_screen_1: smallScreen, S_small_screen_2: smallScreen, S_small_screen_3: smallScreen,
+  C_big_display_L: big, C_big_display_R: big, S_big_screen_L: bigScreen("screen_process"), S_big_screen_R: bigScreen("screen_trend"),
+  C_small_display_1: small, C_small_display_2: small, C_small_display_3: small, S_small_screen_1: smallScreen("screen_trend_b"), S_small_screen_2: smallScreen("screen_process_b"), S_small_screen_3: smallScreen("screen_trend"),
   // Node: at the centre of the pair of large displays (front faces), on the centre line. A cross bar behind the two tilt axes,
   // a bracket at each axis, and a block from the bar back to the wall's felt face.
   C_big_arm: (c) => {

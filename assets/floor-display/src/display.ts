@@ -5,10 +5,12 @@ export function panel(c: Ctx) {
   return { material: "plastic_black", mesh: c.kit.translate(c.kit.box(p("thickness"), p("width"), h, { bevel: p("bevel") }), [0, 0, -h / 2]) };
 }
 
-export function screen(c: Ctx) {
+/** The lit area with abstract process content (generator/textures.ts); the wall display passes its own picture. */
+export const screenOf = (material: string) => (c: Ctx) => {
   const p = (key: string) => c.p("display." + key), rim = p("border");
-  return { material: "glass_black", mesh: c.kit.sheet(p("width") - 2 * rim, p("height") - 2 * rim) };
-}
+  return { material, mesh: c.kit.sheet(p("width") - 2 * rim, p("height") - 2 * rim) };
+};
+export const screen = screenOf("screen_process");
 
 export const components: GroupModule["components"] = {
   C_panel: panel, S_screen: screen,

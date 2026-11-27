@@ -1,7 +1,7 @@
 // The local installation publishes exact asset releases. The same bytes supply the viewer, the
 // numeric command solver and the digest. A changed dependency produces a different release pin.
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { build } from "../generator/build.ts";
 import { ROOT } from "../tools/timeline.ts";
 import { createRoomLibrary, releaseInventory } from "./room-installed.ts";
@@ -24,9 +24,32 @@ function collect(dir: string, prefix: string, files: Map<string, Buffer>) {
   }
 }
 
+/** Builds the current editions from source and keeps every earlier build in <data>/library-archive, so a scene
+ *  pinned to an earlier build still opens after an asset changed. Earlier builds are marked retained. */
 export async function loadRoomLibrary(buildDir: string) {
   const library = createRoomLibrary();
   const manikin = join(ROOT, "assets", "manikin");
+  const archive = join(dirname(buildDir), "library-archive"), current = new Set<string>();
+  mkdirSync(archive, { recursive: true });
+  const keep = (id: string, digest: string, payload: Map<string, Buffer>) => {
+    if (existsSync(join(archive, digest))) return;
+    const stage = mkdtempSync(join(archive, ".stage-"));
+    try {
+      for (const [file, bytes] of payload) { mkdirSync(dirname(join(stage, file)), { recursive: true }); writeFileSync(join(stage, file), bytes); }
+      writeFileSync(join(stage, ".pin"), id);
+      renameSync(stage, join(archive, digest));
+    } finally { rmSync(stage, { recursive: true, force: true }); }
+  };
+  // The build left by the previous start may be what saved scenes are pinned to: keep it before rebuilding.
+  for (const edition of editions) {
+    const { asset, version, kind } = edition, name = asset + "@" + version, dir = join(buildDir, name);
+    const glb = join(dir, asset + ".glb"), manifest = join(dir, asset + ".manifest.json");
+    if (!existsSync(glb) || !existsSync(manifest)) continue;
+    const payload = new Map([["model.glb", readFileSync(glb)], ["manifest.json", readFileSync(manifest)]]);
+    if (kind === "station") collect(manikin, "manikin/", payload);
+    const { digest } = releaseInventory(payload);
+    keep(name + "#" + digest, digest, payload);
+  }
   for (const edition of editions) {
     const { asset, version, kind } = edition, name = asset + "@" + version;
     const paramsDir = "paramsDir" in edition ? join(ROOT, "assets", asset, edition.paramsDir) : undefined;
@@ -35,8 +58,20 @@ export async function loadRoomLibrary(buildDir: string) {
     if (!built.ok) throw new Error(name + ": " + built.messages.join("\n"));
     const payload = new Map([["model.glb", readFileSync(built.glbPath)], ["manifest.json", readFileSync(built.manifestPath)]]);
     if (kind === "station") collect(manikin, "manikin/", payload);
-    const { digest } = releaseInventory(payload);
-    library.install(name + "#" + digest, payload);
+    const { digest } = releaseInventory(payload), id = name + "#" + digest;
+    library.install(id, payload);
+    current.add(id);
+    keep(id, digest, payload);
   }
+  for (const digest of readdirSync(archive)) {
+    if (!/^[0-9a-f]{64}$/.test(digest) || !existsSync(join(archive, digest, ".pin"))) continue;
+    const id = readFileSync(join(archive, digest, ".pin"), "utf8");
+    if (current.has(id) || !id.endsWith("#" + digest)) continue;
+    const payload = new Map<string, Buffer>();
+    collect(join(archive, digest), "", payload);
+    payload.delete(".pin");
+    library.install(id, payload);
+  }
+  for (const item of library.catalog.releases) if (!current.has(item.id)) item.retained = true;
   return library;
 }

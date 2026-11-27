@@ -45,6 +45,8 @@ export interface RoomRelease {
   anchor: RoomPoint; variant?: string; frame?: string;
   members: RoomMember[]; joints: RoomJoint[];
   footprint: { min: [number, number]; max: [number, number] }; seat?: boolean;
+  /** An earlier build kept so that scenes pinned to it still open; not offered for new placements. */
+  retained?: boolean;
 }
 export interface RoomCatalog {
   transfer?: ProjectTransfer;

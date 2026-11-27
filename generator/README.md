@@ -90,7 +90,7 @@ C_stand_shelf: (c) => {
      (see `sided()` in `pods.ts`). Frames are never mirrored, only meshes. `check` verifies pairs.
    - A part names a material from `generator/materials.ts`: `shell_white`, `leather_black`,
      `plastic_black`, `panel_dark`, `deck_dark`, `rubber_black`, `metal_dark`, `metal_bright`,
-     `glass_black`, `estop_red`, `estop_yellow`, `screen_main`, `screen_touch`.
+     `glass_black`, `estop_red`, `estop_yellow`, `screen_main`, `screen_touch`, and the abstract control-room screens `screen_process`, `screen_process_b`, `screen_trend`, `screen_trend_b`, `screen_overview`, `screen_console`.
    - Parts with the same material are merged; **each remaining part is one draw call**. The budget
      is 80 for the whole rig (the blockout uses 62), so small components should use one material.
    - `S_` surfaces are built the same way and must have 0–1 UVs (`kit.sheet`, `kit.arcSheet`).

@@ -45,6 +45,7 @@ export function openPublicRoomLibrary(release: string, data: string) {
     pins.set(pin.id, pin);
   }
   const { catalog } = loadInstalledRoomLibrary([...pins.values()], archive, { retainPayload: false });
+  for (const item of catalog.releases) if (!shipped.some(p => p.id === item.id)) item.retained = true;
   const files = new Map<string, string>();
   for (const item of catalog.releases) {
     const folder = join(archive, item.digest), url = "/api/library/" + item.digest + "/";
