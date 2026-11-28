@@ -4,6 +4,7 @@ import type { OperatorOptions,OperatorPatch } from "./room-person.ts";
 import type { ProjectTransfer } from "./project.ts";
 import type { PersonState } from "./commands/doc.ts";
 import type { JointValue, JointType } from "./pose.ts";
+import type { SceneContent } from "./room-content.ts";
 
 export const ROOM_SCHEMA = "synergon-room/1" as const;
 
@@ -31,6 +32,9 @@ export interface RoomScene {
   person: RoomPerson | null;
   /** The scene's artificial lighting; absent means DEFAULT_LIGHTING. Changed with lighting.set (people, agents, simulations). */
   lighting?: RoomLighting;
+  /** What the scene's flat screens show (pages and app views); absent means nothing. Kept, undone, transferred and
+   *  compared like `lighting`; a malformed block leaves the scene openable and only makes its screens wait. */
+  content?: SceneContent;
 }
 /** Artificial lighting of a scene, shown when a viewer switches the lighting view on (daylight dimmed). Visual, not lux. */
 export interface RoomLighting {

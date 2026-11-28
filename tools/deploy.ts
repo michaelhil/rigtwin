@@ -35,7 +35,9 @@
 //   --dry-run    do every local step for real, then print the exact remote commands and HTTPS checks without running them
 //   --rollback   switch `current` to the release before the live one and check the site (no local build). Refused when
 //                the live release has a server and that release has none (both version.json files read with `cat`): once
-//                the host runs the server, the site does not go back to a release without it. (The automatic switch-back
+//                the host runs the server, the site does not go back to a release without it. Refused too when the live
+//                release's version.json `reads` names a scene field that release's lacks (scenes saved since might not open
+//                there). (The automatic switch-back
 //                after a failed deploy always returns to the release that was live before, so this never stops it.)
 //
 // What this script expects of the server; it never reads or changes web-server configuration:
@@ -319,6 +321,15 @@ function printPlannedChecks(cfg: Config, glbPath: string, pages: string[], sourc
 }
 
 // ------------------------------------------------------------------------------------------------ rollback
+/** Why the site must not go back from the live release to `target` (both version.json contents), or null. */
+export function rollbackRefusal(live: { server?: unknown; reads?: unknown }, target: { server?: unknown; reads?: unknown }, liveName: string, targetName: string, remoteRoot = "/srv/synergon"): string | null {
+  // once the host runs the server, the site does not go back to a release without one (the service would have nothing to start)
+  if (live.server && !target.server) return `refusing to roll back: the live release ${liveName} has a server and ${targetName} has none (no server entry in its version.json). Deploy a fixed release instead, or, if the server must go, run deploy/setup-server.sh --undo on the host and switch ${remoteRoot}/current there by hand.`;
+  // a scene saved under the live release may carry a field the older one cannot read: the scene would no longer open
+  const list = (x: unknown) => Array.isArray(x) ? x.map(String) : [], has = list(target.reads), lacks = list(live.reads).filter((f) => !has.includes(f));
+  if (lacks.length) return `refusing to roll back: the live release ${liveName} reads the scene field${lacks.length > 1 ? "s" : ""} ${lacks.join(", ")} and ${targetName} does not (reads in its version.json), so scenes saved since might not open there. Deploy a fixed release instead.`;
+  return null;
+}
 async function doRollback(cfg: Config) {
   heading(`rollback on ${cfg.host}:${cfg.remoteRoot}${dryRun ? " (dry run: nothing is changed)" : ""}`);
   const live = currentRelease(cfg, `${releasesDir(cfg)}/<live release>`);
@@ -326,7 +337,7 @@ async function doRollback(cfg: Config) {
     say(`  would list ${releasesDir(cfg)}, pick the newest release older than the live one, read both version.json files, then run:`);
     remote(cfg, `cat ${releasesDir(cfg)}/<live release>/version.json`);
     remote(cfg, `cat ${releasesDir(cfg)}/<previous release>/version.json`);
-    say("  (refused, before the switch, when the live release's version.json has a server entry and the previous release's has none)");
+    say("  (refused, before the switch, when the live release's version.json has a server entry and the previous release's has none, or reads a scene field (reads) that the previous release's does not)");
     remote(cfg, switchCommand(cfg, `${releasesDir(cfg)}/<previous release>`, false));
     printPlannedChecks(cfg, "asset/rig-b.glb", ["README.html"], "that release's version.json", "if it has one");
     say("\ndry run finished: nothing was changed on the server"); timeline("rollback dry run", secs(t0), cfg.host); return;
@@ -338,8 +349,8 @@ async function doRollback(cfg: Config) {
   const readVersion = (release: string) => { const out = remote(cfg, `cat ${q(release + "/version.json")}`).out; try { return JSON.parse(out); } catch { return stop(`${release}/version.json is not JSON`); } };
   const liveVersion = readVersion(live), version = readVersion(target);
   say(`  live: ${liveName}${liveVersion.server ? " (with a server)" : ""}\n  back to: ${older[older.length - 1]} (${version.short})${version.server ? " (with a server)" : ""}`);
-  // once the host runs the server, the site does not go back to a release without one (the service would have nothing to start)
-  if (liveVersion.server && !version.server) stop(`refusing to roll back: the live release ${liveName} has a server and ${older[older.length - 1]} has none (no server entry in its version.json). Deploy a fixed release instead, or, if the server must go, run deploy/setup-server.sh --undo on the host and switch ${cfg.remoteRoot}/current there by hand.`);
+  const refused = rollbackRefusal(liveVersion, version, liveName, older[older.length - 1], cfg.remoteRoot);
+  if (refused) stop(refused);
   const s = performance.now();
   remote(cfg, switchCommand(cfg, target));
   const checks = await verifySite(cfg, { version, glb: { path: `asset/${version.model.asset}.glb`, bytes: version.model.bytes, sha256: version.model.sha256 }, wikiPages: ["README.html"] });

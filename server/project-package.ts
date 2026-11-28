@@ -9,8 +9,9 @@ import {
   type ReleaseFiles,
   type ReleaseMode,
 } from "../shared/project.ts";
-import { ROOM_SCHEMA, type RoomCatalog, type RoomScene } from "../shared/room.ts";
-import { validateInstance, parseRoom } from "./room-model.ts";
+import { ROOM_SCHEMA, type RoomCatalog, type RoomLighting, type RoomScene } from "../shared/room.ts";
+import { contentShapeOk } from "../shared/room-content.ts";
+import { validateInstance, validateLighting, parseRoom } from "./room-model.ts";
 import { cleanName, isWorkspaceId } from "./names.ts";
 
 export class ProjectError extends Error {
@@ -57,8 +58,18 @@ function array(value: unknown, max: number, desc: string): unknown[] {
   if (!Array.isArray(value) || value.length > max) throw invalid("Expected at most " + max + " " + desc + ".");
   return value;
 }
+const SCENE_FIELDS = ["schema", "id", "name", "version", "room", "instances", "person"];
+/** Optional scene fields this release reads. A field outside both lists comes from a newer release. */
+const SCENE_OPTIONAL = ["lighting", "content"];
 export function sceneShape(x: unknown): RoomScene {
-  fields(x, ["schema", "id", "name", "version", "room", "instances", "person"]);
+  const newer = object(x) ? Object.keys(x).filter((k) => !SCENE_FIELDS.includes(k) && !SCENE_OPTIONAL.includes(k)) : [];
+  if (newer.length)
+    throw new ProjectError(
+      "newer_format",
+      "A scene has fields this installation does not know (" + newer.slice(0, 5).map((k) => JSON.stringify(k.slice(0, 40))).join(", ") + "): it was made by a newer Synergon.",
+      "Update this installation, then try again.",
+    );
+  fields(x, [...SCENE_FIELDS, ...SCENE_OPTIONAL], SCENE_FIELDS);
   if (x.schema !== ROOM_SCHEMA) throw invalid("Unsupported scene format.");
   id(x.id);
   name(x.name);
@@ -111,6 +122,15 @@ export function sceneShape(x: unknown): RoomScene {
       }
     }
   }
+  if (x.lighting !== undefined) {
+    if (!object(x.lighting)) throw invalid("Invalid scene lighting.");
+    try {
+      validateLighting(x.lighting as unknown as RoomLighting, x.room.height as number);
+    } catch (e) {
+      throw invalid("Invalid scene lighting: " + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+  if (x.content !== undefined && !contentShapeOk(x.content)) throw invalid("Invalid live screen content.");
   // parseRoom checks dimensional bounds, finite transforms, poses, occupancy and unique instance IDs.
   parseRoom(JSON.stringify({ scene: { ...x, version: 0 }, history: [] }));
   return x as unknown as RoomScene;

@@ -5,7 +5,8 @@ import { readFileSync, readdirSync, statSync, mkdtempSync, symlinkSync, writeFil
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { verifySite, routeProbe, FIRST_ROLLOUT } from "../deploy.ts";
+import { verifySite, routeProbe, rollbackRefusal, FIRST_ROLLOUT } from "../deploy.ts";
+import { READS, currentVersion } from "../version.ts";
 import { serveFolder } from "../dist.ts";
 
 const dist = process.env.SYNERGON_DIST_TEST_DIR || join(import.meta.dir, "..", "..", "dist");
@@ -153,6 +154,20 @@ writeFileSync(join(oldDist, "version.json"), JSON.stringify(noServer, null, 1) +
   expect("no scene API check", !r.get("server: api/workspaces") && !r.get("server: installed public room editions"), r.checks.map((c) => c.what).join("; "));
   expect("all required checks pass", r.failed.length === 0, r.failed.map((c) => c.what + ": " + c.detail).join("; "));
   s.server.stop(true); api.stop(true); rmSync(olderDist, { recursive: true, force: true });
+}
+// 10. the rollback rule for scene fields: never back to a release that cannot read what the live one reads
+{
+  console.log("10. rollback and the scene fields a release reads (version.json reads)");
+  const server = { format: version.server.format }, before = { server }, reader = { server, reads: ["content"] };
+  const reads = currentVersion().reads;
+  expect("a version.json made now reads content", JSON.stringify(reads) === JSON.stringify(READS) && reads.includes("content"), JSON.stringify(reads));
+  const why = rollbackRefusal(reader, before, "live-a", "older-b");
+  expect("refused from a release that reads content to one without reads", !!why && why.includes("content") && why.includes("older-b"), String(why));
+  expect("refused when the target reads less", !!rollbackRefusal({ server, reads: ["content", "next"] }, reader, "l", "t")?.includes("next"));
+  expect("allowed between releases that read the same", rollbackRefusal(reader, { server, reads: ["content"] }, "l", "t") === null);
+  expect("allowed to a release that reads more", rollbackRefusal(reader, { server, reads: ["content", "next"] }, "l", "t") === null);
+  expect("allowed between releases without reads", rollbackRefusal(before, { server }, "l", "t") === null);
+  expect("the server rule still holds", /has a server and t has none/.test(rollbackRefusal(reader, { reads: ["content"] }, "l", "t") ?? ""));
 }
 rmSync(oldDist, { recursive: true, force: true });
 console.log(`\ndeploy checks test: ${pass} passed, ${fail} failed`);

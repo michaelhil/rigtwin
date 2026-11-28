@@ -2,7 +2,7 @@
 title: Portable room projects
 tldr: Create a local project, restore named scene versions, and transfer exact asset releases and assessment inputs between installations.
 status: living
-updated: 2026-11-26
+updated: 2026-11-28
 tags: [implementation, viewer, server, assets]
 ---
 
@@ -14,7 +14,7 @@ Open **Projects** on a local installation. **New project** creates a folder with
 
 Edit **Project record** to save the entire `project.md`. Use headings for purpose, goals, requirements, issues, pipeline, chosen standards and predecessor projects as needed. Additional fields, Markdown and free-form notes travel verbatim. Assessment profile settings and frozen runs also travel when present.
 
-**Named versions** saves a complete snapshot of one scene and its source revision. Compare a snapshot with the current layout or another saved version of the same scene. Restore replaces that scene and starts a new undo interval. Subsequent edits can be undone. Other scenes and saved versions retain their state.
+**Named versions** saves a complete snapshot of one scene and its source revision, its lighting and its screen content included. Compare a snapshot with the current layout or another saved version of the same scene; the comparison lists changed room, operator, placements, lighting and screen content by path (for example `lighting/ceiling/countX`). Restore replaces that scene and starts a new undo interval. Subsequent edits can be undone. Other scenes and saved versions retain their state.
 
 **Project settings** changes the title or moves the folder. The local data directory contains `projects/<folder>/project.json`, `project.md`, `scenes/` and `versions/`. Projects containing assessments also have `assessment.json`. The scene file holds the installation's single writable layout and undo history. Moving the complete folder keeps project and scene IDs. A receiving installation issues its own workspace handles.
 
@@ -22,7 +22,7 @@ Edit **Project record** to save the entire `project.md`. Use headings for purpos
 
 Under **Export project**, select **Embed pinned files** or **Link exact release** for each listed pin. Each release appears once across live scenes, named versions and saved assessment inputs. Embedding includes the release inventory, model, manifest and the station's operator files. Every model, motion clip, shape file and texture requested by the viewer must resolve within the release inventory. Attribution links in source records are preserved. A mixed package contains bytes for embedded pins and exact IDs for linked pins. Restricted releases require links.
 
-On a second local installation choose **Import project** and select the package. Before making a folder visible the importer checks the complete project, verifies embedded bytes, resolves exact linked releases, validates poses and replays saved assessments. A missing pin identifies the release to install from an approved library. An identical project re-import opens its existing copy. If the package supplies files for a previously linked release, the importer saves those files with that copy so they remain available after restart. If the ID already belongs to divergent content, **Import as separate copy** creates a fresh project and workspace handles. Source scene IDs remain valid for its named versions and assessment runs.
+On a second local installation choose **Import project** and select the package. Before making a folder visible the importer checks the complete project, verifies embedded bytes, resolves exact linked releases, validates poses and replays saved assessments. A scene's lighting and its screen content (`content`, which page or app view each flat screen shows) travel with it, in the live scene, named versions and assessment inputs; lighting outside its limits is refused with the reason. A scene field this installation does not know is refused as coming from a newer Synergon (`newer_format`): update the receiving installation. A missing pin identifies the release to install from an approved library. An identical project re-import opens its existing copy. If the package supplies files for a previously linked release, the importer saves those files with that copy so they remain available after restart. If the ID already belongs to divergent content, **Import as separate copy** creates a fresh project and workspace handles. Source scene IDs remain valid for its named versions and assessment runs.
 
 For an offline demonstration, start a second server using `bun run serve --port 4174 --data <empty-directory> --empty-library`. Import an embedded package, reopen the scene and make a new edit. Restart with the same data directory and `--empty-library` to reopen it. Public installations expose room workspaces only. The local project directory and its contents are outside the public asset bundle.
 

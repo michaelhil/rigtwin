@@ -2,7 +2,7 @@
 title: Scene editor
 tldr: Arrange a scene's room, edit its assets and operator, and discover the same instance-qualified controls through HTTP, MCP or the CLI.
 status: living
-updated: 2026-11-27
+updated: 2026-11-28
 tags: [implementation, viewer, server, assets]
 ---
 
@@ -71,7 +71,7 @@ For a prismatic joint the positive room axis gives its direction of travel. For 
 
 A release identifies its asset, version and SHA-256 digest of its ordered file inventory. Model geometry, manifest and operator package dependencies belong to the release. Fetch `inventory.json` next to its model URL to inspect file digests. An instance owns its placement and joint overrides. Address a point with an instance and its local member ID. The operator carries an explicit host and host-local targets. Each viewer owns its own camera and selection.
 
-An accepted edit writes the scene and its undo record together in one atomic file write in the project folder. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. When an asset changes, both installations keep its earlier builds (the public server in its library archive, a local installation in `<data>/library-archive`), so a scene pinned to an earlier build still opens; earlier builds are marked retained and are not offered under **Add object**, and the release picker labels them "earlier build". **Swap release** moves a placed asset to the current build. 
+An accepted edit writes the scene and its undo record together in one atomic file write in the project folder. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. A scene's screen content (`content`: which page or app view each flat screen shows, made by a later release) is kept, undone in one step like the lighting, transferred and compared; a malformed block leaves the scene openable. An undo record of a kind this installation does not know (from a newer release) is kept but never offered for undo. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. When an asset changes, both installations keep its earlier builds (the public server in its library archive, a local installation in `<data>/library-archive`), so a scene pinned to an earlier build still opens; earlier builds are marked retained and are not offered under **Add object**, and the release picker labels them "earlier build". **Swap release** moves a placed asset to the current build. 
 
 ## Lighting
 

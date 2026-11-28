@@ -8,6 +8,7 @@ import { operatorFields,type OperatorPatch } from "../shared/room-person.ts";
 import { roomCommands } from "../shared/room-commands.ts";
 import { ROOM_SCHEMA, roomPoint, effectiveLighting, LIGHTING_LIMITS, type RoomLighting, type RoomCatalog, type RoomDimensions, type RoomInstance,
   type RoomPerson, type RoomPoint, type RoomRef, type RoomRelease, type RoomScene } from "../shared/room.ts";
+import type { SceneContent } from "../shared/room-content.ts";
 import { cleanName } from "./names.ts";
 
 export const ROOM_HISTORY = 200;
@@ -17,7 +18,7 @@ export class RoomError extends Error {
 }
 const invalid = (message: string) => new RoomError("invalid_args", message, "Use discover or the command's argument schema.");
 type PoseGroup = {instance:string; pose:RoomInstance["pose"]}[];
-type Prior = RoomPerson | RoomInstance | RoomDimensions | RoomLighting | PoseGroup | null;
+type Prior = RoomPerson | RoomInstance | RoomDimensions | RoomLighting | SceneContent | PoseGroup | null;
 interface Change { version: number; command: string; key: string; keys?:string[]; before: Prior; index?: number; undoes?: number }
 export interface RoomRecord { scene: RoomScene; history: Change[]; historyStart?: number }
 export interface RoomWire { id: string; args?: unknown; expectedVersion?: unknown }
@@ -63,8 +64,13 @@ function validHistoryEntry(entry: Change, version: number): boolean {
       new Set(keys).size === keys.length && before.every((row, n) =>
         row && typeof row.instance === "string" && keys[n] === instanceKey(row.instance) && validPose(row.pose));
   }
-  return entry.keys === undefined && (entry.key === "room" || entry.key === "person" || entry.key === "lighting" || entry.key.startsWith("instance/"));
+  if (entry.key === "content") return entry.keys === undefined && (entry.before === null || (typeof entry.before === "object" && !Array.isArray(entry.before)));
+  if (entry.key === "room" || entry.key === "person" || entry.key === "lighting" || entry.key.startsWith("instance/")) return entry.keys === undefined;
+  // A key of a newer release: kept, so the history stays contiguous, but never undoable (undoable() skips it).
+  return entry.keys === undefined || (Array.isArray(entry.keys) && entry.keys.every(k => typeof k === "string"));
 }
+/** The history keys this release can undo. Entries under any other key are kept but never offered. */
+const knownKey = (key: string) => ["room", "person", "lighting", "content", "poses"].includes(key) || key.startsWith("instance/");
 
 export function parseRoom(text: string): RoomRecord {
   const r: RoomRecord = JSON.parse(text);
@@ -87,6 +93,7 @@ export function parseRoom(text: string): RoomRecord {
   }
   if (d.person !== null && (!d.person || !ids.has(d.person.host) || !d.person.state?.body || typeof d.person.state.posture !== "string")) throw malformed();
   if (d.lighting !== undefined) try { validateLighting(d.lighting, d.room.height); } catch { throw malformed(); }
+  // A malformed `content` block (contentShapeOk false) is kept as it is: the scene opens and its screens wait.
   return r;
 }
 
@@ -150,7 +157,7 @@ export function validateInstance(scene: RoomScene, catalog: RoomCatalog, i: Room
   if (problems.length) throw new RoomError("incompatible", problems.join(", "), "Clear the listed pose values with pose.set value null, or clear/rebind the seated person or their named aims with person.set.");
 }
 const COLOUR = /^#[0-9a-fA-F]{6}$/;
-function validateLighting(l: RoomLighting, roomHeight: number) {
+export function validateLighting(l: RoomLighting, roomHeight: number) {
   const { count, intensity, spread, cct, height } = LIGHTING_LIMITS, c = l.ceiling;
   const within = (v: unknown, [lo, hi]: readonly [number, number]) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
   const bool = (v: unknown) => typeof v === "boolean", colour = (v: unknown) => v === null || (typeof v === "string" && COLOUR.test(v));
@@ -226,6 +233,7 @@ function editAims(person: RoomPerson, patch: AimPatch, release: RoomRelease) {
 function undoable(record: RoomRecord) {
   const claimed = new Set<string>(), undone = new Set<number>(), available: Change[] = [];
   for (const e of [...record.history].reverse()) {
+    if (!knownKey(e.key)) continue;
     if (e.undoes !== undefined) { undone.add(e.undoes); continue; }
     if (undone.has(e.version)) continue;
     const keys=e.keys ?? [e.key];
@@ -299,13 +307,14 @@ export function roomCommand(record: RoomRecord, catalog: RoomCatalog, wire: Room
     }
     else if (key === "room") { before = draft.room; draft.room = after as RoomDimensions; }
     else if (key === "lighting") { before = draft.lighting ?? null; if (after) draft.lighting = after as unknown as RoomLighting; else delete draft.lighting; }
+    else if (key === "content") { before = draft.content ?? null; if (after) draft.content = after as SceneContent; else delete draft.content; }
     else if (key === "person") { before = draft.person; draft.person = after as RoomPerson | null; }
-    else {
+    else if (key.startsWith("instance/")) {
       const id = key.slice("instance/".length);
       index = draft.instances.findIndex(i => i.id === id); before = draft.instances[index] ?? null;
       if (index >= 0) draft.instances.splice(index, 1);
       if (after) draft.instances.splice(Math.min(target.index ?? draft.instances.length, draft.instances.length), 0, after as RoomInstance);
-    }
+    } else throw new RoomError("undo_unavailable", "This installation cannot undo a " + key + " edit.", "Read state for the list of undoable versions.");
     if (draft.person && !draft.instances.some(i => i.id === draft.person!.host))
       throw new RoomError("occupied", "Undo would remove the seated person's station.", "Move or unseat the person before undoing this edit.");
     for (const item of draft.instances) validateInstance(draft, catalog, item);

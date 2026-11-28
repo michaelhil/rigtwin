@@ -445,7 +445,7 @@ function compare(left:RoomScene,right:RoomScene) {
     if(object(a)&&object(b)) for(const key of [...new Set([...Object.keys(a),...Object.keys(b)])].sort()) walk(path+"/"+key,a[key],b[key]);
     else changes.push({path,before:a??null,after:b??null});
   };
-  for(const k of ["name","room","person"] as const) walk(k,left[k],right[k]);
+  for(const k of ["name","room","person","lighting","content"] as const) walk(k,left[k],right[k]);
   const byId=(s:RoomScene)=>Object.fromEntries(s.instances.map(i=>[i.id,i]));
   walk("instances",byId(left),byId(right));
   return {scene:left.id,fromRevision:left.version,toRevision:right.version,changes};

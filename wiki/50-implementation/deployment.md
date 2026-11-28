@@ -2,7 +2,7 @@
 title: Deployment
 tldr: Every push to main deploys automatically; bun run deploy does the same by hand. It checks everything, builds the viewer, model, wiki and server into one release, uploads it through a restricted account, switches the site atomically, checks it over HTTPS at synergon.mightwork.ai and switches back on failure. The host's one-time setup, its service and the cutover from the earlier address are on a page of their own.
 status: living
-updated: 2026-11-25
+updated: 2026-11-28
 tags: [deployment, implementation, wiki, viewer, server]
 ---
 
@@ -201,7 +201,12 @@ ssh synergon-deploy 'ln -sfn /srv/synergon/releases/<release> /srv/synergon/curr
   pattern) and **refuses** when the live one has a `server` entry and the target has none: once the host
   runs the server, the site does not go back to a release without it (the service would have no
   `server/server.js` to start and would fail every 2 s). The gate on the server did not change for this.
-- The automatic switch-back after a failed deploy is not subject to that rule: it always returns to the
+- It also **refuses** when the live release's `version.json` `reads` names a scene field that the target's
+  does not (`reads` lists the scene fields a release can open that an older one may not; `["content"]`, what
+  the flat screens show, since 2026-11-28). A scene saved under the live release could otherwise stop opening
+  after the switch. Releases before that date have no `reads`, so the site does not go back past it with
+  `--rollback`; deploy a fixed release instead. `tools/deploy-tests/deploy-checks.ts` tests the rule.
+- The automatic switch-back after a failed deploy is not subject to these rules: it always returns to the
   release that was live just before, so it cannot cross it, and it must work when the very first release
   with a server fails its checks.
 - After any switch the service exits by itself (it watches where `current` points, every 2 s) and

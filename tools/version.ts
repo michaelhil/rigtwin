@@ -15,9 +15,15 @@ export interface Version {
   /** true when the working tree had changes that are not in `revision` */
   dirty: boolean;
   model: { asset: string; sha256: string; triangles: number; bytes: number } | null;
+  /** scene fields this release reads that an older release may not; `bun run deploy --rollback` never goes back to a
+   *  release that lacks one of the live release's (a scene saved since could otherwise not be opened) */
+  reads: string[];
   /** one line for people: date, revision, start of the model hash */
   short: string;
 }
+
+/** The scene fields of `Version.reads`: `content` (what the flat screens show), read since 2026-11-28. */
+export const READS = ["content"];
 
 const git = (...args: string[]) => { const r = spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" }); return r.status === 0 ? r.stdout.trim() : null; };
 
@@ -37,5 +43,5 @@ export function currentVersion(opts: { buildDir?: string; asset?: string; built?
   const built = (opts.built ?? new Date()).toISOString().replace(/\.\d+Z$/, "Z");
   const rev = revision + (dirty ? "+changes" : "");
   const short = [opts.label ?? `${built.slice(0, 10)} ${built.slice(11, 16)} UTC`, rev, ...(model ? [`model ${model.sha256.slice(0, 8)}`] : [])].join(" · ");
-  return { name: "synergon", built, revision, dirty, model, short };
+  return { name: "synergon", built, revision, dirty, model, reads: [...READS], short };
 }
