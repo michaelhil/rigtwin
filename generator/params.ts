@@ -16,6 +16,7 @@ const UNITS: Record<string, { si: string; k: number }> = {
   m: { si: "m", k: 1 }, mm: { si: "m", k: 0.001 }, cm: { si: "m", k: 0.01 }, in: { si: "m", k: 0.0254 },
   rad: { si: "rad", k: 1 }, deg: { si: "rad", k: Math.PI / 180 },
   "1": { si: "1", k: 1 }, ratio: { si: "1", k: 1 }, count: { si: "1", k: 1 },
+  K: { si: "K", k: 1 },
 };
 
 const isNumeric = (v: unknown): v is ParamValue => typeof v === "number" ? Number.isFinite(v) : Array.isArray(v) && v.length > 0 && v.every(isNumeric);

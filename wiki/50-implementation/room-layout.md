@@ -77,7 +77,7 @@ An accepted edit writes the scene and its undo record together in one atomic fil
 
 ## Camera and scene tools
 
-**Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
+**Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. The **lamp** button beside it (shown when a scene has assets with lamps, such as the operator desk) dims the room and lights the assets' lamps, so you can see where their light falls; it is a picture, not a lux calculation. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
 
 The panel footer holds **Copy view link**, **Save picture**, **Trace** and **Settings**. A view link opens this scene with its plan centre and zoom or its 3D camera, selected object and component. Pictures are PNGs of the visible plan or 3D drawing. Trace lists recorded layout edits newest first. Settings controls object labels, the floor grid, colours and component visibility. **Agent access** gives the scene MCP endpoint.
 

@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { type Vec3, type Mat4, identity, matMul, translation, matFromQuat, quatFromRpy, quatMul, rotationRpy, xformDir, xformPoint, norm } from "../shared/math.ts";
 import { jointTransform, trsFromPose, type JointValue } from "../shared/pose.ts";
 import type { ManifestComponent, ManifestJoint, ManifestDatum, Box, ParamClass } from "../shared/manifest.ts";
-import { kit, type Kit, type Part, type Mesh, assertMesh, mergeParts, triangleCount } from "./kit.ts";
+import { kit, type Kit, type Lamp, type Part, type Mesh, assertMesh, mergeParts, triangleCount } from "./kit.ts";
 import { evalExpr } from "./expr.ts";
 import { ParamTable } from "./params.ts";
 import { PALETTE, type Material } from "./materials.ts";
@@ -65,7 +65,7 @@ export interface Ctx {
   arr: (key: string) => any;
   kit: Kit;
 }
-export type ComponentFn = (c: Ctx) => Part | Part[];
+export type ComponentFn = (c: Ctx) => Part | Lamp | (Part | Lamp)[];
 export interface GroupModule { components: Record<string, ComponentFn>; omitted?: Record<string, string> }
 
 export function loadSpec(dir: string): Spec {
@@ -199,8 +199,10 @@ export async function assemble(spec: Spec, params: ParamTable, opts: { srcDir: s
           if (fn) {
             const side = /_L(_|$)/.test(id) ? "L" : /_R(_|$)/.test(id) ? "R" : null;
             const ctx: Ctx = { id, side, sy: side === "R" ? -1 : 1, p: (k) => params.num(k, reader), arr: (k) => params.arr(k, reader), kit };
-            const res = fn(ctx);
-            parts = mergeParts((Array.isArray(res) ? res : [res]).filter(Boolean));
+            const res = fn(ctx), items = (Array.isArray(res) ? res : [res]).filter(Boolean) as (Part | Lamp)[];
+            const lamps = items.filter((x): x is Lamp => "lamp" in x).map(({ lamp }) => JSON.parse(JSON.stringify(lamp, (_, v) => typeof v === "number" ? r6(v) : v)));
+            if (lamps.length) node.lamps = lamps;
+            parts = mergeParts(items.filter((x): x is Part => !("lamp" in x)));
             if (!parts.length) throw new Error("the component function returned no parts");
             for (const p of parts) {
               if (!PALETTE[p.material]) throw new Error(`unknown material '${p.material}'. Palette: ${Object.keys(PALETTE).join(", ")}`);
@@ -286,7 +288,7 @@ export async function assemble(spec: Spec, params: ParamTable, opts: { srcDir: s
     const keys = [...(params.usage.get(ownerOf(rec.id)) ?? [])].sort();
     rec.params = keys; rec.class_counts = params.classCounts(keys); rec.class = params.weakestClass(keys) as ParamClass | null;
     const node = out.get(rec.id);
-    if (node) node.extras = { id: rec.id, kind: rec.kind, group: rec.group, class: rec.class, label: rec.label, ...(rec.assembly ? { assembly: true } : {}) };
+    if (node) node.extras = { id: rec.id, kind: rec.kind, group: rec.group, class: rec.class, label: rec.label, ...(rec.assembly ? { assembly: true } : {}), ...(node.lamps ? { lamps: node.lamps } : {}) };
   }
   const rootId = Object.keys(spec.nodes).find((id) => !spec.nodes[id].parent)!;
   const root = out.get(rootId)!;

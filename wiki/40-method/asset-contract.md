@@ -189,6 +189,12 @@ The kit's operations are listed in `generator/README.md` (box, rounded box, cyli
 extrude, revolve, loft, arc sweep, tube along a path, faceted cage, prism, screen sheets, outlines,
 transforms). Kit primitives sit on z = 0 and grow upward, centred in x and y.
 
+**Lamps.** A component function may also return lamps with `c.kit.lamp({...})` beside its parts: a `spot` (position,
+direction, half beam angle, soft edge) or a `strip` (a lit rectangle of a length and width facing a direction), each
+with a colour (`c.kit.cctColour(kelvin)`) and a relative visual brightness (1 = a typical desk downlight). Their numbers
+are parameter records like any other (beam, colour temperature: usually assumed; brightness: invented, cosmetic). The
+viewer turns them into real lights; they show the character of the light, not lux.
+
 ## 7. Materials palette
 
 Defined in `generator/materials.ts`; colours are written in sRGB and converted to linear values in
@@ -236,6 +242,7 @@ as PNG. No logos, decals or text anywhere on the model.
 | component, assembly, surface | `{ id, kind: "component" \| "surface", group, class, label, assembly?: true }` |
 | joint | `{ id, kind: "joint", joint: { type, axis, lower, upper, neutral, unit, kind, evidence, locked, signal } }` |
 | reference frame | `{ id, kind: "datum", label }` |
+| a component with lamps | the component's extras plus `lamps: [{ kind: "spot" \| "strip", at, dir, colour, intensity, angle?, penumbra?, length?, width? }]` in the node's frame (metres, Z up) |
 
 A consumer that reads only the GLB can therefore find and pose every joint without the manifest.
 

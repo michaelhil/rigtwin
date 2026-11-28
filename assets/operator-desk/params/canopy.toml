@@ -158,3 +158,35 @@ unit = "count"
 class = "invented"
 tier = "cosmetic"
 evidence = "Pieces per rounded corner of a spotlight, and sides of its round lamp."
+
+# Light the canopy gives in the viewer. The lamps themselves are not identified: beam and colour are assumptions, the
+# brightness is a visual setting, not a photometric value (the viewer shows the character of the light, not lux).
+[canopy.spot_beam]
+value = 40
+unit = "deg"
+class = "assumed"
+basis = "convention"
+tier = "cosmetic"
+evidence = "Full beam angle of each spotlight: a common medium beam for desk downlights; the lamps' data are unknown (IMG_1803 shows the lamp face only)."
+
+[canopy.spot_intensity]
+value = 1.0
+unit = "1"
+class = "invented"
+tier = "cosmetic"
+evidence = "Visual brightness of each spotlight in the viewer (1 = a typical desk downlight); not a photometric value."
+
+[canopy.light_intensity]
+value = 0.7
+unit = "1"
+class = "invented"
+tier = "cosmetic"
+evidence = "Visual brightness of the light strip in the viewer, relative to a spotlight; not a photometric value."
+
+[canopy.lamp_cct]
+value = 4000
+unit = "K"
+class = "assumed"
+basis = "by_eye"
+tier = "cosmetic"
+evidence = "Colour temperature of the strip and spotlights: neutral white as they appear in the photos (IMG_1795, IMG_1803); the photos' white balance makes this approximate."

@@ -218,5 +218,5 @@ const parts: GroupModule["components"] = {
 // every mesh of the group goes through the sliver filter
 export const components: GroupModule["components"] = Object.fromEntries(Object.entries(parts).map(([id, fn]) => [id, (c: Ctx) => {
   const res = fn(c);
-  return (Array.isArray(res) ? res : [res]).map((p) => ({ material: p.material, mesh: dropSlivers(p.mesh) }));
+  return (Array.isArray(res) ? res : [res]).map((p) => ("lamp" in p ? p : { material: p.material, mesh: dropSlivers(p.mesh) }));
 }]));

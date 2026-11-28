@@ -30,6 +30,7 @@ const symbols = {
   views: "m3 8 9-5 9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
   reset: "M4 10a8 8 0 1 1 0 5 M4 4v6h6",
+  lamp: "M9 18h6 M10 21h4 M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.3 1.1 2.2h5c0-.9.3-1.6 1.1-2.2A6 6 0 0 0 12 3z",
   close: "M5 5l14 14M19 5 5 19",
 };
 function toolButton(label: string, glyph: keyof typeof symbols, run: () => void) {
@@ -205,14 +206,34 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
         eyeMode = false;
         ++eyeEpoch;
         view.showAllComponents();
-        view.setDisplay({ labels: false, grid: true, colours: "natural" });
+        view.setDisplay({ labels: false, grid: true, colours: "natural", lighting: "day" });
         view.fit();
         refresh();
         return null;
       },
     });
   });
-  camera.append(...(o.leading ?? []), viewMenu, eye, reset);
+  // Lamps: the room dimmed and the assets' lamps lit. Offered only when a shown asset has lamps.
+  const LAMP_NOTE = "synergon.lampNote";
+  const lamp = toolButton("Show the lamps (room dimmed)", "lamp", () => {
+    const on = view.display().lighting !== "lamps";
+    view.setDisplay({ ...view.display(), lighting: on ? "lamps" : "day" });
+    lamp.setAttribute("aria-pressed", String(on));
+    if (on) {
+      let seen = false;
+      try { seen = localStorage.getItem(LAMP_NOTE) === "1"; localStorage.setItem(LAMP_NOTE, "1"); } catch { /* storage blocked */ }
+      if (!seen) o.notify("Lamps on. This shows where light falls, not how bright it is (no lux values).");
+    }
+  });
+  lamp.title = "Show the lamps (room dimmed). Shows where light falls; brightness is not measured.";
+  lamp.setAttribute("aria-pressed", "false");
+  lamp.hidden = true;
+  const offerLamp = () => {
+    lamp.hidden = !view.hasLamps();
+    if (lamp.hidden && view.display().lighting === "lamps") { view.setDisplay({ ...view.display(), lighting: "day" }); lamp.setAttribute("aria-pressed", "false"); }
+  };
+  o.cameraHost.addEventListener("rv-lamps", offerLamp);
+  camera.append(...(o.leading ?? []), viewMenu, lamp, eye, reset);
   for (const b of [viewMenu, trace, cog]) b.setAttribute("aria-expanded", "false");
   async function operator(on: boolean) {
     const epoch = ++eyeEpoch;
@@ -378,6 +399,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
       });
   }
   function refresh() {
+    offerLamp();
     eye.disabled = !o.getScene().person || (!!view.focusedAsset() && o.getScene().person?.host !== view.focusedAsset());
     if (eyeMode && view.getView() === "3d") {
       if (eye.disabled) {

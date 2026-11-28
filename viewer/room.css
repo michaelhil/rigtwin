@@ -247,3 +247,4 @@
 .rm-card-scope .rm-icon {width:10px;height:10px;margin-left:4px;vertical-align:middle}
 
 .rm-stage-head:has(.rm-scope-selector[open]) {position:relative;z-index:25}
+

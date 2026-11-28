@@ -29,10 +29,13 @@ export interface RoomViewCallbacks {
   onAdjust?(instanceId:string,values:Record<string,JointValue>,version:number):void;
   onError?(message: string): void;
 }
+export type Lighting = "day" | "lamps";
 export interface Drawing {
   focused?:string|null;
   scene: RoomScene; releases: RoomRelease[]; models: Map<string, PlacedAsset>;
   selected: string | null; member: string | null; measurement: RoomMeasurement | null; hiddenParts?: ReadonlySet<string>; colours?:"natural"|"parts"|"evidence";
+  /** day: the room's daylight; lamps: the room dimmed and the assets' lamps lit, so their light shows. */
+  lighting?: Lighting;
 }
 type Gesture = { pointer: number; start: Point; local: Point; pan: Point; moved: boolean; rotate: boolean; object?: RoomInstance; member?: string };
 

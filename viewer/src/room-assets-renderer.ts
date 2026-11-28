@@ -1,6 +1,7 @@
 // One parsed file per installed pin. Model nodes and materials belong to placements; geometry and textures belong to the file.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { nodesFromGlb, type KNode } from "../../shared/kinematics.ts";
 import type { Manifest } from "../../shared/manifest.ts";
 import { poseFromRest, type JointValue, type Trs } from "../../shared/pose.ts";
@@ -92,6 +93,8 @@ export class PlacedAsset {
   readonly model: THREE.Group;
   readonly parts: THREE.Mesh[] = [];
   readonly objects = new Map<string, THREE.Object3D>();
+  /** Real lights made from the lamps the model's nodes declare (generator/kit.ts LampSpec). */
+  readonly lamps: THREE.Light[] = [];
   readonly rest = new Map<string, Trs>();
   planParts: PlanPart[] = [];
   private poseKey?: string;
@@ -117,6 +120,10 @@ export class PlacedAsset {
       o.receiveShadow = true;
       this.parts.push(o);
     });
+    for (const node of this.objects.values()) for (const spec of (node.userData.lamps ?? []) as LampSpec[]) {
+      const light = makeLamp(spec);
+      if (light) { node.add(light); this.lamps.push(light); }
+    }
     for (const j of asset.manifest.joints) {
       const o = this.objects.get(j.id);
       if (o) this.rest.set(j.id, { t: o.position.toArray(), q: o.quaternion.toArray() });
@@ -210,8 +217,43 @@ export class PlacedAsset {
     }
   }
 
+  /** Switch the lamps' light on or off (their lit surfaces stay lit either way). */
+  lightLamps(on: boolean) { for (const l of this.lamps) l.visible = on; }
+
   dispose() {
     this.holder.removeFromParent();
+    for (const l of this.lamps) if (l instanceof THREE.SpotLight) l.shadow.dispose();
     for (const mesh of this.parts) for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) m.dispose();
   }
+}
+
+// ---- lamps: the visual light of an asset's lamps. Brightness is relative (1 = a typical desk downlight) and scaled here
+// to the view's lighting; the picture shows the character of the light, not lux.
+interface LampSpec { kind: "spot" | "strip"; at: [number, number, number]; dir: [number, number, number]; colour: [number, number, number]; intensity: number; angle?: number; penumbra?: number; length?: number; width?: number }
+const SPOT_CANDELA = 24, STRIP_NITS = 70;
+let areaLightsReady = false;
+function makeLamp(spec: LampSpec): THREE.Light | null {
+  // A black body of the lamp's colour temperature reads far warmer on screen than an LED of that rating looks to the eye
+  // (which adapts): keep a third of the tint.
+  const colour = new THREE.Color().setRGB(...spec.colour, THREE.SRGBColorSpace).lerp(new THREE.Color(0xffffff), 2 / 3);
+  const at = new THREE.Vector3(...spec.at), dir = new THREE.Vector3(...spec.dir).normalize();
+  if (spec.kind === "spot") {
+    const light = new THREE.SpotLight(colour, spec.intensity * SPOT_CANDELA, 6, spec.angle ?? 0.35, spec.penumbra ?? 0.5, 2);
+    light.position.copy(at);
+    light.target.position.copy(at.clone().add(dir));
+    light.add(light.target); light.target.position.copy(dir);
+    light.castShadow = true;
+    light.shadow.mapSize.set(512, 512);
+    light.shadow.bias = -0.0004;
+    light.shadow.camera.near = 0.02; light.shadow.camera.far = 4;
+    return light;
+  }
+  if (spec.kind === "strip" && spec.length && spec.width) {
+    if (!areaLightsReady) { RectAreaLightUniformsLib.init(); areaLightsReady = true; }
+    const light = new THREE.RectAreaLight(colour, spec.intensity * STRIP_NITS, spec.width, spec.length);
+    light.position.copy(at);
+    light.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
+    return light;
+  }
+  return null;
 }

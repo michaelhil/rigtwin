@@ -10,6 +10,20 @@ import { cage, cageParts, prism, type CageSpec } from "./cage.ts";
 
 export interface Mesh { positions: number[]; normals: number[]; uvs?: number[]; indices: number[] }
 export interface Part { material: string; mesh: Mesh }
+/** A lamp of the asset, in its node's frame (metres, Z up). Written into the node's extras; the viewer makes it a real light.
+ *  spot: a cone of half-angle `angle` (rad) along `dir`; strip: a lit rectangle `length` × `width` facing `dir`.
+ *  `intensity` is a relative, visual brightness (1 = a typical desk downlight), not a photometric value. */
+export interface LampSpec { kind: "spot" | "strip"; at: Vec3; dir: Vec3; colour: [number, number, number]; intensity: number; angle?: number; penumbra?: number; length?: number; width?: number }
+export interface Lamp { lamp: LampSpec }
+/** sRGB colour (0..1) of a light of correlated colour temperature `kelvin` (a smooth fit, good from 2000 to 10000 K). */
+export function cctColour(kelvin: number): [number, number, number] {
+  const t = kelvin / 100, c = (v: number) => Math.max(0, Math.min(255, v)) / 255;
+  const r = t <= 66 ? 255 : 329.698727446 * Math.pow(t - 60, -0.1332047592);
+  const g = t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  return [c(r), c(g), c(b)];
+}
+export const lamp = (spec: LampSpec): Lamp => ({ lamp: spec });
 
 const DEFAULT_CREASE = 50; // degrees; above the 45° of a chamfer so chamfers blend into their faces
 
@@ -500,7 +514,7 @@ export * as math from "./math.ts";
 /** The kit as one object, handed to component functions as `c.kit`. */
 export const kit = {
   shade, recomputeNormals, assertMesh, bounds, triangleCount,
-  transform, translate, rotate, rotateRpy, place, scale, mirrorY, merge, part, mergeParts, mapParts,
+  transform, translate, rotate, rotateRpy, place, scale, mirrorY, merge, part, mergeParts, mapParts, lamp, cctColour,
   rectOutline, roundedRectOutline, obroundOutline, ellipseOutline, circleOutline, offsetOutline, outlineArea, earclip, triangulate3,
   loft, ring, extrude, box, roundedBox, revolve, cylinder, cone, sphere, tube, bellowsProfile, sweepArc, arcSheet, sheet, tubePath,
   cage, cageParts, prism,

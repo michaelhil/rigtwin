@@ -22,7 +22,9 @@ export const components: GroupModule["components"] = {
   },
   C_canopy_light: (c) => {
     const k = c.kit, [d, l, h] = c.arr("canopy.light_size") as number[];
-    return k.part("light_white", k.translate(k.box(d, l, h, { bevel: c.p("detail.bevel") }), [0, 0, -h]));
+    // the strip also lights the desk in the viewer: a lit rectangle on its lower face, shining down
+    return [k.part("light_white", k.translate(k.box(d, l, h, { bevel: c.p("detail.bevel") }), [0, 0, -h])),
+      k.lamp({ kind: "strip", at: [0, 0, -h], dir: [0, 0, -1], length: l, width: d, colour: k.cctColour(c.p("canopy.lamp_cct")), intensity: c.p("canopy.light_intensity") })];
   },
   // Node at the canopy's front edge, on the felt. Each spotlight: a dark rounded-triangle body, a lit ring round its lower face, a
   // round lamp in the middle; one point of the triangle toward the front centre.
@@ -35,7 +37,10 @@ export const components: GroupModule["components"] = {
       dark.push(place(k.translate(k.extrude(tri, h - b, { bevelBottom: b }), [0, 0, -h + b])), place(k.translate(k.extrude(inner, b), [0, 0, -h - b / 2])));
       lit.push(place(k.translate(k.extrude(tri, b), [0, 0, -h])), place(k.translate(k.cylinder(c.p("canopy.spot_lens"), b, { segments: Math.round(c.arr("canopy.spot_segments")[1]) }), [0, 0, -h - b])));
     }
-    return [k.part("plastic_black", dark), k.part("light_white", lit)];
+    // each spotlight also shines straight down in the viewer, from the face of its lamp
+    const lamps = [1, -1].map((side) => k.lamp({ kind: "spot", at: [sx, side * sy, -h - b], dir: [0, 0, -1], angle: c.p("canopy.spot_beam") / 2, penumbra: 0.5,
+      colour: k.cctColour(c.p("canopy.lamp_cct")), intensity: c.p("canopy.spot_intensity") }));
+    return [k.part("plastic_black", dark), k.part("light_white", lit), ...lamps];
   },
   // a square plate with a round raised grille; vanes are not modelled
   C_canopy_fan: (c) => {

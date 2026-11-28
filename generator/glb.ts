@@ -12,6 +12,7 @@ export interface OutNode {
   rotation: Quat;
   extras: Record<string, unknown>;
   parts?: Part[];
+  lamps?: unknown[];
   children: OutNode[];
 }
 export interface GlbStats { bytes: number; nodes: number; meshes: number; primitives: number; triangles: number; vertices: number; materials: number; textures: number }

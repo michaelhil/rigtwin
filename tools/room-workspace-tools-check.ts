@@ -240,6 +240,13 @@ try {
   await home.evaluate("document.querySelector('#home-demo').click()");
   await wait(home, "/^\\/workspaces\\/[0-9a-f-]{36}$/.test(location.pathname) && document.querySelector('.rv-stage')?.dataset.view==='3d' && document.querySelector('.rv-orbit canvas')");
   await wait(home, "document.querySelector('.rm-notice span')?.textContent==='This demo resets each time you open it from the homepage. Your changes here are not kept.'");
+  // The demo's operator desk has lamps: the view controls offer the lamp switch, which dims the stage and back.
+  const lampButton = "document.querySelector('[aria-label=\"Show the lamps (room dimmed)\"]')";
+  await wait(home, `${lampButton} && !${lampButton}.hidden`);
+  await home.evaluate(`${lampButton}.click()`);
+  await wait(home, `${lampButton}.getAttribute('aria-pressed')==='true' && document.querySelector('.rv-stage').classList.contains('rv-dim')`);
+  await home.evaluate(`${lampButton}.click()`);
+  await wait(home, `${lampButton}.getAttribute('aria-pressed')==='false' && !document.querySelector('.rv-stage').classList.contains('rv-dim')`);
   // A demo shows only "Demo ▾" above its scene; its workspace menu offers the visitor's own workspaces and "New workspace".
   assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-editor .hy-label')].filter(e=>!e.closest('[hidden]')).map(e=>e.textContent).join(' › ')"), "Demo › Control room");
   await home.evaluate("document.querySelector('.hy-workspace summary').click()");

@@ -152,6 +152,13 @@ point names; with `mirror: true` you give only the +Y half and points with y = 0
 - `C_seat_back_shell` in `seat.ts` is the worked example: stations bottom to top, each a half ring
   of six points, quads between stations, caps, a dark centre band by per-face material.
 
+## Lamps
+
+A component may return `c.kit.lamp({ kind: "spot" | "strip", at, dir, colour, intensity, ... })` among its parts. The lamp
+is written into the node's extras (`lamps`) and the viewer makes it a real light (a spot light with shadows, or an area
+light for a strip). `intensity` is a relative visual brightness, not a photometric value; `c.kit.cctColour(kelvin)` gives
+the colour of a colour temperature. The operator desk's canopy uses it for its two downlights and its light strip.
+
 ## Joints and the shared pose function
 
 `shared/pose.ts` is the single definition: `node transform = mount · motion(value)`. The generator

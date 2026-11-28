@@ -46,6 +46,8 @@ export class RoomOrbit {
   private gridVisible = true;
   private readonly controls: OrbitControls;
   private readonly shadow = new THREE.DirectionalLight(0xffffff, 2.3);
+  private readonly sky = new THREE.HemisphereLight(0xebf1f3,0x9da697,1.12);
+  private lighting = "day";
   private readonly environment: THREE.WebGLRenderTarget;
   private readonly tags = document.createElement("div");
   private readonly pointer = new THREE.Vector2();
@@ -73,7 +75,7 @@ export class RoomOrbit {
     this.renderer.domElement.setAttribute("aria-label","Orbiting 3D room layout");
     this.tags.className = "rv-orbit-tags";
     host.append(this.renderer.domElement,this.tags);
-    this.scene.add(this.room,this.furniture,this.overlay,new THREE.HemisphereLight(0xebf1f3,0x9da697,1.12),this.shadow,this.shadow.target);
+    this.scene.add(this.room,this.furniture,this.overlay,this.sky,this.shadow,this.shadow.target);
     const pmrem = new THREE.PMREMGenerator(this.renderer), studio = new RoomEnvironment();
     this.environment = pmrem.fromScene(studio,.04);
     this.scene.environment = this.environment.texture;
@@ -181,6 +183,14 @@ export class RoomOrbit {
     const releaseChanged=!!priorInstance && priorInstance.release!==instance?.release;
     this.drawing = d;
     this.room.visible = !d.focused;
+    if ((d.lighting ?? "day") !== this.lighting) {
+      // Lamps: the room's own light is dimmed and the background darkened, so the assets' lamps show where light falls.
+      this.lighting = d.lighting ?? "day";
+      const dim = this.lighting === "lamps";
+      this.sky.intensity = dim ? .07 : 1.12; this.shadow.intensity = dim ? .2 : 2.3; this.scene.environmentIntensity = dim ? .05 : .62;
+      this.renderer.setClearColor(dim ? 0x262b28 : 0xeeeee8);
+      this.host.closest(".rv-stage")?.classList.toggle("rv-dim", dim);
+    }
     if(scopeChanged)this.finishGrab(false);
     const key = JSON.stringify(d.scene.room), first = !this.lastRoom;
     if (this.lastRoom !== key) { this.lastRoom = key; this.buildRoom(d.scene.room); }
@@ -188,6 +198,7 @@ export class RoomOrbit {
       if (model.holder.parent !== this.furniture) this.furniture.add(model.holder);
       model.holder.visible=!d.focused || model.id===d.focused;
       model.select(model.id === d.selected ? d.member : null);
+      model.lightLamps(d.lighting === "lamps");
     }
     const row = d.scene.instances.find(i => i.id === d.selected), rel = d.releases.find(r => r.id === row?.release);
     clearObjects(this.overlay);

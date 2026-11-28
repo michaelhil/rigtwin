@@ -1,6 +1,6 @@
 // Local camera and selection never write to the room. A pointer gesture commits one placement through the caller's scene writer.
 import { disposeRoomAsset, loadRoomAsset, PlacedAsset, type RoomAsset } from "./room-assets-renderer.ts";
-import { RoomPlan, type Drawing, type RoomMeasurement, type RoomViewCallbacks } from "./room-plan-renderer.ts";
+import { RoomPlan, type Drawing, type Lighting, type RoomMeasurement, type RoomViewCallbacks } from "./room-plan-renderer.ts";
 import type { RoomOrbit } from "./room-orbit-renderer.ts";
 import type { RoomAvatar } from "./room-person-renderer.ts";
 import type { CameraPreset, RoomViewLink } from "./room-camera-state.ts";
@@ -46,7 +46,7 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
   }
   let scene:RoomScene | undefined, releases:RoomRelease[]=[];
   const hiddenParts = new Set<string>();
-  let grid=true, labels=false, eye=false;
+  let grid=true, labels=false, eye=false, lighting:Lighting="day";
   let colours:"natural"|"parts"|"evidence"="natural";
   const cameraChanged=()=>stage.dispatchEvent(new Event("room-camera-change",{bubbles:true}));
   const leaveEye=()=>{eye=false;orbit?.leaveEye();if(personKey && scene?.person)person?.show(true);cameraChanged();};
@@ -78,7 +78,7 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
   function paint() {
     if (!scene || disposed) return;
     const showMeasurement=!focused || measurement?.instances?.every(id=>id===focused);
-    const data:Drawing={scene,releases,models,focused,selected,member,measurement:showMeasurement?measurement:null,hiddenParts,colours};
+    const data:Drawing={scene,releases,models,focused,selected,member,measurement:showMeasurement?measurement:null,hiddenParts,colours,lighting};
     for(const model of models.values())if(!focused || model.id===focused)model.applyDisplay(hiddenParts,colours);
     if (mode === "plan") plan.update(data);
     if (orbit && (mode==="3d" || focused!==paintedScope)) {orbit.update(data);paintedScope=focused;}
@@ -138,6 +138,8 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
           continue;
         }
         model=new PlacedAsset(source,rel,i.id); models.set(i.id,model);
+        // the toolbar offers the lamp switch once a model with lamps is shown
+        if (model.lamps.length) queueMicrotask(()=>stage.dispatchEvent(new Event("rv-lamps",{bubbles:true})));
       }
       applyPose(model,i);
     }
@@ -236,9 +238,11 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
     restoreLook(state:NonNullable<RoomViewLink["look"]>) {orbit?.restoreLook(state);},
     restoreCamera(state:RoomViewLink){size();if(state.plan)plan.restoreCamera(state.plan);if(state.orbit)orbit?.restoreCamera(state.orbit);},
     releases(){return releases;},
-    display(){return {grid,labels,colours};},
-    setDisplay(next:{grid:boolean;labels:boolean;colours:"natural"|"parts"|"evidence"}){
-      grid=next.grid;labels=next.labels;colours=next.colours;paint();
+    display(){return {grid,labels,colours,lighting};},
+    /** True when a shown asset has lamps (the Settings switch is offered only then). */
+    hasLamps(){return [...models.values()].some(m=>m.lamps.length>0);},
+    setDisplay(next:{grid:boolean;labels:boolean;colours:"natural"|"parts"|"evidence";lighting:Lighting}){
+      grid=next.grid;labels=next.labels;colours=next.colours;lighting=next.lighting;paint();
       stage.classList.toggle("rv-no-grid",!grid);stage.classList.toggle("rv-no-labels",!labels);orbit?.showGrid(grid);
     },
     components(instance:string){
