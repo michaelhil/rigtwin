@@ -58,6 +58,7 @@ POST /api/scenes/{scene}/command
 | `person.options`, `person.set`, `person.measure` | seat and configure the operator; distance from the seated eye to a target |
 | `measure.distance`, `measure.clearance` | distance between two named points; clearance at the door |
 | `room.set`, `scene.reset` | room size and openings; empty the scene |
+| `lighting.set` | the scene's lighting: ceiling light grid, screens, the assets' lamps (per asset with `instance`); see [lighting](../50-implementation/room-layout.md#lighting) |
 | `assessment.profiles`, `assessment.configure`, `assessment.run`, `assessment.replay` | [assessment](../50-implementation/room-layout.md) |
 | `undo` | undo a recorded edit by its version, or the latest |
 

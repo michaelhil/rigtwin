@@ -5,7 +5,7 @@ import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUnifo
 import { nodesFromGlb, type KNode } from "../../shared/kinematics.ts";
 import type { Manifest } from "../../shared/manifest.ts";
 import { poseFromRest, type JointValue, type Trs } from "../../shared/pose.ts";
-import type { RoomInstance, RoomRelease } from "../../shared/room.ts";
+import type { RoomInstance, RoomLighting, RoomRelease } from "../../shared/room.ts";
 
 export interface RoomAsset { source: THREE.Group; manifest: Manifest; nodes: KNode[] }
 export interface PlanPart { id: string; path: string; fill: string; top: number }
@@ -95,6 +95,11 @@ export class PlacedAsset {
   readonly objects = new Map<string, THREE.Object3D>();
   /** Real lights made from the lamps the model's nodes declare (generator/kit.ts LampSpec). */
   readonly lamps: THREE.Light[] = [];
+  /** Area lights in front of the lit screens, and the screens' glowing materials. */
+  readonly screenLights: THREE.RectAreaLight[] = [];
+  private readonly screenGlow: THREE.MeshStandardMaterial[] = [];
+  /** Lamp surfaces (materials named light_*) whose glow follows a lamp colour set in the scene's lighting. */
+  private readonly lampGlow: THREE.MeshStandardMaterial[] = [];
   readonly rest = new Map<string, Trs>();
   planParts: PlanPart[] = [];
   private poseKey?: string;
@@ -122,7 +127,16 @@ export class PlacedAsset {
     });
     for (const node of this.objects.values()) for (const spec of (node.userData.lamps ?? []) as LampSpec[]) {
       const light = makeLamp(spec);
-      if (light) { node.add(light); this.lamps.push(light); }
+      if (light) { light.userData.base = light.intensity; light.userData.colour = light.color.clone(); node.add(light); this.lamps.push(light); }
+    }
+    for (const mesh of this.parts) for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      if (!(m instanceof THREE.MeshStandardMaterial)) continue;
+      if (/^light_/.test(m.name)) { m.userData.lampEmissive = m.emissive.clone(); this.lampGlow.push(m); }
+      if (!m.emissiveMap) continue;
+      // a lit screen: an area light of its size in front of it, facing where the screen faces
+      m.userData.glow = m.emissiveIntensity; this.screenGlow.push(m);
+      const light = screenLight(mesh);
+      if (light) { mesh.add(light); this.screenLights.push(light); }
     }
     for (const j of asset.manifest.joints) {
       const o = this.objects.get(j.id);
@@ -219,6 +233,20 @@ export class PlacedAsset {
 
   /** Switch the lamps' light on or off (their lit surfaces stay lit either way). */
   lightLamps(on: boolean) { for (const l of this.lamps) l.visible = on; }
+  /** Apply the scene's lighting to this placement. `shown`: the viewer's lighting view is on (lights cast light). */
+  applyLighting(l: RoomLighting, shown: boolean) {
+    const own = l.instances?.[this.id], on = own?.on ?? l.lamps.on, level = own?.intensity ?? l.lamps.intensity;
+    const colour = own?.colour !== undefined ? own.colour : l.lamps.colour, tint = colour ? new THREE.Color(colour) : null;
+    for (const light of this.lamps) {
+      light.visible = shown && on && level > 0;
+      light.intensity = light.userData.base * level;
+      light.color.copy(tint ?? light.userData.colour);
+    }
+    for (const m of this.lampGlow) m.emissive.copy(on ? (tint ?? m.userData.lampEmissive) : new THREE.Color(0));
+    const screen = l.screens.on ? l.screens.intensity : 0;
+    for (const m of this.screenGlow) m.emissiveIntensity = m.userData.glow * screen;
+    for (const light of this.screenLights) { light.visible = shown && screen > 0; light.intensity = SCREEN_NITS * screen; }
+  }
 
   dispose() {
     this.holder.removeFromParent();
@@ -256,4 +284,19 @@ function makeLamp(spec: LampSpec): THREE.Light | null {
     return light;
   }
   return null;
+}
+
+/** The light a screen throws: a cool, soft area light of the screen's size, just in front of its lit face. */
+const SCREEN_NITS = 5;
+function screenLight(mesh: THREE.Mesh): THREE.RectAreaLight | null {
+  const box = (mesh.geometry.boundingBox ?? (mesh.geometry.computeBoundingBox(), mesh.geometry.boundingBox))!;
+  const size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+  // A screen sheet is flat in the node's y–z plane and faces -x (generator kit.sheet; curved sheets come close).
+  if (!(size.y > 0.05 && size.z > 0.03)) return null;
+  if (!areaLightsReady) { RectAreaLightUniformsLib.init(); areaLightsReady = true; }
+  const light = new THREE.RectAreaLight(new THREE.Color(0xa8c4e6), SCREEN_NITS, size.z, size.y);
+  light.position.copy(centre).add(new THREE.Vector3(-0.01, 0, 0));
+  light.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0));
+  light.visible = false;
+  return light;
 }

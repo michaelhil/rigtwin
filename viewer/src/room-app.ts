@@ -9,7 +9,8 @@ import { roomScope } from './room-scope.ts';
 import { mountRoomView } from './room-view.ts';
 import { readRoomViewLink } from './room-camera-state.ts';
 import { DEMO_WORKSPACE, firstNote, forgetScene, hierarchy, lastScene, openDemo, rememberScene, rememberWorkspace, type Place } from './hierarchy.ts';
-import type { RoomInstance, RoomJoint, RoomPoint, RoomRef, RoomRelease, RoomScene } from '../../shared/room.ts';
+import { cctColour } from '../../shared/light-colour.ts';
+import { effectiveLighting, type RoomInstance, type RoomJoint, type RoomLighting, type RoomPoint, type RoomRef, type RoomRelease, type RoomScene } from '../../shared/room.ts';
 import {roomOperatorControls} from './room-operator-controls.ts';
 
 type PanelTab = 'layout' | 'measure' | 'assessment';
@@ -397,8 +398,16 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
   }
   function accept(next: RoomScene) {
     if (next.id !== scene.id || next.version < scene.version) return;
-    // A rename keeps the revision: take the new name only.
-    if (next.version === scene.version) { if (next.name !== scene.name) { scene = { ...scene, name: next.name }; selector.scene(next.name); document.title = next.name + ' · Synergon'; } return; }
+    // A rename and live lighting values (a simulation's) keep the revision: take the name and the lighting only.
+    if (next.version === scene.version) {
+      if (next.name !== scene.name) { scene = { ...scene, name: next.name }; selector.scene(next.name); document.title = next.name + ' · Synergon'; }
+      if (JSON.stringify(next.lighting) !== JSON.stringify(scene.lighting)) {
+        scene = { ...scene, lighting: next.lighting }; view.setScene(scene, releases); lightingChanged();
+        if (selected === null) afterTyping(scroll, renderPanel);
+      }
+      return;
+    }
+    if (JSON.stringify(next.lighting) !== JSON.stringify(scene.lighting)) queueMicrotask(lightingChanged);
     cancelLayoutDrag?.();
     scene = next;
     poseGesture?.accept(next);
@@ -553,7 +562,66 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
       }
       shell.append(details('room/'+key,name,[h('p','rm-help',wall+' · offset from west corner'),sliders],metres(opening.width)));
     }
-    return [shell];
+    return [shell, lightingProperties()];
+  }
+  // ---- lighting: part of the scene (lighting.set), so agents and simulations can drive it too. Editing it switches this
+  // viewer's lighting view on, where the daylight is dimmed and the lights show.
+  /** The lighting changed (here or elsewhere): if this viewer is in daylight, mark the lamp button. */
+  function lightingChanged() { if (view.display().lighting !== 'lamps') drawing.dispatchEvent(new Event('rv-lighting-changed')); }
+  function showLighting() {
+    if (view.display().lighting === 'lamps') return;
+    view.setDisplay({ ...view.display(), lighting: 'lamps' }); drawing.dispatchEvent(new Event('rv-lighting'));
+  }
+  function lightingWrite(patch: Args) { showLighting(); return write('lighting.set', patch, scene.version); }
+  function lightingSlider(key: string, label: string, value: number, unit: string, step: number, low: number, high: number,
+    patch: (n: number) => Args, apply: (n: number, l: RoomLighting) => void, scope = 'lighting') {
+    return sceneSlider({ key, label, value, unit, step, low, high, min: low, max: high }, scope, n => lightingWrite(patch(n)),
+      (draft, n) => { const l = effectiveLighting(draft); apply(n, l); draft.lighting = l; showLighting(); });
+  }
+  function toggle(label: string, on: boolean, change: (on: boolean) => void) {
+    const box = h('input'); box.type = 'checkbox'; box.checked = on; box.onchange = () => change(box.checked);
+    return h('label', 'rm-check', box, label);
+  }
+  /** A colour that follows the colour temperature unless "Own colour" is ticked. The swatch always shows the colour in use. */
+  function colourField(label: string, own: string | null, inUse: string, change: (colour: string | null) => void) {
+    const input = h('input'); input.type = 'color'; input.value = own ?? inUse; input.disabled = !own; input.setAttribute('aria-label', label);
+    input.onchange = () => change(input.value);
+    const box = h('input'); box.type = 'checkbox'; box.checked = !!own; box.onchange = () => change(box.checked ? input.value : null);
+    return h('div', 'rm-colour-row', h('span', 'rm-adjust-name', label), input, h('label', 'rm-check', box, 'Own colour'));
+  }
+  /** The colour a colour temperature shows in the lighting view (a third of the black-body tint, as the viewer draws it). */
+  const tempColour = (kelvin: number) => '#' + cctColour(kelvin).map(v => Math.round((v + 2 * (1 - v) / 3) * 255).toString(16).padStart(2, '0')).join('');
+  function lightingProperties() {
+    const l = effectiveLighting(scene), c = l.ceiling, roomHeight = scene.room.height;
+    const ceiling = h('div', 'rm-slider-list',
+      lightingSlider('countX', 'Lights across', c.countX, '', 1, 1, 8, n => ({ ceiling: { countX: Math.round(n) } }), (n, x) => { x.ceiling.countX = Math.round(n); }),
+      lightingSlider('countY', 'Lights along', c.countY, '', 1, 1, 8, n => ({ ceiling: { countY: Math.round(n) } }), (n, x) => { x.ceiling.countY = Math.round(n); }),
+      lightingSlider('height', 'Height', c.height ?? roomHeight, 'm', .01, 1.5, roomHeight,
+        n => ({ ceiling: { height: n >= roomHeight - .005 ? null : n } }), (n, x) => { x.ceiling.height = n >= roomHeight - .005 ? null : n; }),
+      lightingSlider('intensity', 'Brightness', c.intensity, '', .05, 0, 3, n => ({ ceiling: { intensity: n } }), (n, x) => { x.ceiling.intensity = n; }),
+      lightingSlider('spread', 'Spread', c.spread, '', .05, 0, 1, n => ({ ceiling: { spread: n } }), (n, x) => { x.ceiling.spread = n; }),
+      lightingSlider('cct', 'Colour temperature', c.cct, 'K', 50, 2200, 8000, n => ({ ceiling: { cct: Math.round(n) } }), (n, x) => { x.ceiling.cct = Math.round(n); }));
+    const screens = h('div', 'rm-slider-list',
+      lightingSlider('screens', 'Brightness', l.screens.intensity, '', .05, 0, 3, n => ({ screens: { intensity: n } }), (n, x) => { x.screens.intensity = n; }));
+    const lamps = h('div', 'rm-slider-list',
+      lightingSlider('lamps', 'Brightness', l.lamps.intensity, '', .05, 0, 3, n => ({ lamps: { intensity: n } }), (n, x) => { x.lamps.intensity = n; }));
+    return section('Lighting',
+      h('p', 'rm-help', 'Shown in the lighting view (the lamp button below the drawing). Visual only, not lux.'),
+      details('lighting/ceiling', 'Ceiling lights', [toggle('On', c.on, on => void lightingWrite({ ceiling: { on } })), ceiling,
+        h('p', 'rm-help', 'Spread: 0 is a narrow downlight, 1 a wide, diffuse light.'),
+        colourField('Colour', c.colour, tempColour(c.cct), colour => void lightingWrite({ ceiling: { colour } }))], c.on ? c.countX + ' × ' + c.countY : 'Off'),
+      details('lighting/screens', 'Screens', [toggle('Screens glow and give light', l.screens.on, on => void lightingWrite({ screens: { on } })), screens], l.screens.on ? 'On' : 'Off'),
+      details('lighting/lamps', 'Asset lamps', [toggle('On', l.lamps.on, on => void lightingWrite({ lamps: { on } })), lamps,
+        colourField('Colour', l.lamps.colour, tempColour(4000), colour => void lightingWrite({ lamps: { colour } }))], l.lamps.on ? 'On' : 'Off'));
+  }
+  /** An asset's own lamps (for example a desk's downlights and light strip): on, brightness and colour of this asset only. */
+  function lampControls(item: RoomInstance) {
+    const l = effectiveLighting(scene), own = l.instances?.[item.id] ?? {};
+    const on = own.on ?? l.lamps.on, level = own.intensity ?? l.lamps.intensity, colour = own.colour !== undefined ? own.colour : l.lamps.colour;
+    const list = h('div', 'rm-slider-list', lightingSlider('level', 'Brightness', level, '', .05, 0, 3,
+      n => ({ instance: item.id, lamps: { intensity: n } }), (n, x) => { x.instances = { ...x.instances, [item.id]: { ...x.instances?.[item.id], intensity: n } }; }, item.id + '/lamps'));
+    return details(item.id + '/lamps', 'Lamps', [toggle('On', on, v => void lightingWrite({ instance: item.id, lamps: { on: v } })), list,
+      colourField('Colour', colour, tempColour(4000), v => void lightingWrite({ instance: item.id, lamps: { colour: v } }))], on ? 'On' : 'Off');
   }
   function inspect(item: RoomInstance, release: RoomRelease, isolated=false) {
     const prefix = item.id + '/', version = scene.version;
@@ -580,6 +648,7 @@ function editor(first: RoomScene, releases: RoomRelease[], where: Place, isPubli
       picker.onchange = () => { chosenJoints.set(item.id, picker.value); expanded.add(prefix + 'joints'); renderPanel(); };
       controls.append(details(prefix + 'joints', 'Adjustments', [field('Joint', picker), jointForm(item, joint)], String(joints.length)));
     }
+    if (view.lampCount(item.id)) controls.append(lampControls(item));
     if (release.seat) controls.append(roomOperatorControls({item,release,scene,apiRoot:api,write,bodySlider:f=>bodySlider(item,version,f),details}));
     const versions = select('Installed release', releases.filter(r => !r.retained || r.id === release.id).map(r => ({ value: r.id, label: shortRelease(r) })), release.id);
     const swap = action('Swap release', () => {

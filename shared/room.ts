@@ -29,6 +29,32 @@ export interface RoomScene {
   room: RoomDimensions;
   instances: RoomInstance[];
   person: RoomPerson | null;
+  /** The scene's artificial lighting; absent means DEFAULT_LIGHTING. Changed with lighting.set (people, agents, simulations). */
+  lighting?: RoomLighting;
+}
+/** Artificial lighting of a scene, shown when a viewer switches the lighting view on (daylight dimmed). Visual, not lux. */
+export interface RoomLighting {
+  /** A grid of ceiling lights: countX across the room (east), countY along it (north), at height metres above the floor
+   *  (null: just under the ceiling). spread 0 is a narrow downlight, 1 a wide diffuse light. */
+  ceiling: { on: boolean; countX: number; countY: number; height: number | null; intensity: number; spread: number; cct: number; colour: string | null };
+  /** Lit screens of the assets also light their surroundings. intensity also sets how bright the screens glow. */
+  screens: { on: boolean; intensity: number };
+  /** The assets' own lamps (a desk's downlights and light strip). colour replaces the lamps' colour when set. */
+  lamps: { on: boolean; intensity: number; colour: string | null };
+  /** Per placed asset: its lamps' on, intensity and colour, overriding `lamps`. */
+  instances?: Record<string, { on?: boolean; intensity?: number; colour?: string | null }>;
+}
+export const DEFAULT_LIGHTING: RoomLighting = {
+  ceiling: { on: true, countX: 3, countY: 2, height: null, intensity: 1, spread: 0.6, cct: 4000, colour: null },
+  screens: { on: true, intensity: 1 },
+  lamps: { on: true, intensity: 1, colour: null },
+};
+export const LIGHTING_LIMITS = { count: [1, 8], intensity: [0, 3], spread: [0, 1], cct: [2200, 8000], height: 1.5 } as const;
+/** The scene's lighting with every field present. */
+export function effectiveLighting(scene: Pick<RoomScene, "lighting">): RoomLighting {
+  const l = scene.lighting;
+  return { ceiling: { ...DEFAULT_LIGHTING.ceiling, ...l?.ceiling }, screens: { ...DEFAULT_LIGHTING.screens, ...l?.screens },
+    lamps: { ...DEFAULT_LIGHTING.lamps, ...l?.lamps }, ...(l?.instances ? { instances: l.instances } : {}) };
 }
 export interface RoomRef { instance: string; member: string }
 export type RoomPoint = [number, number, number];

@@ -35,6 +35,13 @@ export const roomCommands = [
   tool("person.measure", "Measure the seated eye's 3D distance to an instance-qualified target in metres.", object({ to: ref }, ["to"])),
   tool("measure.distance", "Measure 3D distance between two posed instance members. Use member 'floor' for either placement anchor.", object({ from: ref, to: ref }, ["from", "to"])),
   tool("measure.clearance", "Measure floor-plan distance from the doorway threshold to this instance's footprint, and the longest unobstructed opening along that threshold across all instances.", object({ instance: text }, ["instance"])),
+  tool("lighting.set", "Set the scene's artificial lighting; omitted fields stay. ceiling: a grid of countX × countY ceiling lights (1–8 each) at height metres (null: under the ceiling), intensity 0–3, spread 0 (narrow downlight) to 1 (wide, diffuse), cct colour temperature 2200–8000 K, colour \"#rrggbb\" or null for the colour temperature. screens: their light and glow, on and intensity 0–3. lamps: the assets' own lamps (on, intensity, colour); with instance, only that asset's lamps (null clears its own setting). Viewers show it in their lighting view; values are visual, not lux. live: true for values driven by a simulation: every viewer follows at once, but the change is not an undoable edit and adds no revision (at most 10 a second per scene); omit it for design changes.", object({
+    ceiling: object({ on: { type: "boolean" }, countX: { type: "integer" }, countY: { type: "integer" }, height: nullable(number), intensity: number, spread: number, cct: number, colour: nullable({ type: "string", pattern: "^#[0-9a-fA-F]{6}$" }) }),
+    screens: object({ on: { type: "boolean" }, intensity: number }),
+    lamps: object({ on: nullable({ type: "boolean" }), intensity: nullable(number), colour: nullable({ type: "string", pattern: "^#[0-9a-fA-F]{6}$" }) }),
+    instance: text,
+    live: { type: "boolean" },
+  }), true),
   tool("room.set", "Set the rectangular room in metres. Door (south) and window (north) offsets measure east from the west wall.", object({ width: number, depth: number, height: number, door: opening, window: opening }), true),
   tool("scene.reset", "Reset the explicit joint settings on one placement or the whole room to their release neutrals. Placement and occupants are preserved. One undo restores all affected settings.", object({instance:text}), true),
   tool("history.list", "Read recent room edits and recorded version numbers, newest first.", object({})),

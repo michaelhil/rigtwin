@@ -112,15 +112,24 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
     }
     return record;
   };
+  // Live lighting values (a simulation's): at most 10 a second per scene.
+  const liveHits = new Map<string, number[]>();
+  const liveAllowed = (id: string) => {
+    const now = Date.now(), hits = (liveHits.get(id) ?? []).filter(t => t > now - 1000);
+    if (hits.length >= 10) return false;
+    hits.push(now); liveHits.set(id, hits); return true;
+  };
   const change = (id: string, wire: RoomWire) => {
     const current = read(id);
     try {
-      const { record, result, recorded } = roomCommand(current, catalog, wire, listeners.get(id)?.size ?? 0);
-      if (recorded !== null) projects.edit(id, () => record);
-      return { scene: record.scene, receipt: { ok: true, version: record.scene.version, recorded, result } };
+      if (wire.id === "lighting.set" && obj(wire.args) && wire.args.live === true && !liveAllowed(id))
+        throw new RoomError("rate_limited", "At most 10 live lighting values a second per scene.", "Send fewer updates, or combine them.");
+      const { record, result, recorded, live } = roomCommand(current, catalog, wire, listeners.get(id)?.size ?? 0);
+      if (recorded !== null || (live && record !== current)) projects.edit(id, () => record);
+      return { scene: record.scene, publish: recorded !== null || (live && record !== current), receipt: { ok: true, version: record.scene.version, recorded, result } };
     } catch (e) {
       if (!(e instanceof RoomError)) throw e;
-      return { scene: null, receipt: { ok: false, version: current.scene.version, error: e.wire() } };
+      return { scene: null, publish: false, receipt: { ok: false, version: current.scene.version, error: e.wire() } };
     }
   };
   const run = async (id: string, wire: RoomWire) => {
@@ -140,8 +149,8 @@ export function createRoomApi({ dataDir, catalog, publicMode = false, standardsP
         }
       }
     }
-    const { scene, receipt } = change(id, wire);
-    if (scene && receipt.recorded != null) publish(scene);
+    const { scene, publish: send, receipt } = change(id, wire);
+    if (scene && send) publish(scene);
     return receipt;
   };
 

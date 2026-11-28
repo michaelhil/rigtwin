@@ -240,13 +240,21 @@ try {
   await home.evaluate("document.querySelector('#home-demo').click()");
   await wait(home, "/^\\/workspaces\\/[0-9a-f-]{36}$/.test(location.pathname) && document.querySelector('.rv-stage')?.dataset.view==='3d' && document.querySelector('.rv-orbit canvas')");
   await wait(home, "document.querySelector('.rm-notice span')?.textContent==='This demo resets each time you open it from the homepage. Your changes here are not kept.'");
-  // The demo's operator desk has lamps: the view controls offer the lamp switch, which dims the stage and back.
-  const lampButton = "document.querySelector('[aria-label=\"Show the lamps (room dimmed)\"]')";
+  // The lighting view: the lamp button in the view controls dims the daylight so the scene's lighting shows, and back.
+  const lampButton = "document.querySelector('.rw-lighting')";
   await wait(home, `${lampButton} && !${lampButton}.hidden`);
   await home.evaluate(`${lampButton}.click()`);
   await wait(home, `${lampButton}.getAttribute('aria-pressed')==='true' && document.querySelector('.rv-stage').classList.contains('rv-dim')`);
   await home.evaluate(`${lampButton}.click()`);
   await wait(home, `${lampButton}.getAttribute('aria-pressed')==='false' && !document.querySelector('.rv-stage').classList.contains('rv-dim')`);
+  // Room envelope › Lighting › Ceiling lights: switching them off is a scene edit, and it turns this viewer's lighting view on.
+  await home.evaluate("[...document.querySelectorAll('summary')].find(s=>s.textContent.includes('Ceiling lights')).click()");
+  await home.evaluate("[...document.querySelectorAll('summary')].find(s=>s.textContent.includes('Ceiling lights')).parentElement.querySelector('.rm-check input').click()");
+  await wait(home, `${lampButton}.getAttribute('aria-pressed')==='true'`);
+  const demoScene = (await home.evaluate("location.pathname")).split("/").pop();
+  for (let i = 0; i < 50 && (await (await fetch(site + "/api/scenes/" + demoScene + "/state")).json() as any).lighting?.ceiling.on !== false; i++) await Bun.sleep(100);
+  assert.equal(((await (await fetch(site + "/api/scenes/" + demoScene + "/state")).json()) as any).lighting?.ceiling.on, false, "Switching the ceiling lights off reaches the scene");
+  await home.evaluate(`${lampButton}.click()`);
   // A demo shows only "Demo ▾" above its scene; its workspace menu offers the visitor's own workspaces and "New workspace".
   assert.equal(await home.evaluate("[...document.querySelectorAll('.hy-editor .hy-label')].filter(e=>!e.closest('[hidden]')).map(e=>e.textContent).join(' › ')"), "Demo › Control room");
   await home.evaluate("document.querySelector('.hy-workspace summary').click()");

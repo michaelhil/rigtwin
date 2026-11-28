@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { effectiveLighting } from "../../shared/room.ts";
+import { cctColour } from "../../shared/light-colour.ts";
+/** Brightness of one ceiling light (visual; scaled so that the room reads alike for any grid and spread). */
+const CEILING_CANDELA = 9;
+/** The marker of a ceiling light in the lighting view: a disc 0.3 m across. */
+const fixture = new THREE.CylinderGeometry(.15, .15, .02, 24);
 import { doorClearance } from "../../shared/room-geometry.ts";
 import { roomPoint, type RoomDimensions, type RoomPoint } from "../../shared/room.ts";
 import type { CameraPreset, OrbitCamera, RoomViewLink } from "./room-camera-state.ts";
@@ -190,15 +196,17 @@ export class RoomOrbit {
       this.sky.intensity = dim ? .07 : 1.12; this.shadow.intensity = dim ? .2 : 2.3; this.scene.environmentIntensity = dim ? .05 : .62;
       this.renderer.setClearColor(dim ? 0x262b28 : 0xeeeee8);
       this.host.closest(".rv-stage")?.classList.toggle("rv-dim", dim);
+      this.host.closest(".rm-drawing")?.classList.toggle("rm-drawing-dim", dim);
     }
     if(scopeChanged)this.finishGrab(false);
     const key = JSON.stringify(d.scene.room), first = !this.lastRoom;
     if (this.lastRoom !== key) { this.lastRoom = key; this.buildRoom(d.scene.room); }
+    this.buildCeiling(d);
     for (const model of d.models.values()) {
       if (model.holder.parent !== this.furniture) this.furniture.add(model.holder);
       model.holder.visible=!d.focused || model.id===d.focused;
       model.select(model.id === d.selected ? d.member : null);
-      model.lightLamps(d.lighting === "lamps");
+      model.applyLighting(effectiveLighting(d.scene), d.lighting === "lamps");
     }
     const row = d.scene.instances.find(i => i.id === d.selected), rel = d.releases.find(r => r.id === row?.release);
     clearObjects(this.overlay);
@@ -322,6 +330,36 @@ export class RoomOrbit {
     this.frustum(); this.invalidate();
   }
 
+  /** The scene's grid of ceiling lights, lit in the lighting view only. Rebuilt when its settings or the room change. */
+  private readonly ceiling = new THREE.Group();
+  private ceilingKey = "";
+  private buildCeiling(d: Drawing) {
+    if (!this.ceiling.parent) this.scene.add(this.ceiling);
+    const c = effectiveLighting(d.scene).ceiling, r = d.scene.room, shown = d.lighting === "lamps" && c.on && c.intensity > 0 && !d.focused;
+    this.ceiling.visible = shown;
+    const key = JSON.stringify([c, r.width, r.depth, r.height]);
+    if (key === this.ceilingKey) return;
+    this.ceilingKey = key;
+    for (const old of [...this.ceiling.children]) {
+      old.removeFromParent();
+      if (old instanceof THREE.SpotLight) old.dispose();
+      if (old instanceof THREE.Mesh) (old.material as THREE.Material).dispose();
+    }
+    // Spread: 0 a narrow downlight (15° half angle, a sharp edge), 1 a wide diffuse light (80°, a soft edge).
+    const angle = THREE.MathUtils.degToRad(15 + 65 * c.spread), penumbra = .25 + .75 * c.spread;
+    const colour = c.colour ? new THREE.Color(c.colour) : new THREE.Color().setRGB(...cctColour(c.cct), THREE.SRGBColorSpace).lerp(new THREE.Color(0xffffff), 2 / 3);
+    const height = c.height ?? r.height - .02, per = CEILING_CANDELA * c.intensity * (1 + 2 * c.spread) / Math.sqrt(c.countX * c.countY / 6);
+    for (let i = 0; i < c.countX; i++) for (let j = 0; j < c.countY; j++) {
+      const x = (i + .5) * r.width / c.countX, y = (j + .5) * r.depth / c.countY;
+      const light = new THREE.SpotLight(colour, per, height * 3, angle, penumbra, 2);
+      light.position.set(x, height, -y);
+      light.target.position.set(x, 0, -y);
+      // a small glowing disc marks where the light hangs
+      const disc = new THREE.Mesh(fixture, new THREE.MeshStandardMaterial({ color: 0x000000, emissive: colour, emissiveIntensity: 1.4 }));
+      disc.position.set(x, height + .01, -y);
+      this.ceiling.add(light, light.target, disc);
+    }
+  }
   private buildRoom(r: RoomDimensions) {
     clearObjects(this.room); this.wallGroups.clear();
     const {width:w, depth:d, height:h, door, window:win} = r;

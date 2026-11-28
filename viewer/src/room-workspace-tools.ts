@@ -213,26 +213,28 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
       },
     });
   });
-  // Lamps: the room dimmed and the assets' lamps lit. Offered only when a shown asset has lamps.
+  // The lighting view: the daylight dimmed so the scene's lighting (ceiling lights, screens, the assets' lamps) shows.
   const LAMP_NOTE = "synergon.lampNote";
-  const lamp = toolButton("Show the lamps (room dimmed)", "lamp", () => {
+  const lamp = toolButton("Show the lighting (room dimmed)", "lamp", () => {
     const on = view.display().lighting !== "lamps";
     view.setDisplay({ ...view.display(), lighting: on ? "lamps" : "day" });
-    lamp.setAttribute("aria-pressed", String(on));
-    if (on) {
-      let seen = false;
-      try { seen = localStorage.getItem(LAMP_NOTE) === "1"; localStorage.setItem(LAMP_NOTE, "1"); } catch { /* storage blocked */ }
-      if (!seen) o.notify("Lamps on. This shows where light falls, not how bright it is (no lux values).");
-    }
+    lamp.classList.remove("rw-tool-dot"); lamp.setAttribute("aria-label", "Show the lighting (room dimmed)");
+    syncLamp();
+    if (on) note();
   });
-  lamp.title = "Show the lamps (room dimmed). Shows where light falls; brightness is not measured.";
-  lamp.setAttribute("aria-pressed", "false");
-  lamp.hidden = true;
-  const offerLamp = () => {
-    lamp.hidden = !view.hasLamps();
-    if (lamp.hidden && view.display().lighting === "lamps") { view.setDisplay({ ...view.display(), lighting: "day" }); lamp.setAttribute("aria-pressed", "false"); }
+  lamp.title = "Show the lighting (room dimmed). Shows where light falls; brightness is not measured.";
+  lamp.classList.add("rw-lighting");
+  const note = () => {
+    let seen = false;
+    try { seen = localStorage.getItem(LAMP_NOTE) === "1"; localStorage.setItem(LAMP_NOTE, "1"); } catch { /* storage blocked */ }
+    if (!seen) o.notify("Lighting on. This shows where light falls, not how bright it is (no lux values). Set the lights under Room envelope › Lighting.");
   };
-  o.cameraHost.addEventListener("rv-lamps", offerLamp);
+  const syncLamp = () => lamp.setAttribute("aria-pressed", String(view.display().lighting === "lamps"));
+  syncLamp();
+  // the panel switches the lighting view on when someone edits the lighting
+  o.cameraHost.addEventListener("rv-lighting", () => { syncLamp(); note(); });
+  // changed elsewhere (another viewer, an agent, a simulation) while this viewer shows daylight
+  o.cameraHost.addEventListener("rv-lighting-changed", () => { lamp.classList.add("rw-tool-dot"); lamp.setAttribute("aria-label", "Lighting changed. Show the lighting view"); });
   camera.append(...(o.leading ?? []), viewMenu, lamp, eye, reset);
   for (const b of [viewMenu, trace, cog]) b.setAttribute("aria-expanded", "false");
   async function operator(on: boolean) {
@@ -399,7 +401,7 @@ export function mountRoomWorkspaceTools(o: ToolsOptions) {
       });
   }
   function refresh() {
-    offerLamp();
+    syncLamp();
     eye.disabled = !o.getScene().person || (!!view.focusedAsset() && o.getScene().person?.host !== view.focusedAsset());
     if (eyeMode && view.getView() === "3d") {
       if (eye.disabled) {

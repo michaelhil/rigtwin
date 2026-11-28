@@ -248,3 +248,17 @@
 
 .rm-stage-head:has(.rm-scope-selector[open]) {position:relative;z-index:25}
 
+/* Lighting controls: on/off checkboxes and colour rows in the room and asset panels */
+.room-app .rm-check { display: flex; justify-content: flex-start; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--rm-ink); cursor: pointer; }
+.room-app .rm-check input[type=checkbox] { flex: none; width: 15px; height: 15px; min-height: 0; margin: 0; padding: 0; accent-color: var(--rm-accent); }
+.rm-colour-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin-top: 6px; }
+.rm-colour-row input[type="color"]:disabled { cursor: default; opacity: .85; }
+.rm-colour-row input[type="color"] { width: 34px; height: 26px; padding: 0 2px; border: 1px solid #c6d0c6; border-radius: 5px; background: #fff; cursor: pointer; }
+.rm-colour-row .rm-button { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+/* The lighting view: the whole drawing area goes dark (heading included), so there is no seam above the 3D view. */
+.rm-drawing.rm-drawing-dim { background: #262b28; }
+.rm-drawing-dim :is(.rm-stage-title, .rm-stage-size, .rm-scope-back) { color: #e9ece6; }
+.rm-drawing-dim .rm-scope-path > .rm-icon, .rm-drawing-dim .rm-scope-trigger .rm-icon { color: #9aa69c; }
+/* A lighting change while this viewer shows daylight: a dot on the lamp button. */
+.rw-tool.rw-tool-dot { position: relative; }
+.rw-tool.rw-tool-dot::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #d9861c; box-shadow: 0 0 0 2px #fff; }

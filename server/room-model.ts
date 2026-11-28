@@ -6,7 +6,7 @@ import { limitViolation, type JointValue } from "../shared/pose.ts";
 import { doorClearance, footprint } from "../shared/room-geometry.ts";
 import { operatorFields,type OperatorPatch } from "../shared/room-person.ts";
 import { roomCommands } from "../shared/room-commands.ts";
-import { ROOM_SCHEMA, roomPoint, type RoomCatalog, type RoomDimensions, type RoomInstance,
+import { ROOM_SCHEMA, roomPoint, effectiveLighting, LIGHTING_LIMITS, type RoomLighting, type RoomCatalog, type RoomDimensions, type RoomInstance,
   type RoomPerson, type RoomPoint, type RoomRef, type RoomRelease, type RoomScene } from "../shared/room.ts";
 import { cleanName } from "./names.ts";
 
@@ -17,7 +17,7 @@ export class RoomError extends Error {
 }
 const invalid = (message: string) => new RoomError("invalid_args", message, "Use discover or the command's argument schema.");
 type PoseGroup = {instance:string; pose:RoomInstance["pose"]}[];
-type Prior = RoomPerson | RoomInstance | RoomDimensions | PoseGroup | null;
+type Prior = RoomPerson | RoomInstance | RoomDimensions | RoomLighting | PoseGroup | null;
 interface Change { version: number; command: string; key: string; keys?:string[]; before: Prior; index?: number; undoes?: number }
 export interface RoomRecord { scene: RoomScene; history: Change[]; historyStart?: number }
 export interface RoomWire { id: string; args?: unknown; expectedVersion?: unknown }
@@ -63,7 +63,7 @@ function validHistoryEntry(entry: Change, version: number): boolean {
       new Set(keys).size === keys.length && before.every((row, n) =>
         row && typeof row.instance === "string" && keys[n] === instanceKey(row.instance) && validPose(row.pose));
   }
-  return entry.keys === undefined && (entry.key === "room" || entry.key === "person" || entry.key.startsWith("instance/"));
+  return entry.keys === undefined && (entry.key === "room" || entry.key === "person" || entry.key === "lighting" || entry.key.startsWith("instance/"));
 }
 
 export function parseRoom(text: string): RoomRecord {
@@ -86,6 +86,7 @@ export function parseRoom(text: string): RoomRecord {
     ids.add(i.id);
   }
   if (d.person !== null && (!d.person || !ids.has(d.person.host) || !d.person.state?.body || typeof d.person.state.posture !== "string")) throw malformed();
+  if (d.lighting !== undefined) try { validateLighting(d.lighting, d.room.height); } catch { throw malformed(); }
   return r;
 }
 
@@ -147,6 +148,23 @@ export function validateInstance(scene: RoomScene, catalog: RoomCatalog, i: Room
     for (const t of targets) if (t && !r.members.some(m => m.id === t)) problems.push("person aim at " + t);
   }
   if (problems.length) throw new RoomError("incompatible", problems.join(", "), "Clear the listed pose values with pose.set value null, or clear/rebind the seated person or their named aims with person.set.");
+}
+const COLOUR = /^#[0-9a-fA-F]{6}$/;
+function validateLighting(l: RoomLighting, roomHeight: number) {
+  const { count, intensity, spread, cct, height } = LIGHTING_LIMITS, c = l.ceiling;
+  const within = (v: unknown, [lo, hi]: readonly [number, number]) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+  const bool = (v: unknown) => typeof v === "boolean", colour = (v: unknown) => v === null || (typeof v === "string" && COLOUR.test(v));
+  if (!c || !bool(c.on) || ![c.countX, c.countY].every(n => Number.isInteger(n) && within(n, count)))
+    throw invalid("Ceiling lights: countX and countY are whole numbers from " + count[0] + " to " + count[1] + ".");
+  if (c.height !== null && !within(c.height, [height, roomHeight])) throw invalid("Ceiling light height is between " + height + " m and the room height (" + roomHeight + " m), or null.");
+  if (!within(c.intensity, intensity) || !within(c.spread, spread) || !within(c.cct, cct) || !colour(c.colour))
+    throw invalid("Ceiling lights: intensity 0–3, spread 0–1, cct 2200–8000 K, colour #rrggbb or null.");
+  if (!l.screens || !bool(l.screens.on) || !within(l.screens.intensity, intensity)) throw invalid("Screens: on and intensity 0–3.");
+  if (!l.lamps || !bool(l.lamps.on) || !within(l.lamps.intensity, intensity) || !colour(l.lamps.colour)) throw invalid("Lamps: on, intensity 0–3, colour #rrggbb or null.");
+  for (const o of Object.values(l.instances ?? {})) {
+    if (!o || (o.on !== undefined && !bool(o.on)) || (o.intensity !== undefined && !within(o.intensity, intensity)) || (o.colour !== undefined && !colour(o.colour)))
+      throw invalid("An asset's lamps: on, intensity 0–3, colour #rrggbb or null.");
+  }
 }
 function validateRoom(r: RoomDimensions) {
   if ([r.width, r.depth, r.height].some(n => !(n > 0) || !Number.isFinite(n))) throw invalid("Room dimensions must be positive and finite.");
@@ -237,7 +255,7 @@ export function roomCommand(record: RoomRecord, catalog: RoomCatalog, wire: Room
   const err = check(spec.inputSchema, args);
   if (err) throw invalid(err);
   const a = args as Args, scene = record.scene;
-  const reply = (result: unknown, next = record) => ({ record: next, result, recorded: next === record ? null : next.scene.version });
+  const reply = (result: unknown, next = record) => ({ record: next, result, recorded: next === record ? null : next.scene.version, live: false });
   switch (wire.id) {
     case "state": return reply({ scene, undoable: undoable(record).map(e => e.version) });
     case "history.list": return reply({entries:record.history.slice().reverse().map(({version,command,key,undoes})=>({version,command,key,undoes}))});
@@ -280,6 +298,7 @@ export function roomCommand(record: RoomRecord, catalog: RoomCatalog, wire: Room
       before=replaced;
     }
     else if (key === "room") { before = draft.room; draft.room = after as RoomDimensions; }
+    else if (key === "lighting") { before = draft.lighting ?? null; if (after) draft.lighting = after as unknown as RoomLighting; else delete draft.lighting; }
     else if (key === "person") { before = draft.person; draft.person = after as RoomPerson | null; }
     else {
       const id = key.slice("instance/".length);
@@ -299,10 +318,32 @@ export function roomCommand(record: RoomRecord, catalog: RoomCatalog, wire: Room
     before=changed.map(i=>({instance:i.id,pose:i.pose}));
     after=changed.map(i=>{i.pose={};return {instance:i.id,pose:i.pose};});
     result={reset:changed.map(i=>i.id)};
+  } else if (wire.id === "lighting.set") {
+    key = "lighting"; guard(record, wire.expectedVersion, [key]);
+    type Patch = { ceiling?: Partial<RoomLighting["ceiling"]>; screens?: Partial<RoomLighting["screens"]>; lamps?: { on?: boolean | null; intensity?: number | null; colour?: string | null }; instance?: string };
+    const patch = wire.args as Patch, next = structuredClone(effectiveLighting(scene));
+    Object.assign(next.ceiling, patch.ceiling ?? {}); Object.assign(next.screens, patch.screens ?? {});
+    if (patch.instance !== undefined) {
+      const item = getInstance(draft, catalog, patch.instance), own = { ...next.instances?.[item.id] } as Record<string, unknown>;
+      for (const [k, v] of Object.entries(patch.lamps ?? {})) { if (v === null) delete own[k]; else own[k] = v; }
+      const instances = { ...next.instances };
+      if (Object.keys(own).length) instances[item.id] = own; else delete instances[item.id];
+      if (Object.keys(instances).length) next.instances = instances; else delete next.instances;
+    } else if (patch.lamps) {
+      if (patch.lamps.on === null || patch.lamps.intensity === null) throw invalid("Without instance, lamps.on and lamps.intensity need values; only colour may be null.");
+      Object.assign(next.lamps, patch.lamps);
+    }
+    validateLighting(next, scene.room.height);
+    before = scene.lighting ?? null; after = draft.lighting = next; result = { lighting: next };
+    // A live value (a simulation's): stored and sent to every viewer, but no revision and no undo entry.
+    if ((wire.args as { live?: boolean }).live) return { record: isDeepStrictEqual(before, after) ? record : { ...record, scene: draft }, result, recorded: null, live: true };
   } else if (wire.id === "room.set") {
     key = "room"; guard(record, wire.expectedVersion, [key]);
     before = scene.room; after = draft.room = { ...scene.room, ...wire.args as Partial<RoomDimensions> };
-    validateRoom(after); result = { room: after };
+    validateRoom(after);
+    const hung = scene.lighting?.ceiling.height;
+    if (typeof hung === "number" && hung > after.height) throw invalid("The ceiling lights hang at " + hung + " m, above the new room height. Lower them first with lighting.set, or set their height to null (under the ceiling).");
+    result = { room: after };
   } else if (wire.id === "person.set") {
     const host = a.host === null ? null : getInstance(draft, catalog, a.host);
     key = "person"; guard(record, wire.expectedVersion, host ? [key, instanceKey(host.id)] : [key]);

@@ -73,11 +73,23 @@ A release identifies its asset, version and SHA-256 digest of its ordered file i
 
 An accepted edit writes the scene and its undo record together in one atomic file write in the project folder. Pass the revision on which an edit is based to detect overlapping changes. The receipt gives the recorded version for targeted undo. Changes to separate placements can proceed independently. Reconnect reads the current snapshot. An unsupported scene format or unavailable pin identifies what must be supplied. When an asset changes, both installations keep its earlier builds (the public server in its library archive, a local installation in `<data>/library-archive`), so a scene pinned to an earlier build still opens; earlier builds are marked retained and are not offered under **Add object**, and the release picker labels them "earlier build". **Swap release** moves a placed asset to the current build. 
 
+## Lighting
+
+A scene has its own artificial lighting, saved with the scene and changed with one command, `lighting.set`, so people, agents and a later simulation all control it the same way and every open viewer follows at once. It is shown in the **lighting view**: the lamp button in the view controls dims the daylight and darkens the background. Editing any lighting control switches the lighting view on.
+
+| Part | Controls (Room envelope › Lighting) | Command fields |
+|---|---|---|
+| Ceiling lights | On; lights across and along (1–8 each, evenly spaced); height (default: just under the ceiling); brightness; spread (narrow downlight to wide, diffuse); colour temperature (2200–8000 K); colour (replaces the temperature) | `ceiling: {on, countX, countY, height, intensity, spread, cct, colour}` |
+| Screens | Screens glow and give light; brightness (also how bright they glow) | `screens: {on, intensity}` |
+| Asset lamps | On, brightness, colour for every asset's own lamps (a desk's downlights and light strip); per asset in its card under **Lamps** | `lamps: {on, intensity, colour}`, with `instance` for one asset |
+
+A design change is an undoable edit. A simulation sends its values with `"live": true`: every viewer follows at once and the value is stored, but it is not an undoable edit and adds no revision, so it never buries a person's own edits (at most 10 a second per scene). For example `{"instance":"desk-a","lamps":{"colour":"#ff2a1a"},"live":true}` for an alarm: the lit strip and its light both turn red. A viewer in daylight sees a dot on the lamp button when the lighting changes; small discs mark the ceiling lights in the lighting view. Values are visual (relative brightness), not lux; lights cast no shadows except an asset's own downlights.
+
 <a id="camera-and-workspace-tools"></a>
 
 ## Camera and scene tools
 
-**Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. The **lamp** button beside it (shown when a scene has assets with lamps, such as the operator desk) dims the room and lights the assets' lamps, so you can see where their light falls; it is a picture, not a lux calculation. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
+**Views** in the lower-right corner of the drawing offers an overview, four elevations and a top view. The **lamp** button beside it switches the lighting view on: the daylight is dimmed so the scene's [lighting](#lighting) shows; it is a picture, not a lux calculation. **Operator’s eye** uses the seated eye and its named look target from the same measurement command as the assessment engine. Drag to turn your head and scroll to zoom. Changing the station pose or placement updates the eye position. Select **Operator’s eye** again to return to orbit. Click the operator in 3D or the operator tag in plan to open the station's operator controls.
 
 The panel footer holds **Copy view link**, **Save picture**, **Trace** and **Settings**. A view link opens this scene with its plan centre and zoom or its 3D camera, selected object and component. Pictures are PNGs of the visible plan or 3D drawing. Trace lists recorded layout edits newest first. Settings controls object labels, the floor grid, colours and component visibility. **Agent access** gives the scene MCP endpoint.
 

@@ -240,6 +240,35 @@ describe("room workspace", () => {
     expect((await call({ scene: other.id })).error.code).toBe("not_demo");
   });
 
+  test("lighting is part of the scene: patched, validated, per asset and undoable", async () => {
+    const app = setup(), ws = await app.create();
+    expect((await ws.state()).lighting).toBeUndefined();
+    const set = await ws.command("lighting.set", { ceiling: { countX: 4, colour: "#ff3300" }, screens: { intensity: 2 } });
+    expect(set.ok).toBe(true);
+    expect(set.result.lighting.ceiling).toMatchObject({ on: true, countX: 4, countY: 2, colour: "#ff3300", cct: 4000 });
+    expect(set.result.lighting.screens.intensity).toBe(2);
+    expect((await ws.command("lighting.set", { ceiling: { countX: 9 } })).error.code).toBe("invalid_args");
+    expect((await ws.command("lighting.set", { ceiling: { height: 3.5 } })).error.code).toBe("invalid_args");
+    await ws.command("instances.add", { instance: "left", release: station.id });
+    const own = await ws.command("lighting.set", { instance: "left", lamps: { colour: "#00ff00", intensity: 2 } });
+    expect(own.result.lighting.instances.left).toEqual({ colour: "#00ff00", intensity: 2 });
+    expect((await ws.command("lighting.set", { instance: "left", lamps: { colour: null, intensity: null } })).result.lighting.instances).toBeUndefined();
+    expect((await ws.command("lighting.set", { instance: "nobody", lamps: { on: false } })).ok).toBe(false);
+    expect((await ws.command("undo", { version: set.recorded })).ok).toBe(false); // later lighting edits supersede it
+    await ws.command("lighting.set", { ceiling: { height: 2.5 } });
+    expect((await ws.command("room.set", { height: 2.4 })).error.code).toBe("invalid_args");
+    expect((await ws.command("undo", {})).ok).toBe(true);
+    expect((await ws.state()).lighting?.ceiling.height).toBeNull();
+    // A simulation's live values: stored and visible, but no revision and no undo entry; at most 10 a second.
+    const before = await ws.state();
+    const live = await ws.command("lighting.set", { instance: "left", lamps: { colour: "#ff0000" }, live: true });
+    expect([live.ok, live.recorded, live.version]).toEqual([true, null, before.version]);
+    const after = await ws.state();
+    expect([after.version, after.lighting?.instances?.left?.colour]).toEqual([before.version, "#ff0000"]);
+    const burst = await Promise.all(Array.from({ length: 12 }, (_, n) => ws.command("lighting.set", { ceiling: { intensity: n / 10 }, live: true })));
+    expect(burst.filter(r => !r.ok).map(r => r.error.code)).toContain("rate_limited");
+  });
+
   test("unsupported scene format fails without rewriting the file", async () => {
     const app = setup(), ws = await app.create();
     const file = (readdirSync(join(app.dir, "projects"), { recursive: true }) as string[]).find(f => f.endsWith(ws.id + ".json"))!;

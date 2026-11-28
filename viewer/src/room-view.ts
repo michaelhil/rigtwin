@@ -138,8 +138,6 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
           continue;
         }
         model=new PlacedAsset(source,rel,i.id); models.set(i.id,model);
-        // the toolbar offers the lamp switch once a model with lamps is shown
-        if (model.lamps.length) queueMicrotask(()=>stage.dispatchEvent(new Event("rv-lamps",{bubbles:true})));
       }
       applyPose(model,i);
     }
@@ -241,6 +239,8 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
     display(){return {grid,labels,colours,lighting};},
     /** True when a shown asset has lamps (the Settings switch is offered only then). */
     hasLamps(){return [...models.values()].some(m=>m.lamps.length>0);},
+    /** How many lamps a placed asset has (0 until its model has loaded). */
+    lampCount(instance:string){return models.get(instance)?.lamps.length ?? 0;},
     setDisplay(next:{grid:boolean;labels:boolean;colours:"natural"|"parts"|"evidence";lighting:Lighting}){
       grid=next.grid;labels=next.labels;colours=next.colours;lighting=next.lighting;paint();
       stage.classList.toggle("rv-no-grid",!grid);stage.classList.toggle("rv-no-labels",!labels);orbit?.showGrid(grid);

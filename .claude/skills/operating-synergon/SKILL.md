@@ -42,6 +42,7 @@ Over HTTP: `POST /api/scenes/<id>/command` with `Content-Type: application/json`
 | Place, move, swap, remove | `instances.add`, `instances.move {"instance", "x", "y", "yaw"}` (east/north metres from the south-west corner, degrees), `instances.swap`, `instances.remove` |
 | Operator | `person.options {"host"}` for presets and ranges, `person.set {"host", …}`; `person.measure {"to": {"instance", "member"}}` for eye distance |
 | Measure | `measure.distance {"from", "to"}`, `measure.clearance {"instance"}` (door approach) |
+| Lighting ("dim the room", "turn the desk strip red") | `lighting.set {"ceiling": {"countX": 4, "intensity": 0.5}}`, `{"instance": "desk-a", "lamps": {"colour": "#ff2a1a"}}`; add `"live": true` for values a simulation drives (no undo entry); visual, not lux |
 | Assess | use [assessing-synergon](../assessing-synergon/SKILL.md) |
 | Undo | `undo {"version": <recorded>}` or `undo {}` for the latest |
 | "let me try it" / a sandbox | `POST /api/projects/command` `demo.open {}` → a furnished demo scene of its own; `demo.open {"scene": <that id>}` resets it first |
