@@ -376,9 +376,9 @@ export class RoomOrbit {
       this.ceiling.add(light, light.target);
     }
     // a new grid while lit: build its shaders in the background, and show it when they are ready
-    if (shown) {
+    if (shown && this.renderer.extensions.has("KHR_parallel_shader_compile")) {
       this.ceiling.visible = true;
-      const pending = this.ceilingPending = key, ready = this.renderer.compileAsync(this.scene, this.activeCamera());
+      const pending = this.ceilingPending = key, ready = this.background(this.scene)!;
       this.ceiling.visible = false;
       void ready.catch(() => {}).finally(() => {
         if (this.ceilingPending !== pending) return;
@@ -391,6 +391,12 @@ export class RoomOrbit {
   private ceilingPending = "";
   private ceilingWanted = false;
   private activeCamera() { return this.eyeActive ? this.eyeCamera : this.camera; }
+  /** Shaders can be built in the background only where the browser supports it (KHR_parallel_shader_compile); elsewhere
+   *  objects are drawn at once, as before. */
+  private background(objects: THREE.Object3D, target?: THREE.Scene): Promise<unknown> | null {
+    if (!this.renderer.extensions.has("KHR_parallel_shader_compile")) return null;
+    return this.renderer.compileAsync(objects, this.activeCamera(), target ?? null);
+  }
   /** Build the shaders for the lighting view (or daylight) in the background, then switch to it. */
   private prepareLighting(want: boolean) {
     const d = this.drawing; if (!d) return;
@@ -402,8 +408,9 @@ export class RoomOrbit {
       this.ceiling.visible = shown && c.on && c.intensity > 0 && !d.focused;
     };
     apply(want);
-    const ready = this.renderer.compileAsync(this.scene, this.activeCamera());
+    const ready = this.background(this.scene);
     apply(this.litShown);
+    if (!ready) { this.preparing = false; this.litShown = want; this.callbacks.onBusy?.("lighting", null); return; }
     void ready.catch(() => {}).finally(() => {
       this.preparing = false; this.litShown = want; this.callbacks.onBusy?.("lighting", null);
       if (this.drawing) this.update(this.drawing);
@@ -413,9 +420,9 @@ export class RoomOrbit {
   async prepare(object: THREE.Object3D) {
     const was = object.visible;
     object.visible = true;
-    const ready = this.renderer.compileAsync(object, this.activeCamera(), this.scene);
+    const ready = this.background(object, this.scene);
     object.visible = false;
-    await ready.catch(() => {});
+    if (ready) await ready.catch(() => {});
     object.visible = was;
   }
   private buildRoom(r: RoomDimensions) {
