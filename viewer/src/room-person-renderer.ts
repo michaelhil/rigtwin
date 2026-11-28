@@ -86,6 +86,8 @@ export class RoomAvatar {
     if (av.state("operator")._bound !== av.binding) av.update(0);
   }
   show(visible:boolean) { if(this.avatar)this.avatar.holder.visible=visible; }
+  /** The figure's root in the scene (null before it has loaded). */
+  object() { return this.avatar?.holder ?? null; }
   hide() { if (this.avatar) this.avatar.holder.visible=false; }
   dispose() { this.retired=true; this.avatar?.dispose(); this.avatar=undefined; }
 }

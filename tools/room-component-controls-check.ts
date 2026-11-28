@@ -558,7 +558,7 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   const bodyBefore = await page.evaluate(bodyPixels);
   await pointer(page,"mousePressed",heightPoints.start);
   await pointer(page,"mouseMoved",heightPoints.left);
-  const settled = "document.querySelector('.rv-status').hidden";
+  const settled = "document.querySelector('.rv-progress').hidden";
   await page.waitFor(settled+" && "+bodyPixels+"!=="+JSON.stringify(bodyBefore),"held stature slider to resize the avatar");
   assert.equal((await read()).version,before.version+2,"A body preview should be local");
   await pressKey(page,"Escape",27);
@@ -568,7 +568,7 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   assert.equal((await read()).version,before.version+2,"Cancelling a body preview should leave the saved operator intact");
   // Also cancel during the async rebind, after the old avatar was hidden.
   await page.evaluate(`(() => {
-    const status=document.querySelector('.rv-status');
+    const status=document.querySelector('.rv-progress');
     const observer=new MutationObserver(()=>{
       if(status.hidden)return;
       observer.disconnect();
@@ -579,7 +579,7 @@ async function checkOrbitPicks(browser: Browser, base: string, path: string, sce
   })()`);
   await pointer(page,"mousePressed",heightPoints.start);
   await pointer(page,"mouseMoved",heightPoints.left);
-  await page.waitFor("document.querySelector('.rv-status').dataset.cancelTest==='interrupted'","Escape during avatar rebind");
+  await page.waitFor("document.querySelector('.rv-progress').dataset.cancelTest==='interrupted'","Escape during avatar rebind");
   await pointer(page,"mouseReleased",heightPoints.left);
   await frames(page);
   await page.waitFor(settled+" && "+bodyPixels+"==="+JSON.stringify(bodyBefore),"restore visible operator after interrupted rebind");

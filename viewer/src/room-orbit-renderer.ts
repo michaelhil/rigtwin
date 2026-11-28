@@ -5,6 +5,8 @@ import { effectiveLighting } from "../../shared/room.ts";
 import { cctColour } from "../../shared/light-colour.ts";
 /** Brightness of one ceiling light (visual; scaled so that the room reads alike for any grid and spread). */
 const CEILING_CANDELA = 9;
+/** The most real light sources a ceiling grid uses; a denser grid is approximated (see buildCeiling). */
+const MAX_CEILING_LIGHTS = 12;
 /** The marker of a ceiling light in the lighting view: a disc 0.3 m across. */
 const fixture = new THREE.CylinderGeometry(.15, .15, .02, 24);
 import { doorClearance } from "../../shared/room-geometry.ts";
@@ -189,9 +191,13 @@ export class RoomOrbit {
     const releaseChanged=!!priorInstance && priorInstance.release!==instance?.release;
     this.drawing = d;
     this.room.visible = !d.focused;
-    if ((d.lighting ?? "day") !== this.lighting) {
+    // Switching the lighting view changes the number of lights, which needs new shaders: they are built in the background
+    // first (prepareLighting), and the view keeps drawing the current state meanwhile.
+    const want = d.lighting === "lamps";
+    if (want !== this.litShown && !this.preparing) this.prepareLighting(want);
+    if ((this.litShown ? "lamps" : "day") !== this.lighting) {
       // Lamps: the room's own light is dimmed and the background darkened, so the assets' lamps show where light falls.
-      this.lighting = d.lighting ?? "day";
+      this.lighting = this.litShown ? "lamps" : "day";
       const dim = this.lighting === "lamps";
       this.sky.intensity = dim ? .07 : 1.12; this.shadow.intensity = dim ? .2 : 2.3; this.scene.environmentIntensity = dim ? .05 : .62;
       this.renderer.setClearColor(dim ? 0x262b28 : 0xeeeee8);
@@ -206,7 +212,7 @@ export class RoomOrbit {
       if (model.holder.parent !== this.furniture) this.furniture.add(model.holder);
       model.holder.visible=!d.focused || model.id===d.focused;
       model.select(model.id === d.selected ? d.member : null);
-      model.applyLighting(effectiveLighting(d.scene), d.lighting === "lamps");
+      model.applyLighting(effectiveLighting(d.scene), this.litShown);
     }
     const row = d.scene.instances.find(i => i.id === d.selected), rel = d.releases.find(r => r.id === row?.release);
     clearObjects(this.overlay);
@@ -335,30 +341,82 @@ export class RoomOrbit {
   private ceilingKey = "";
   private buildCeiling(d: Drawing) {
     if (!this.ceiling.parent) this.scene.add(this.ceiling);
-    const c = effectiveLighting(d.scene).ceiling, r = d.scene.room, shown = d.lighting === "lamps" && c.on && c.intensity > 0 && !d.focused;
-    this.ceiling.visible = shown;
+    const c = effectiveLighting(d.scene).ceiling, r = d.scene.room, shown = this.litShown && c.on && c.intensity > 0 && !d.focused;
+    this.ceilingWanted = shown;
+    this.ceiling.visible = shown && !this.ceilingPending;
     const key = JSON.stringify([c, r.width, r.depth, r.height]);
     if (key === this.ceilingKey) return;
     this.ceilingKey = key;
     for (const old of [...this.ceiling.children]) {
       old.removeFromParent();
       if (old instanceof THREE.SpotLight) old.dispose();
-      if (old instanceof THREE.Mesh) (old.material as THREE.Material).dispose();
+      if (old instanceof THREE.Mesh) (old.material as THREE.Material).dispose(); // the shared marker material: disposing twice is harmless
     }
     // Spread: 0 a narrow downlight (15° half angle, a sharp edge), 1 a wide diffuse light (80°, a soft edge).
     const angle = THREE.MathUtils.degToRad(15 + 65 * c.spread), penumbra = .25 + .75 * c.spread;
     const colour = c.colour ? new THREE.Color(c.colour) : new THREE.Color().setRGB(...cctColour(c.cct), THREE.SRGBColorSpace).lerp(new THREE.Color(0xffffff), 2 / 3);
     const height = c.height ?? r.height - .02, per = CEILING_CANDELA * c.intensity * (1 + 2 * c.spread) / Math.sqrt(c.countX * c.countY / 6);
+    // every fixture gets its disc ...
+    const marker = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: colour, emissiveIntensity: 1.4 });
     for (let i = 0; i < c.countX; i++) for (let j = 0; j < c.countY; j++) {
-      const x = (i + .5) * r.width / c.countX, y = (j + .5) * r.depth / c.countY;
-      const light = new THREE.SpotLight(colour, per, height * 3, angle, penumbra, 2);
+      const disc = new THREE.Mesh(fixture, marker);
+      disc.position.set((i + .5) * r.width / c.countX, height + .01, -(j + .5) * r.depth / c.countY);
+      this.ceiling.add(disc);
+    }
+    // ... but at most MAX_CEILING_LIGHTS real light sources: a denser grid is lit by a coarser one of the same total
+    // brightness with wider beams (each light source costs every pixel of every frame).
+    let lx = c.countX, ly = c.countY;
+    while (lx * ly > MAX_CEILING_LIGHTS) { if (lx >= ly) lx--; else ly--; }
+    const share = (c.countX * c.countY) / (lx * ly), wide = Math.min(THREE.MathUtils.degToRad(80), angle * Math.sqrt(share));
+    for (let i = 0; i < lx; i++) for (let j = 0; j < ly; j++) {
+      const x = (i + .5) * r.width / lx, y = (j + .5) * r.depth / ly;
+      const light = new THREE.SpotLight(colour, per * share, height * 3, wide, share > 1 ? Math.max(penumbra, .6) : penumbra, 2);
       light.position.set(x, height, -y);
       light.target.position.set(x, 0, -y);
-      // a small glowing disc marks where the light hangs
-      const disc = new THREE.Mesh(fixture, new THREE.MeshStandardMaterial({ color: 0x000000, emissive: colour, emissiveIntensity: 1.4 }));
-      disc.position.set(x, height + .01, -y);
-      this.ceiling.add(light, light.target, disc);
+      this.ceiling.add(light, light.target);
     }
+    // a new grid while lit: build its shaders in the background, and show it when they are ready
+    if (shown) {
+      this.ceiling.visible = true;
+      const pending = this.ceilingPending = key, ready = this.renderer.compileAsync(this.scene, this.activeCamera());
+      this.ceiling.visible = false;
+      void ready.catch(() => {}).finally(() => {
+        if (this.ceilingPending !== pending) return;
+        this.ceilingPending = ""; this.ceiling.visible = this.ceilingWanted; this.invalidate();
+      });
+    }
+  }
+  private litShown = false;
+  private preparing = false;
+  private ceilingPending = "";
+  private ceilingWanted = false;
+  private activeCamera() { return this.eyeActive ? this.eyeCamera : this.camera; }
+  /** Build the shaders for the lighting view (or daylight) in the background, then switch to it. */
+  private prepareLighting(want: boolean) {
+    const d = this.drawing; if (!d) return;
+    this.preparing = true;
+    if (want) this.callbacks.onBusy?.("lighting", "Preparing the lighting.");
+    const l = effectiveLighting(d.scene), c = l.ceiling;
+    const apply = (shown: boolean) => {
+      for (const model of d.models.values()) model.applyLighting(l, shown);
+      this.ceiling.visible = shown && c.on && c.intensity > 0 && !d.focused;
+    };
+    apply(want);
+    const ready = this.renderer.compileAsync(this.scene, this.activeCamera());
+    apply(this.litShown);
+    void ready.catch(() => {}).finally(() => {
+      this.preparing = false; this.litShown = want; this.callbacks.onBusy?.("lighting", null);
+      if (this.drawing) this.update(this.drawing);
+    });
+  }
+  /** Build an object's shaders in the background before it is first drawn (the seated operator). */
+  async prepare(object: THREE.Object3D) {
+    const was = object.visible;
+    object.visible = true;
+    const ready = this.renderer.compileAsync(object, this.activeCamera(), this.scene);
+    object.visible = false;
+    await ready.catch(() => {});
+    object.visible = was;
   }
   private buildRoom(r: RoomDimensions) {
     clearObjects(this.room); this.wallGroups.clear();

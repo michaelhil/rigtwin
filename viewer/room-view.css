@@ -78,3 +78,13 @@
 .rv-operator-marker {cursor:pointer}
 .rv-no-grid .rv-minor,.rv-no-grid .rv-major { stroke:none; }
 @media(max-width:600px){.rw-cameras { bottom:43px; right:8px; }.rw-pop { max-height:58dvh; }}
+
+/* The central progress card (loading, seating the operator, preparing the lighting). The view stays movable. */
+.rv-progress { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; max-width: min(86%, 440px); padding: 12px 10px 12px 16px; border: 1px solid #d3dbd0; border-radius: 10px; background: #fdfdf8f2; box-shadow: 0 8px 28px #233b2722; font-size: 13px; color: #2f4238; pointer-events: auto; }
+.rv-spinner { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c9d4c9; border-top-color: #12695c; animation: rv-spin .8s linear infinite; }
+@keyframes rv-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rv-spinner { animation-duration: 2.4s; } }
+.rv-progress-close { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-left: 4px; border: 0; border-radius: 6px; background: transparent; color: #5b6b61; cursor: pointer; }
+.rv-progress-count { flex: none; color: #6b7a70; font-variant-numeric: tabular-nums; }
+.rv-progress-close:hover { background: #eef2ec; }
+.rv-progress-close:focus-visible { outline: 2px solid #12695c; outline-offset: 1px; }

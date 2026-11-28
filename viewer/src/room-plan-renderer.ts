@@ -28,6 +28,8 @@ export interface RoomViewCallbacks {
   onPlace(instanceId: string, placement: RoomPlacement): void;
   onAdjust?(instanceId:string,values:Record<string,JointValue>,version:number):void;
   onError?(message: string): void;
+  /** Work in progress for the central progress card (null when done). */
+  onBusy?(key: string, message: string | null): void;
 }
 export type Lighting = "day" | "lamps";
 export interface Drawing {

@@ -13,9 +13,28 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
   const stage = document.createElement("div"); stage.className="rv-stage rv-no-labels";
   const orbitHost=document.createElement("div"); orbitHost.className="rv-orbit"; orbitHost.hidden=true;
   const status=document.createElement("div"); status.className="rv-status"; status.setAttribute("role","status"); status.hidden=true;
+  // The central progress card: what is loading or being prepared. The view stays movable meanwhile; X hides the card
+  // until the work in progress is done.
+  // Screen readers hear each new step, not every object count (the count is aria-hidden).
+  const progressText=document.createElement("span"); progressText.setAttribute("role","status"); progressText.setAttribute("aria-live","polite");
+  const progressCount=document.createElement("span"); progressCount.className="rv-progress-count"; progressCount.setAttribute("aria-hidden","true");
+  const progressClose=document.createElement("button"); progressClose.type="button"; progressClose.className="rv-progress-close";
+  progressClose.setAttribute("aria-label","Hide progress"); progressClose.title="Hide progress";
+  progressClose.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16"><path d="M5 5l14 14M19 5 5 19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const progress=document.createElement("div"); progress.className="rv-progress"; progress.hidden=true;
+  progress.append(Object.assign(document.createElement("span"),{className:"rv-spinner"}),progressText,progressCount,progressClose);
+  const busy=new Map<string,[string,string]>(); let progressDismissed=false;
+  const setBusy=(key:string,message:string|null,count="")=>{
+    if (message) busy.set(key,[message,count]); else busy.delete(key);
+    if (!busy.size) progressDismissed=false;
+    const [text,n]=[...busy.values()].at(-1) ?? ["",""];
+    if (progressText.textContent!==text) progressText.textContent=text;
+    progressCount.textContent=n; progress.hidden=!text || progressDismissed;
+  };
+  progressClose.onclick=()=>{progressDismissed=true;progress.hidden=true;};
   host.append(stage);
   const plan=new RoomPlan(stage,callbacks);
-  stage.append(orbitHost,status);
+  stage.append(orbitHost,status,progress);
   const assets=new Map<string,RoomAsset>(), fetching=new Set<string>(), failures=new Map<string,string>();
   const models=new Map<string,PlacedAsset>();
   let posePreview:{instance:string;values:Record<string,JointValue>}|undefined;
@@ -65,9 +84,10 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
   function statusLine() {
     if (!scene) return;
     for (const i of shownInstances()) if (failures.has(i.release)) { notice(failures.get(i.release)); return; }
-    if (shownInstances().some(i => !models.has(i.id))) notice("Loading layout objects…");
-    else if (personWaiting && mode === "3d") notice("Seating the operator…");
-    else notice();
+    const missing=shownInstances().filter(i => !models.has(i.id)).length, total=shownInstances().length;
+    setBusy("objects", missing ? "Loading the scene." : null, missing ? (total-missing) + " of " + total : "");
+    setBusy("operator", personWaiting && mode === "3d" ? "Seating the operator. You can already move the view." : null);
+    notice();
   }
   function size() {
     const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight);
@@ -102,6 +122,9 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
       if (!current()) return;
       person ??= new RoomAvatar(orbit.renderer);
       await person.seat(model,obj,seated,current);
+      // build the figure's shaders in the background, so the first frame with it does not freeze the view
+      const figure=person.object();
+      if (current() && figure && orbit) await orbit.prepare(figure);
       if (current()) { personKey=key; stage.dataset.seatedHost=obj.id; stage.dataset.operatorPosture=seated.state.posture;person.show(!eye);orbit?.operatorReady(obj.id); }
     } catch (e) { if (current()) { personKey=key; error=e; } }
     finally {
@@ -153,15 +176,15 @@ export function mountRoomView(host: HTMLElement, callbacks: RoomViewCallbacks) {
     orbit?.show(mode==="3d");
     if (next==="3d" && !orbit) {
       orbitLoading ??= (async()=>{
-        notice("Opening 3D view…");
+        setBusy("3d","Opening the 3D view.");
         try {
           const {RoomOrbit}=await import("./room-orbit-renderer.ts");
           if (disposed) return;
-          orbit=new RoomOrbit(orbitHost,callbacks);
+          orbit=new RoomOrbit(orbitHost,{...callbacks,onBusy:setBusy});
           orbit.show(mode==="3d");orbit.showGrid(grid);size();
         } catch(e) {
           if (!disposed) { mode="plan";stage.dataset.view=mode;orbitHost.hidden=true;plan.svg.style.display="block";report(e); }
-        } finally {orbitLoading=undefined;}
+        } finally {orbitLoading=undefined;setBusy("3d",null);}
       })();
       await orbitLoading;
     }
